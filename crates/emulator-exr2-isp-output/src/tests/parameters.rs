@@ -1,5 +1,5 @@
 use fujimod_emulator_exr2_isp_input::*;
-use fujimod_emulator_devices::exr2::isp::*;
+use fujimod_emulator_imaging::exr2_isp::*;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
@@ -12,7 +12,7 @@ fn parameter_domains_and_raw_video_refusals() {
     let mut cx = h.cx();
     d.write(&mut cx, 0xfff19000, 4, 0x3f);
     assert!(cx.refusal().is_some());
-    let mut d = RawConversion::new(fujimod_emulator_devices::exr2::isp::options::raw::RegisterOptions {}, ()).unwrap();
+    let mut d = RawConversion::new(fujimod_emulator_imaging::exr2_isp::options::raw::RegisterOptions {}, ()).unwrap();
     write(&mut d, &mut h, 0xfff42000, 1);
     assert_eq!(d.next_deadline(0), None);
     let mut cx = h.cx();

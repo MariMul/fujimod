@@ -3,7 +3,7 @@
 //! explicit unmeasured laws.
 //! Comparators admit only arriving pixels, as in the adjacent histogram bank;
 //! windows crossing a frame boundary are neither resized nor black-padded.
-use fujimod_emulator_devices::imaging::analysis::ImageLayout;
+use fujimod_emulator_imaging::analysis::ImageLayout;
 
 pub fn banks(r: &[u32], pixels: &[u8], l: ImageLayout) -> Result<Vec<u8>, String> {
     if pixels.len() != l.bytes()? {

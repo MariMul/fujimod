@@ -1,5 +1,5 @@
 use super::*;
-use crate::imaging::exposure::{Calibration, Exposure, Filtered};
+use crate::exposure::{Calibration, Exposure, Filtered};
 use crate::scene::Frame;
 
 fn exposure(frame: Arc<Frame>, seconds: f64) -> ExposedFrame {

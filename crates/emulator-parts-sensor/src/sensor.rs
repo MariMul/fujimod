@@ -2,9 +2,9 @@
 //! black level, active image area and reference white are body data. The RGB spectral response
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
-use fujimod_emulator_devices::imaging::exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle};
+use fujimod_emulator_imaging::exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle};
 use fujimod_emulator_imaging::raw::{Cfa, Packing};
-use fujimod_emulator_devices::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
+use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 pub trait Controls: Send {
@@ -30,8 +30,8 @@ pub trait Controls: Send {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::imaging::exposure::Exposure;
-    use fujimod_emulator_devices::scene::{Frame, SensorFrames};
+    use fujimod_emulator_imaging::exposure::Exposure;
+    use fujimod_emulator_imaging::scene::{Frame, SensorFrames};
     use std::sync::{Arc, Mutex};
 
     #[test]
@@ -145,13 +145,13 @@ mod tests {
             .unwrap();
         let focus = Arc::new(Mutex::new(0.));
         sensor.attach_projection(
-            fujimod_emulator_devices::imaging::optics::Projection::new(
-                fujimod_emulator_devices::imaging::optics::Spec {
+            fujimod_emulator_imaging::optics::Projection::new(
+                fujimod_emulator_imaging::optics::Spec {
                     focus: "lens".into(),
                     focal_length_mm: 18.5,
                     subject_distance_mm: 2000.,
                     sensor_width_mm: 1.,
-                    relative_illumination: fujimod_emulator_devices::imaging::optics::Illumination::Uniform,
+                    relative_illumination: fujimod_emulator_imaging::optics::Illumination::Uniform,
                 },
                 focus.clone(),
             )
@@ -337,7 +337,7 @@ struct Configuration {
     black: u16,
     linear: Vec<u16>,
     radiometry: Option<Calibration>,
-    projection: Option<fujimod_emulator_devices::imaging::optics::Spec>,
+    projection: Option<fujimod_emulator_imaging::optics::Spec>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -357,7 +357,7 @@ pub struct Sensor {
     controls: Option<Box<dyn Controls>>,
     radiometry: Option<(Calibration, ExposureHandle, ApertureHandle)>,
     exposed: Option<ExposedFrame>,
-    projection: Option<fujimod_emulator_devices::imaging::optics::Projection>,
+    projection: Option<fujimod_emulator_imaging::optics::Projection>,
     readout_valid: bool,
 }
 /// A validated readout from one accepted exposure. It retains immutable image
@@ -438,7 +438,7 @@ impl Sensor {
         self.controls = Some(controls);
         Ok(())
     }
-    pub fn attach_projection(&mut self, projection: fujimod_emulator_devices::imaging::optics::Projection) {
+    pub fn attach_projection(&mut self, projection: fujimod_emulator_imaging::optics::Projection) {
         self.projection = Some(projection);
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {

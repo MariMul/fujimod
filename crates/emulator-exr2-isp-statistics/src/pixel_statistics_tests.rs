@@ -1,8 +1,5 @@
 use super::*;
-use fujimod_emulator_devices::{
-    imaging::exposure::{Calibration, Exposure},
-    scene::{Frame, FramePixels},
-};
+use fujimod_emulator_imaging::{exposure::{Calibration, Exposure}, scene::{Frame, FramePixels}};
 use std::sync::Arc;
 
 fn exposed(frame: Arc<Frame>, seconds: f64) -> ExposedFrame {
@@ -130,10 +127,10 @@ fn repeated_source_runs_match_scalar_sampling_with_clips_and_per_row_rounding() 
 /// precomputed sample offsets; they equal the scalar sums too.
 #[test]
 fn prepared_readouts_match_scalar_sampling() {
-    use fujimod_emulator_devices::exr2::isp::parameters::Parameters;
-    use fujimod_emulator_devices::imaging::optics::{Illumination, Projection, Spec};
-    use fujimod_emulator_devices::imaging::radiometric::Renderer;
-    use fujimod_emulator_devices::scene::SensorFrames;
+    use fujimod_emulator_imaging::exr2_isp::parameters::Parameters;
+    use fujimod_emulator_imaging::optics::{Illumination, Projection, Spec};
+    use fujimod_emulator_imaging::radiometric::Renderer;
+    use fujimod_emulator_imaging::scene::SensorFrames;
     use std::sync::Mutex;
     for [width, height] in [[7, 5], [23, 17], [40, 29]] {
         for lens in [false, true] {
@@ -199,7 +196,7 @@ fn rect_in(grid: [usize; 2], [x, y, w, h]: [usize; 4]) -> [usize; 4] {
     [left, top, (x + w).min(grid[0]) - left, (y + h).min(grid[1]) - top]
 }
 
-fn bytes(spans: &[fujimod_emulator_devices::scene::StatisticsSpan]) -> Vec<(usize, u32, Vec<u8>)> {
+fn bytes(spans: &[fujimod_emulator_imaging::scene::StatisticsSpan]) -> Vec<(usize, u32, Vec<u8>)> {
     spans
         .iter()
         .map(|s| (s.destination, s.offset, s.bytes.clone()))

@@ -1,6 +1,6 @@
 use crate::scaler::Scaler;
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_devices::exr2::isp::Irq;
+use fujimod_emulator_imaging::exr2_isp::Irq;
 use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 
 #[test]
@@ -8,7 +8,7 @@ fn checkpoint_pending_scaler_restores_pixels_and_original_dma_deadline() {
     let mut host = TestHost::new();
     host.ram[0x8000..0x8040].fill(123);
     let mut device = Scaler::new(
-        fujimod_emulator_devices::exr2::isp::options::scaler::Options {
+        fujimod_emulator_imaging::exr2_isp::options::scaler::Options {
             completion_ticks: 5,
         },
         Irq { core: 0, line: 47 },

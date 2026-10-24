@@ -208,9 +208,9 @@ impl ExposedFrame {
     fn mosaic_gain(&self) -> f64 {
         mosaic_gain(self.exposure, self.aperture_squared)
     }
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let response: Vec<u16> = self.response.iter().flatten().copied().collect();
-        Ok(crate::checkpoint::Checkpoint::encode(
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "exposed-frame",
             &(
                 self.exposure,
@@ -230,7 +230,7 @@ impl ExposedFrame {
         .with_children(vec![self.frame.checkpoint()?])
         .with_blobs(self.filtered.iter().map(Filtered::materialize).collect()))
     }
-    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
         let (
             exposure,
             aperture_squared,
@@ -402,9 +402,9 @@ impl ExposedFrame {
         serde_json::json!({"frame":self.frame.fingerprint(),"exposure":self.exposure,
             "aperture_squared":self.aperture_squared,"color_sample_weights":self.color_sample_weights,
             "focus_shift_mm":self.focus_shift_mm,"response_scale":self.response_scale,
-            "filtered":self.filtered.as_ref().map(|pixels|crate::fingerprint::bytes(&pixels.materialize())),
+            "filtered":self.filtered.as_ref().map(|pixels|fujimod_emulator_devices::fingerprint::bytes(&pixels.materialize())),
             "sample_dimensions":self.sample_dimensions(),
-            "response":crate::fingerprint::words16(&response)})
+            "response":fujimod_emulator_devices::fingerprint::words16(&response)})
     }
 }
 

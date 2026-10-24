@@ -193,7 +193,7 @@ impl Session {
             .filter(|(_, frame)| {
                 matches!(
                     frame.pixels,
-                    fujimod_emulator_devices::scene::FramePixels::Mosaic { .. }
+                    fujimod_emulator_imaging::scene::FramePixels::Mosaic { .. }
                 )
             })
             .collect::<Vec<_>>();

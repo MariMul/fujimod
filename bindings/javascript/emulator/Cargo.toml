@@ -12,6 +12,7 @@ name = "fujimod_emulator_javascript"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+fujimod-emulator-imaging.workspace = true
 fujimod-emulator-xp5-board.workspace = true
 fujimod-emulator-xp5-display.workspace = true
 fujimod-emulator-parts-controls.workspace = true

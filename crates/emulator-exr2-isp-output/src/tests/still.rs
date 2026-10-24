@@ -1,4 +1,4 @@
-use fujimod_emulator_devices::exr2::isp::*;
+use fujimod_emulator_imaging::exr2_isp::*;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
@@ -6,7 +6,7 @@ use fujimod_emulator_devices::Device;
 fn still_isp_reconstructs_addressed_pixels_and_refuses_unequal_black() {
     let mut h = TestHost::new();
     let mut d = StillProcessor::new(
-        fujimod_emulator_devices::exr2::isp::options::still::Options {
+        fujimod_emulator_imaging::exr2_isp::options::still::Options {
             completion_ticks: 4,
             cfa: cfa(),
         },
@@ -64,7 +64,7 @@ fn raw_writeback() -> (StillProcessor, TestHost) {
         }
     }
     let mut d = StillProcessor::new(
-        fujimod_emulator_devices::exr2::isp::options::still::Options {
+        fujimod_emulator_imaging::exr2_isp::options::still::Options {
             completion_ticks: 4,
             cfa: cfa(),
         },
@@ -92,7 +92,7 @@ fn raw_writeback() -> (StillProcessor, TestHost) {
         .into_iter()
         .enumerate()
     {
-        if let Some(offset) = fujimod_emulator_devices::imaging::film::still_offset(index * 4) {
+        if let Some(offset) = fujimod_emulator_imaging::film::still_offset(index * 4) {
             write(&mut d, &mut h, 0xfff44000 + offset as u64, value);
         }
     }

@@ -3,7 +3,7 @@
 //! DCT arithmetic is modeled; only q<=3 is measured. Timing is declared.
 //! DMA bytes/count/status precede IRQ77. Entropy output beyond 0x110 completes
 //! with status 0x20 instead of READY (0x10), count 0 and no RAM write.
-use fujimod_emulator_devices::exr2::isp::{Irq, dma::{Transfer, physical}, due, stream::{State, StreamHandle}, word};
+use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{Transfer, physical}, due, stream::{State, StreamHandle}, word};
 use fujimod_emulator_image_codecs::jpeg::{Codec, OUTPUT_OVERFLOW};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};

@@ -2,8 +2,8 @@
 //! a declared moving integer pattern; statistics retain their selected input.
 //! No guest memory, software mode or instruction address drives the source.
 use super::{FrameCadence, ImageFrames, StatisticsCadence, StatisticsFrames};
-use crate::parts::pins::{InputPins, Selection};
-use crate::{Cx, Device};
+use fujimod_emulator_devices::parts::pins::{InputPins, Selection};
+use fujimod_emulator_devices::{Cx, Device};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -23,8 +23,8 @@ pub struct ClockedFrames {
     cadence: StatisticsCadence,
     activity: Option<(Box<dyn InputPins>, Selection)>,
     optics: Option<super::optics::Optics>,
-    renderer: Option<crate::imaging::radiometric::Renderer>,
-    frame_period: Option<crate::imaging::timing::FramePeriod>,
+    renderer: Option<crate::radiometric::Renderer>,
+    frame_period: Option<crate::timing::FramePeriod>,
     external_period: u64,
     sensor_clock: Option<super::SensorFramesHandle>,
     seen_sensor_frame: Option<super::FrameEdge>,
@@ -33,8 +33,8 @@ pub struct ClockedFrames {
 }
 pub struct Wiring {
     pub sensor_clock: Option<super::SensorFramesHandle>,
-    pub frame_period: Option<crate::imaging::timing::FramePeriod>,
-    pub renderer: Option<crate::imaging::radiometric::Renderer>,
+    pub frame_period: Option<crate::timing::FramePeriod>,
+    pub renderer: Option<crate::radiometric::Renderer>,
     pub images: ImageFrames,
     pub statistics: StatisticsFrames,
     pub activity: Option<(Box<dyn InputPins>, Selection)>,
@@ -161,7 +161,7 @@ impl ClockedFrames {
     }
 }
 impl Device for ClockedFrames {
-    fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let mut children: Vec<_> = self
             .optics
             .as_ref()
@@ -172,7 +172,7 @@ impl Device for ClockedFrames {
         if let Some(renderer) = &self.renderer {
             children.push(renderer.checkpoint()?);
         }
-        Ok(crate::checkpoint::Checkpoint::encode(
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
             &(
                 &self.clock,
@@ -191,7 +191,7 @@ impl Device for ClockedFrames {
         )?
         .with_children(children))
     }
-    fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         let (
             clock,
             _,
@@ -251,7 +251,7 @@ impl Device for ClockedFrames {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (
             clock,

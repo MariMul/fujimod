@@ -60,7 +60,7 @@ pub struct Wiring {
     pub pulses: PulsePins,
     pub gpio: Box<dyn Pins>,
     pub completion: [InterruptLine; 2],
-    pub position: Option<fujimod_emulator_devices::scene::optics::Position>,
+    pub position: Option<fujimod_emulator_imaging::scene::optics::Position>,
 }
 #[derive(Serialize, Deserialize)]
 struct Zoom {
@@ -79,9 +79,9 @@ pub struct LensUnit {
     length: usize,
     mechanics: Mechanics,
     zoom: Option<Zoom>,
-    position: Option<fujimod_emulator_devices::scene::optics::Position>,
-    aperture: Option<(fujimod_emulator_devices::imaging::exposure::ApertureHandle, Vec<(i64, f64)>)>,
-    focus: Option<(fujimod_emulator_devices::imaging::optics::FocusHandle, i64, f64)>,
+    position: Option<fujimod_emulator_imaging::scene::optics::Position>,
+    aperture: Option<(fujimod_emulator_imaging::exposure::ApertureHandle, Vec<(i64, f64)>)>,
+    focus: Option<(fujimod_emulator_imaging::optics::FocusHandle, i64, f64)>,
 }
 impl LensUnit {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -170,7 +170,7 @@ impl LensUnit {
     }
     pub fn attach_aperture(
         &mut self,
-        output: fujimod_emulator_devices::imaging::exposure::ApertureHandle,
+        output: fujimod_emulator_imaging::exposure::ApertureHandle,
         positions: Vec<(i64, f64)>,
     ) -> Result<(), String> {
         if positions.len() < 2
@@ -184,7 +184,7 @@ impl LensUnit {
     }
     pub fn attach_focus(
         &mut self,
-        output: fujimod_emulator_devices::imaging::optics::FocusHandle,
+        output: fujimod_emulator_imaging::optics::FocusHandle,
         infinity_position: i64,
         steps_per_mm: f64,
     ) -> Result<(), String> {

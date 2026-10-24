@@ -1,6 +1,6 @@
 //! Declared fixed-luma Y0,Y1,Cb,Cr input at programmed imaging DMA outputs.
 //! This source is a scenario input, not sensor/ISP or coefficient fidelity.
-use crate::Cx;
+use fujimod_emulator_devices::Cx;
 
 pub fn paint(
     cx: &mut Cx<'_>,

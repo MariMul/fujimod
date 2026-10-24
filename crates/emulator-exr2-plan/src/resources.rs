@@ -1,9 +1,10 @@
 //! Explicit peer wires and external scene/media inputs, never CPU state.
-use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
+use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
+use fujimod_emulator_imaging::exr2_isp as isp;
 use fujimod_emulator_devices::parts::hdmi_sink::HdmiSink;
 use fujimod_emulator_devices::parts::lens_bridge;
 use fujimod_emulator_devices::parts::sd_card::Card;
-use fujimod_emulator_devices::scene::{ImageFrames, SensorFramesHandle, StatisticsFrames};
+use fujimod_emulator_imaging::scene::{ImageFrames, SensorFramesHandle, StatisticsFrames};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
@@ -24,21 +25,21 @@ pub struct Inputs {
 /// A shared wire is declared once and has one concrete type. Every consumer
 /// is recorded during construction so source accesses wake its connected peers.
 pub enum Wire {
-    FramePeriod(fujimod_emulator_devices::imaging::timing::FramePeriod),
-    ImageGrid(fujimod_emulator_devices::imaging::analysis::GridHandle),
-    Focus(fujimod_emulator_devices::imaging::optics::FocusHandle),
-    Exposure(fujimod_emulator_devices::imaging::exposure::ExposureHandle),
-    Aperture(fujimod_emulator_devices::imaging::exposure::ApertureHandle),
+    FramePeriod(fujimod_emulator_imaging::timing::FramePeriod),
+    ImageGrid(fujimod_emulator_imaging::analysis::GridHandle),
+    Focus(fujimod_emulator_imaging::optics::FocusHandle),
+    Exposure(fujimod_emulator_imaging::exposure::ExposureHandle),
+    Aperture(fujimod_emulator_imaging::exposure::ApertureHandle),
     SoftwarePulse(irq::SoftwarePulse),
     Parameters(isp::parameters::ParameterHandle),
-    MemoryOutputs(fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle),
+    MemoryOutputs(fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle),
     Stream(isp::stream::StreamHandle),
-    OutputChannels(fujimod_emulator_devices::exr2::isp::output_channels::OutputChannels),
+    OutputChannels(fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels),
     IrqRoutes(isp::dma::IrqRoutes),
-    PhaseEdges(fujimod_emulator_devices::scene::FramePhases),
+    PhaseEdges(fujimod_emulator_imaging::scene::FramePhases),
     BridgeRegisters(lens_bridge::Registers),
     LogicLevel(fujimod_emulator_devices::signals::Level),
-    OpticalPosition(fujimod_emulator_devices::scene::optics::Position),
+    OpticalPosition(fujimod_emulator_imaging::scene::optics::Position),
 }
 impl Wire {
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
@@ -143,7 +144,7 @@ impl Resources {
     pub fn optical_position(
         &self,
         name: &str,
-    ) -> Result<fujimod_emulator_devices::scene::optics::Position, String> {
+    ) -> Result<fujimod_emulator_imaging::scene::optics::Position, String> {
         match self.wires.get(name) {
             Some(Wire::OpticalPosition(v)) => Ok(v.clone()),
             _ => Err(format!("{name} is not an optical position wire")),

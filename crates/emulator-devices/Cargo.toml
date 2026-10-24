@@ -46,4 +46,5 @@ futures-lite = "2"
 videotoolbox = { version = "0.21", features = ["async"] }
 
 [dev-dependencies]
+fujimod-emulator-imaging.workspace = true
 fujimod-emulator-image-codecs.workspace = true

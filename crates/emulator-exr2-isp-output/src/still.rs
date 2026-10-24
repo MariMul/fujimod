@@ -2,13 +2,13 @@
 //! geometry drives RAW reads and IRQ61 output. Nearest six-by-six CFA color
 //! uses programmed black, WB/exposure, radial shading and the measured film
 //! law. Spatial filtering remains unmodeled.
-use fujimod_emulator_devices::exr2::isp::dma::{Raster, Transfer, physical};
-use fujimod_emulator_devices::exr2::isp::{Irq, word};
-use fujimod_emulator_devices::imaging::film::{Film, still_offset};
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
+use fujimod_emulator_imaging::exr2_isp::{Irq, word};
+use fujimod_emulator_imaging::film::{Film, still_offset};
 use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
-use fujimod_emulator_devices::exr2::isp::options::still::Options;
+use fujimod_emulator_imaging::exr2_isp::options::still::Options;
 
 pub struct StillProcessor {
     r: Vec<u32>,

@@ -18,9 +18,7 @@ impl Position {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        exr2::isp::contrast::energies, imaging::analysis::ImageLayout, scene::ImageFrames,
-    };
+    use crate::{exr2_isp::contrast::energies, analysis::ImageLayout, scene::ImageFrames};
     #[test]
     fn physical_position_changes_pixels_and_sharp_input_is_recoverable() {
         let l = ImageLayout {
@@ -118,15 +116,15 @@ impl Optics {
             last: None,
         })
     }
-    pub(super) fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub(super) fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         Ok(
-            crate::checkpoint::Checkpoint::encode("optical-input", &(&self.options, self.last))?
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("optical-input", &(&self.options, self.last))?
                 .with_blobs(vec![self.source.clone()]),
         )
     }
     pub(super) fn validate_checkpoint(
         &self,
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
         bytes: usize,
     ) -> Result<(), String> {
         let (options, last): (Options, Option<i64>) = saved.decode("optical-input")?;
@@ -141,7 +139,7 @@ impl Optics {
     }
     pub(super) fn restore_checkpoint(
         &mut self,
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
         bytes: usize,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved, bytes)?;
@@ -195,6 +193,6 @@ impl Optics {
     pub fn fingerprint(&self) -> serde_json::Value {
         serde_json::json!({"position":self.position.value(),"last":self.last,
             "target":self.options.target_position,"pulses_per_radius":self.options.pulses_per_radius,
-            "maximum_radius":self.options.maximum_radius,"source":crate::fingerprint::bytes(&self.source)})
+            "maximum_radius":self.options.maximum_radius,"source":fujimod_emulator_devices::fingerprint::bytes(&self.source)})
     }
 }

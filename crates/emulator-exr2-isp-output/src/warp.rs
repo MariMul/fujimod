@@ -1,12 +1,12 @@
 //! FFF65000 warp registers. Endpoint nearest
 //! packed422 sampling and timing are declared approximations. Memory DMA
 //! completes with IRQ74; the explicit JPEG stream has joint START ownership.
-use fujimod_emulator_devices::exr2::isp::dma::{Raster, Transfer};
-use fujimod_emulator_devices::exr2::isp::stream::{State, StreamHandle};
-use fujimod_emulator_devices::exr2::isp::{Irq, due, word};
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
+use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
+use fujimod_emulator_imaging::exr2_isp::{Irq, due, word};
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
-use fujimod_emulator_devices::exr2::isp::options::warp::Options;
+use fujimod_emulator_imaging::exr2_isp::options::warp::Options;
 
 pub struct Warp {
     r: Vec<u32>,
@@ -260,7 +260,7 @@ impl Device for Warp {
             Vec<u32>,
             Transfer,
             Option<u64>,
-            fujimod_emulator_devices::exr2::isp::stream::Stream,
+            fujimod_emulator_imaging::exr2_isp::stream::Stream,
         ) = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
         if r.len() != self.r.len() {
             return Err("warp bank size".into());

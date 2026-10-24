@@ -233,7 +233,7 @@ impl Device for Rifp {
         let row = io.r(0x7c) & 0x1ffff;
         let rows = io.r(0x80) & 0xffff;
         if address != 0 && io.r(0x70) & 0x80000000 != 0 && row >= 4 && row % 4 == 0 && rows != 0 {
-            if let Err(e) = fujimod_emulator_devices::imaging::frame::paint(cx, address, row / 2, rows, row, self.source_luma) {
+            if let Err(e) = fujimod_emulator_imaging::frame::paint(cx, address, row / 2, rows, row, self.source_luma) {
                 cx.fail(e);
                 return;
             }

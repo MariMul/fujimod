@@ -181,7 +181,7 @@ fn initial_revision_is_external_metadata_only_before_guest_execution() {
 
 #[test]
 fn scene_rgb_prepares_only_the_next_sensor_exposure() {
-    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
     let mut session = card_session();
     let input = Arc::new(Mutex::new(SensorFrames::new(
@@ -574,7 +574,7 @@ fn card_insertion_refuses_full_gpio_queue_before_replacing_media() {
 
 #[test]
 fn sensor_raw16_replaces_the_current_frame_without_changing_the_latched_frame() {
-    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
     let mut session = card_session();
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
@@ -596,7 +596,7 @@ fn sensor_raw16_replaces_the_current_frame_without_changing_the_latched_frame() 
 #[test]
 fn sensor_radiance_is_retained_by_serialized_input_history_and_undo() {
     use super::history::{Entry, History, Input};
-    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
     let mut session = card_session();
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
@@ -791,7 +791,7 @@ fn automatic_history_bounds_interactive_log_payloads_and_retains_failures() {
 fn automatic_history_admits_one_oversized_input_and_expires_its_old_prefix() {
     use super::history::{History, Input};
     use fujimod_emulator_cpu::ExecutionPolicy;
-    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
     let mut session = card_session();
     session
@@ -832,7 +832,7 @@ fn automatic_history_admits_one_oversized_input_and_expires_its_old_prefix() {
 #[test]
 fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     use super::history::{History, Input};
-    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames, mosaic::Radiance};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames, mosaic::Radiance};
     use std::sync::{Arc, Mutex};
     let mut session = card_session();
     let input = Arc::new(Mutex::new(SensorFrames::new(

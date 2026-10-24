@@ -1,5 +1,5 @@
 use super::{FrameEdge, Recorded};
-use crate::imaging::analysis::ImageLayout;
+use crate::analysis::ImageLayout;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -10,7 +10,7 @@ pub enum ImageSource {
 }
 pub enum Pixels {
     Packed(Arc<[u8]>),
-    Sensor(Arc<crate::imaging::radiometric::Image>),
+    Sensor(Arc<crate::radiometric::Image>),
 }
 impl Pixels {
     pub fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
@@ -32,13 +32,13 @@ impl Pixels {
             _ => unreachable!(),
         }
     }
-    fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         match self {
             Self::Packed(p) => Ok(
-                crate::checkpoint::Checkpoint::encode("image-pixels", &false)?
+                fujimod_emulator_devices::checkpoint::Checkpoint::encode("image-pixels", &false)?
                     .with_blobs(vec![p.clone()]),
             ),
-            Self::Sensor(image) => Ok(crate::checkpoint::Checkpoint::encode(
+            Self::Sensor(image) => Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
                 "image-pixels",
                 &true,
             )?
@@ -46,7 +46,7 @@ impl Pixels {
         }
     }
     fn from_checkpoint(
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
         layout: ImageLayout,
     ) -> Result<Self, String> {
         let physical: bool = saved.decode("image-pixels")?;
@@ -55,7 +55,7 @@ impl Pixels {
                 return Err("invalid physical image pixels checkpoint".into());
             }
             Ok(Self::Sensor(Arc::new(
-                crate::imaging::radiometric::Image::from_checkpoint(&saved.children()[0])?,
+                crate::radiometric::Image::from_checkpoint(&saved.children()[0])?,
             )))
         } else {
             if !saved.children().is_empty()
@@ -69,7 +69,7 @@ impl Pixels {
     }
     fn fingerprint(&self) -> serde_json::Value {
         match self {
-            Self::Packed(p) => serde_json::json!({"packed":crate::fingerprint::bytes(p)}),
+            Self::Packed(p) => serde_json::json!({"packed":fujimod_emulator_devices::fingerprint::bytes(p)}),
             Self::Sensor(image) => serde_json::json!({"sensor":image.fingerprint()}),
         }
     }
@@ -80,7 +80,7 @@ pub struct ImageFrame {
     pub pixels: Pixels,
     pub prepared: Option<Arc<[u8]>>,
     pub source: ImageSource,
-    pub radiance: Option<crate::imaging::exposure::ExposedFrame>,
+    pub radiance: Option<crate::exposure::ExposedFrame>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImageState {
@@ -95,7 +95,7 @@ struct ImageState {
 #[derive(Clone)]
 pub struct ImageFrames(pub Arc<Mutex<ImageFrame>>);
 impl ImageFrames {
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let frame = self.0.lock().map_err(|_| "image-frame poisoned")?;
         let state = ImageState {
             edge: frame.edge,
@@ -117,12 +117,12 @@ impl ImageFrames {
             .collect();
         children.insert(0, frame.pixels.checkpoint()?);
         Ok(
-            crate::checkpoint::Checkpoint::encode("image-frame", &state)?
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("image-frame", &state)?
                 .with_blobs(blobs)
                 .with_children(children),
         )
     }
-    fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<ImageFrame, String> {
+    fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<ImageFrame, String> {
         let state: ImageState = saved.decode("image-frame")?;
         let bytes = state.layout.bytes()?;
         if saved.blobs().len() != usize::from(state.prepared)
@@ -138,7 +138,7 @@ impl ImageFrames {
             prepared: state.prepared.then(|| saved.blobs()[0].clone()),
             source: state.source,
             radiance: if state.radiance {
-                Some(crate::imaging::exposure::ExposedFrame::from_checkpoint(
+                Some(crate::exposure::ExposedFrame::from_checkpoint(
                     &saved.children()[1],
                 )?)
             } else {
@@ -146,10 +146,10 @@ impl ImageFrames {
             },
         })
     }
-    pub fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         Self::from_checkpoint(saved).map(|_| ())
     }
-    pub fn restore_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         let frame = Self::from_checkpoint(saved)?;
         *self.0.lock().map_err(|_| "image-frame poisoned")? = frame;
         Ok(())
@@ -158,7 +158,7 @@ impl ImageFrames {
     pub fn fingerprint(&self) -> serde_json::Value {
         let frame = self.0.lock().unwrap();
         serde_json::json!({"edge":frame.edge,"layout":[frame.layout.width,frame.layout.height,frame.layout.stride],
-            "pixels":frame.pixels.fingerprint(),"prepared":frame.prepared.as_ref().map(|b|crate::fingerprint::bytes(b)),"source":frame.source,
+            "pixels":frame.pixels.fingerprint(),"prepared":frame.prepared.as_ref().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)),"source":frame.source,
             "radiance":frame.radiance.as_ref().map(|f|f.fingerprint())})
     }
     pub fn new(layout: ImageLayout) -> Result<Self, String> {
@@ -267,17 +267,17 @@ pub struct StatisticsFrame {
 #[derive(Clone)]
 pub struct StatisticsFrames(pub Arc<Mutex<StatisticsFrame>>);
 impl StatisticsFrames {
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        crate::checkpoint::Checkpoint::encode(
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "statistics-frame",
             &*self.0.lock().map_err(|_| "statistics-frame poisoned")?,
         )
     }
-    pub fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         let _: StatisticsFrame = saved.decode("statistics-frame")?;
         Ok(())
     }
-    pub fn restore_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         *self.0.lock().map_err(|_| "statistics-frame poisoned")? =
             saved.decode::<StatisticsFrame>("statistics-frame")?;
         Ok(())
@@ -286,7 +286,7 @@ impl StatisticsFrames {
     pub fn fingerprint(&self) -> serde_json::Value {
         let frame = self.0.lock().unwrap();
         serde_json::json!({"edge":frame.edge,"spans":frame.spans.iter().map(|s|serde_json::json!({
-            "destination":s.destination,"offset":s.offset,"bytes":crate::fingerprint::bytes(&s.bytes)})).collect::<Vec<_>>()})
+            "destination":s.destination,"offset":s.offset,"bytes":fujimod_emulator_devices::fingerprint::bytes(&s.bytes)})).collect::<Vec<_>>()})
     }
     pub fn new(spans: Vec<StatisticsSpan>) -> Result<Self, String> {
         let mut total = 0usize;
@@ -392,7 +392,7 @@ mod checkpoint_tests {
             &pending.children()[0].blobs()[0],
             &image.0.lock().unwrap().pixels.render(layout, 0).unwrap()
         ));
-        let invalid = crate::checkpoint::Checkpoint::encode(
+        let invalid = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "image-frame",
             &ImageState {
                 edge: None,

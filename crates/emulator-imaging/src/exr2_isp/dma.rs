@@ -1,7 +1,7 @@
 //! Shared image DMA: bounded, nonoverlapping addressed rows, then status,
 //! then the physical IRQ. No host read, digest or instruction drives effects.
 use super::{Irq, due};
-use crate::Cx;
+use fujimod_emulator_devices::Cx;
 use serde::{Deserialize, Serialize};
 
 /// An explicit transfer clock, independent of the external frame cadence.
@@ -117,7 +117,7 @@ impl Raster {
 /// active rows only at `deadline`, publishes status, then calls `interrupt`.
 #[derive(Default)]
 pub struct Transfer {
-    pub pixels: crate::work::Buffer,
+    pub pixels: fujimod_emulator_devices::work::Buffer,
     raster: Option<Raster>,
     row_bytes: usize,
     deadline: Option<u64>,
@@ -129,7 +129,7 @@ impl Serialize for Transfer {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         struct Snapshot<'a> {
-            #[serde(with = "crate::checkpoint::bytes")]
+            #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
             pixels: &'a [u8],
             raster: Option<Raster>,
             row_bytes: usize,
@@ -152,7 +152,7 @@ impl<'de> Deserialize<'de> for Transfer {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         struct Snapshot {
-            #[serde(with = "crate::checkpoint::bytes")]
+            #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
             pixels: Vec<u8>,
             raster: Option<Raster>,
             row_bytes: usize,
@@ -161,7 +161,7 @@ impl<'de> Deserialize<'de> for Transfer {
         }
         let saved = Snapshot::deserialize(deserializer)?;
         Ok(Self {
-            pixels: crate::work::Buffer::restored(saved.pixels, saved.failure),
+            pixels: fujimod_emulator_devices::work::Buffer::restored(saved.pixels, saved.failure),
             raster: saved.raster,
             row_bytes: saved.row_bytes,
             deadline: saved.deadline,
@@ -174,7 +174,7 @@ impl Transfer {
         let pixels = &self.pixels;
         let (raster, row_bytes) = self.layout();
         let deadline = self.deadline;
-        let mut value = serde_json::json!({"pixels":crate::fingerprint::bytes(pixels),"raster":raster,
+        let mut value = serde_json::json!({"pixels":fujimod_emulator_devices::fingerprint::bytes(pixels),"raster":raster,
             "row_bytes":row_bytes,"deadline":deadline});
         if let Some(failure) = pixels.failure() {
             value["failure"] = failure.into();
@@ -328,9 +328,9 @@ use std::sync::{Arc, Mutex};
 pub struct IrqRoutes(Arc<Mutex<Routing>>);
 #[derive(serde::Serialize, serde::Deserialize)]
 struct Routing {
-    #[serde(with = "crate::checkpoint::array")]
+    #[serde(with = "fujimod_emulator_devices::checkpoint::array")]
     owners: [Option<usize>; 128],
-    #[serde(with = "crate::checkpoint::array")]
+    #[serde(with = "fujimod_emulator_devices::checkpoint::array")]
     banks: [Option<usize>; 128],
     enabled: [[u32; 4]; 2],
 }
@@ -346,17 +346,17 @@ impl Default for IrqRoutes {
     }
 }
 impl IrqRoutes {
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        crate::checkpoint::Checkpoint::encode(
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "image-irq-routes",
             &*self.0.lock().map_err(|_| "image-irq-routes poisoned")?,
         )
     }
-    pub fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         let _: Routing = saved.decode("image-irq-routes")?;
         Ok(())
     }
-    pub fn restore_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         *self.0.lock().map_err(|_| "image-irq-routes poisoned")? =
             saved.decode::<Routing>("image-irq-routes")?;
         Ok(())
@@ -441,7 +441,7 @@ impl RouteOutput {
         Ok(Self { routes, core })
     }
 }
-impl crate::exr2::irq::EnableOutput for RouteOutput {
+impl fujimod_emulator_devices::exr2::irq::EnableOutput for RouteOutput {
     fn publish(&self, enabled: [u32; 4]) {
         let mut routes = self.routes.0.lock().unwrap();
         if routes.enabled[self.core] == enabled {
@@ -482,7 +482,7 @@ mod fingerprint_tests {
     use super::*;
     #[test]
     fn masked_rearm_preserves_the_established_bank_through_checkpoint() {
-        use crate::exr2::irq::EnableOutput;
+        use fujimod_emulator_devices::exr2::irq::EnableOutput;
         for core in 0..2 {
             let routes = IrqRoutes::default();
             let output = RouteOutput::new(routes.clone(), core).unwrap();
@@ -508,7 +508,7 @@ mod fingerprint_tests {
     }
     #[test]
     fn ambiguous_enables_refuse_rearm_even_with_an_established_bank() {
-        use crate::exr2::irq::EnableOutput;
+        use fujimod_emulator_devices::exr2::irq::EnableOutput;
         let routes = IrqRoutes::default();
         let outputs = [
             RouteOutput::new(routes.clone(), 0).unwrap(),
@@ -600,7 +600,7 @@ mod fingerprint_tests {
         transfer.pixels.fill(0xa5);
         let identity = transfer.fingerprint();
         assert!(serde_json::to_vec(&identity).unwrap().len() < 500);
-        let saved = crate::checkpoint::Checkpoint::encode("transfer", &transfer).unwrap();
+        let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &transfer).unwrap();
         let mut restored: Transfer = saved.decode("transfer").unwrap();
         assert_eq!(restored.fingerprint(), identity);
         *restored.pixels.last_mut().unwrap() ^= 1;

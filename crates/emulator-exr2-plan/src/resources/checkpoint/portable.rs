@@ -1,7 +1,7 @@
 //! A resource archive includes external pixels and media. Shared wires are
 //! rebound by the receiving graph's existing checkpoint validator/restorer.
 use super::*;
-use fujimod_emulator_devices::scene::{Frame, FrameEdge, SensorFrames};
+use fujimod_emulator_imaging::scene::{Frame, FrameEdge, SensorFrames};
 use serde::{Deserialize, Serialize};
 
 const KIND: &str = "session-resources-v1";
@@ -138,7 +138,7 @@ impl ResourceSnapshot {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::parts::sd_card;
-    use fujimod_emulator_devices::scene::FramePixels;
+    use fujimod_emulator_imaging::scene::FramePixels;
 
     fn resources() -> Resources {
         let mut resources = Resources::default();

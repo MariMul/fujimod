@@ -2,25 +2,19 @@
 //! sensor-command transport, declared physical phase clocks, and RAW channels
 //! 2/4. No startup ledger, program signature, or instruction inspection.
 mod registers;
-use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle;
-use fujimod_emulator_devices::exr2::isp::{
-    Irq,
-    dma::{Raster, Transfer, physical},
-    due,
-    parameters::ParameterHandle,
-    word,
-};
-use fujimod_emulator_devices::imaging::film::Film;
+use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
+use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{Raster, Transfer, physical}, due, parameters::ParameterHandle, word};
+use fujimod_emulator_imaging::film::Film;
 use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_parts_sensor::sensor::Sensor;
-use fujimod_emulator_devices::scene::FrameEdge;
+use fujimod_emulator_imaging::scene::FrameEdge;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
-use fujimod_emulator_devices::exr2::isp::options::input::{Options, Command, PhaseAck, ClockMode, ClockSource};
+use fujimod_emulator_imaging::exr2_isp::options::input::{Options, Command, PhaseAck, ClockMode, ClockSource};
 
 pub struct Wiring {
-    pub frame_period: Option<fujimod_emulator_devices::imaging::timing::FramePeriod>,
-    pub statistics_grid: Option<fujimod_emulator_devices::imaging::analysis::GridHandle>,
+    pub frame_period: Option<fujimod_emulator_imaging::timing::FramePeriod>,
+    pub statistics_grid: Option<fujimod_emulator_imaging::analysis::GridHandle>,
     pub phase_irqs: [Irq; 2],
     pub raw_irq: Irq,
     pub readback_irq: Irq,
@@ -28,7 +22,7 @@ pub struct Wiring {
     pub sensor: Option<Sensor>,
     pub parameters: Option<ParameterHandle>,
     pub memory_outputs: Option<MemoryOutputHandle>,
-    pub edges: fujimod_emulator_devices::scene::FramePhases,
+    pub edges: fujimod_emulator_imaging::scene::FramePhases,
     pub start_tick: u64,
 }
 #[derive(Serialize, Deserialize)]
@@ -1045,8 +1039,8 @@ impl Device for ImageInput {
         let (s, e, sensor, outputs, controls): (
             State,
             [Option<FrameEdge>; 2],
-            Option<fujimod_emulator_devices::scene::SensorFrames>,
-            Option<fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputs>,
+            Option<fujimod_emulator_imaging::scene::SensorFrames>,
+            Option<fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputs>,
             Option<serde_json::Value>,
         ) = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
         if s.r.len() != 0x400 / 4

@@ -1,4 +1,5 @@
-use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
+use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
+use fujimod_emulator_imaging::exr2_isp as isp;
 use fujimod_emulator_devices::{bus::InterruptLine, graph::Mapping};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -89,11 +90,11 @@ pub struct Sensor {
 pub enum SensorControls {
     Xtrans16 {
         options: serde_json::Value,
-        calibration: fujimod_emulator_devices::imaging::exposure::Calibration,
+        calibration: fujimod_emulator_imaging::exposure::Calibration,
         exposure: String,
         aperture: String,
-        projection: Option<fujimod_emulator_devices::imaging::optics::Spec>,
-        frame_clock: Option<fujimod_emulator_devices::imaging::timing::ClockOutput>,
+        projection: Option<fujimod_emulator_imaging::optics::Spec>,
+        frame_clock: Option<fujimod_emulator_imaging::timing::ClockOutput>,
     },
 }
 #[derive(Deserialize)]
@@ -211,7 +212,7 @@ pub enum Model {
         options: serde_json::Value,
     },
     ImageCombination {
-        options: fujimod_emulator_devices::exr2::isp::options::combination::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::combination::Options,
         irq: isp::Irq,
     },
     I2c {
@@ -229,13 +230,13 @@ pub enum Model {
         medium: String,
     },
     ExternalFrames {
-        options: fujimod_emulator_devices::scene::clocked::Options,
+        options: fujimod_emulator_imaging::scene::clocked::Options,
         sensor_clock: Option<String>,
         images: String,
         statistics: String,
         activity: Option<InputSignal>,
         position: Option<String>,
-        radiometric: Option<fujimod_emulator_devices::imaging::radiometric::Spec>,
+        radiometric: Option<fujimod_emulator_imaging::radiometric::Spec>,
         phase_edges: Option<String>,
         frame_period: Option<String>,
     },
@@ -367,7 +368,7 @@ pub enum Model {
         ram_bytes: u64,
     },
     ImageInput {
-        options: fujimod_emulator_devices::exr2::isp::options::input::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::input::Options,
         phase_irqs: [isp::Irq; 2],
         raw_irq: isp::Irq,
         readback_irq: isp::Irq,
@@ -380,7 +381,7 @@ pub enum Model {
         edges: String,
     },
     OutputChannel {
-        options: fujimod_emulator_devices::exr2::isp::options::output::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::output::Options,
         base: u64,
         irq: u32,
         channel: usize,
@@ -390,18 +391,18 @@ pub enum Model {
         memory_outputs: Option<String>,
     },
     Statistics {
-        options: fujimod_emulator_devices::exr2::isp::options::producer::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::producer::Options,
         routes: String,
         frames: String,
         images: String,
         grid: Option<String>,
     },
     PhaseDetection {
-        options: fujimod_emulator_devices::exr2::isp::options::phase_detection::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::phase_detection::Options,
         routes: String,
     },
     WindowAnalysis {
-        options: fujimod_emulator_devices::exr2::isp::options::window_analysis::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::window_analysis::Options,
         routes: String,
     },
     Parameters {
@@ -409,26 +410,26 @@ pub enum Model {
         bank: String,
     },
     RawConversion {
-        options: fujimod_emulator_devices::exr2::isp::options::raw::RegisterOptions,
+        options: fujimod_emulator_imaging::exr2_isp::options::raw::RegisterOptions,
     },
     Prefilter {
-        options: fujimod_emulator_devices::exr2::isp::options::raw::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::raw::Options,
         irq: isp::Irq,
     },
     RawStatistics {
-        options: fujimod_emulator_devices::exr2::isp::options::raw::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::raw::Options,
         irq: isp::Irq,
     },
     StillProcessor {
-        options: fujimod_emulator_devices::exr2::isp::options::still::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::still::Options,
         irq: isp::Irq,
     },
     Scaler {
-        options: fujimod_emulator_devices::exr2::isp::options::scaler::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::scaler::Options,
         irq: isp::Irq,
     },
     Warp {
-        options: fujimod_emulator_devices::exr2::isp::options::warp::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::warp::Options,
         irq: isp::Irq,
         stream: String,
     },
@@ -446,13 +447,13 @@ pub enum Model {
         irq: isp::Irq,
     },
     Block11000 {
-        options: fujimod_emulator_devices::exr2::isp::options::block11000::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::block11000::Options,
     },
     FaceDetector {
-        options: fujimod_emulator_devices::exr2::isp::options::face_detector::Options,
+        options: fujimod_emulator_imaging::exr2_isp::options::face_detector::Options,
     },
     FaceResults {
-        profile: fujimod_emulator_devices::exr2::isp::options::face_results::Profile,
+        profile: fujimod_emulator_imaging::exr2_isp::options::face_results::Profile,
         routes: String,
     },
     Adapter {

@@ -1,6 +1,6 @@
 //! RAW readback destinations the EXR II image input and output banks share
 //! through one board wire.
-use crate::exr2::isp::dma::{Raster, Transfer};
+use crate::exr2_isp::dma::{Raster, Transfer};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 

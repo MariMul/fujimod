@@ -1,6 +1,6 @@
 use super::*;
-use fujimod_emulator_devices::imaging::{exposure::Calibration, radiometric::Renderer};
-use fujimod_emulator_devices::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
+use fujimod_emulator_imaging::{exposure::Calibration, radiometric::Renderer};
+use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
 use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use std::sync::{Arc, Mutex};
 
@@ -73,14 +73,14 @@ fn frozen_scene_jobs_keep_latched_bytes_pair_order_and_pending_restore() {
         },
         sensor,
         Arc::new(Mutex::new(
-            fujimod_emulator_devices::imaging::exposure::Exposure {
+            fujimod_emulator_imaging::exposure::Exposure {
                 seconds: 0.0001,
                 analog_gain: 1.,
             },
         )),
         Arc::new(Mutex::new(8.)),
         Arc::new(Mutex::new(
-            fujimod_emulator_devices::exr2::isp::parameters::Parameters {
+            fujimod_emulator_imaging::exr2_isp::parameters::Parameters {
                 words: fujimod_emulator_devices::test_host::film_words(),
                 film: Default::default(),
             },
@@ -91,7 +91,7 @@ fn frozen_scene_jobs_keep_latched_bytes_pair_order_and_pending_restore() {
     let image = renderer.capture().unwrap().unwrap();
     // Derive the oracle from an independent restored image, leaving the queued
     // image's raster cache empty when it leaves the owner.
-    let expected = fujimod_emulator_devices::imaging::radiometric::Image::from_checkpoint(
+    let expected = fujimod_emulator_imaging::radiometric::Image::from_checkpoint(
         &image.checkpoint().unwrap(),
     )
     .unwrap()
@@ -107,7 +107,7 @@ fn frozen_scene_jobs_keep_latched_bytes_pair_order_and_pending_restore() {
     {
         let mut frame = images.0.lock().unwrap();
         frame.edge = Some(FrameEdge { index: 1, tick: 10 });
-        frame.pixels = fujimod_emulator_devices::scene::frames::Pixels::Sensor(image);
+        frame.pixels = fujimod_emulator_imaging::scene::frames::Pixels::Sensor(image);
     }
     for output in &mut outputs {
         advance(output, &mut host, 10);
@@ -197,7 +197,7 @@ fn failed_worker_result_survives_checkpoint_and_prevents_either_bank_dma() {
 
 #[test]
 fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_destination() {
-    use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputs;
+    use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputs;
     use fujimod_emulator_devices::test_host::read;
     for latch_routes_first in [false, true] {
         let (mut outputs, _, channels) = pair();

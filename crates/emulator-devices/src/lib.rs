@@ -14,14 +14,12 @@ pub mod exr2;
 pub mod fingerprint;
 pub mod graph;
 pub mod graphics;
-pub mod imaging;
 pub mod keyed_io;
 pub mod lz_osd;
 pub mod map;
 pub mod parts;
 pub mod math;
 pub mod record;
-pub mod scene;
 pub mod signals;
 #[doc(hidden)]
 pub mod test_host;

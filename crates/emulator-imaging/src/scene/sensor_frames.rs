@@ -99,18 +99,18 @@ impl Frame {
     pub fn fingerprint(&self) -> serde_json::Value {
         let pixels = match &self.pixels {
             FramePixels::Rgb24(bytes) => {
-                serde_json::json!({"kind":"rgb24","contents":crate::fingerprint::bytes(bytes)})
+                serde_json::json!({"kind":"rgb24","contents":fujimod_emulator_devices::fingerprint::bytes(bytes)})
             }
             FramePixels::Raw16(samples) => {
-                serde_json::json!({"kind":"raw16","contents":crate::fingerprint::words16(samples)})
+                serde_json::json!({"kind":"raw16","contents":fujimod_emulator_devices::fingerprint::words16(samples)})
             }
             FramePixels::Mosaic { cfa, radiance } => {
-                serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":crate::fingerprint::float32s(radiance.values())})
+                serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":fujimod_emulator_devices::fingerprint::float32s(radiance.values())})
             }
         };
         serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels})
     }
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let (kind, pixels): (PixelKind, Arc<[u8]>) = match &self.pixels {
             FramePixels::Rgb24(bytes) => (PixelKind::Rgb24, bytes.clone()),
             FramePixels::Raw16(words) => (
@@ -129,13 +129,13 @@ impl Frame {
                 radiance.bytes().clone(),
             ),
         };
-        Ok(crate::checkpoint::Checkpoint::encode(
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "sensor-frame",
             &(self.width, self.height, self.white_luminance, kind),
         )?
         .with_blobs(vec![pixels]))
     }
-    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
         let (width, height, white, kind): (usize, usize, f64, PixelKind) =
             saved.decode("sensor-frame")?;
         let bytes_per_site = match kind {
@@ -334,7 +334,7 @@ mod tests {
         let mut encoded = serde_json::to_value(&frame).unwrap();
         encoded["pixels"]["Mosaic"]["radiance"]["norm"] = serde_json::json!(0.);
         assert!(serde_json::from_value::<Frame>(encoded).is_err());
-        let corrupt = crate::checkpoint::Checkpoint::encode(
+        let corrupt = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "sensor-frame",
             &(
                 2usize,
@@ -505,15 +505,15 @@ mod fingerprint_tests {
     #[test]
     fn raw_fingerprint_uses_every_word_in_little_endian_order() {
         let words = [0x1234, 0xff00, 0, 0xabcd];
-        let identity = crate::fingerprint::words16(&words);
+        let identity = fujimod_emulator_devices::fingerprint::words16(&words);
         let bytes: Vec<_> = words.iter().flat_map(|v| v.to_le_bytes()).collect();
         assert_eq!(
             identity["sha256"],
-            crate::fingerprint::bytes(&bytes)["sha256"]
+            fujimod_emulator_devices::fingerprint::bytes(&bytes)["sha256"]
         );
         assert_ne!(
             identity,
-            crate::fingerprint::words16(&[0x1234, 0xff00, 0, 0xabce])
+            fujimod_emulator_devices::fingerprint::words16(&[0x1234, 0xff00, 0, 0xabce])
         );
     }
 }

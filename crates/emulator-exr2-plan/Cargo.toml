@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-imaging.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-catalog.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }

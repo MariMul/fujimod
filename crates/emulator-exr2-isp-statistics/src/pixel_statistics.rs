@@ -1,6 +1,6 @@
 //! Register-selected EXR II color windows and accumulation planes.
 //! CFA sample densities come from the selected physical sensor calibration.
-use fujimod_emulator_devices::imaging::exposure::ExposedFrame;
+use fujimod_emulator_imaging::exposure::ExposedFrame;
 
 /// A bounded pure memo of pixel measurements. DMA addresses, frame edges and
 /// completion clocks are handled by the producer even when these bytes repeat.
@@ -10,7 +10,7 @@ pub(super) struct Cache {
         ExposedFrame,
         [usize; 2],
         [[u32; 23]; 2],
-        Vec<fujimod_emulator_devices::scene::StatisticsSpan>,
+        Vec<fujimod_emulator_imaging::scene::StatisticsSpan>,
     )>,
 }
 impl Cache {
@@ -41,7 +41,7 @@ impl Cache {
         frame: &ExposedFrame,
         grid: [usize; 2],
         registers: &[u32],
-    ) -> Result<&[fujimod_emulator_devices::scene::StatisticsSpan], String> {
+    ) -> Result<&[fujimod_emulator_imaging::scene::StatisticsSpan], String> {
         let words = [0x100, 0x200].map(|base| std::array::from_fn(|i| registers[base / 4 + i]));
         let same = self
             .previous
@@ -148,8 +148,8 @@ pub fn color_spans(
     frame: &ExposedFrame,
     grid: [usize; 2],
     r: &[u32],
-) -> Result<Vec<fujimod_emulator_devices::scene::StatisticsSpan>, String> {
-    use fujimod_emulator_devices::scene::StatisticsSpan;
+) -> Result<Vec<fujimod_emulator_imaging::scene::StatisticsSpan>, String> {
+    use fujimod_emulator_imaging::scene::StatisticsSpan;
     let sum = |[x, y, w, h]: [usize; 4]| -> Result<[u64; 3], String> {
         if w * h > 32_000_000 {
             return Err("color statistics window exceeds sensor extent".into());
@@ -245,8 +245,8 @@ pub fn contrast_spans(
     frame: &ExposedFrame,
     grid: [usize; 2],
     r: &[u32],
-) -> Result<Vec<fujimod_emulator_devices::scene::StatisticsSpan>, String> {
-    use fujimod_emulator_devices::scene::StatisticsSpan;
+) -> Result<Vec<fujimod_emulator_imaging::scene::StatisticsSpan>, String> {
+    use fujimod_emulator_imaging::scene::StatisticsSpan;
     let energy = |x: usize, y: usize, w: usize, h: usize| -> Result<[u64; 2], String> {
         if w.checked_mul(h).is_none_or(|n| n > 32_000_000) {
             return Err("contrast window exceeds sensor extent".into());
@@ -365,9 +365,9 @@ mod exact_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::imaging::exposure::Calibration;
-    use fujimod_emulator_devices::imaging::exposure::Exposure;
-    use fujimod_emulator_devices::scene::{Frame, FramePixels, SensorFrames};
+    use fujimod_emulator_imaging::exposure::Calibration;
+    use fujimod_emulator_imaging::exposure::Exposure;
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
     use std::sync::{Arc, Mutex};
     #[test]
     fn color_grid_keeps_horizontal_and_vertical_gaps_on_their_register_axes() {

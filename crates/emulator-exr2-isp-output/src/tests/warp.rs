@@ -1,4 +1,4 @@
-use fujimod_emulator_devices::exr2::isp::*;
+use fujimod_emulator_imaging::exr2_isp::*;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;
 #[test]
@@ -8,7 +8,7 @@ fn warp_memory_dma_keeps_alignment_rows_and_acknowledges_status() {
         .copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]);
     h.ram[0x9000..0x9040].fill(0xa5);
     let mut d = Warp::new(
-        fujimod_emulator_devices::exr2::isp::options::warp::Options {
+        fujimod_emulator_imaging::exr2_isp::options::warp::Options {
             completion_ticks: 5,
             stop_ticks: 2,
         },

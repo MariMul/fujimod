@@ -19,13 +19,13 @@ pub struct Irq {
     pub line: u32,
 }
 impl Irq {
-    pub fn raise(self, cx: &mut crate::Cx<'_>) -> Result<(), String> {
+    pub fn raise(self, cx: &mut fujimod_emulator_devices::Cx<'_>) -> Result<(), String> {
         cx.raise_irq(self.core, self.line)
     }
 }
 
 pub fn word(
-    cx: &mut crate::Cx<'_>,
+    cx: &mut fujimod_emulator_devices::Cx<'_>,
     address: u64,
     size: u8,
     base: u64,

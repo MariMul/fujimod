@@ -1,5 +1,5 @@
 //! Offline pixel-law probe. No CPU, device state, completion, or firmware substitution.
-use fujimod_emulator_devices::imaging::film::Film;
+use fujimod_emulator_imaging::film::Film;
 use fujimod_emulator_image_codecs::jpeg::{Codec, fdct};
 use serde::Deserialize;
 use std::{

@@ -1,8 +1,8 @@
-use fujimod_emulator_devices::exr2::isp::dma::IrqRoutes;
+use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
 use crate::*;
 use fujimod_emulator_exr2_isp_testing::*;
-use fujimod_emulator_devices::imaging::analysis::ImageLayout;
-use fujimod_emulator_devices::scene::{FrameEdge, ImageFrames, StatisticsFrames, StatisticsSpan};
+use fujimod_emulator_imaging::analysis::ImageLayout;
+use fujimod_emulator_imaging::scene::{FrameEdge, ImageFrames, StatisticsFrames, StatisticsSpan};
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_devices::Device;
 pub(super) fn producer(
@@ -30,7 +30,7 @@ fn producer_with_metering(
     width: usize,
     height: usize,
     pixels_per_tick: Option<u64>,
-    metering: Option<fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic>,
+    metering: Option<fujimod_emulator_imaging::exr2_isp::options::metering::Arithmetic>,
 ) -> (Block18000, StatisticsFrames, ImageFrames, IrqRoutes, Memory) {
     let images = ImageFrames::from_pixels(
         ImageLayout {
@@ -56,11 +56,11 @@ fn producer_with_metering(
     let frames = StatisticsFrames::new(spans).unwrap();
     let routes = routes(0x2e);
     let mut d = Block18000::new(
-        fujimod_emulator_devices::exr2::isp::options::producer::Options {
+        fujimod_emulator_imaging::exr2_isp::options::producer::Options {
             pixels_per_tick,
             contrast: None,
             metering,
-            clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
+            clock: fujimod_emulator_imaging::exr2_isp::dma::Clock::Fixed { ticks: 5 },
             ack_ticks: 2,
             stop_ticks: 3,
             histogram: hist,
@@ -135,13 +135,13 @@ fn producer_with_raster_banks() -> (
     .unwrap();
     let routes = routes(0x2e);
     let mut d = Block18000::new(
-        fujimod_emulator_devices::exr2::isp::options::producer::Options {
+        fujimod_emulator_imaging::exr2_isp::options::producer::Options {
             pixels_per_tick: None,
             contrast: Some(
-                fujimod_emulator_devices::exr2::isp::contrast::Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
+                fujimod_emulator_imaging::exr2_isp::contrast::Arithmetic::SquaredHorizontalGradients { luma_bits: 8 },
             ),
-            metering: Some(fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic::RgbCellMeans12),
-            clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
+            metering: Some(fujimod_emulator_imaging::exr2_isp::options::metering::Arithmetic::RgbCellMeans12),
+            clock: fujimod_emulator_imaging::exr2_isp::dma::Clock::Fixed { ticks: 5 },
             ack_ticks: 2,
             stop_ticks: 3,
             histogram: false,
@@ -241,8 +241,8 @@ fn statistics_dma_histogram_and_paired_ack_backpressure() {
 
 #[test]
 fn switching_from_sensor_statistics_restores_the_external_span_layout() {
-    use fujimod_emulator_devices::imaging::exposure::{Calibration, ExposedFrame, Exposure};
-    use fujimod_emulator_devices::scene::{Frame, FramePixels};
+    use fujimod_emulator_imaging::exposure::{Calibration, ExposedFrame, Exposure};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels};
     let (mut d, frames, images, _, mut m) = producer(false);
     let edge = FrameEdge { index: 1, tick: 10 };
     images.publish(edge, &[5; 16]).unwrap();
@@ -319,11 +319,11 @@ fn external_statistics_preserve_a_span_overlapping_the_histogram_destination() {
     ];
     let frames = StatisticsFrames::new(spans).unwrap();
     let mut d = Block18000::new(
-        fujimod_emulator_devices::exr2::isp::options::producer::Options {
+        fujimod_emulator_imaging::exr2_isp::options::producer::Options {
             pixels_per_tick: None,
             contrast: None,
             metering: None,
-            clock: fujimod_emulator_devices::exr2::isp::dma::Clock::Fixed { ticks: 5 },
+            clock: fujimod_emulator_imaging::exr2_isp::dma::Clock::Fixed { ticks: 5 },
             ack_ticks: 2,
             stop_ticks: 3,
             histogram: true,
@@ -436,7 +436,7 @@ fn histogram_samples_the_guest_window_and_latches_pixels_before_dma() {
 
 #[test]
 fn histogram_crop_clips_present_samples_without_resizing_or_padding() {
-    use fujimod_emulator_devices::imaging::analysis::histogram_luma;
+    use fujimod_emulator_imaging::analysis::histogram_luma;
     let layout = ImageLayout {
         width: 4,
         height: 2,
@@ -549,14 +549,14 @@ fn pixel_processing_precedes_statistics_dma_and_latches_the_exposure() {
 
 #[test]
 fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
-    use fujimod_emulator_devices::imaging::exposure::{Calibration, ExposedFrame, Exposure};
-    use fujimod_emulator_devices::scene::{Frame, FramePixels};
+    use fujimod_emulator_imaging::exposure::{Calibration, ExposedFrame, Exposure};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels};
     let (mut d, frames, images, _, mut m) = producer_with_metering(
         false,
         4,
         2,
         None,
-        Some(fujimod_emulator_devices::exr2::isp::options::metering::Arithmetic::RgbCellMeans12),
+        Some(fujimod_emulator_imaging::exr2_isp::options::metering::Arithmetic::RgbCellMeans12),
     );
     let edge = FrameEdge { index: 1, tick: 10 };
     images.publish(edge, &[5; 16]).unwrap();
@@ -587,7 +587,7 @@ fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
 
 #[test]
 fn histogram_coordinates_follow_the_upstream_extent_instead_of_the_display_raster() {
-    use fujimod_emulator_devices::imaging::analysis::histogram_luma;
+    use fujimod_emulator_imaging::analysis::histogram_luma;
     let layout = ImageLayout {
         width: 4,
         height: 4,
@@ -636,11 +636,11 @@ fn raster_worker_result_is_frozen_in_fingerprint_and_checkpoint_until_due() {
     registers[0x104 / 4] = layout.height as u32 - 1;
     registers[0x200 / 4] = layout.width as u32 - 1;
     registers[0x204 / 4] = layout.height as u32 - 1;
-    let (expected_contrast, expected_bands) = fujimod_emulator_devices::exr2::isp::contrast::banks(
+    let (expected_contrast, expected_bands) = fujimod_emulator_imaging::exr2_isp::contrast::banks(
         &registers,
         &pixels,
         layout,
-        &fujimod_emulator_devices::exr2::isp::contrast::Arithmetic::SquaredHorizontalGradients {
+        &fujimod_emulator_imaging::exr2_isp::contrast::Arithmetic::SquaredHorizontalGradients {
             luma_bits: 8,
         },
     )

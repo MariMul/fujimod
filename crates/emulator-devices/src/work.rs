@@ -203,7 +203,7 @@ impl Buffer {
     pub fn check(&self) -> Result<(), String> {
         self.failure().map_or(Ok(()), |error| Err(error.to_owned()))
     }
-    pub(crate) fn restored(bytes: Vec<u8>, failure: Option<String>) -> Self {
+    pub fn restored(bytes: Vec<u8>, failure: Option<String>) -> Self {
         Self {
             bytes,
             failure,

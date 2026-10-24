@@ -4,13 +4,13 @@
 //! offset 4 admits an aligned detector input bus address and one IRQ47 owner.
 //! The declared 400,000-tick latency is unmeasured. Completion retains that
 //! endpoint even if the interrupt controller masks it after admission.
-use fujimod_emulator_devices::exr2::isp::Irq;
-use fujimod_emulator_devices::exr2::isp::dma::IrqRoutes;
+use fujimod_emulator_imaging::exr2_isp::Irq;
+use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
-use fujimod_emulator_devices::exr2::isp::options::face_results::Profile;
+use fujimod_emulator_imaging::exr2_isp::options::face_results::Profile;
 
 pub const BASE: u64 = crate::face_detector::BASE;
 pub const LATENCY: u64 = 400_000;

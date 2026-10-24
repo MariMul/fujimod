@@ -8,7 +8,7 @@ pub struct ResourceSnapshot {
     wires: BTreeMap<String, Checkpoint>,
     images: BTreeMap<String, Checkpoint>,
     statistics: BTreeMap<String, Checkpoint>,
-    sensors: BTreeMap<String, fujimod_emulator_devices::scene::SensorFrames>,
+    sensors: BTreeMap<String, fujimod_emulator_imaging::scene::SensorFrames>,
     media: Checkpoint,
     nands: BTreeMap<String, Checkpoint>,
 }
@@ -92,7 +92,7 @@ impl Wire {
                 }
             }
             Self::Exposure(_) => {
-                let value: fujimod_emulator_devices::imaging::exposure::Exposure =
+                let value: fujimod_emulator_imaging::exposure::Exposure =
                     saved.decode("physical-exposure")?;
                 if !value.seconds.is_finite()
                     || value.seconds < 0.
@@ -122,14 +122,14 @@ impl Wire {
                 let _: isp::parameters::Parameters = saved.decode("parameters")?;
             }
             Self::MemoryOutputs(_) => {
-                let _: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputs =
+                let _: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputs =
                     saved.decode("memory-outputs")?;
             }
             Self::Stream(_) => {
                 let _: isp::stream::Stream = saved.decode("stream")?;
             }
             Self::PhaseEdges(_) => {
-                let _: [Option<fujimod_emulator_devices::scene::FrameEdge>; 2] =
+                let _: [Option<fujimod_emulator_imaging::scene::FrameEdge>; 2] =
                     saved.decode("phase-edges")?;
             }
             Self::OutputChannels(v) => v.validate_checkpoint(saved)?,
@@ -303,18 +303,18 @@ impl Resources {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
+    use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
     #[test]
     fn checkpoint_graph_resources_restore_existing_stream_scene_and_signal_handles() {
         let mut resources = Resources::default();
         let logic = fujimod_emulator_devices::signals::Level::new(false);
-        let position = fujimod_emulator_devices::scene::optics::Position::default();
+        let position = fujimod_emulator_imaging::scene::optics::Position::default();
         position.publish(23);
         resources
             .wires
             .insert("focus".into(), Wire::OpticalPosition(position.clone()));
         let stream: isp::stream::StreamHandle = Default::default();
-        let phases: fujimod_emulator_devices::scene::FramePhases = Default::default();
+        let phases: fujimod_emulator_imaging::scene::FramePhases = Default::default();
         resources
             .wires
             .insert("cable".into(), Wire::LogicLevel(logic.clone()));
@@ -324,7 +324,7 @@ mod tests {
         resources
             .wires
             .insert("phases".into(), Wire::PhaseEdges(phases.clone()));
-        let image = ImageFrames::new(fujimod_emulator_devices::imaging::analysis::ImageLayout {
+        let image = ImageFrames::new(fujimod_emulator_imaging::analysis::ImageLayout {
             width: 8,
             height: 2,
             stride: 16,
@@ -379,7 +379,7 @@ mod optical_wire_tests {
     use super::*;
     #[test]
     fn optical_position_restores_the_existing_shared_wire() {
-        let position = fujimod_emulator_devices::scene::optics::Position::default();
+        let position = fujimod_emulator_imaging::scene::optics::Position::default();
         let reader = position.clone();
         position.publish(-62);
         let wire = Wire::OpticalPosition(position.clone());
@@ -396,7 +396,7 @@ mod optical_wire_tests {
 #[cfg(test)]
 mod exposure_wire_tests {
     use super::*;
-    use fujimod_emulator_devices::imaging::exposure::Exposure;
+    use fujimod_emulator_imaging::exposure::Exposure;
     #[test]
     fn physical_wires_restore_shared_values_and_refuse_bad_iris_before_mutation() {
         let mut resources = Resources::default();

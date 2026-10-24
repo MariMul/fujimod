@@ -1,6 +1,6 @@
 //! Declared packed-422 signed Q8 four-source arithmetic. Rounding, clipping
 //! and neutral chroma bias are explicit approximations, not silicon results.
-use fujimod_emulator_devices::exr2::isp::dma::{MAX_BYTES, Raster};
+use fujimod_emulator_imaging::exr2_isp::dma::{MAX_BYTES, Raster};
 use super::{Prepared, read_rows};
 use fujimod_emulator_devices::Cx;
 

@@ -11,7 +11,7 @@ pub type Cfa = [[u8; 6]; 6];
 /// share this buffer with their restores to preserve pixel identity.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Radiance {
-    #[serde(with = "crate::checkpoint::shared_bytes")]
+    #[serde(with = "fujimod_emulator_devices::checkpoint::shared_bytes")]
     counts: Arc<[u8]>,
     pub norm: f64,
 }
@@ -214,11 +214,11 @@ mod tests {
             let original: Vec<_> = (0..=u16::MAX)
                 .flat_map(|raw| ((f64::from(raw) / norm) as f32).to_le_bytes())
                 .collect();
-            let identity = crate::fingerprint::float32s(radiance.values());
+            let identity = fujimod_emulator_devices::fingerprint::float32s(radiance.values());
             assert_eq!(identity["floats"], 65536);
             assert_eq!(
                 identity["sha256"],
-                crate::fingerprint::bytes(&original)["sha256"]
+                fujimod_emulator_devices::fingerprint::bytes(&original)["sha256"]
             );
         }
         assert!(Radiance::from_bytes(Arc::from([0u8]), 1.).is_err());

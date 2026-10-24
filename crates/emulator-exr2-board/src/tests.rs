@@ -498,8 +498,8 @@ fn serial_lens_owns_its_part_and_uses_native_gpio_selection_and_pulse_wiring() {
 
 #[test]
 fn readback_and_jpeg_peers_share_real_constructor_handles() {
-    use fujimod_emulator_devices::imaging::analysis::ImageLayout;
-    use fujimod_emulator_devices::scene::ImageFrames;
+    use fujimod_emulator_imaging::analysis::ImageLayout;
+    use fujimod_emulator_imaging::scene::ImageFrames;
     let mut doc = document(vec![
         node(
             "parameters",
@@ -600,8 +600,8 @@ fn graphics_uses_real_constructor_and_two_declared_controller_outputs() {
 
 #[test]
 fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
-    use fujimod_emulator_devices::imaging::analysis::ImageLayout;
-    use fujimod_emulator_devices::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
+    use fujimod_emulator_imaging::analysis::ImageLayout;
+    use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
     let plan = document(vec![json!({
         "name":"frames", "boot_entries":["loader"], "windows":[], "dependencies":[],
         "model":{"kind":"external-frames", "options":{"period_ticks":10,"phase_source":null,"optics":null},

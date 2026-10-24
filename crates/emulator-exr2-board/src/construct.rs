@@ -1,7 +1,8 @@
 use fujimod_emulator_exr2_io::{adc, hdmi, usb};
 use fujimod_emulator_exr2_audio::{self as audio};
 use fujimod_emulator_exr2_system::{boot, core_release, dram, reset, timer};
-use fujimod_emulator_devices::exr2::{clock, gpio, irq, isp, pulse};
+use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
+use fujimod_emulator_imaging::exr2_isp as isp;
 use fujimod_emulator_exr2_companion::companion;
 use fujimod_emulator_exr2_display::{formatter, timing};
 use fujimod_emulator_exr2_serial::{dma, spi};
@@ -380,7 +381,7 @@ impl Builder<'_> {
             }
             Model::ImageCombination { options, irq } => {
                 if windows.len() != 1
-                    || windows[0].base != fujimod_emulator_devices::exr2::isp::options::combination::BASE
+                    || windows[0].base != fujimod_emulator_imaging::exr2_isp::options::combination::BASE
                     || windows[0].size != 0x500
                 {
                     return Err("image combination requires its register window".into());
@@ -451,9 +452,9 @@ impl Builder<'_> {
                 radiometric,
                 phase_edges,
                 frame_period,
-            } => Box::new(fujimod_emulator_devices::scene::clocked::ClockedFrames::new(
+            } => Box::new(fujimod_emulator_imaging::scene::clocked::ClockedFrames::new(
                 options,
-                fujimod_emulator_devices::scene::clocked::Wiring {
+                fujimod_emulator_imaging::scene::clocked::Wiring {
                     sensor_clock: sensor_clock
                         .map(|name| {
                             resources
@@ -475,7 +476,7 @@ impl Builder<'_> {
                         .transpose()?,
                     renderer: radiometric
                         .map(|r| {
-                            fujimod_emulator_devices::imaging::radiometric::Renderer::new(
+                            fujimod_emulator_imaging::radiometric::Renderer::new(
                                 r.calibration,
                                 resources
                                     .inputs
@@ -489,7 +490,7 @@ impl Builder<'_> {
                                 r.projection
                                     .map(|p| {
                                         let focus = wire!(resources, id, p.focus.clone(), Focus);
-                                        fujimod_emulator_devices::imaging::optics::Projection::new(p, focus)
+                                        fujimod_emulator_imaging::optics::Projection::new(p, focus)
                                     })
                                     .transpose()?,
                             )
@@ -881,7 +882,7 @@ impl Builder<'_> {
                             )?;
                             if let Some(p) = projection {
                                 let focus = wire!(resources, id, p.focus.clone(), Focus);
-                                sensor.attach_projection(fujimod_emulator_devices::imaging::optics::Projection::new(
+                                sensor.attach_projection(fujimod_emulator_imaging::optics::Projection::new(
                                     p, focus,
                                 )?);
                             }

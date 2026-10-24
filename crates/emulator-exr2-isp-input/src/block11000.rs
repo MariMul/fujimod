@@ -7,7 +7,7 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use fujimod_emulator_devices::exr2::isp::options::block11000::{Options, ControlMode};
+use fujimod_emulator_imaging::exr2_isp::options::block11000::{Options, ControlMode};
 
 pub const BASE: u64 = 0xfff11000;
 const STROBE_VALUE: u32 = 0x000d0000;

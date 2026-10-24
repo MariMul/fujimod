@@ -5,7 +5,7 @@
 //! are explicit approximations. The tile widths bound internal working windows;
 //! this implementation evaluates their full-raster equivalent. No firmware
 //! state, instruction identity or callback participates in preparation.
-use fujimod_emulator_devices::exr2::isp::dma::{MAX_BYTES, Raster};
+use fujimod_emulator_imaging::exr2_isp::dma::{MAX_BYTES, Raster};
 use super::{Prepared, read_rows};
 use fujimod_emulator_devices::Cx;
 

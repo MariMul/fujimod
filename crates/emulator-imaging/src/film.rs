@@ -276,10 +276,10 @@ mod tests {
             (random >> 32) as u32
         };
         for bank in 0..32 {
-            let mut words = crate::test_host::film_words();
+            let mut words = fujimod_emulator_devices::test_host::film_words();
             if bank != 0 {
                 for (i, word) in words.iter_mut().enumerate() {
-                    if let Some(mask) = crate::exr2::isp::parameters::mask(i * 4) {
+                    if let Some(mask) = crate::exr2_isp::parameters::mask(i * 4) {
                         *word = match bank {
                             1 => 0,
                             2 => mask,
@@ -319,7 +319,7 @@ mod tests {
     }
     #[test]
     fn raster_memo_preserves_scalar_integer_colors_across_collisions() {
-        let words = crate::test_host::film_words();
+        let words = fujimod_emulator_devices::test_host::film_words();
         let mut film = Film::default();
         film.update(|o| words[o / 4]).unwrap();
         let mut pixels = FilmPixels::new(&film);
@@ -475,7 +475,7 @@ pub(crate) mod color_tests {
     use super::*;
     #[test]
     fn neutral_matrix_tone_and_chroma() {
-        let r = crate::test_host::film_words();
+        let r = fujimod_emulator_devices::test_host::film_words();
         let mut f = Film::default();
         f.update(|o| r[o / 4]).unwrap();
         assert_eq!(f.develop([1024; 3]), [16, 128, 128]);
@@ -487,7 +487,7 @@ pub(crate) mod color_tests {
     }
     #[test]
     fn host_film_lut_crop_and_padding() {
-        let r = crate::test_host::film_words();
+        let r = fujimod_emulator_devices::test_host::film_words();
         let mut f = RgbFilm::default();
         f.update(|o| r[o / 4], Some([256; 3])).unwrap();
         assert_eq!(f.linear[0], 0);

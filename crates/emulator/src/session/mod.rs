@@ -98,11 +98,11 @@ impl Session {
         &mut self,
         name: &str,
         period: u64,
-        cadence: fujimod_emulator_devices::scene::StatisticsCadence,
+        cadence: fujimod_emulator_imaging::scene::StatisticsCadence,
     ) -> Result<(), String> {
         let now = self.board.now();
         self.board
-            .edit_device::<fujimod_emulator_devices::scene::clocked::ClockedFrames, _>(
+            .edit_device::<fujimod_emulator_imaging::scene::clocked::ClockedFrames, _>(
                 self.node(name)?,
                 |frames| frames.configure(period, cadence, now),
             )
@@ -110,7 +110,7 @@ impl Session {
     pub fn frame_state(&self, name: &str) -> Result<serde_json::Value, String> {
         use fujimod_emulator_devices::Device;
         self.board
-            .inspect_device::<fujimod_emulator_devices::scene::clocked::ClockedFrames, _>(
+            .inspect_device::<fujimod_emulator_imaging::scene::clocked::ClockedFrames, _>(
                 self.node(name)?,
                 |frames| Ok(frames.save()),
             )
@@ -215,7 +215,7 @@ impl Session {
         bytes: &[u8],
         white_luminance: f64,
     ) -> Result<(), String> {
-        use fujimod_emulator_devices::scene::{Frame, FramePixels};
+        use fujimod_emulator_imaging::scene::{Frame, FramePixels};
         if !white_luminance.is_finite() || white_luminance <= 0. {
             return Err("scene white luminance must be positive finite cd/m²".into());
         }
@@ -245,7 +245,7 @@ impl Session {
         height: usize,
         bytes: &[u8],
     ) -> Result<(), String> {
-        use fujimod_emulator_devices::scene::{Frame, FramePixels};
+        use fujimod_emulator_imaging::scene::{Frame, FramePixels};
         let input = self
             .resources
             .inputs
@@ -273,14 +273,14 @@ impl Session {
     /// Install a RAF's visible crop as mosaic radiance. Its recorded exposure
     /// is the normalization, so a later exposure scales the sensor counts.
     pub fn sensor_raf(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
-        use fujimod_emulator_devices::scene::Frame;
+        use fujimod_emulator_imaging::scene::Frame;
         self.sensor_frame(name, std::sync::Arc::new(Frame::from_raf_bytes(bytes)?))
     }
     /// Install shared immutable sensor pixels without retaining source file bytes.
     pub fn sensor_frame(
         &self,
         name: &str,
-        frame: std::sync::Arc<fujimod_emulator_devices::scene::Frame>,
+        frame: std::sync::Arc<fujimod_emulator_imaging::scene::Frame>,
     ) -> Result<(), String> {
         self.resources
             .inputs

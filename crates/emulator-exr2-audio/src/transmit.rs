@@ -5,7 +5,8 @@
 //! Disabled transmitters have no polling timer. The owning audio register
 //! block and DMA channel share a device, so a guest format write wakes it.
 use super::SerialAudio;
-use fujimod_emulator_devices::{Cx, Device, exr2::isp::{Irq, dma::IrqRoutes}};
+use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::{Irq, dma::IrqRoutes};
 use fujimod_emulator_parts_io::audio_sink::AudioSink;
 use fujimod_emulator_exr2_serial::dma::audio::BASE;
 use serde::{Deserialize, Serialize};

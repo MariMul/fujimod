@@ -1,15 +1,12 @@
 //! FFF12000/FFF13000 output banks. Packed Y0,Y1,Cb,Cr, nearest-pair
 //! resampling, and completion latency are declared input laws; silicon
 //! filtering is unresolved. Each instance owns one bank.
-use fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle;
-use fujimod_emulator_devices::exr2::isp::options::output::{GeometryPolicy, Options};
-use fujimod_emulator_devices::exr2::isp::output_channels::{FrameTransfer, OutputChannels, Source};
-use fujimod_emulator_devices::exr2::isp::{
-    dma::{self, IrqRoutes, Raster, Transfer},
-    due,
-};
-use fujimod_emulator_devices::imaging::analysis::{ImageLayout, nearest_pairs};
-use fujimod_emulator_devices::scene::ImageFrames;
+use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
+use fujimod_emulator_imaging::exr2_isp::options::output::{GeometryPolicy, Options};
+use fujimod_emulator_imaging::exr2_isp::output_channels::{FrameTransfer, OutputChannels, Source};
+use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes, Raster, Transfer}, due};
+use fujimod_emulator_imaging::analysis::{ImageLayout, nearest_pairs};
+use fujimod_emulator_imaging::scene::ImageFrames;
 use fujimod_emulator_devices::{Cx, Device};
 
 #[cfg(test)]
@@ -284,7 +281,7 @@ impl OutputChannel {
             layout.stride,
         )?;
         let result = match &frames.pixels {
-            fujimod_emulator_devices::scene::frames::Pixels::Sensor(image) => (|| {
+            fujimod_emulator_imaging::scene::frames::Pixels::Sensor(image) => (|| {
                 let frozen = image.freeze(layout)?;
                 transfer.pixels.defer_fallible(move |mut staging| {
                     staging.resize(layout.stride * layout.height, 0);
@@ -300,7 +297,7 @@ impl OutputChannel {
                 }
                 Ok(())
             })(),
-            fujimod_emulator_devices::scene::frames::Pixels::Packed(pixels) => (|| {
+            fujimod_emulator_imaging::scene::frames::Pixels::Packed(pixels) => (|| {
                 let input = frames.layout;
                 if pixels.len() != input.bytes()? {
                     return Err("packed image extent differs from its raster".into());

@@ -1,6 +1,7 @@
 //! XP4 MOVDC output DMA. The packed422 source and clock are explicit scenario
 //! inputs, not an ISP implementation or measured silicon timing.
-use fujimod_emulator_devices::{imaging::frame, Cx, Device};
+use fujimod_emulator_imaging::frame;
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

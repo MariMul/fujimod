@@ -364,9 +364,7 @@ mod tests {
     }
     #[test]
     fn cold_power_keeps_shared_mosaic_input_without_raf_bytes() {
-        use fujimod_emulator_devices::scene::{
-            Frame as SensorFrame, FramePixels, SensorFrames, mosaic::Radiance,
-        };
+        use fujimod_emulator_imaging::scene::{Frame as SensorFrame, FramePixels, SensorFrames, mosaic::Radiance};
         use std::sync::Mutex;
         let mut session = session(ExecutionPolicy::Interactive);
         let sensor = Arc::new(Mutex::new(SensorFrames::new(

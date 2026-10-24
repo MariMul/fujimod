@@ -1,7 +1,7 @@
 //! Declared coarse/fine horizontal-gradient statistics on programmed regions.
 //! Layout uses 64-byte-row banks.
 //! Squared differences and scale are unmeasured ISP arithmetic, not AF policy.
-use crate::imaging::analysis::ImageLayout;
+use crate::analysis::ImageLayout;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]

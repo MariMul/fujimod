@@ -1,25 +1,20 @@
 //! FFF18000 statistics DMA and FFF28000 parameter/LUT bank. External banks or
 //! selected gradient arithmetic consume the connected packed-luma raster; DMA
 //! uses an explicit transfer clock. No configuration hashes or finite lifetimes.
-use fujimod_emulator_devices::exr2::isp::{
-    dma::{self, IrqRoutes},
-    due, Irq,
-};
-use fujimod_emulator_devices::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
-use fujimod_emulator_devices::{
-    imaging::{analysis::ImageLayout, radiometric::FrozenReadout},
-    work::Job,
-};
+use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes}, due, Irq};
+use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
+use fujimod_emulator_imaging::{analysis::ImageLayout, radiometric::FrozenReadout};
+use fujimod_emulator_devices::work::Job;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use fujimod_emulator_devices::exr2::isp::options::producer::Options;
+use fujimod_emulator_imaging::exr2_isp::options::producer::Options;
 
 const BASE: u64 = 0xfff18000;
 const GLOBAL: u64 = 0xfff28000;
 const IRQ: u32 = 0x2e;
 pub struct Wiring {
-    pub grid: Option<fujimod_emulator_devices::imaging::analysis::GridHandle>,
+    pub grid: Option<fujimod_emulator_imaging::analysis::GridHandle>,
     pub routes: IrqRoutes,
     pub frames: StatisticsFrames,
     pub images: ImageFrames,
@@ -70,7 +65,7 @@ struct RasterJobInput {
     source: RasterInput,
     layout: ImageLayout,
     registers: [u32; 1024],
-    contrast: Option<fujimod_emulator_devices::exr2::isp::contrast::Arithmetic>,
+    contrast: Option<fujimod_emulator_imaging::exr2_isp::contrast::Arithmetic>,
     metering: bool,
 }
 impl RasterJobInput {
@@ -83,7 +78,7 @@ impl RasterJobInput {
             .contrast
             .as_ref()
             .map(|arithmetic| {
-                fujimod_emulator_devices::exr2::isp::contrast::banks(
+                fujimod_emulator_imaging::exr2_isp::contrast::banks(
                     &self.registers,
                     &pixels,
                     self.layout,
@@ -100,7 +95,7 @@ impl RasterJobInput {
 }
 enum ImagePixelsSnapshot {
     Sensor {
-        image: Arc<fujimod_emulator_devices::imaging::radiometric::Image>,
+        image: Arc<fujimod_emulator_imaging::radiometric::Image>,
         readout: FrozenReadout,
     },
     Packed(Arc<[u8]>),
@@ -108,7 +103,7 @@ enum ImagePixelsSnapshot {
 impl ImagePixelsSnapshot {
     fn histogram_image(
         &self,
-    ) -> Option<&Arc<fujimod_emulator_devices::imaging::radiometric::Image>> {
+    ) -> Option<&Arc<fujimod_emulator_imaging::radiometric::Image>> {
         match self {
             Self::Sensor { image, .. } => Some(image),
             Self::Packed(_) => None,
@@ -122,10 +117,10 @@ impl ImagePixelsSnapshot {
     }
 }
 struct ImageSnapshot {
-    edge: Option<fujimod_emulator_devices::scene::FrameEdge>,
+    edge: Option<fujimod_emulator_imaging::scene::FrameEdge>,
     layout: ImageLayout,
     pixels: ImagePixelsSnapshot,
-    radiance: Option<fujimod_emulator_devices::imaging::exposure::ExposedFrame>,
+    radiance: Option<fujimod_emulator_imaging::exposure::ExposedFrame>,
 }
 
 fn reuse_spans(target: &mut Vec<StatisticsSpan>, source: &[StatisticsSpan]) {
@@ -340,13 +335,13 @@ impl Block18000 {
         let image = {
             let image = self.wiring.images.0.lock().unwrap();
             let pixels = match &image.pixels {
-                fujimod_emulator_devices::scene::frames::Pixels::Sensor(physical) => {
+                fujimod_emulator_imaging::scene::frames::Pixels::Sensor(physical) => {
                     ImagePixelsSnapshot::Sensor {
                         image: physical.clone(),
                         readout: physical.freeze(image.layout)?,
                     }
                 }
-                fujimod_emulator_devices::scene::frames::Pixels::Packed(pixels) => {
+                fujimod_emulator_imaging::scene::frames::Pixels::Packed(pixels) => {
                     ImagePixelsSnapshot::Packed(pixels.clone())
                 }
             };
@@ -417,7 +412,7 @@ impl Block18000 {
                     physical.histogram(grid, window, &mut self.histogram_bytes)?
                 }
                 ImagePixelsSnapshot::Packed(pixels) => {
-                    fujimod_emulator_devices::imaging::analysis::histogram_luma(
+                    fujimod_emulator_imaging::analysis::histogram_luma(
                         pixels,
                         image.layout,
                         grid,

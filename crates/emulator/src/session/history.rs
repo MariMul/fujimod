@@ -3,7 +3,7 @@
 use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::touch_input::ContactInput;
-use fujimod_emulator_devices::scene::{Frame, StatisticsCadence};
+use fujimod_emulator_imaging::scene::{Frame, StatisticsCadence};
 use std::{collections::VecDeque, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -142,9 +142,9 @@ impl Input {
                 .capacity()
                 .saturating_add(size_of::<Frame>())
                 .saturating_add(match &frame.pixels {
-                    fujimod_emulator_devices::scene::FramePixels::Rgb24(bytes) => bytes.len(),
-                    fujimod_emulator_devices::scene::FramePixels::Raw16(words) => words.len() * 2,
-                    fujimod_emulator_devices::scene::FramePixels::Mosaic { radiance, .. } => {
+                    fujimod_emulator_imaging::scene::FramePixels::Rgb24(bytes) => bytes.len(),
+                    fujimod_emulator_imaging::scene::FramePixels::Raw16(words) => words.len() * 2,
+                    fujimod_emulator_imaging::scene::FramePixels::Mosaic { radiance, .. } => {
                         radiance.bytes().len()
                     }
                 }),

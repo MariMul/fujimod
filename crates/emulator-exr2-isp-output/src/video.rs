@@ -2,8 +2,8 @@
 //! the selected host codec, then committed to the two programmed bitstream banks
 //! before status/IRQ publication. The declared clock is 64 luma samples/tick
 //! (setup/stop: two ticks), independent of host encoder speed.
-use fujimod_emulator_devices::exr2::isp::dma::physical;
-use fujimod_emulator_devices::exr2::isp::{Irq, due, word};
+use fujimod_emulator_imaging::exr2_isp::dma::physical;
+use fujimod_emulator_imaging::exr2_isp::{Irq, due, word};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_image_codecs::h264::{self, Codec, Config};
 use serde::{Deserialize, Serialize};

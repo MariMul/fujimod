@@ -574,10 +574,7 @@ fn projects(frame: &Frame) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        imaging::exposure::{Calibration, Exposure},
-        scene::Frame,
-    };
+    use crate::{exposure::{Calibration, Exposure}, scene::Frame};
     fn frame(rgb: Vec<u8>, seconds: f64) -> ExposedFrame {
         ExposedFrame::from_frame(
             Arc::new(Frame::new(64, 8, FramePixels::Rgb24(rgb.into())).unwrap()),

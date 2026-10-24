@@ -124,7 +124,7 @@ impl Work {
             if address == 0 || address & 7 != 0 {
                 return Err("MOVDC output DMA requires a nonzero 8-byte-aligned address".into());
             }
-            fujimod_emulator_devices::imaging::frame::paint(cx, address, width, height, self.state.r(0xd0), luma)?;
+            fujimod_emulator_imaging::frame::paint(cx, address, width, height, self.state.r(0xd0), luma)?;
         } else {
             // Half-size packed422: consume the actual programmed input. The
             // supported horizontal filter uses the normalized seven-tap
@@ -167,7 +167,7 @@ impl Work {
                 )?;
             }
             let weights = (control & 0x01000000 != 0).then_some(weights);
-            let output = fujimod_emulator_devices::imaging::frame::half_422(&input, width as usize, height as usize, weights)?;
+            let output = fujimod_emulator_imaging::frame::half_422(&input, width as usize, height as usize, weights)?;
             for y in 0..height as usize / 2 {
                 cx.ram_write(
                     address + y as u64 * u64::from(output_stride),

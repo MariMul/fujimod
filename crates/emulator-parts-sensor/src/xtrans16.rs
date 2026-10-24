@@ -3,7 +3,7 @@
 //! and vertical timing. Gain is4095/(4095-code).
 //! Timing/ADC responsivity remain declared physical calibration, not firmware
 //! inspection or a caller signature. The sensor receives actual scan periods.
-use fujimod_emulator_devices::imaging::exposure::{ApertureHandle, Exposure, ExposureHandle};
+use fujimod_emulator_imaging::exposure::{ApertureHandle, Exposure, ExposureHandle};
 use crate::sensor::Controls;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -45,7 +45,7 @@ pub struct Sensor {
     exposure: ExposureHandle,
     aperture: ApertureHandle,
     shutter: Option<crate::leaf_shutter::LeafShutter>,
-    frame_clock: Option<(fujimod_emulator_devices::imaging::timing::FramePeriod, u64)>,
+    frame_clock: Option<(fujimod_emulator_imaging::timing::FramePeriod, u64)>,
 }
 impl Sensor {
     pub fn new(
@@ -155,7 +155,7 @@ impl Sensor {
     }
     pub fn attach_frame_clock(
         &mut self,
-        output: fujimod_emulator_devices::imaging::timing::FramePeriod,
+        output: fujimod_emulator_imaging::timing::FramePeriod,
         ticks_per_second: u64,
     ) -> Result<(), String> {
         if ticks_per_second == 0 {
@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn physical_scan_clock_preserves_vertical_blanking_and_raster_extension() {
-        let period: fujimod_emulator_devices::imaging::timing::FramePeriod = Default::default();
+        let period: fujimod_emulator_imaging::timing::FramePeriod = Default::default();
         let exposure: ExposureHandle = Default::default();
         let mut s = Sensor::new(
             Options {

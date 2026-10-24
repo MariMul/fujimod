@@ -1,6 +1,6 @@
 //! Declared two-source packed-422 mask blend. A register-scaled 8-bit mask
 //! and Q8 interpolation are unmeasured numerical approximations.
-use fujimod_emulator_devices::exr2::isp::dma::{MAX_BYTES, Raster};
+use fujimod_emulator_imaging::exr2_isp::dma::{MAX_BYTES, Raster};
 use super::{Prepared, read_rows};
 use fujimod_emulator_devices::Cx;
 

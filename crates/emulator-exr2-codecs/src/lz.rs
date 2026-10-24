@@ -6,7 +6,8 @@
 //! laws. Supported descriptor forms and bounded scalar half-size FIR
 //! descriptors are admitted. The
 //! default resize mode awaits a result and has no manufactured completion.
-use fujimod_emulator_devices::exr2::{irq, isp::Irq};
+use fujimod_emulator_devices::exr2::irq;
+use fujimod_emulator_imaging::exr2_isp::Irq;
 use fujimod_emulator_devices::{Cx, Device, compression::method4::Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -387,7 +388,7 @@ impl Decompressor {
         ) {
             return Ok(true);
         }
-        let raster = |address, pitch, dimensions: u32| fujimod_emulator_devices::exr2::isp::dma::Raster {
+        let raster = |address, pitch, dimensions: u32| fujimod_emulator_imaging::exr2_isp::dma::Raster {
             address,
             pitch,
             width: (dimensions & 8191) as usize,
@@ -431,8 +432,8 @@ impl Decompressor {
         let kind = self.raster_kind()?;
         let count = self.r(0x14) as usize * (self.r(0x18) >> 16) as usize;
         let bytes = self.r(0x24) as usize * (self.r(0x28) >> 16) as usize;
-        let source = fujimod_emulator_devices::exr2::isp::dma::span(self.r(0x10) as u64, count)?;
-        let dest = fujimod_emulator_devices::exr2::isp::dma::span(self.r(0x20) as u64, bytes)?;
+        let source = fujimod_emulator_imaging::exr2_isp::dma::span(self.r(0x10) as u64, count)?;
+        let dest = fujimod_emulator_imaging::exr2_isp::dma::span(self.r(0x20) as u64, bytes)?;
         if count > SOURCE_BYTES
             || Self::resize_alias_conflicts(&self.state.regs, kind, source, dest)?
         {
@@ -805,11 +806,11 @@ impl Decompressor {
                 }
                 Job::Resize => {
                     let kind = Self::raster_kind_for(&s.regs)?;
-                    let source = fujimod_emulator_devices::exr2::isp::dma::span(
+                    let source = fujimod_emulator_imaging::exr2_isp::dma::span(
                         r(0x10) as u64,
                         r(0x14) as usize * (r(0x18) >> 16) as usize,
                     )?;
-                    let dest = fujimod_emulator_devices::exr2::isp::dma::span(
+                    let dest = fujimod_emulator_imaging::exr2_isp::dma::span(
                         r(0x20) as u64,
                         r(0x24) as usize * (r(0x28) >> 16) as usize,
                     )?;

@@ -1,6 +1,6 @@
 //! Plan options of the EXR II output banks model in `fujimod-emulator-exr2-isp`.
 use serde::{Deserialize};
-use crate::exr2::isp::dma;
+use crate::exr2_isp::dma;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]

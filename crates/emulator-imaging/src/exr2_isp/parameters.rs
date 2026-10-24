@@ -1,8 +1,8 @@
 //! FFF19000 parameter retention. The bank supplies uploaded pixel parameters
 //! through 96 canonical word masks. Implemented silicon bits remain unmeasured.
 use super::word;
-use crate::imaging::film::Film;
-use crate::{Cx, Device};
+use crate::film::Film;
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -97,8 +97,8 @@ fn valid(o: usize, v: u32) -> bool {
     }
 }
 impl Device for ParameterBank {
-    fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        crate::checkpoint::Checkpoint::encode(
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
             &*self
                 .parameters
@@ -106,11 +106,11 @@ impl Device for ParameterBank {
                 .map_err(|_| "parameter state poisoned")?,
         )
     }
-    fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         let _: Parameters = saved.decode(self.name())?;
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         *self
             .parameters
             .lock()

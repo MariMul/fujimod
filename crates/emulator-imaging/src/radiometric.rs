@@ -6,7 +6,7 @@ use super::{
     exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle},
     film::{Film, FilmPixels},
 };
-use crate::{exr2::isp::parameters::ParameterHandle, scene::SensorFramesHandle};
+use crate::{exr2_isp::parameters::ParameterHandle, scene::SensorFramesHandle};
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 #[derive(Deserialize)]
@@ -71,15 +71,15 @@ impl Renderer {
             previous: None,
         })
     }
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        crate::checkpoint::Checkpoint::encode(
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "radiometric-renderer",
             &(self.calibration, self.projection.as_ref().map(|p| p.spec())),
         )
     }
     pub(crate) fn validate_checkpoint(
         &self,
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let (calibration, projection): (Calibration, Option<super::optics::Spec>) =
             saved.decode("radiometric-renderer")?;
@@ -94,7 +94,7 @@ impl Renderer {
     }
     pub(crate) fn restore_checkpoint(
         &mut self,
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.previous = None;
@@ -164,8 +164,8 @@ impl Image {
             layout,
         })
     }
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        Ok(crate::checkpoint::Checkpoint::encode(
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "radiometric-image",
             &(
                 &self.film,
@@ -175,7 +175,7 @@ impl Image {
         )?
         .with_children(vec![self.exposure.checkpoint()?]))
     }
-    pub fn from_checkpoint(saved: &crate::checkpoint::Checkpoint) -> Result<Self, String> {
+    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
         let (film, gain, projection): (Film, [u32; 3], Option<super::optics::Spec>) =
             saved.decode("radiometric-image")?;
         if saved.children().len() != 1
@@ -466,11 +466,7 @@ impl Image {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        exr2::isp::parameters::Parameters,
-        imaging::exposure::Exposure,
-        scene::{Frame, FramePixels, SensorFrames},
-    };
+    use crate::{exr2_isp::parameters::Parameters, exposure::Exposure, scene::{Frame, FramePixels, SensorFrames}};
     fn renderer() -> (Renderer, ParameterHandle, ExposureHandle) {
         renderer_with_projection(None)
     }
@@ -494,7 +490,7 @@ mod tests {
             analog_gain: 1.,
         }));
         let parameters = Arc::new(Mutex::new(Parameters {
-            words: crate::test_host::film_words(),
+            words: fujimod_emulator_devices::test_host::film_words(),
             film: Film::default(),
         }));
         let r = Renderer::new(
@@ -575,7 +571,7 @@ mod tests {
     }
     #[test]
     fn frozen_readout_keeps_capture_inputs_across_focus_exposure_and_film_updates() {
-        use crate::imaging::optics::{Illumination, Projection, Spec};
+        use crate::optics::{Illumination, Projection, Spec};
 
         let focus = Arc::new(Mutex::new(0.2));
         let projection = Projection::new(
@@ -665,7 +661,7 @@ mod tests {
     }
     #[test]
     fn readouts_match_scalar_film_across_binning_projection_padding_and_restore() {
-        use crate::imaging::optics::{Illumination, Projection, Spec};
+        use crate::optics::{Illumination, Projection, Spec};
         for [width, height] in [[1, 1], [5, 3], [17, 11]] {
             for [out_width, out_height] in [[2, 1], [14, 7], [4, 19], [40, 12]] {
                 for projection_mode in 0..3 {
@@ -686,7 +682,7 @@ mod tests {
                         saturation_lux_seconds: 1.,
                         color_sample_weights: [8, 20, 8],
                     };
-                    let mut words = crate::test_host::film_words();
+                    let mut words = fujimod_emulator_devices::test_host::film_words();
                     words[0x200 / 4] = 257 | 193 << 16;
                     words[0x204 / 4] = 311;
                     let parameters = Arc::new(Mutex::new(Parameters {
@@ -729,7 +725,7 @@ mod tests {
                         )
                         .unwrap();
                     } else {
-                        crate::imaging::optics::bin_exposure(
+                        crate::optics::bin_exposure(
                             &mut sampled,
                             [width.min(out_width), height.min(out_height)],
                         )

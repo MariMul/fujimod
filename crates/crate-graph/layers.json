@@ -3,6 +3,7 @@
   "layers": {
     "interface": [
       "fujimod-emulator-devices",
+      "fujimod-emulator-imaging",
       "fujimod-emulator-storage"
     ],
     "model": [
@@ -22,7 +23,6 @@
       "fujimod-emulator-exr2-system",
       "fujimod-emulator-graphics",
       "fujimod-emulator-image-codecs",
-      "fujimod-emulator-imaging",
       "fujimod-emulator-ip",
       "fujimod-emulator-ip-arm",
       "fujimod-emulator-ip-dmp",
@@ -133,14 +133,14 @@
       "fujimod-emulator-devices/src/exr2/clock.rs",
       "fujimod-emulator-devices/src/exr2/gpio.rs",
       "fujimod-emulator-devices/src/exr2/irq.rs",
-      "fujimod-emulator-devices/src/exr2/isp/parameters.rs",
       "fujimod-emulator-devices/src/exr2/pulse.rs",
       "fujimod-emulator-devices/src/exr2/pulse/block86000.rs",
       "fujimod-emulator-devices/src/keyed_io.rs",
       "fujimod-emulator-devices/src/lz_osd.rs",
       "fujimod-emulator-devices/src/parts/controls.rs",
       "fujimod-emulator-devices/src/parts/hdmi_sink.rs",
-      "fujimod-emulator-devices/src/scene/clocked.rs"
+      "fujimod-emulator-imaging/src/exr2_isp/parameters.rs",
+      "fujimod-emulator-imaging/src/scene/clocked.rs"
     ]
   }
 }

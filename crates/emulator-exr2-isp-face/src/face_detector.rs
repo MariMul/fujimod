@@ -13,7 +13,7 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use fujimod_emulator_devices::exr2::isp::options::face_detector::{Options, Mode};
+use fujimod_emulator_imaging::exr2_isp::options::face_detector::{Options, Mode};
 
 pub const BASE: u64 = 0xfff14000;
 

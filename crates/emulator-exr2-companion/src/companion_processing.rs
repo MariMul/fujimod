@@ -2,8 +2,9 @@
 //! Uploads remain opaque in ProgramUpload. This separately selected datapath
 //! consumes only channel descriptors, image bytes, frame edges, and IRQ wiring.
 use super::companion;
-use fujimod_emulator_devices::exr2::isp::{self, dma};
-use fujimod_emulator_devices::{Cx, Device, scene::ImageFrames};
+use fujimod_emulator_imaging::exr2_isp::{self as isp, dma};
+use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::scene::ImageFrames;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -443,7 +444,8 @@ mod tests {
     }
     use super::*;
     use fujimod_emulator_devices::test_host::{TestHost, advance, write};
-    use fujimod_emulator_devices::{Host, imaging::analysis::ImageLayout};
+    use fujimod_emulator_devices::Host;
+    use fujimod_emulator_imaging::analysis::ImageLayout;
     fn fixture() -> (Processing, ImageFrames, TestHost) {
         let frames = ImageFrames::new(ImageLayout {
             width: 8,

@@ -2,14 +2,10 @@
 //! tracking, eight-byte result records, and latency are declared, unmeasured
 //! numerical laws. Other pyramid/tuning words are retained without inventing
 //! their silicon effects.
-use fujimod_emulator_devices::exr2::isp::{
-    Irq,
-    dma::{self, IrqRoutes, Raster, Transfer},
-    due,
-};
-use fujimod_emulator_devices::imaging::analysis::{self, WindowGrid};
+use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{self, IrqRoutes, Raster, Transfer}, due};
+use fujimod_emulator_imaging::analysis::{self, WindowGrid};
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_devices::exr2::isp::options::window_analysis::Options;
+use fujimod_emulator_imaging::exr2_isp::options::window_analysis::Options;
 const BASE: u64 = 0xfff42000;
 const IMAGE_BYTES: usize = 8 << 20;
 pub struct Wiring {

@@ -2,7 +2,7 @@
 //! zune-jpeg with SIMD features disabled and unsafe code disabled in options.
 //! RGB box downsampling and full-range packed422 conversion are declared;
 //! Playback output follows these register-selected decoding steps.
-use fujimod_emulator_devices::exr2::isp::{Irq, dma::{Raster, Transfer, physical}, due, word};
+use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{Raster, Transfer, physical}, due, word};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

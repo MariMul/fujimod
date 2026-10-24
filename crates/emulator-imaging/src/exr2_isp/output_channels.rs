@@ -1,8 +1,5 @@
 //! DMA state the two EXR II output banks share through one board wire.
-use crate::exr2::isp::{
-    Irq,
-    dma::{self, Transfer},
-};
+use crate::exr2_isp::{Irq, dma::{self, Transfer}};
 use std::sync::{Arc, Mutex};
 
 /// Both banks share this physical output interface. Reservations are current
@@ -30,22 +27,22 @@ impl Default for OutputChannels {
 }
 
 impl OutputChannels {
-    pub fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        crate::checkpoint::Checkpoint::encode(
+    pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "output-channels",
             &*self.0.lock().map_err(|_| "output-channels poisoned")?,
         )
     }
     pub fn validate_checkpoint(
         &self,
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let _: Channels = saved.decode("output-channels")?;
         Ok(())
     }
     pub fn restore_checkpoint(
         &self,
-        saved: &crate::checkpoint::Checkpoint,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         *self.0.lock().map_err(|_| "output-channels poisoned")? =
             saved.decode::<Channels>("output-channels")?;
