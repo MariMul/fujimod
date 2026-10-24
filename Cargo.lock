@@ -1120,8 +1120,8 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-bulk",
  "fujimod-catalog-construction",
- "fujimod-catalog-content",
  "fujimod-catalog-controls",
+ "fujimod-catalog-identity",
  "fujimod-catalog-remote",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
@@ -1135,10 +1135,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-assets"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-identity",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "fujimod-catalog-bulk"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
+ "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars",
  "serde",
@@ -1166,7 +1177,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-construction",
- "fujimod-catalog-content",
+ "fujimod-catalog-identity",
  "fujimod-catalog-run-inputs",
  "fujimod-workspace-hack",
  "schemars",
@@ -1192,20 +1203,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-catalog-content"
-version = "0.1.0"
-dependencies = [
- "fujimod-workspace-hack",
- "serde",
- "serde_json",
- "sha2",
-]
-
-[[package]]
 name = "fujimod-catalog-controls"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
+ "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars",
  "serde",
@@ -1217,11 +1218,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-identity"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+]
+
+[[package]]
 name = "fujimod-catalog-remote"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
  "fujimod-catalog-controls",
+ "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars",
  "serde",
@@ -1237,7 +1245,7 @@ name = "fujimod-catalog-run-inputs"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-construction",
- "fujimod-catalog-content",
+ "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars",
  "serde",
@@ -1282,7 +1290,7 @@ dependencies = [
 name = "fujimod-catalog-settings"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
+ "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars",
  "serde",
@@ -1320,7 +1328,6 @@ dependencies = [
 name = "fujimod-emulator"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
@@ -1351,9 +1358,9 @@ name = "fujimod-emulator-boot"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-assets",
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
- "fujimod-catalog-content",
  "fujimod-catalog-controls",
  "fujimod-catalog-run-inputs",
  "fujimod-emulator",
@@ -1380,7 +1387,7 @@ dependencies = [
 name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
+ "fujimod-catalog-assets",
  "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
@@ -1676,7 +1683,6 @@ dependencies = [
 name = "fujimod-emulator-exr2-plan"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-construction",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-resources",
  "fujimod-emulator-imaging",
@@ -2224,7 +2230,7 @@ dependencies = [
 name = "fujimod-python-emulator"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-content",
+ "fujimod-catalog-assets",
  "fujimod-catalog-settings",
  "fujimod-emulator",
  "fujimod-emulator-cpu",

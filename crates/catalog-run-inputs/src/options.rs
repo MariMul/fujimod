@@ -745,7 +745,7 @@ impl RunFactoryOptions {
             return Err("run wifi_sdio_transfer_ticks must be positive".into());
         }
         if let Some(sink) = &self.hdmi_sink {
-            fujimod_catalog_content::validate_id(&sink.edid.id)?;
+            fujimod_catalog_identity::validate_id(&sink.edid.id)?;
             if sink.edid.size == 0
                 || sink.edid.size % 128 != 0
                 || sink.edid.size > 32768

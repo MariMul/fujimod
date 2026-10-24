@@ -19,7 +19,7 @@ use fujimod_catalog_configuration::{
     Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
     RunPurpose, RunScene, RunStart,
 };
-use fujimod_catalog_content::Content;
+use fujimod_catalog_assets::Content;
 use fujimod_catalog_controls::{
     AdcInterval, ElectricalInput, InputTarget, facts::ConfigurationLocation,
 };

@@ -1814,11 +1814,11 @@ impl DeviceGraph {
         }
         let mut available = names.clone();
         for node in &self.devices {
-            fujimod_catalog_content::validate_id(&node.name)?;
+            fujimod_catalog_identity::validate_id(&node.name)?;
             if let Some(choices) = &node.model_choices {
                 for model in choices.models.values() {
                     for dependency in &model.dependencies {
-                        fujimod_catalog_content::validate_id(&dependency.name)?;
+                        fujimod_catalog_identity::validate_id(&dependency.name)?;
                         available.insert(&dependency.name);
                     }
                 }

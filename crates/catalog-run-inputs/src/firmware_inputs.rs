@@ -90,15 +90,15 @@ impl RunFirmwareInputs {
         if self.schema != 1 || self.schema_uri != RUN_FIRMWARE_INPUTS_SCHEMA_URI {
             return Err("run firmware inputs schema differs".into());
         }
-        fujimod_catalog_content::validate_id(&self.id)?;
-        fujimod_catalog_content::validate_id(&self.firmware_id)?;
+        fujimod_catalog_identity::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         let digest =
             |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
         if !digest(&self.source_sha256) {
             return Err("run firmware source identity is invalid".into());
         }
         if let Some(settings) = &self.settings {
-            fujimod_catalog_content::validate_id(&settings.nand)?;
+            fujimod_catalog_identity::validate_id(&settings.nand)?;
             if settings
                 .requested
                 .iter()

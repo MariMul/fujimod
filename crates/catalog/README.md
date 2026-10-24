@@ -4,8 +4,10 @@ The catalog crates load validated firmware, camera, service and emulator
 catalog data without USB or execution dependencies. Each domain is its own
 crate, so a consumer rebuilds only when the documents it reads change:
 
-- `fujimod-catalog-content`: identifier and digest checks, and the
-  content-addressed documents and assets a caller's provider supplies.
+- `fujimod-catalog-identity`: the identifier and digest checks every document
+  uses.
+- `fujimod-catalog-assets`: the content-addressed documents and assets a
+  caller's provider supplies, and the file provider that reads them.
 - `fujimod-catalog-camera`: firmware identities and camera definitions.
 - `fujimod-catalog-service`: App80 service definitions, checked against a
   firmware identity.

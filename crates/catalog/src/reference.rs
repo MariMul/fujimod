@@ -3,7 +3,7 @@
 //! The records contain device facts and named references. They never contain
 //! another record's filename or an input asset's location.
 
-use fujimod_catalog_content::{validate_id, validate_sha256};
+use fujimod_catalog_identity::{validate_id, validate_sha256};
 use fujimod_catalog_remote::FirmwareObservation;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};

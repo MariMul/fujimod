@@ -254,8 +254,8 @@ pub struct NamedSetting {
 impl FirmwareSettings {
     /// Validate identity, store extents and field bounds.
     pub fn validate(&self) -> Result<(), String> {
-        fujimod_catalog_content::validate_id(&self.id)?;
-        fujimod_catalog_content::validate_id(&self.firmware_id)?;
+        fujimod_catalog_identity::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         let fail = |message: &str| Err(format!("settings {}: {message}", self.id));
         if self.schema_uri != SETTINGS_SCHEMA_URI || self.schema != 1 {
             return fail("unsupported schema");
@@ -373,7 +373,7 @@ impl FirmwareSettings {
                 SectionLength::Counted { counts, bits } => bits > 0 && within(counts, 6),
                 SectionLength::CountedList { count, bits } => bits > 0 && within(count, 3),
             };
-            if fujimod_catalog_content::validate_id(&section.name).is_err()
+            if fujimod_catalog_identity::validate_id(&section.name).is_err()
                 || !names.insert(section.name.as_str())
                 || !within(section.offset, 0)
                 || !length

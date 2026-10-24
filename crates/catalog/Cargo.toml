@@ -13,7 +13,7 @@ doctest = false
 [dependencies]
 fujimod-catalog-bulk.workspace = true
 fujimod-catalog-construction.workspace = true
-fujimod-catalog-content.workspace = true
+fujimod-catalog-identity.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-remote.workspace = true
 fujimod-catalog-settings.workspace = true

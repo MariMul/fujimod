@@ -71,7 +71,7 @@ impl BodyHardware {
     /// Validate installed parts and all physical connection identities.
     pub fn validate(&self, body: &crate::reference::Body) -> Result<(), String> {
         for (id, profile) in &self.profiles {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
             if let Some(graph) = &profile.graph {
                 graph.validate()?;
             }

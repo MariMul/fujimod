@@ -950,13 +950,9 @@ impl FirmwareFacts {
         if self.schema != 1 || self.schema_uri != FIRMWARE_FACTS_SCHEMA_URI {
             return Err("unsupported remote firmware schema".into());
         }
-        fujimod_catalog_content::validate_id(&self.firmware_id)?;
-        fujimod_catalog_content::validate_id(&self.body_id)?;
-        fujimod_catalog_content::Content {
-            size: 1,
-            sha256: self.firmware_sha256.clone(),
-        }
-        .validate()?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
+        fujimod_catalog_identity::validate_id(&self.body_id)?;
+        fujimod_catalog_identity::validate_content_sha256(&self.firmware_sha256.clone())?;
         if self.identity_checks.is_empty() {
             return Err("remote facts require firmware identity checks".into());
         }
@@ -1061,13 +1057,9 @@ impl BuildMenuManifest {
         if self.schema != 1 || self.schema_uri != MENU_MANIFEST_SCHEMA_URI {
             return Err("unsupported build menu schema".into());
         }
-        fujimod_catalog_content::validate_id(&self.firmware_id)?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         for digest in [&self.firmware_sha256, &self.elf_sha256] {
-            fujimod_catalog_content::Content {
-                size: 1,
-                sha256: digest.clone(),
-            }
-            .validate()?;
+            fujimod_catalog_identity::validate_content_sha256(&digest.clone())?;
         }
         let mut files = BTreeSet::new();
         for artifact in &self.artifacts {
@@ -1080,11 +1072,7 @@ impl BuildMenuManifest {
             {
                 return Err("invalid or repeated build artifact path".into());
             }
-            fujimod_catalog_content::Content {
-                size: artifact.size,
-                sha256: artifact.sha256.clone(),
-            }
-            .validate()?;
+            fujimod_catalog_identity::validate_content_sha256(&artifact.sha256.clone())?;
         }
         for span in &self.memory {
             let artifact = self

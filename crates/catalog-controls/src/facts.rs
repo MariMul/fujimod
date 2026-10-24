@@ -365,10 +365,6 @@ impl AddressIdentity {
         if self.size == 0 || self.address.checked_add(self.size).is_none() {
             return Err("firmware range identity has an empty or overflowing extent".into());
         }
-        fujimod_catalog_content::Content {
-            size: self.size,
-            sha256: self.sha256.clone(),
-        }
-        .validate()
+        fujimod_catalog_identity::validate_content_sha256(&self.sha256.clone())
     }
 }

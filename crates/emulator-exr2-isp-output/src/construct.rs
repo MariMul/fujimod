@@ -107,6 +107,9 @@ fn video_encoder(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device({
-        Box::new(crate::video::VideoEncoder::new(options, route(irq)?)?)
+        Box::new(crate::video::VideoEncoder::new(
+            fujimod_emulator_exr2_plan::construction::decode(options)?,
+            route(irq)?,
+        )?)
     }))
 }

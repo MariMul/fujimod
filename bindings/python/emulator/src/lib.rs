@@ -25,11 +25,11 @@ fn load_input_assets<'py>(
     locations: &str,
     max_asset_bytes: u64,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let assets: Vec<fujimod_catalog_content::Asset> = serde_json::from_str(assets)
+    let assets: Vec<fujimod_catalog_assets::Asset> = serde_json::from_str(assets)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let locations = serde_json::from_str(locations)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let provider = fujimod_emulator::inputs::Files::new(
+    let provider = fujimod_catalog_assets::files::Files::new(
         &root,
         &root,
         Default::default(),
@@ -53,7 +53,7 @@ fn load_input_assets<'py>(
 /// Verify each declared asset identity before constructing an execution graph.
 #[pyfunction]
 fn verify_input_assets(manifest: &str, assets: &Bound<'_, PyDict>) -> PyResult<()> {
-    let declared: Vec<fujimod_catalog_content::Asset> = serde_json::from_str(manifest)
+    let declared: Vec<fujimod_catalog_assets::Asset> = serde_json::from_str(manifest)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let mut seen = std::collections::BTreeSet::new();
     for asset in declared {

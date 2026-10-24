@@ -69,7 +69,7 @@ pub struct RunConfiguration {
 impl RunConfiguration {
     /// Resolve a bundled run-configuration by its stable identity.
     pub fn bundled(id: &str) -> Result<Self, String> {
-        fujimod_catalog_content::validate_id(id)?;
+        fujimod_catalog_identity::validate_id(id)?;
         let document = BUNDLED_RUN_CONFIGURATIONS
             .iter()
             .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
@@ -91,12 +91,12 @@ impl RunConfiguration {
         if let Some(preset) = &self.preset {
             preset.validate()?;
         }
-        fujimod_catalog_content::validate_id(&self.id)?;
-        fujimod_catalog_content::validate_id(&self.body_id)?;
-        fujimod_catalog_content::validate_id(&self.firmware_id)?;
+        fujimod_catalog_identity::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.body_id)?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         let mut overlays = BTreeSet::new();
         for overlay in &self.overlays {
-            fujimod_catalog_content::validate_id(overlay)?;
+            fujimod_catalog_identity::validate_id(overlay)?;
             if !overlays.insert(overlay) {
                 return Err("run configuration repeats an overlay identity".into());
             }
@@ -787,14 +787,14 @@ pub struct RunPowerOnSettings {
 impl RunPowerOnSettings {
     fn validate(&self) -> Result<(), String> {
         if let Some(camera) = &self.camera {
-            fujimod_catalog_content::validate_id(camera)?;
+            fujimod_catalog_identity::validate_id(camera)?;
         }
         if self.requested.len() > 64 {
             return Err("run settings request too many changes".into());
         }
         for (name, value) in &self.requested {
-            fujimod_catalog_content::validate_id(name)?;
-            fujimod_catalog_content::validate_id(value)?;
+            fujimod_catalog_identity::validate_id(name)?;
+            fujimod_catalog_identity::validate_id(value)?;
         }
         Ok(())
     }
@@ -802,7 +802,7 @@ impl RunPowerOnSettings {
 
 impl Exr2RunInputs {
     fn validate(&self) -> Result<(), String> {
-        fujimod_catalog_content::validate_id(&self.gpio.block_id)?;
+        fujimod_catalog_identity::validate_id(&self.gpio.block_id)?;
         if self.gpio.keys.len() > 64
             || self.gpio.connections.len() > 64
             || self.gpio.outputs.len() > 256
@@ -811,21 +811,21 @@ impl Exr2RunInputs {
         }
         let mut keys = BTreeSet::new();
         for key in &self.gpio.keys {
-            fujimod_catalog_content::validate_id(&key.connection_id)?;
+            fujimod_catalog_identity::validate_id(&key.connection_id)?;
             if !keys.insert(key.connection_id.as_str()) {
                 return Err("run GPIO repeats a control identity".into());
             }
         }
         let mut connections = BTreeSet::new();
         for connection in &self.gpio.connections {
-            fujimod_catalog_content::validate_id(&connection.connection_id)?;
+            fujimod_catalog_identity::validate_id(&connection.connection_id)?;
             if !connections.insert(connection.connection_id.as_str()) {
                 return Err("run GPIO repeats a connection identity".into());
             }
         }
         let mut outputs = BTreeSet::new();
         for output in &self.gpio.outputs {
-            fujimod_catalog_content::validate_id(&output.connection_id)?;
+            fujimod_catalog_identity::validate_id(&output.connection_id)?;
             if !outputs.insert((output.connection_id.as_str(), output.signal_index)) {
                 return Err("run GPIO repeats an output signal identity".into());
             }
@@ -835,21 +835,21 @@ impl Exr2RunInputs {
         }
         let mut encoders = BTreeSet::new();
         for encoder in &self.encoders {
-            fujimod_catalog_content::validate_id(&encoder.connection_id)?;
+            fujimod_catalog_identity::validate_id(&encoder.connection_id)?;
             if encoder.phase > 3 || !encoders.insert(encoder.connection_id.as_str()) {
                 return Err("run encoder input has a repeated identity or invalid phase".into());
             }
         }
-        fujimod_catalog_content::validate_id(&self.adc.block_id)?;
+        fujimod_catalog_identity::validate_id(&self.adc.block_id)?;
         if self.adc.samples.is_empty() || self.adc.samples.len() > 64 {
             return Err("run ADC sample count is outside its bound".into());
         }
-        fujimod_catalog_content::validate_id(&self.power.part_id)?;
+        fujimod_catalog_identity::validate_id(&self.power.part_id)?;
         if self.power.spi_status.len() > 128 {
             return Err("run power status input count exceeds its bound".into());
         }
         validate_register_values(&self.power.spi_status)?;
-        fujimod_catalog_content::validate_id(&self.mcu.part_id)?;
+        fujimod_catalog_identity::validate_id(&self.mcu.part_id)?;
         if self.mcu.packet[14] != 0xaa
             || self
                 .mcu
@@ -866,14 +866,14 @@ impl Exr2RunInputs {
         }
         let mut serial_parts = BTreeSet::new();
         for registers in &self.serial_registers {
-            fujimod_catalog_content::validate_id(&registers.part_id)?;
+            fujimod_catalog_identity::validate_id(&registers.part_id)?;
             if !serial_parts.insert(registers.part_id.as_str()) || registers.values.len() > 128 {
                 return Err("run serial register target is repeated or too large".into());
             }
             validate_register_values(&registers.values)?;
         }
-        fujimod_catalog_content::validate_id(&self.usb.connection_id)?;
-        fujimod_catalog_content::validate_id(&self.card.connection_id)?;
+        fujimod_catalog_identity::validate_id(&self.usb.connection_id)?;
+        fujimod_catalog_identity::validate_id(&self.card.connection_id)?;
         if !self.card.present && self.card.write_protected {
             return Err("an absent run card cannot be write protected".into());
         }
@@ -913,7 +913,7 @@ pub struct RunFirstStart {
 
 impl RunFirstStart {
     fn validate(&self) -> Result<(), String> {
-        fujimod_catalog_content::validate_id(&self.key_id)?;
+        fujimod_catalog_identity::validate_id(&self.key_id)?;
         if self.hold_ticks == 0 || self.settle_ticks == 0 || self.max_presses == 0 {
             return Err("run first-start timing and press limit must be positive".into());
         }
@@ -1370,7 +1370,7 @@ pub struct RunOverlay {
 impl RunOverlay {
     /// Resolve a bundled run overlay by its stable identity.
     pub fn bundled(id: &str) -> Result<Self, String> {
-        fujimod_catalog_content::validate_id(id)?;
+        fujimod_catalog_identity::validate_id(id)?;
         let document = BUNDLED_RUN_OVERLAYS
             .iter()
             .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
@@ -1390,8 +1390,8 @@ impl RunOverlay {
         {
             return Err("run overlay schema or identity differs".into());
         }
-        fujimod_catalog_content::validate_id(&self.id)?;
-        fujimod_catalog_content::validate_id(&self.configuration_id)?;
+        fujimod_catalog_identity::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.configuration_id)?;
         match &self.change {
             RunOverlayChange::Preset { preset } => preset.validate(),
             RunOverlayChange::Execution { execution } => {
@@ -1510,10 +1510,10 @@ impl RunPreset {
     fn validate(&self) -> Result<(), String> {
         self.factory_options.validate()?;
         if let Some(id) = &self.factory_inputs_id {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
         }
         if let Some(id) = &self.firmware_profile_id {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
         }
         if self
             .clear_options
@@ -1524,25 +1524,25 @@ impl RunPreset {
             return Err("run preset repeats a cleared option".into());
         }
         if let Some(id) = &self.hardware_inputs_id {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
         }
         for (id, inputs) in &self.native_device_inputs {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
             inputs.validate()?;
         }
         for (id, medium) in &self.nand_inputs {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
             medium.validate()?;
         }
         if let Some(observer) = &self.observer {
-            fujimod_catalog_content::validate_id(&observer.scanout)?;
+            fujimod_catalog_identity::validate_id(&observer.scanout)?;
         }
         if let Some(hardware) = &self.hardware_selection {
-            fujimod_catalog_content::validate_id(&hardware.soc_profile_id)?;
-            fujimod_catalog_content::validate_id(&hardware.body_profile_id)?;
+            fujimod_catalog_identity::validate_id(&hardware.soc_profile_id)?;
+            fujimod_catalog_identity::validate_id(&hardware.body_profile_id)?;
         }
         if let Some(id) = &self.firmware_inputs_id {
-            fujimod_catalog_content::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
         }
         if let Some(card) = &self.virtual_card {
             card.validate()?;
@@ -1777,7 +1777,7 @@ impl Exr2RunScene {
             return Err("run scene has too many statistics spans".into());
         }
         for span in &self.statistics.live_statistics {
-            fujimod_catalog_content::validate_id(&span.asset)?;
+            fujimod_catalog_identity::validate_id(&span.asset)?;
             if !assets.contains_key(span.asset.as_str()) {
                 return Err("run scene statistics refer to an undeclared asset".into());
             }
@@ -1814,7 +1814,7 @@ pub struct GeneratedSceneAsset {
 
 impl GeneratedSceneAsset {
     fn validate(&self) -> Result<(), String> {
-        fujimod_catalog_content::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.id)?;
         if self.pattern.is_empty()
             || self.size == 0
             || self.size > 64 << 20
