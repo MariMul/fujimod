@@ -142,7 +142,7 @@ photographed by the project's author with an X70.
   output's SHA-256 already matches the recorded original. Native runs and tests
   load it through `fujimod.scenes.default_scene_raf()`, which runs the script
   when the file is missing or stale. The same script writes
-  `build/assets/default-scene.raf.gz`, which the website serves (Cloudflare
+  `build/assets/default-scene.raf.gzipdata`, which the website serves (Cloudflare
   assets are limited to 25 MiB; the RAF is 32 MiB) and the browser decompresses
   with `DecompressionStream`.
 - **Sensor input:** the RAF reaches the sensor through the RAF input (per-site

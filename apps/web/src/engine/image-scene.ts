@@ -3,7 +3,7 @@ import type { Scene } from '@fujimod/emulator-ui/engine/api';
 /** Load the X70 sensor's original mosaic without a browser image conversion. */
 export async function loadRafScene(): Promise<Scene> {
   const response = await fetch(
-    new URL('../../../../build/assets/default-scene.raf.gz', import.meta.url),
+    new URL('../../../../build/assets/default-scene.raf.gzipdata', import.meta.url),
   );
   if (!response.ok || !response.body) throw Error('Default RAF is unavailable.');
   const raf = response.body.pipeThrough(new DecompressionStream('gzip'));

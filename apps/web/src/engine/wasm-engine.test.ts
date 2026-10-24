@@ -209,7 +209,7 @@ test('the X70 boots and restores its default with original RAF bytes', async () 
     const request = await sent('boot');
     assert(request.type === 'rpc' && request.request.action === 'boot');
     assert.deepEqual(request.request.scene, { raf: bytes });
-    assert.match(urls[0], /build\/assets\/default-scene\.raf\.gz/);
+    assert.match(urls[0]!, /build\/assets\/default-scene\.raf\.gzipdata/);
     f.resolve([]);
     await boot;
     const restore = f.engine.setScene(null);

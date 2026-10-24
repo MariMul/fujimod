@@ -10,7 +10,7 @@ export const originalSha256 = '2fdbda765e9abf147d4bdfdd5a2060d2c8702d7ad53561a5b
 export const defaultSceneRaf = fileURLToPath(
   new URL('../../build/assets/default-scene.raf', import.meta.url),
 );
-export const defaultSceneRafGzip = `${defaultSceneRaf}.gz`;
+export const defaultSceneRafGzip = `${defaultSceneRaf}.gzipdata`;
 const original = new URL('../../apps/web/src/engine/assets/default-scene.raf.zst', import.meta.url);
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
