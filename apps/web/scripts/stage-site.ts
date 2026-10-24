@@ -1,6 +1,6 @@
 /** Stage generated website assets locally before their direct Cloudflare upload. */
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
@@ -78,6 +78,16 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
       sha256: createHash('sha256').update(data).digest('hex'),
     });
   }
+  async function copyBundle(directory: string, bundle: string) {
+    const manifest: unknown = JSON.parse(await readFile(join(directory, 'wasm.json'), 'utf8'));
+    for (const name of runtimeBundleFiles(manifest))
+      await copy(join(directory, name), bundle + name);
+    const licenses = await readdir(join(directory, 'licenses'), { withFileTypes: true });
+    if (!licenses.length || licenses.some((entry) => !entry.isFile()))
+      throw Error(`Invalid runtime licenses: ${bundle}`);
+    for (const entry of licenses)
+      await copy(join(directory, 'licenses', entry.name), bundle + 'licenses/' + entry.name);
+  }
   try {
     for (const firmware of emulators) {
       const config = firmware.emulate!;
@@ -107,16 +117,18 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
         browser.passed !== true
       )
         throw Error(`Emulator qualification failed: ${firmware.id}`);
-      const manifest: unknown = JSON.parse(await readFile(join(directory, 'wasm.json'), 'utf8'));
-      for (const name of runtimeBundleFiles(manifest))
-        await copy(join(directory, name), config.bundle + name);
+      await copyBundle(directory, config.bundle);
+      if (firmware.camera_table) {
+        if (firmware.camera_table !== config.bundle + 'camera.json')
+          throw Error(`Unexpected camera table location: ${firmware.id}`);
+        await copy(join(directory, 'camera.json'), firmware.camera_table);
+      }
       if (config.usb) {
         const bundle = config.usb.bundle;
         if (bundle !== `runtime/${firmware.id}-usb/`)
           throw Error(`Unexpected USB runtime location: ${firmware.id}`);
         const usb = join(inputs.runtime, `${firmware.id}-usb`);
-        const manifest: unknown = JSON.parse(await readFile(join(usb, 'wasm.json'), 'utf8'));
-        for (const name of runtimeBundleFiles(manifest)) await copy(join(usb, name), bundle + name);
+        await copyBundle(usb, bundle);
       }
     }
     const catalogBytes = Buffer.from(JSON.stringify(catalog));

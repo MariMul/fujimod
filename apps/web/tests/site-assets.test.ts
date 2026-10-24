@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -6,7 +7,7 @@ import { join } from 'node:path';
 import { stageSite, runtimeBundleFiles } from '../scripts/stage-site.ts';
 import type { Catalog } from '../src/catalog';
 
-test('a failed local asset preparation preserves the installed website assets', async () => {
+test('local preparation gates qualification and stages complete runtime bundles', async () => {
   const root = await mkdtemp(join(tmpdir(), 'site-assets-'));
   const runtime = join(root, 'input'),
     destination = join(root, 'public');
@@ -64,6 +65,13 @@ test('a failed local asset preparation preserves the installed website assets', 
     await assert.rejects(stageSite(inputs, destination), /camera.wasm/);
     for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
       if (name !== 'wasm.json') await writeFile(join(runtime, 'test-100', name), 'test');
+    await assert.rejects(stageSite(inputs, destination), /licenses/);
+    await mkdir(join(runtime, 'test-100/licenses'));
+    await writeFile(join(runtime, 'test-100/licenses/COPYING.txt'), 'license');
+    catalog.firmwares[0].camera_table = 'runtime/test-100/camera.json';
+    await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
+    await assert.rejects(stageSite(inputs, destination), /camera.json/);
+    await writeFile(join(runtime, 'test-100/camera.json'), '{"schema":1}');
     await assert.rejects(stageSite(inputs, destination), /patches.json/);
     const prepared = {
       document: 'document.json',
@@ -80,6 +88,81 @@ test('a failed local asset preparation preserves the installed website assets', 
       await writeFile(join(runtime, 'test-100', name), 'input');
     await assert.rejects(stageSite(inputs, destination), /patches.json/);
     assert.equal(await readFile(join(destination, 'runtime/catalog.json'), 'utf8'), 'installed');
+    const hash = (data: Uint8Array) => createHash('sha256').update(data).digest('hex');
+    const program = new Uint8Array(20);
+    const metadata = Buffer.from(
+      JSON.stringify({
+        schema: 1,
+        source: { bytes: 42, sha256: '1'.repeat(64) },
+        outputs: {
+          ffboot: { bytes: 1, sha256: '2'.repeat(64) },
+          ffsys: { bytes: 1, sha256: '3'.repeat(64) },
+        },
+        commands: 1,
+        program_sha256: hash(program),
+        firmware: 'test-100',
+        release: 'test',
+        mods: [],
+      }),
+    );
+    const header = Buffer.alloc(12);
+    header.write('FJMODP01');
+    header.writeUInt32LE(metadata.length, 8);
+    const patch = Buffer.concat([header, metadata, program]);
+    await mkdir(inputs.patches);
+    await writeFile(join(inputs.patches, 'test.fmpatch'), patch);
+    await writeFile(
+      join(inputs.patches, 'patches.json'),
+      JSON.stringify({
+        schema: 1,
+        release: 'test',
+        patches: { ['1'.repeat(64)]: 'test.fmpatch' },
+        firmwares: [
+          {
+            ...catalog.firmwares[0],
+            release_date: '2026-01-01',
+            patch_bytes: patch.length,
+            patch_sha256: hash(patch),
+            boot_instructions: ['Copy files.'],
+          },
+        ],
+      }),
+    );
+    const source = await readFile(new URL('../src/home/Features.tsx', import.meta.url), 'utf8');
+    const digest = /featureMedia\('([0-9a-f]{24})'\)/.exec(source)![1];
+    const video = 'a'.repeat(24) + '.mp4',
+      still = 'a'.repeat(24) + '.webp';
+    await mkdir(inputs.media);
+    await writeFile(join(inputs.media, video), 'video');
+    await writeFile(join(inputs.media, still), 'still');
+    await writeFile(
+      join(inputs.media, 'media.json'),
+      JSON.stringify({
+        schema: 1,
+        catalog: digest,
+        cards: { shape_aspect_item: { video, still, clips: {} } },
+      }),
+    );
+    catalog.firmwares[0].emulate!.usb = { bundle: 'runtime/test-100-usb/' };
+    await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
+    await mkdir(join(runtime, 'test-100-usb/licenses'), { recursive: true });
+    for (const name of ['camera.wasm', 'camera.mjs', 'runtime-NOTICES.txt', 'licenses/COPYING.txt'])
+      await writeFile(join(runtime, 'test-100-usb', name), 'usb ' + name);
+    await writeFile(join(runtime, 'test-100-usb/wasm.json'), '{"construction":"session"}');
+    await stageSite(inputs, destination);
+    for (const [name, expected] of [
+      ['runtime/test-100/camera.json', '{"schema":1}'],
+      ['runtime/test-100/licenses/COPYING.txt', 'license'],
+      ['runtime/test-100-usb/licenses/COPYING.txt', 'usb licenses/COPYING.txt'],
+    ])
+      assert.equal(await readFile(join(destination, name), 'utf8'), expected);
+    const manifest = JSON.parse(await readFile(join(destination, 'site-assets.json'), 'utf8')) as {
+      files: { path: string }[];
+    };
+    assert.ok(manifest.files.some((file) => file.path === 'runtime/test-100/camera.json'));
+    assert.ok(
+      manifest.files.some((file) => file.path === 'runtime/test-100-usb/licenses/COPYING.txt'),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
