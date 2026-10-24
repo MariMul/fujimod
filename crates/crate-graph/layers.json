@@ -59,6 +59,7 @@
       "fujimod-emulator-cpu",
       "fujimod-emulator-cpu-hvf",
       "fujimod-emulator-cpu-unicorn",
+      "fujimod-emulator-session",
       "fujimod-unicorn-sys"
     ],
     "library": [

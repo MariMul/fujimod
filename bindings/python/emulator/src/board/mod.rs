@@ -36,14 +36,14 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
 }
 
 enum Backend {
-    Graph(fujimod_emulator::session::Session),
+    Graph(fujimod_emulator_session::Session),
     Xp4(Box<dyn xp4_backend::Xp4Backend>),
 }
 
 /// Lend the session of a Python `Board` to another binding crate.
 pub(crate) fn borrow_session(
     board: &Bound<'_, PyAny>,
-    call: &mut dyn FnMut(&mut fujimod_emulator::session::Session) -> PyResult<()>,
+    call: &mut dyn FnMut(&mut fujimod_emulator_session::Session) -> PyResult<()>,
 ) -> PyResult<()> {
     let mut board = board.cast::<Board>()?.try_borrow_mut()?;
     call(board.session_mut()?)
@@ -122,7 +122,7 @@ impl Board {
         }
         self.outcome(result)
     }
-    fn session(&self) -> PyResult<&fujimod_emulator::session::Session> {
+    fn session(&self) -> PyResult<&fujimod_emulator_session::Session> {
         match self.backend.as_ref() {
             Some(Backend::Graph(session)) => Ok(session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
@@ -131,7 +131,7 @@ impl Board {
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
-    pub fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator::session::Session> {
+    pub fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator_session::Session> {
         match self.backend.as_mut() {
             Some(Backend::Graph(session)) => Ok(session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
@@ -525,7 +525,7 @@ impl Board {
             memory_watch: None,
             function_watch: None,
             instruction_points: BTreeMap::new(),
-            backend: Some(Backend::Graph(fujimod_emulator::session::Session {
+            backend: Some(Backend::Graph(fujimod_emulator_session::Session {
                 definition: serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?,"scene":json::<serde_json::Value>(scene)?}),
                 board,
                 controls: None,

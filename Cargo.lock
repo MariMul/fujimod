@@ -1333,24 +1333,16 @@ dependencies = [
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
- "fujimod-emulator-exr2-io",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
- "fujimod-emulator-exr2-storage",
  "fujimod-emulator-exr2-system",
- "fujimod-emulator-imaging",
  "fujimod-emulator-models",
- "fujimod-emulator-storage",
- "fujimod-recording",
  "fujimod-workspace-hack",
  "libc",
  "serde",
- "serde-wasm-bindgen",
  "serde_json",
  "sha2",
  "toml",
- "tsify",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1372,6 +1364,7 @@ dependencies = [
  "fujimod-emulator-exr2-resources",
  "fujimod-emulator-models",
  "fujimod-emulator-preparation",
+ "fujimod-emulator-session",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -1859,6 +1852,7 @@ dependencies = [
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-preparation",
+ "fujimod-emulator-session",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xp5-display",
@@ -1976,6 +1970,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-session"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-io",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-exr2-storage",
+ "fujimod-emulator-imaging",
+ "fujimod-emulator-storage",
+ "fujimod-recording",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-emulator-storage"
 version = "0.1.0"
 dependencies = [
@@ -2058,6 +2073,7 @@ dependencies = [
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-sensor-input",
+ "fujimod-emulator-session",
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-imaging",
  "fujimod-emulator-xp5-io",
@@ -2197,6 +2213,7 @@ dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
+ "fujimod-emulator-session",
  "fujimod-workspace-hack",
  "pyo3",
 ]
@@ -2207,6 +2224,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-boot",
+ "fujimod-emulator-session",
  "fujimod-python-base",
  "fujimod-workspace-hack",
  "serde_json",
@@ -2238,6 +2256,7 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
  "fujimod-emulator-preparation",
+ "fujimod-emulator-session",
  "fujimod-emulator-storage",
  "fujimod-python-base",
  "fujimod-settings",
@@ -2314,6 +2333,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-remote",
  "fujimod-emulator",
+ "fujimod-emulator-session",
  "fujimod-python-base",
  "fujimod-python-usb-lease",
  "fujimod-remote",
@@ -2395,6 +2415,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
  "fujimod-emulator",
+ "fujimod-emulator-session",
  "fujimod-recording",
  "fujimod-usb",
  "fujimod-workspace-hack",

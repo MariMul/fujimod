@@ -8,15 +8,15 @@ use std::{
 };
 
 struct Owner<'a> {
-    session: NonNull<fujimod_emulator::session::Session>,
+    session: NonNull<fujimod_emulator_session::Session>,
     thread: ThreadId,
-    _loan: PhantomData<&'a mut fujimod_emulator::session::Session>,
+    _loan: PhantomData<&'a mut fujimod_emulator_session::Session>,
 }
 // This is a synchronous, lifetime-bound detach capability, not a Send Session.
 // Dereferencing is guarded by the original thread ID and Drop never uses it.
 unsafe impl Send for Owner<'_> {}
 impl<'a> Owner<'a> {
-    fn new(session: &'a mut fujimod_emulator::session::Session) -> Self {
+    fn new(session: &'a mut fujimod_emulator_session::Session) -> Self {
         Self {
             session: NonNull::from(session),
             thread: thread::current().id(),

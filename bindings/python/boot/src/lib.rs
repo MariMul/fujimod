@@ -1,6 +1,6 @@
 //! Catalog run preparation and boot for the Python emulator bindings, installed through
 //! `fujimod_python_base::boot`.
-use fujimod_emulator::session::Session;
+use fujimod_emulator_session::Session;
 use fujimod_emulator_boot as boot;
 use fujimod_python_base::boot::{Boot, Inputs};
 

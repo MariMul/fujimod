@@ -12,7 +12,7 @@ pub mod scanout;
 mod tests;
 pub mod usb;
 
-use crate::board::Board;
+use fujimod_emulator::board::Board;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_exr2_resources::Resources;
 use std::collections::BTreeMap;

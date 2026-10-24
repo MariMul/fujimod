@@ -1,6 +1,6 @@
 //! In-process board transport. Execution yields between bounded, watched windows.
 use crate::{backend::Backend, connection::Connection, *};
-use fujimod_emulator::session::{
+use fujimod_emulator_session::{
     Session, checkpoint::Snapshot as Checkpoint, contact_driver::Actuator,
 };
 

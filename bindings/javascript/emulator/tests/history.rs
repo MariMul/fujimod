@@ -311,7 +311,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         schema: u32,
         owner: u32,
         generation: u64,
-        entries: Vec<fujimod_emulator::session::history::Entry>,
+        entries: Vec<fujimod_emulator_session::history::Entry>,
     }
     let mut h = create(false);
     let cold = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
@@ -335,7 +335,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
     let mut log: Log = ciborium::from_reader(bytes.as_slice()).unwrap();
     assert!(matches!(
         log.entries[0].input,
-        fujimod_emulator::session::history::Input::Run {
+        fujimod_emulator_session::history::Input::Run {
             instructions: u64::MAX,
             ..
         }

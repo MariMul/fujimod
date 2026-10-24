@@ -1,7 +1,7 @@
 //! A session keyframe owns the stopped machine and its external connections.
 //! Restoring positions does not drive contacts again or emit duplicate edges.
 use super::Session;
-use crate::board::keyframe::Keyframe;
+use fujimod_emulator::board::keyframe::Keyframe;
 use fujimod_emulator_exr2_resources::ResourceSnapshot;
 use fujimod_emulator_devices::parts::switch_panel::SwitchPanel;
 mod portable;

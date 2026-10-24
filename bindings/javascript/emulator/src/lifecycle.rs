@@ -1,7 +1,7 @@
 //! Cold power boundaries and portable committed storage for an owned camera.
 //! CPU contexts and pending device operations never enter the durable format.
 use super::{results::SavedMedia, session::Session};
-use fujimod_emulator::session::durable::Media;
+use fujimod_emulator_session::durable::Media;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 

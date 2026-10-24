@@ -3,7 +3,7 @@ use super::{
     results::{Checkpoint as CheckpointResult, ErrorReport, InputLog, Point},
     session::Session,
 };
-use fujimod_emulator::session::{
+use fujimod_emulator_session::{
     checkpoint::Snapshot,
     history::{Boundary, Entry, History as CoreHistory, Input},
 };

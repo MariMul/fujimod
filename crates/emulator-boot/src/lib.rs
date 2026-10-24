@@ -6,13 +6,11 @@ mod first_start;
 pub mod graph;
 mod x70;
 
-use fujimod_emulator::{
-    board::{
+use fujimod_emulator::board::{
         bus::{Bus, Mode},
         factory,
-    },
-    session::Session,
-};
+    };
+use fujimod_emulator_session::Session;
 use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_configuration::{

@@ -1,6 +1,6 @@
 use super::*;
 mod portable;
-use crate::board::{
+use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };

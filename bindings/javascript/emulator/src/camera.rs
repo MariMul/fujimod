@@ -70,7 +70,7 @@ struct Graph {
     card: Option<Card>,
     scene_input: Option<Scene>,
     controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
-    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    contact_driver: Option<fujimod_emulator_session::contact_driver::Spec>,
     preview: Option<Preview>,
 }
 #[derive(Deserialize)]
@@ -156,7 +156,7 @@ pub(super) struct Preview {
 }
 pub(super) struct Metadata {
     pub card: Option<Card>,
-    pub storage: fujimod_emulator::session::durable::Spec,
+    pub storage: fujimod_emulator_session::durable::Spec,
     pub identity: [u8; 32],
     pub scene: Option<Scene>,
     pub scanout: Option<String>,
@@ -176,7 +176,7 @@ struct BrowserFields {
     card: Option<Card>,
     scene_input: Option<Scene>,
     controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
-    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    contact_driver: Option<fujimod_emulator_session::contact_driver::Spec>,
     preview: Option<Preview>,
 }
 
@@ -235,8 +235,8 @@ struct Attachments {
     scene: Option<Scene>,
     preview: Option<Preview>,
     controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
-    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
-    storage: fujimod_emulator::session::durable::Spec,
+    contact_driver: Option<fujimod_emulator_session::contact_driver::Spec>,
+    storage: fujimod_emulator_session::durable::Spec,
     identity: [u8; 32],
     scanout: Option<String>,
     initial_positions: BTreeMap<String, String>,
@@ -275,7 +275,7 @@ fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
 fn camera_identity(
     firmware_id: &str,
     firmware_sha256: &str,
-    storage: &fujimod_emulator::session::durable::Spec,
+    storage: &fujimod_emulator_session::durable::Spec,
 ) -> Result<[u8; 32], String> {
     Ok(Sha256::digest(
         serde_json::to_vec(&serde_json::json!({
@@ -351,7 +351,7 @@ impl Session {
         )?;
         core.board.set_execution_policy(policy)?;
         let browser = config.browser;
-        let storage = fujimod_emulator::session::durable::Spec {
+        let storage = fujimod_emulator_session::durable::Spec {
             cards: browser
                 .card
                 .as_ref()
@@ -440,7 +440,7 @@ impl Session {
             .map(|(name, a)| Ok((name, a.build(dat)?)))
             .collect::<Result<_, String>>()?;
         resources.inputs = g.scene.build(&assets)?;
-        let storage = fujimod_emulator::session::durable::Spec {
+        let storage = fujimod_emulator_session::durable::Spec {
             cards: g
                 .card
                 .as_ref()
@@ -476,7 +476,7 @@ impl Session {
             };
             cpu.coprocessor(c.register, Some(value | c.set_bits))?;
         }
-        let core = fujimod_emulator::session::Session {
+        let core = fujimod_emulator_session::Session {
             definition,
             controls: None,
             contact_driver: None,
@@ -510,7 +510,7 @@ impl Session {
 
     /// Apply the browser attachments to a booted core and start its checkpoint.
     fn start_camera(
-        mut core: fujimod_emulator::session::Session,
+        mut core: fujimod_emulator_session::Session,
         a: Attachments,
     ) -> Result<Self, String> {
         core.board.watch_pcs(&a.watch_pcs)?;

@@ -1,7 +1,7 @@
 //! What the emulator bindings call to prepare and boot catalog runs. `fujimod-python-boot`
 //! implements it and installs it, so the emulator bindings depend on no catalog crate and do not
 //! wait for the boot assembly to rebuild.
-use fujimod_emulator::session::Session;
+use fujimod_emulator_session::Session;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use std::{path::PathBuf, sync::OnceLock};
 

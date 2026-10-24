@@ -2,7 +2,7 @@
 //!
 //! The emulator bindings install the borrower when they register, so binding crates such as
 //! the remote bindings drive a board's session without depending on them.
-use fujimod_emulator::session::Session;
+use fujimod_emulator_session::Session;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use std::sync::OnceLock;
 

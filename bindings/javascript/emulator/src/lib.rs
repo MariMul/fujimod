@@ -11,7 +11,7 @@ pub mod lifecycle;
 pub mod results;
 mod session;
 mod snapshot;
-use fujimod_emulator::session::card::{CardState, CardTree};
+use fujimod_emulator_session::card::{CardState, CardTree};
 use fujimod_emulator_boot::RecReport;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use jit::{JitSelection, JitStatistics};

@@ -3,7 +3,7 @@ use super::*;
 
 #[pyclass(unsendable, module = "fujimod._native.emulator")]
 pub struct Checkpoint {
-    pub(super) saved: fujimod_emulator::session::checkpoint::Snapshot,
+    pub(super) saved: fujimod_emulator_session::checkpoint::Snapshot,
 }
 #[pymethods]
 impl Checkpoint {

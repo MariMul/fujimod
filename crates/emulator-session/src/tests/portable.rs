@@ -1,5 +1,5 @@
 use super::*;
-use crate::session::contact_driver::{Actuator, Check, ControlInput, Pose, Spec as DriverSpec};
+use crate::contact_driver::{Actuator, Check, ControlInput, Pose, Spec as DriverSpec};
 use fujimod_emulator_cpu::{Register, arm};
 use fujimod_emulator_devices::parts::switch_panel::{Case, Circuit, Control, Signal, Spec};
 use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};

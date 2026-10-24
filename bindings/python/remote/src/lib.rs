@@ -55,7 +55,7 @@ struct PythonBoard(Py<PyAny>);
 impl remote::board::SessionOwner for PythonBoard {
     fn with_session<T>(
         &mut self,
-        call: impl FnOnce(&mut fujimod_emulator::session::Session) -> Result<T>,
+        call: impl FnOnce(&mut fujimod_emulator_session::Session) -> Result<T>,
     ) -> Result<T> {
         Python::attach(|py| {
             fujimod_python_base::board_session::with_session(self.0.bind(py), |session| {

@@ -144,8 +144,8 @@ struct Load {
 pub struct Session {
     pub(super) construction: Option<super::snapshot::Construction>,
     pub(super) capture_order: std::cell::Cell<u64>,
-    pub core: fujimod_emulator::session::Session,
-    pub(super) reset_image: Option<Arc<fujimod_emulator::session::checkpoint::Snapshot>>,
+    pub core: fujimod_emulator_session::Session,
+    pub(super) reset_image: Option<Arc<fujimod_emulator_session::checkpoint::Snapshot>>,
     pub(super) powered_on: bool,
     pub(super) generation: u64,
     /// Identifies this session in its checkpoint IDs and input logs.
@@ -319,7 +319,7 @@ impl Session {
         let mut session = Self {
             construction: Some(construction),
             capture_order: std::cell::Cell::new(1),
-            core: fujimod_emulator::session::Session {
+            core: fujimod_emulator_session::Session {
                 definition,
                 controls: None,
                 contact_driver: None,
@@ -357,7 +357,7 @@ impl Session {
             .into_iter()
             .try_fold(0u64, |sum, n| sum.checked_add(n))
             .ok_or("board instruction count overflow")?;
-        let input = fujimod_emulator::session::history::Input::Run {
+        let input = fujimod_emulator_session::history::Input::Run {
             instructions: u64::MAX - count,
             quantum: self.quantum,
             pause_after: None,

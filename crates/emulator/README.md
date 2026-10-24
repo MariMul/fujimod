@@ -53,7 +53,7 @@ files are read only; firmware-written settings remain in the session's medium.
 
 Rust embedding uses `fujimod_emulator_boot::{Options, open, to_rec, screenshot}`;
 set `Options.configuration_id` and `Options.overlays` to select the run.
-`open` returns an unexecuted `session::Session`; its `board` owns execution and
+`open` returns an unexecuted `fujimod_emulator_session::Session`; its `board` owns execution and
 its other methods supply external inputs and passive observations. `to_rec`
 returns a stopped report while retaining the session for inspection. No Python
 runtime is required. The Python package exposes the same construction through
@@ -92,7 +92,7 @@ Rust callers can open an XP5 board through
 `fujimod_emulator_xp5_board::boot::open`. `OpenOptions` supplies a validated CPU
 graph, explicit device windows, interrupt state, A-profile setup, resistor-key
 options, device resources, and initial memory images. The function builds the
-same `board::factory::Graph`, strict device bus and `session::Session` used by
+same `board::factory::Graph`, strict device bus and `fujimod_emulator_session::Session` used by
 the rest of the emulator. `xp5_device_windows` converts a selected SoC
 hardware profile to device windows; callers supply any run-specific device
 options and firmware bytes.

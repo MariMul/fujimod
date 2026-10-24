@@ -58,10 +58,11 @@ From the bottom of the graph to the top:
    rebuilds neither the storage interface nor the emulator. They
    construct nodes through the constructor registry and depend on the interface
    and plan crates only.
-6. `fujimod-emulator`: execution, scheduling and sessions. It depends on the
-   CPU, interface and plan crates and on no catalog crate above the interface's
-   own inputs. Sessions reach devices through capability traits, never through
-   concrete model types. `fujimod-emulator-boot` sits above it: it prepares
+6. `fujimod-emulator`: execution and scheduling. It depends on the CPU and
+   device interface crates only. `fujimod-emulator-session` sits above it: a
+   session holds a board with its EXR II resources, inputs, media, history and
+   checkpoints, and reaches devices through capability traits, never through
+   concrete model types. `fujimod-emulator-boot` sits above both: it prepares
    runs from the reference catalog and run configurations, assembles the CPU
    graph and the X70 plan, and opens sessions.
 7. Binding libraries (the Python binding crates, the JavaScript bindings)

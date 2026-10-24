@@ -15,6 +15,7 @@ board = ["dep:fujimod-emulator"]
 ff80 = ["dep:async-io", "dep:fujimod-usb"]
 
 [dependencies]
+fujimod-emulator-session.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-remote.workspace = true
 fujimod-recording.workspace = true

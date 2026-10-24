@@ -599,7 +599,7 @@ fn validate_images(graph: &factory::Graph, images: &[MemoryImage]) -> Result<(),
 /// selection and byte identity policy belong to caller.
 pub fn open(
     options: OpenOptions,
-) -> Result<(fujimod_emulator::session::Session, crate::session::Inputs), String> {
+) -> Result<(fujimod_emulator_session::Session, crate::session::Inputs), String> {
     validate_images(&options.processors, &options.images)?;
     options.processors.validate()?;
     let assembly = assemble_devices(
@@ -625,7 +625,7 @@ pub fn open(
     if let Some(scene) = options.scene.as_ref() {
         board.set_scene(scene)?;
     }
-    let session = fujimod_emulator::session::Session {
+    let session = fujimod_emulator_session::Session {
         definition: options.definition,
         board,
         controls: None,

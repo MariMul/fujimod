@@ -15,6 +15,7 @@ doctest = false
 emulator = ["dep:fujimod-python-base", "dep:fujimod-emulator", "fujimod-remote/board"]
 
 [dependencies]
+fujimod-emulator-session.workspace = true
 fujimod-python-usb-lease = { path = "../usb-lease" }
 fujimod-python-base = { path = "../base", optional = true }
 fujimod-emulator = { workspace = true, optional = true }

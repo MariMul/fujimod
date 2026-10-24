@@ -7,7 +7,7 @@ use super::{
     },
     session::Session,
 };
-use fujimod_emulator::session::{
+use fujimod_emulator_session::{
     card::{CardState, CardTree},
     history::Input,
 };
