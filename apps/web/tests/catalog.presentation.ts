@@ -34,7 +34,7 @@ try {
       assert.equal(await page.locator('#camera-table .phase.open').count(), 1, 'one tip open');
       assert.equal(
         await tip.locator('li:not(.todo)').count(),
-        phase.steps.filter((step) => step.done).length,
+        phase.steps.filter((step) => step.fraction === 1).length,
         `${progress.model} ${phase.label}`,
       );
     }

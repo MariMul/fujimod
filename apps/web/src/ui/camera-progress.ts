@@ -1,6 +1,7 @@
 /** Bring-up progress per camera model, from the catalog's generated progress documents. */
 export type StageProgress = 'pass' | 'fail' | 'stale' | 'not-run';
 export type ModProgress = StageProgress | 'unavailable';
+export type StockResult = 'pass' | 'partial' | 'fail' | 'stale' | 'not-run';
 export const STAGES = [
   'research',
   'analysis',
@@ -12,19 +13,33 @@ export const STAGES = [
   'mod-target',
   'mod-build',
   'sd-image',
+  'sd-boot',
 ] as const;
 export type Stage = (typeof STAGES)[number];
+export interface StockProgress {
+  result: StockResult;
+  passed?: number;
+  total?: number;
+}
 export interface FirmwareProgress {
   firmware_id: string;
   model: string;
   version: string;
+  facts: { located: number; total: number } | null;
+  /** Camera model whose boot ROM dump this firmware boots with. */
+  boot_rom: string | null;
   stages: Record<Stage, StageProgress>;
+  /** Stock features the body has, by feature. */
+  stock: Record<string, StockProgress>;
   mods: Record<string, ModProgress>;
 }
 
 export interface Step {
   label: string;
-  done: boolean;
+  /** Completed share of this step, 0–1. */
+  fraction: number;
+  /** "35 of 35", "9 of 11", "X70 dump". */
+  detail?: string;
 }
 export interface Phase {
   id: 'research' | 'emulator' | 'camera' | 'mods' | 'sd-card';
@@ -36,101 +51,114 @@ export interface Phase {
   /** "Done", "2 of 3", "6 of 24", "Not yet". */
   value: string;
   steps: Step[];
+  /** Draw each step as its own cell of the segment. */
+  cells: boolean;
 }
 
-const STEP_LABELS: Record<Exclude<Stage, 'research'>, string> = {
-  analysis: 'Boot facts located',
-  rec: 'Reaches the shooting screen',
-  menu: 'Menus respond',
-  'camera-identity': 'Identified over USB',
-  'camera-snapshot': 'Memory snapshot',
-  'camera-menu': 'Menus driven over USB',
-  'mod-target': 'Firmware locations found',
-  'mod-build': 'Built for this firmware',
-  'sd-image': 'Dual-boot SD card image',
-};
-function steps(progress: FirmwareProgress, stages: readonly Exclude<Stage, 'research'>[]): Step[] {
-  return stages.map((stage) => ({
-    label: STEP_LABELS[stage],
-    done: progress.stages[stage] === 'pass',
-  }));
+/** Emulator features in table order; boot and menus are the REC and menu stages. */
+const EMULATOR: [string, string][] = [
+  ['boot', 'Boot'],
+  ['record-picture', 'Record picture'],
+  ['record-movie', 'Record movie'],
+  ['control-input', 'Control input'],
+  ['control-layout', 'Control layout'],
+  ['menus', 'Menus'],
+  ['focus', 'Focus'],
+  ['lens', 'Lens'],
+  ['film-simulations', 'Film simulations'],
+  ['playback-picture', 'Playback picture'],
+  ['playback-movie', 'Playback movie'],
+  ['develop-raw', 'Develop RAW'],
+  ['ibis', 'IBIS'],
+  ['sd', 'SD'],
+  ['card-slots', 'Card slots'],
+];
+const pass = (result: string) => Number(result === 'pass');
+function stockStep(label: string, stock: StockProgress): Step {
+  if (stock.result === 'partial' && stock.passed !== undefined && stock.total)
+    return {
+      label,
+      fraction: stock.passed / stock.total,
+      detail: `${stock.passed} of ${stock.total}`,
+    };
+  return { label, fraction: pass(stock.result) };
 }
-function stepValue(list: Step[]) {
-  const done = list.filter((step) => step.done).length;
-  return done === list.length ? 'Done' : done ? `${done} of ${list.length}` : 'Not yet';
-}
-function stepPhase(
+function phase(
   id: Phase['id'],
   label: string,
   weight: number,
-  progress: FirmwareProgress,
-  stages: readonly Exclude<Stage, 'research'>[],
+  steps: Step[],
+  cells = false,
 ): Phase {
-  const list = steps(progress, stages);
+  const done = steps.filter((step) => step.fraction === 1).length;
   return {
     id,
     label,
     weight,
-    fraction: list.filter((step) => step.done).length / list.length,
-    value: stepValue(list),
-    steps: list,
-  };
-}
-/** Research: the `research` stage unpacks and exports the firmware; `analysis` locates its boot facts. */
-function researchPhase(progress: FirmwareProgress): Phase {
-  const exported = progress.stages.research === 'pass',
-    list = [
-      { label: 'Firmware unpacked', done: exported },
-      { label: 'Code exported', done: exported },
-      { label: 'Boot facts located', done: progress.stages.analysis === 'pass' },
-    ];
-  return {
-    id: 'research',
-    label: 'Research',
-    weight: 10,
-    fraction: list.filter((step) => step.done).length / list.length,
-    value: stepValue(list),
-    steps: list,
+    fraction: steps.reduce((sum, step) => sum + step.fraction, 0) / steps.length,
+    value: done === steps.length ? 'Done' : done ? `${done} of ${steps.length}` : 'Not yet',
+    steps,
+    cells,
   };
 }
 
 export function phases(progress: FirmwareProgress): Phase[] {
-  const mods = Object.values(progress.mods),
-    working = mods.filter((result) => result === 'pass').length;
+  const { stages, facts } = progress,
+    research = pass(stages.research),
+    mods = Object.entries(progress.mods),
+    working = mods.filter(([, result]) => result === 'pass').length;
+  const emulator = EMULATOR.flatMap(([feature, label]): Step[] => {
+    if (feature === 'boot') return [{ label, fraction: pass(stages.rec) }];
+    if (feature === 'menus') return [{ label, fraction: pass(stages.menu) }];
+    const stock = progress.stock[feature];
+    return stock ? [stockStep(label, stock)] : [];
+  });
   return [
-    researchPhase(progress),
-    stepPhase('emulator', 'Emulator', 30, progress, ['rec', 'menu']),
-    stepPhase('camera', 'Camera', 20, progress, [
-      'camera-identity',
-      'camera-snapshot',
-      'camera-menu',
+    phase('research', 'Research', 10, [
+      { label: 'Update file registered', fraction: research },
+      { label: 'Overlays unpacked', fraction: research },
+      { label: 'Corpus exported', fraction: research },
+      { label: 'Function index built', fraction: pass(stages.analysis) },
+      facts
+        ? {
+            label: 'Facts located',
+            fraction: facts.located / facts.total,
+            detail: `${facts.located} of ${facts.total}`,
+          }
+        : { label: 'Facts located', fraction: 0 },
+      progress.boot_rom
+        ? { label: 'Boot ROM', fraction: 1, detail: `${progress.boot_rom} dump` }
+        : { label: 'Boot ROM', fraction: 0 },
+    ]),
+    phase('emulator', 'Emulator', 40, emulator, true),
+    phase('camera', 'Camera', 15, [
+      { label: 'ff80 identity', fraction: pass(stages['camera-identity']) },
+      { label: 'RAM snapshot', fraction: pass(stages['camera-snapshot']) },
+      { label: 'Remote menu control', fraction: pass(stages['camera-menu']) },
     ]),
     {
-      id: 'mods',
-      label: 'Mods',
-      weight: 30,
+      ...phase('mods', 'Mods', 25, [
+        { label: 'Mod target', fraction: pass(stages['mod-target']) },
+        { label: 'FujiMod build', fraction: pass(stages['mod-build']) },
+        ...mods.map(([mod, result]) => ({ label: mod, fraction: pass(result) })),
+      ]),
       fraction: mods.length ? working / mods.length : 0,
       value: working ? `${working} of ${mods.length}` : 'Not yet',
-      steps: steps(progress, ['mod-target', 'mod-build']),
     },
-    stepPhase('sd-card', 'SD card', 10, progress, ['sd-image']),
+    phase('sd-card', 'SD-boot image', 10, [
+      { label: 'Image built', fraction: pass(stages['sd-image']) },
+      { label: 'Booted on a camera', fraction: pass(stages['sd-boot']) },
+    ]),
   ];
 }
 
-/** The first unfinished phase, as the row's status. */
-/** The first unfinished phase; research counts only until later work has progress. */
-export function status(list: Phase[]): string {
-  const underway = list.some((phase) => phase.id !== 'research' && phase.fraction > 0);
-  const next = list.find((phase) => phase.fraction < 1 && !(underway && phase.id === 'research'));
-  if (!next) return 'Ready';
-  if (next.id === 'mods') return next.value === 'Not yet' ? 'Mods' : `${next.value} mods`;
-  return next.label;
-}
-
-/** Whether any stage or mod passes; otherwise the model is listed as not started. */
+/** Whether any stage, stock feature or mod passes; otherwise the model is listed as not started. */
 export function started(progress: FirmwareProgress): boolean {
   return (
     STAGES.some((stage) => progress.stages[stage] === 'pass') ||
+    Object.values(progress.stock).some(
+      (stock) => stock.result !== 'not-run' && stock.result !== 'fail' && stock.result !== 'stale',
+    ) ||
     Object.values(progress.mods).includes('pass')
   );
 }

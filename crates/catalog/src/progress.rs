@@ -24,8 +24,14 @@ pub struct FirmwareProgress {
     pub model: String,
     /// Firmware version.
     pub version: String,
+    /// Located firmware facts, when the firmware has a facts document.
+    pub facts: Option<FactCount>,
+    /// Camera model whose boot ROM dump this firmware boots with, if any.
+    pub boot_rom: Option<String>,
     /// Bring-up stages, in order.
     pub stages: ProgressStages,
+    /// Stock camera features the emulator is graded on, by feature; only features the body has.
+    pub stock: BTreeMap<String, StockProgress>,
     /// Walkthrough result of every shipped mod, by mod name.
     pub mods: BTreeMap<String, ModProgress>,
 }
@@ -35,9 +41,9 @@ pub struct FirmwareProgress {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProgressStages {
-    /// The firmware was registered and unpacked and every code unit exported.
+    /// The update file was registered, its overlays unpacked and every code unit's corpus exported.
     pub research: StageProgress,
-    /// The firmware's static boot facts were located.
+    /// The function index was built and the firmware's facts located.
     pub analysis: StageProgress,
     /// The emulator boots to the shooting screen.
     pub rec: StageProgress,
@@ -55,6 +61,45 @@ pub struct ProgressStages {
     pub mod_build: StageProgress,
     /// The dual-boot SD card image was built.
     pub sd_image: StageProgress,
+    /// A camera booted the SD card image.
+    pub sd_boot: StageProgress,
+}
+
+/// How many of a firmware's facts were located.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct FactCount {
+    pub located: u32,
+    pub total: u32,
+}
+
+/// Latest grade of one stock-feature walkthrough.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct StockProgress {
+    pub result: StockResult,
+    /// Graded parts that pass, for features graded in parts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passed: Option<u32>,
+    /// Graded parts in total.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total: Option<u32>,
+}
+
+/// Grade of one stock feature.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum StockResult {
+    Pass,
+    /// Some graded parts pass.
+    Partial,
+    Fail,
+    /// Recorded, but its inputs changed since.
+    Stale,
+    NotRun,
 }
 
 /// Latest result of one stage.

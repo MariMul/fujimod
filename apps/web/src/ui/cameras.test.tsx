@@ -6,7 +6,6 @@ import {
   byModel,
   phases,
   started,
-  status,
   type FirmwareProgress,
   type Stage,
   type StageProgress,
@@ -29,7 +28,16 @@ function progress(
       passed.includes(stage) ? 'pass' : 'not-run',
     ]),
   ) as Record<Stage, StageProgress>;
-  return { firmware_id: `${model.toLowerCase()}-100`, model, version, stages, mods };
+  return {
+    firmware_id: `${model.toLowerCase()}-100`,
+    model,
+    version,
+    facts: null,
+    boot_rom: null,
+    stages,
+    stock: {},
+    mods,
+  };
 }
 function table(
   columns: Parameters<typeof CameraTable>[0]['columns'],
@@ -46,32 +54,66 @@ function table(
   return host;
 }
 
-test('a stage fills its share of its phase and the row names the first unfinished phase', () => {
-  const list = phases(
-    progress('X-E2S', ['research', 'rec', 'camera-identity', 'mod-target', 'mod-build'], {
+test('each phase fills by its steps and names its value', () => {
+  const document = progress(
+    'X-E2S',
+    ['research', 'rec', 'camera-identity', 'mod-target', 'mod-build'],
+    {
       a: 'pass',
       b: 'fail',
       c: 'fail',
       d: 'fail',
-    }),
+    },
   );
+  document.facts = { located: 1, total: 2 };
+  document.boot_rom = 'X70';
+  const list = phases(document);
   expect(list.map((phase) => [phase.id, phase.fraction, phase.value])).toEqual([
-    ['research', 2 / 3, '2 of 3'],
+    ['research', (3 + 0.5 + 1) / 6, '4 of 6'],
     ['emulator', 1 / 2, '1 of 2'],
     ['camera', 1 / 3, '1 of 3'],
     ['mods', 1 / 4, '1 of 4'],
     ['sd-card', 0, 'Not yet'],
   ]);
-  expect(status(list)).toBe('Emulator');
-  expect(status(phases(progress('X-T4', ['research'])))).toBe('Research');
-  const later = phases(
-    progress(
-      'X70',
-      ['research', 'analysis', 'rec', 'menu', 'camera-identity', 'camera-snapshot', 'camera-menu'],
-      { a: 'pass', b: 'fail' },
-    ),
+  expect(list[0]?.steps.map((step) => [step.label, step.fraction, step.detail])).toEqual([
+    ['Update file registered', 1, undefined],
+    ['Overlays unpacked', 1, undefined],
+    ['Corpus exported', 1, undefined],
+    ['Function index built', 0, undefined],
+    ['Facts located', 1 / 2, '1 of 2'],
+    ['Boot ROM', 1, 'X70 dump'],
+  ]);
+});
+
+test('the emulator draws one cell per feature the body has, partial ones by their share', () => {
+  const document = progress('X-T4', ['rec']);
+  document.stock = {
+    'film-simulations': { result: 'partial', passed: 9, total: 11 },
+    ibis: { result: 'pass' },
+    sd: { result: 'stale' },
+  };
+  const emulator = phases(document)[1]!;
+  expect(emulator.cells).toBe(true);
+  expect(emulator.steps.map((step) => [step.label, step.fraction, step.detail])).toEqual([
+    ['Boot', 1, undefined],
+    ['Menus', 0, undefined],
+    ['Film simulations', 9 / 11, '9 of 11'],
+    ['IBIS', 1, undefined],
+    ['SD', 0, undefined],
+  ]);
+  const host = table([[{ name: 'X-Processor 4', years: '', models: ['X-T4'] }]], [document]);
+  const cells = [...host.querySelectorAll<HTMLElement>('.phase:nth-child(2) .cell')];
+  expect(cells.map((cell) => cell.style.getPropertyValue('--p'))).toEqual([
+    '100%',
+    '0%',
+    `${(9 / 11) * 100}%`,
+    '100%',
+    '0%',
+  ]);
+  expect(host.querySelector('.phase:nth-child(2) li.partial .step-detail')?.textContent).toBe(
+    '9 of 11',
   );
-  expect(status(later)).toBe('1 of 2 mods');
+  expect(host.querySelector('.progress-heading')?.textContent).toBe('X-T41.00');
 });
 
 test('stale and failing stages do not count', () => {
@@ -82,18 +124,12 @@ test('stale and failing stages do not count', () => {
   expect([research?.fraction, emulator?.fraction]).toEqual([0, 1 / 2]);
 });
 
-test('research steps: unpacking and export share one stage, boot facts the other', () => {
-  const steps = (passed: Stage[]) =>
-    phases(progress('X30', passed))[0]?.steps.map((step) => [step.label, step.done]);
-  expect(steps(['research'])).toEqual([
-    ['Firmware unpacked', true],
-    ['Code exported', true],
-    ['Boot facts located', false],
-  ]);
-  expect(steps(['analysis'])?.map(([, done]) => done)).toEqual([false, false, true]);
-});
-
-test('a model is started once any stage or mod passes', () => {
+test('a model is started once any stage, stock feature or mod passes', () => {
+  const partial = progress('X30', []);
+  partial.stock = { lens: { result: 'partial', passed: 1, total: 2 } };
+  expect(started(partial)).toBe(true);
+  partial.stock = { lens: { result: 'fail' } };
+  expect(started(partial)).toBe(false);
   expect(started(progress('X30', []))).toBe(false);
   expect(started(progress('X30', [], { a: 'fail' }))).toBe(false);
   expect(started(progress('X30', [], { a: 'pass' }))).toBe(true);
@@ -121,13 +157,6 @@ test('started models draw a bar; the others are listed as not started', () => {
   ]);
   expect(host.querySelector('.rest')?.textContent).toBe('Not startedX30 · X20');
   expect(host.querySelectorAll('.progress-row .phase')).toHaveLength(5);
-});
-
-test('research fills a third for each of its steps', () => {
-  expect(phases(progress('X70', ['research', 'analysis']))[0]?.fraction).toBe(1);
-  const [research] = phases(progress('X30', ['research']));
-  expect([research?.fraction, research?.value]).toEqual([2 / 3, '2 of 3']);
-  expect(phases(progress('X20', ['analysis']))[0]?.fraction).toBe(1 / 3);
 });
 
 test('one tip is open at a time, whether tapped, hovered or focused', () => {

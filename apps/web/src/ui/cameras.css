@@ -77,13 +77,6 @@
   font-size: 11px;
   color: var(--faint);
 }
-.progress-row .detail {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 
 /* The same 4px track as the emulator's loading bar. */
 .progress-row .bar {
@@ -121,6 +114,29 @@
   overflow: hidden;
   transition: opacity 120ms;
 }
+/* A segment of separately graded features: one cell each, filled by its share. */
+.progress-row .track.cells {
+  display: flex;
+  gap: 1px;
+  background: none;
+}
+.progress-row .cell {
+  position: relative;
+  flex: 1 1 0;
+  background: rgb(118 118 128 / 24%);
+  overflow: hidden;
+}
+.progress-row .cell::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p);
+  background: var(--c);
+  transition: filter 120ms;
+}
+.progress-row .phase.open .cell::after {
+  filter: brightness(1.2);
+}
 .progress-row .fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -147,7 +163,7 @@
   z-index: 2;
   bottom: calc(100% + 22px); /* clears this row's name and status */
   left: 50%;
-  width: 220px;
+  width: 240px;
   translate: -50% 0;
   padding: 10px 12px 11px;
   border-radius: 12px;
@@ -225,6 +241,17 @@
   content: '✓';
   width: 10px;
   font-weight: 700;
+  color: var(--c);
+}
+.progress-row .tip .step-detail {
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.progress-row .tip li.partial.todo::before {
+  content: '◐';
+  font-weight: 400;
   color: var(--c);
 }
 .progress-row .tip li.todo {

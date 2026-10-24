@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onSettled } from 'solid-js';
-import { phases, started, status, type FirmwareProgress, type Phase } from './camera-progress';
+import { phases, started, type FirmwareProgress, type Phase } from './camera-progress';
 import './cameras.css';
 export interface Generation {
   name: string;
@@ -85,9 +85,20 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
       }}
       aria-label={`${props.phase.label}: ${props.phase.value}`}
     >
-      <div class="track">
-        <div class="fill" />
-      </div>
+      <Show
+        when={props.phase.cells}
+        fallback={
+          <div class="track">
+            <div class="fill" />
+          </div>
+        }
+      >
+        <div class="track cells">
+          <For each={props.phase.steps}>
+            {(step) => <div class="cell" style={{ '--p': `${step.fraction * 100}%` }} />}
+          </For>
+        </div>
+      </Show>
       <div class="tip">
         <div class="tip-label">{props.phase.label}</div>
         <div class="tip-value">
@@ -97,7 +108,16 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
         </div>
         <ul>
           <For each={props.phase.steps}>
-            {(step) => <li class={{ todo: !step.done }}>{step.label}</li>}
+            {(step) => (
+              <li
+                class={{ todo: step.fraction < 1, partial: step.fraction > 0 && step.fraction < 1 }}
+              >
+                {step.label}
+                <Show when={step.detail}>
+                  {(detail) => <span class="step-detail">{detail()}</span>}
+                </Show>
+              </li>
+            )}
           </For>
         </ul>
         <Show when={props.phase.id === 'camera' && props.owners.length}>
@@ -131,7 +151,6 @@ function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[]; tips:
       <div class="progress-heading">
         <span class="name">{props.progress.model}</span>
         <span class="version">{props.progress.version}</span>
-        <span class="detail">{status(list())}</span>
       </div>
       <ul class="bar" aria-label={`${props.progress.model} progress`}>
         <For each={list()}>
@@ -198,7 +217,7 @@ const LEGEND_LABELS: Record<Phase['id'], string> = {
   emulator: 'Emulator',
   camera: 'Camera',
   mods: 'Mods',
-  'sd-card': 'SD card',
+  'sd-card': 'SD-boot image',
 };
 export function CameraTable(props: {
   columns: Generation[][];

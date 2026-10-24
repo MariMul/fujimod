@@ -4,17 +4,58 @@
   "firmware_id": "x70-110",
   "model": "X70",
   "version": "1.10",
+  "facts": {
+    "located": 35,
+    "total": 35
+  },
+  "boot_rom": "X70",
   "stages": {
     "research": "pass",
     "analysis": "pass",
     "rec": "pass",
     "menu": "pass",
-    "camera-identity": "not-run",
-    "camera-snapshot": "not-run",
-    "camera-menu": "not-run",
+    "camera-identity": "pass",
+    "camera-snapshot": "pass",
+    "camera-menu": "pass",
     "mod-target": "not-run",
     "mod-build": "not-run",
-    "sd-image": "not-run"
+    "sd-image": "not-run",
+    "sd-boot": "not-run"
+  },
+  "stock": {
+    "record-picture": {
+      "result": "pass"
+    },
+    "record-movie": {
+      "result": "not-run"
+    },
+    "control-input": {
+      "result": "pass"
+    },
+    "focus": {
+      "result": "not-run"
+    },
+    "lens": {
+      "result": "not-run"
+    },
+    "film-simulations": {
+      "result": "not-run"
+    },
+    "playback-picture": {
+      "result": "pass"
+    },
+    "playback-movie": {
+      "result": "not-run"
+    },
+    "develop-raw": {
+      "result": "not-run"
+    },
+    "sd": {
+      "result": "pass"
+    },
+    "control-layout": {
+      "result": "pass"
+    }
   },
   "mods": {
     "af": "not-run",
@@ -34,6 +75,7 @@
     "hdmi-rec": "not-run",
     "controls": "not-run",
     "menu-theme": "not-run",
+    "menu-tap": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "usb-debug": "not-run",

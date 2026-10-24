@@ -4,6 +4,11 @@
   "firmware_id": "x100vi-131",
   "model": "X100VI",
   "version": "1.31",
+  "facts": {
+    "located": 19,
+    "total": 23
+  },
+  "boot_rom": null,
   "stages": {
     "research": "pass",
     "analysis": "not-run",
@@ -14,7 +19,46 @@
     "camera-menu": "not-run",
     "mod-target": "not-run",
     "mod-build": "not-run",
-    "sd-image": "not-run"
+    "sd-image": "not-run",
+    "sd-boot": "not-run"
+  },
+  "stock": {
+    "record-picture": {
+      "result": "not-run"
+    },
+    "record-movie": {
+      "result": "not-run"
+    },
+    "control-input": {
+      "result": "not-run"
+    },
+    "focus": {
+      "result": "not-run"
+    },
+    "lens": {
+      "result": "not-run"
+    },
+    "film-simulations": {
+      "result": "not-run"
+    },
+    "playback-picture": {
+      "result": "not-run"
+    },
+    "playback-movie": {
+      "result": "not-run"
+    },
+    "develop-raw": {
+      "result": "not-run"
+    },
+    "ibis": {
+      "result": "not-run"
+    },
+    "sd": {
+      "result": "not-run"
+    },
+    "control-layout": {
+      "result": "not-run"
+    }
   },
   "mods": {
     "af": "not-run",
@@ -34,6 +78,7 @@
     "hdmi-rec": "not-run",
     "controls": "not-run",
     "menu-theme": "not-run",
+    "menu-tap": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "usb-debug": "not-run",
