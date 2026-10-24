@@ -47,6 +47,7 @@ struct State {
     stop_due: Option<u64>,
     dma: Transfer,
     raw3_dma: Transfer,
+    raw_origins: std::collections::BTreeMap<u64, [usize; 2]>,
 }
 pub struct ImageInput {
     state: State,
@@ -129,6 +130,7 @@ impl ImageInput {
                 stop_due: None,
                 dma: Transfer::default(),
                 raw3_dma: Transfer::default(),
+                raw_origins: Default::default(),
             },
             options,
             wiring,
@@ -396,6 +398,18 @@ impl ImageInput {
         ];
         let words = &bank.words;
         self.film.update(|o| words[o / 4])?;
+        let mut cfa = self.cfa.as_ref().ok_or("RAW readback has no CFA layout")?.clone();
+        if self.wiring.sensor.is_some() && r[1] & 1 != 0 {
+            let [left, top] = *s.raw_origins.get(&physical(src.address, 1)?)
+                .ok_or("RAW readback source has no captured sensor window")?;
+            cfa = cfa.window(left, top);
+        } else if r[1] & 1 != 0 && r[0x35c / 4] & 1 != 0 {
+            if physical(src.address, 1)? != physical(r[0x358 / 4] as u64, 1)? {
+                return Err("RAW readback source differs from the declared RAW window".into());
+            }
+            cfa = cfa.window((r[0x14 / 4] >> 16 & 0x3fff) as usize,
+                             (r[0x18 / 4] >> 16 & 0x3fff) as usize);
+        }
         self.source.resize(src.pitch * src.height, 0);
         cx.ram_read(src.address, &mut self.source)?;
         let raw = RawView {
@@ -417,10 +431,7 @@ impl ImageInput {
                     *target,
                     target.width * 2,
                 )?;
-                self.cfa
-                    .as_ref()
-                    .ok_or("RAW readback has no CFA layout")?
-                    .render(
+                cfa.render(
                         &raw,
                         &self.film,
                         0,
@@ -625,6 +636,7 @@ impl ImageInput {
             dma,
             raw3_dma,
             raw_exposure,
+            raw_origins,
             capture_ack,
             raw3_ack,
             ..
@@ -641,6 +653,8 @@ impl ImageInput {
                 "RAW channel2",
             )?;
             *raw_exposure = sensor.physical_exposure();
+            raw_origins.insert(physical(r[0x358 / 4] as u64, 1)?,
+                [(r[0x14 / 4] >> 16 & 0x3fff) as usize, (r[0x18 / 4] >> 16 & 0x3fff) as usize]);
         }
         if r[1] & 1 != 0 && r[0x378 / 4] & 1 != 0 && !*raw3_ack && raw3_dma.deadline().is_none() {
             *raw3_dma = Self::prepare_raw_channel(
@@ -653,6 +667,8 @@ impl ImageInput {
                 0x37c,
                 "RAW channel3",
             )?;
+            raw_origins.insert(physical(r[0x374 / 4] as u64, 1)?,
+                [(r[0x14 / 4] >> 16 & 0x3fff) as usize, (r[0x18 / 4] >> 16 & 0x3fff) as usize]);
         }
         Ok(true)
     }
@@ -919,12 +935,13 @@ impl Device for ImageInput {
             stop_due,
             dma,
             raw3_dma,
+            raw_origins,
         } = &self.state;
         let state = serde_json::json!({"r":r,"reset":reset,"command_due":command_due,"command_armed":command_armed,
             "raw_exposure":raw_exposure,"command_done":command_done,"command_bytes":fujimod_emulator_devices::fingerprint::bytes(command_bytes),"phases":phases,
             "phase_due":phase_due,"phase_pending":phase_pending,"phase_period":phase_period,"sensor_due":sensor_due,"capture_ack":capture_ack,
             "capture_irq_sent":capture_irq_sent,"raw3_ack":raw3_ack,"raw3_irq_sent":raw3_irq_sent,
-            "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint(),"raw3_dma":raw3_dma.fingerprint()});
+            "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint(),"raw3_dma":raw3_dma.fingerprint(),"raw_origins":raw_origins});
         let sensor = self.wiring.sensor.as_ref().map(|s| s.fingerprint());
         let outputs = self
             .wiring

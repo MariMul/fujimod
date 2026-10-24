@@ -131,6 +131,12 @@ impl Cfa {
     pub fn color(&self, x: usize, y: usize) -> usize {
         self.layout[y % 6 * 6 + x % 6] as usize
     }
+    /// CFA phase at the first sample of a programmed sensor window.
+    pub fn window(&self, left: usize, top: usize) -> Self {
+        let (left, top) = (left % 6, top % 6);
+        Self::new((0..36).map(|i| self.color(left + i % 6, top + i / 6) as u8).collect())
+            .expect("windowing preserves a complete CFA tile")
+    }
     #[inline]
     pub fn rgb(&self, raw: &RawView<'_>, x: usize, y: usize) -> [u16; 3] {
         self.sample_positions(raw, x, y)
