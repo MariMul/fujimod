@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 mod catalog;
 mod corpus;
 #[cfg(feature = "emulator")]
-mod emulator;
+pub mod emulator;
 mod firmware;
 mod usb;
 mod recording;

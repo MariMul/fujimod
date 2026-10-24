@@ -2,7 +2,8 @@
   "model_line_budget": 4000,
   "layers": {
     "interface": [
-      "fujimod-emulator-devices"
+      "fujimod-emulator-devices",
+      "fujimod-emulator-storage"
     ],
     "model": [
       "fujimod-emulator-exr2-audio",
@@ -26,7 +27,6 @@
       "fujimod-emulator-parts-io",
       "fujimod-emulator-parts-lens",
       "fujimod-emulator-parts-sensor",
-      "fujimod-emulator-storage",
       "fujimod-emulator-xp4-display",
       "fujimod-emulator-xp4-io",
       "fujimod-emulator-xp4-storage",
@@ -59,6 +59,7 @@
       "fujimod-emulator-cli",
       "fujimod-emulator-javascript",
       "fujimod-javascript",
+      "fujimod-python-graphics",
       "fujimod-python-module"
     ],
     "other": [
@@ -83,7 +84,6 @@
         "fujimod-emulator-ip-arm",
         "fujimod-emulator-ip-dmp",
         "fujimod-emulator-parts-controls",
-        "fujimod-emulator-storage",
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
         "fujimod-emulator-xp4-storage",
@@ -107,14 +107,7 @@
         "fujimod-emulator-parts-controls",
         "fujimod-emulator-parts-io",
         "fujimod-emulator-parts-lens",
-        "fujimod-emulator-parts-sensor",
-        "fujimod-emulator-storage"
-      ],
-      "fujimod-python": [
-        "fujimod-emulator-exr2-display",
-        "fujimod-emulator-exr2-gpu",
-        "fujimod-emulator-graphics",
-        "fujimod-emulator-storage"
+        "fujimod-emulator-parts-sensor"
       ],
       "fujimod-emulator-xp5-board": [
         "fujimod-emulator-ip",

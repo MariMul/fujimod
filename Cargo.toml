@@ -54,6 +54,7 @@ members = [
   "crates/workflows",
   "bindings/python",
   "bindings/python/module",
+  "bindings/python/graphics",
   "bindings/javascript",
   "bindings/javascript/emulator",
   "bindings/generator",

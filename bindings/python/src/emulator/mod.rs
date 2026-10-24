@@ -7,12 +7,10 @@ mod film;
 mod jpeg;
 mod method4;
 mod mono_raster;
-mod python_graphics;
 mod python_observation;
-mod python_values;
+pub mod python_values;
 mod raf;
 mod raster;
-mod scanout_observation;
 mod scene;
 mod settings;
 mod xp4;
@@ -170,19 +168,11 @@ mod binding {
     #[pymodule_export]
     use super::mono_raster::{mono12_phase_gain, zero_row_edges};
     #[pymodule_export]
-    use super::python_graphics::{
-        UiBatch, clear_parse, clear_path_descriptor, clear_render, copy_untile, gpu_ui_render,
-        graphics_memo_clear, graphics_memo_len, math_check, ui_batch, ui_initialize,
-        ui_stream_draws, ui_stream_parse,
-    };
-    #[pymodule_export]
     use super::python_values::DeviceRefusal;
     #[pymodule_export]
     use super::raf::raf_radiance_rgb;
     #[pymodule_export]
     use super::raster::{ui_composite, ui_composite_tiled, ui_fill_counts};
-    #[pymodule_export]
-    use super::scanout_observation::{render_scanout_snapshot, scanout_snapshot_state};
     #[pymodule_export]
     use super::scene::{
         HostImage, virtual_scene_histogram, virtual_scene_statistics, virtual_scene_yycbcr,

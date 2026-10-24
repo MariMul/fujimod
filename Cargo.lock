@@ -4052,10 +4052,7 @@ dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
- "fujimod-emulator-exr2-display",
- "fujimod-emulator-exr2-gpu",
  "fujimod-emulator-exr2-plan",
- "fujimod-emulator-graphics",
  "fujimod-emulator-storage",
  "fujimod-firmware",
  "fujimod-recording",
@@ -4075,11 +4072,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-python-graphics"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-display",
+ "fujimod-emulator-exr2-gpu",
+ "fujimod-emulator-graphics",
+ "fujimod-python",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-python-module"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-python",
+ "fujimod-python-graphics",
  "fujimod-workspace-hack",
  "pyo3",
 ]
