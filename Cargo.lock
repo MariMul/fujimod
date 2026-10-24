@@ -2220,7 +2220,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
  "fujimod-python-service",
- "fujimod-python-usb",
+ "fujimod-python-usb-base",
  "fujimod-usb",
  "fujimod-usb-app80",
  "fujimod-workspace-hack",
@@ -2356,7 +2356,7 @@ dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-session",
  "fujimod-python-base",
- "fujimod-python-usb-lease",
+ "fujimod-python-usb-base",
  "fujimod-remote",
  "fujimod-usb",
  "fujimod-workspace-hack",
@@ -2383,7 +2383,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-camera",
  "fujimod-firmware",
- "fujimod-python-usb-lease",
+ "fujimod-python-usb-base",
  "fujimod-usb",
  "fujimod-workflows",
  "fujimod-workspace-hack",
@@ -2394,7 +2394,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-python-usb-lease"
+name = "fujimod-python-usb-base"
 version = "0.1.0"
 dependencies = [
  "fujimod-usb",

@@ -1,6 +1,6 @@
 [package]
-name = "fujimod-python-usb-lease"
-description = "ff80 session leases other binding crates borrow from Python USB sessions"
+name = "fujimod-python-usb-base"
+description = "USB exceptions, error conversion and the session hooks binding crates share with the USB bindings"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

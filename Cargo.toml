@@ -90,7 +90,7 @@ members = [
   "bindings/python/remote",
   "bindings/python/service",
   "bindings/python/usb",
-  "bindings/python/usb-lease",
+  "bindings/python/usb-base",
   "bindings/python/graphics",
   "bindings/python/xp4",
   "bindings/javascript",

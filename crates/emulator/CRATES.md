@@ -73,9 +73,10 @@ From the bottom of the graph to the top:
    borrow a Python board's session through), `-catalog` (the reference catalog and corpus),
    `-service` (App80 service definitions, registered in the catalog module),
    `-usb` (USB sessions, tracing, workflows and firmware files), `-app80` (App80
-   mailboxes and service commands, registered in the USB module), `-usb-lease`
-   (the ff80 session lease the remote bindings borrow from a USB session
-   without depending on the USB bindings), `-recording`, `-remote` and
+   mailboxes and service commands, registered in the USB module), `-usb-base`
+   (the USB exceptions and error conversion, and the session hooks through
+   which the App80 and remote bindings lease or run operations on a USB
+   session without depending on the USB bindings), `-recording`, `-remote` and
    `-emulator` (boards, run configurations, input assets and settings
    headers). Binding functions that call one family's model code live in that
    family's binding crate (`fujimod-python-graphics` for the graphics data
@@ -204,7 +205,7 @@ records the rebuild costs below before and after.
    schema generator. USB, the workflows and the USB bindings depend on the
    service crate only, and the EXR II plan and models on the construction
    crate. The service definition bindings (`fujimod-python-service`) and the
-   ff80 session lease (`fujimod-python-usb-lease`) left the catalog and USB
+   ff80 session lease (now in `fujimod-python-usb-base`) left the catalog and USB
    bindings. The catalog-driven boot moved from the emulator into
    `fujimod-emulator-boot`, and the run input preparation from the emulator
    and the storage interface into `fujimod-emulator-preparation`, so the

@@ -14,7 +14,7 @@ doctest = false
 [features]
 
 [dependencies]
-fujimod-python-usb-lease = { path = "../usb-lease" }
+fujimod-python-usb-base = { path = "../usb-base" }
 fujimod-catalog-camera.workspace = true
 fujimod-firmware.workspace = true
 fujimod-usb.workspace = true

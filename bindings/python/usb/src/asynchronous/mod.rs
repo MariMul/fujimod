@@ -49,8 +49,7 @@ fn lock<T>(mutex: &Mutex<T>) -> PyResult<MutexGuard<'_, T>> {
 pub fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
     Python::attach(|py| PyBytes::new(py, data.as_ref()).unbind())
 }
-/// A native ff80 operation borrowing the session for its lifetime.
-pub type Operation<'a, T> = Pin<Box<dyn Future<Output = usb::Result<T>> + Send + 'a>>;
+use fujimod_python_usb_base::{Operation, Running, Sessions};
 
 enum Slot {
     Open(Box<ff80::Session>),
@@ -197,12 +196,22 @@ pub(super) fn register(
     operations::register(py, module)
 }
 
-/// Lease the open ff80 session of a Python `fujimod.usb.Session` to another binding crate.
-pub(super) fn remote_lease(
-    session: &Bound<'_, PyAny>,
-) -> PyResult<fujimod_python_usb_lease::Lease> {
-    let session = session.cast::<AsyncSession>()?.get();
-    Lease::new(session).map(|(lease, _)| fujimod_python_usb_lease::Lease::new(lease))
+/// Lend Python `fujimod.usb.Session` objects to the binding crates built on
+/// `fujimod-python-usb-base`.
+pub(super) fn install() {
+    fujimod_python_usb_base::install(Sessions {
+        lease: |session| {
+            let session = session.cast::<AsyncSession>()?.get();
+            Lease::new(session).map(|(lease, _)| fujimod_python_usb_base::Lease::new(lease))
+        },
+        run: |session, operation| {
+            let session = session.cast::<AsyncSession>()?.get().clone();
+            Ok(Box::pin(async move { session.with(operation).await }) as Running)
+        },
+        configuration_limit: |session| {
+            Ok(session.cast::<AsyncSession>()?.get().configuration_limit())
+        },
+    });
 }
 impl std::borrow::Borrow<ff80::Session> for Lease {
     fn borrow(&self) -> &ff80::Session {

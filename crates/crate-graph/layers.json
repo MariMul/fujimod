@@ -73,7 +73,7 @@
       "fujimod-python-remote",
       "fujimod-python-service",
       "fujimod-python-usb",
-      "fujimod-python-usb-lease",
+      "fujimod-python-usb-base",
       "fujimod-remote"
     ],
     "final": [

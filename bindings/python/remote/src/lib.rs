@@ -98,7 +98,7 @@ impl Camera {
             output,
         };
         let remote = remote::Ff80Remote::new(
-            fujimod_python_usb_lease::lease(session)?,
+            fujimod_python_usb_base::lease(session)?,
             facts.clone(),
             options,
         )
