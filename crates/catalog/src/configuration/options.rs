@@ -655,6 +655,10 @@ pub enum RunStorageProfile {
     /// erased settings bank.
     #[serde(rename = "profile")]
     Profile,
+    /// A new camera as it ships: the body's calibrated settings bank and an
+    /// empty user profile, so the firmware runs its first-start setup.
+    #[serde(rename = "factory")]
+    Factory,
     #[serde(rename = "captured")]
     Captured,
     #[serde(rename = "browser")]

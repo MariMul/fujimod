@@ -4459,7 +4459,7 @@ type RunStillCapture = Literal["register-capture-readonly-card-observation"]
 type RunStorageProfile = Literal[
     "captured",
     "browser",
-    "erased"] | Literal["settings"] | Literal["profile",
+    "erased"] | Literal["settings"] | Literal["profile"] | Literal["factory",
 ]
 
 

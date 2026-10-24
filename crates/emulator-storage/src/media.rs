@@ -30,6 +30,8 @@ pub enum NandInput {
     /// requested named settings, placed in its stock flash blocks before cold boot.
     /// `camera` names the zstd-compressed assets holding a camera's bank
     /// sections (section name to asset); the bank is then that camera's.
+    /// `factory_fresh` leaves the user profile as a new camera ships it: no
+    /// journal records, so only bank settings may be requested.
     Settings {
         options: Options,
         base: String,
@@ -37,6 +39,8 @@ pub enum NandInput {
         requested: BTreeMap<String, String>,
         #[serde(default)]
         camera: BTreeMap<String, String>,
+        #[serde(default)]
+        factory_fresh: bool,
     },
     /// The stock user profile's journal records built from the installed flash
     /// image (`base`) with the requested named settings; the settings bank stays
@@ -112,13 +116,22 @@ impl NandInput {
                 layout,
                 requested,
                 camera,
+                factory_fresh,
             } => {
+                if factory_fresh
+                    && let Some(name) = requested
+                        .keys()
+                        .find(|name| layout.settings.get(*name).is_none_or(|s| s.store != "bank"))
+                {
+                    return Err(format!("A factory-fresh profile cannot hold setting {name}"));
+                }
                 let sections = camera
                     .into_iter()
                     .map(|(section, name)| Ok((section, decompress(asset(&name)?)?)))
                     .collect::<Result<BTreeMap<_, _>, String>>()?;
                 let camera = (!sections.is_empty()).then_some(&sections);
-                settings_medium(options, asset(&base)?, &layout, &requested, camera, true)
+                let profile = !factory_fresh;
+                settings_medium(options, asset(&base)?, &layout, &requested, camera, true, profile)
             }
             Self::Profile {
                 options,
@@ -135,7 +148,7 @@ impl NandInput {
                 if layout.profile.is_none() {
                     return Err(format!("{} has no located user profile", layout.firmware_id));
                 }
-                settings_medium(options, asset(&base)?, &layout, &requested, None, false)
+                settings_medium(options, asset(&base)?, &layout, &requested, None, false, true)
             }
         }
     }
@@ -153,7 +166,8 @@ fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-/// Place the built settings, with or without the bank, in their managed blocks.
+/// Place the built settings, with or without the bank and the user profile's
+/// records, in their managed blocks.
 fn settings_medium(
     options: Options,
     flash: &[u8],
@@ -161,6 +175,7 @@ fn settings_medium(
     requested: &BTreeMap<String, String>,
     camera: Option<&BTreeMap<String, Vec<u8>>>,
     with_bank: bool,
+    with_profile: bool,
 ) -> Result<Nand, String> {
     let settings = fujimod_settings::build(layout, flash, requested, camera)?;
     let block_bytes = options.page_bytes as u64 * options.pages_per_block as u64;
@@ -174,7 +189,8 @@ fn settings_medium(
             .copy_from_slice(&bank.bytes);
         placements.push((u64::from(bank.first_block), bytes, bank.logical_first));
     }
-    for record in settings.profile.into_iter().flat_map(|p| p.records) {
+    let profile = settings.profile.filter(|_| with_profile);
+    for record in profile.into_iter().flat_map(|p| p.records) {
         let mut block = vec![0xff; block_bytes as usize];
         block
             .get_mut(..record.bytes.len())

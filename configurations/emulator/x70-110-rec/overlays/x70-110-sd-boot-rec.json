@@ -8,7 +8,7 @@
     "preset": {
       "factory_options": {
         "quantum": 1000,
-        "storage_profile": "erased",
+        "storage_profile": "factory",
         "graphics_profile": "mode1-abgr8888-straight",
         "backdrop_profile": "declared-black-canvas-unmeasured",
         "copy_profile": "vg-32bpp-untile-unrotated",

@@ -8,7 +8,7 @@
     "preset": {
       "factory_options": {
         "instructions_per_tick": 24,
-        "storage_profile": "erased",
+        "storage_profile": "factory",
         "irq_tie_profile": "kernel-active-scan-order",
         "graphics_profile": "mode1-abgr8888-straight",
         "backdrop_profile": "declared-black-canvas-unmeasured",
