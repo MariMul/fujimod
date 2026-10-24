@@ -132,6 +132,12 @@ behavior that changes often.
   harness and skips no test. The violations that remain until the steps
   below are done are listed there; an entry that is no longer true fails, so
   the list only shrinks.
+- An interface edit rebuilds every crate above it, about 100 units: rebuilding
+  all workspace tests then takes 18 to 20 seconds on a 10-core machine. A model
+  edit rebuilds 6 or 7 crates (about 7 seconds), and either edit republishes
+  the Python extension in 2 to 7 seconds. Merging crates to shorten the
+  interface case would slow these, so the interface keeps only what several
+  models share.
 
 ## Capabilities
 
