@@ -63,3 +63,33 @@ host instructions retired (load barely changes them):
 
 The ISP statistics producer and image output channels, which dominate live view,
 are optimized with the scene and ISP work.
+
+## Walkthroughs
+
+`controls/hero/ev_dial` on the X70 (11.2 camera seconds, 1.03G guest
+instructions after boot, exact policy) is the reference guide. On the shared
+machine it ran at 0.12–0.15x camera speed and failed the 60 CPU second limit.
+Each Python wait poll ran the board once with that poll's read set as store
+watches, and installing and removing about 500 completed-store hooks per run
+cost 1.5–2 ms against 3 us for an unwatched empty window. 96% of consecutive
+polls watch the same set, so a continuation now keeps its hooks for the next
+one (`board/continuation.rs`): the empty watched window costs 25 us and the
+guide passes at 11.2 camera seconds in 22.0 CPU seconds (0.51x).
+
+Engine time in that guide, as shares of the whole run sampled after boot (the
+remainder is Python observation, PNG decoding and live-view scene rendering):
+
+| Cost | Share |
+|---|---|
+| Stores on the slow path (`store_helper`), including state restores for MMIO inside a block | 16% |
+| Translating guest code (`tb_gen_code`) | 13% |
+| Instruction callbacks: exclusives 5%, failed loop proofs 2%, register reads that restore state | 11% |
+| Per-access exit checks (`helper_check_exit_request`) | 7% |
+| Per-block hook helper (`helper_uc_tracecode`) | 7% |
+
+Core 0 leaves translated code 1.73M times ("check exit, no sync"), once per
+600 guest instructions: an emulated LDREX or STREX writes the PC from its
+callback. Item 4 removes those exits. Neither dropping the 15-byte slack before
+each watched range (74K to 25K restarts) nor a 64 MiB translation cache
+changed host instructions retired (227G either way), so translation is not
+driven by watch restarts or cache capacity; its cause is still to be found.
