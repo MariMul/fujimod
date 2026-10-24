@@ -17,6 +17,7 @@ type Card = {
   related: { card: string; reason: string }[];
   manual: string | null;
   changes: string | null;
+  thanks: { user: string; profile: string; suggestion: string }[];
 };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
@@ -38,6 +39,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/image_size',
     changes:
       'Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.',
+    thanks: [],
   },
   shape_aspect_item: {
     title: 'ASPECT RATIO',
@@ -62,6 +64,7 @@ const CARDS: Record<string, Card> = {
     ],
     manual: null,
     changes: null,
+    thanks: [],
   },
   shape_surround_item: {
     title: 'SURROUND VIEW',
@@ -75,6 +78,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   shape_desqueeze_item: {
     title: 'DESQUEEZE',
@@ -84,6 +88,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   shape_jpeg_item: {
     title: 'DESQUEEZE JPEG',
@@ -93,6 +98,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   c: {
     title: 'FRAMING GUIDELINE',
@@ -113,6 +119,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_setup/screen_set-up#framing_guidline',
     changes:
       'Adds GOLDEN RATIO and four GOLDEN SPIRAL focal-point placements. All guides follow the selected image bounds and aspect ratio.',
+    thanks: [],
   },
   film_simulation: {
     title: 'FILM SIMULATION',
@@ -123,6 +130,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/film_simulation',
     changes:
       'Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.',
+    thanks: [],
   },
   film_editor_item: {
     title: 'FILM EDITOR',
@@ -132,6 +140,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   photometry: {
     title: 'PHOTOMETRY',
@@ -151,7 +160,8 @@ const CARDS: Record<string, Card> = {
     ],
     manual: 'menu_shooting/photometry',
     changes:
-      'Adds HIGHLIGHT, which reduces exposure when bright areas dominate the scene. The shooting, Fn and Q displays mark it with an asterisk in brackets.',
+      'Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.',
+    thanks: [],
   },
   raw_view: {
     title: 'RAW VIEW',
@@ -162,6 +172,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   f_log_recording_item: {
     title: 'F-Log RECORDING',
@@ -174,6 +185,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   hdmi_rec_behavior_item: {
     title: 'HDMI OUTPUT',
@@ -186,6 +198,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_exposure_compensation_dial: {
     title: 'EV DIAL',
@@ -195,6 +208,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_command_control: {
     title: 'COMMAND CONTROL',
@@ -204,6 +218,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_auto_mode_selector_lever: {
     title: 'AUTO LEVER',
@@ -213,6 +228,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_shutter_speed_dial: {
     title: 'SHUTTER DIAL',
@@ -222,6 +238,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_aperture_ring: {
     title: 'APERTURE RING',
@@ -231,6 +248,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_focus_mode_selector: {
     title: 'FOCUS MODE',
@@ -240,6 +258,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_af_ae_lock_button: {
     title: 'AE-L/AF-L',
@@ -249,6 +268,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_drive_button: {
     title: 'DRIVE BUTTON',
@@ -258,6 +278,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_quick_menu_button: {
     title: 'Q BUTTON',
@@ -267,6 +288,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bindings_row_command_control_press: {
     title: 'COMMAND PRESS',
@@ -276,6 +298,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   control_ring_setting: {
     title: 'CONTROL RING SETTING',
@@ -286,6 +309,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/control_ring_setting',
     changes:
       'Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
+    thanks: [],
   },
   edit_save_custom_setting: {
     title: 'EDIT/SAVE CUSTOM SETTING',
@@ -296,6 +320,7 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/edit-save_custom_setting',
     changes:
       'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
+    thanks: [],
   },
   snap_menu_item: {
     title: 'MF SNAP FOCUS',
@@ -305,6 +330,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   bug_report_shortcut: {
     title: 'BUG REPORT SHORTCUT',
@@ -314,6 +340,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   sd_volume_name_item: {
     title: 'DATE CARD NAME',
@@ -326,6 +353,7 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
   date_folders_item: {
     title: 'DATE FOLDERS',
@@ -339,10 +367,11 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
+    thanks: [],
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('63eaf5bdb6f719c7103954d9');
+const media = featureMedia('c893fb389404ca5bab738e7b');
 
 function Icon(props: { name: string }) {
   return (
@@ -408,11 +437,15 @@ function CardVideo(props: { media: Media; choice?: string }) {
 function CardBody(props: { target: Target }) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
-  const path = () => [...card().path, card().title, ...(choice() ? [choice()!] : [])].join(' › ');
+  /** The menus above the title: a control's menus, and for an option its control too. */
+  const crumbs = () => (choice() ? [...card().path, card().title] : card().path);
   return (
     <>
       <Show when={media(props.target.card)}>
         {(found) => <CardVideo media={found()} choice={choice()} />}
+      </Show>
+      <Show when={crumbs().length}>
+        <div class="catalog-card-path">{crumbs().join(' › ')} ›</div>
       </Show>
       <div class="catalog-card-title">{choice() ?? card().title}</div>
       <Show
@@ -428,8 +461,8 @@ function CardBody(props: { target: Target }) {
       >
         <p>{card().choices[choice()!]}</p>
       </Show>
-      <div class="catalog-card-path">{path()}</div>
       <Show when={!choice() && card().related.length}>
+        <h5 class="catalog-card-heading">Related</h5>
         <ul class="catalog-card-related">
           <For each={card().related}>
             {(related) => (
@@ -439,6 +472,22 @@ function CardBody(props: { target: Target }) {
             )}
           </For>
         </ul>
+      </Show>
+      <Show when={!choice()}>
+        <For each={card().thanks}>
+          {(person) => (
+            <p class="catalog-thanks">
+              THANKS:{' '}
+              <a href={person.suggestion} target="_blank" rel="noreferrer">
+                suggested
+              </a>{' '}
+              by{' '}
+              <a href={person.profile} target="_blank" rel="noreferrer">
+                {person.user}
+              </a>
+            </p>
+          )}
+        </For>
       </Show>
     </>
   );
