@@ -522,10 +522,6 @@ export function startHome(
       if (disposed) return;
       if (release && !import.meta.env.DEV) {
         build = release.release;
-        setState((s) => {
-          s.buildLabel = `Build ${build}`;
-          s.buildURL = `https://github.com/justjake/fujimod/releases/tag/${encodeURIComponent(build)}`;
-        });
       }
       const loadedCameras = supportedCameras(catalog, release);
       if (JSON.stringify(loadedCameras) !== JSON.stringify(state.cameras))

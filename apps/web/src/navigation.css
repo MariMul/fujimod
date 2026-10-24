@@ -10,8 +10,3 @@
 .site-nav a:hover {
   color: #eee;
 }
-@media (max-width: 480px) {
-  header .build-info a:last-child {
-    display: none;
-  }
-}

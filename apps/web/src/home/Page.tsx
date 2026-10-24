@@ -69,10 +69,7 @@ export default function Home() {
             <a href="dev-tools/">Dev Tools</a>
           </nav>
           <div class="meta build-info">
-            <a id="release-label" href={state.buildURL}>
-              {state.buildLabel}
-            </a>
-            <a href="https://github.com/justjake/fujimod">github.com/justjake/fujimod</a>
+            <a href="https://github.com/justjake/fujimod">justjake/fujimod</a>
           </div>
         </header>
         <main>

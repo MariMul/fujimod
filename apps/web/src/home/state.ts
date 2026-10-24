@@ -52,11 +52,6 @@ export function createHomeState() {
     modEnabled: true,
     bodyPreview: '',
     previewCredit: undefined as PreviewCredit | undefined,
-    buildLabel: import.meta.env.DEV || !release ? 'Development' : `Build ${release.release}`,
-    buildURL:
-      import.meta.env.DEV || !release
-        ? 'https://github.com/justjake/fujimod'
-        : `https://github.com/justjake/fujimod/releases/tag/${encodeURIComponent(release.release)}`,
   });
 }
 export type HomeState = ReturnType<typeof createHomeState>[0];
