@@ -116,10 +116,21 @@ records the rebuild costs below before and after.
    (`-ip-arm`, `-ip-dmp`, `-ip`), graphics, storage, parts by function
    (`-parts-{lens,sensor,controls,io}`), the EXR II subsystems
    (`-exr2-{display,i2c,gpu,audio,serial,codecs,storage,companion,system,io}`)
-   and the EXR II ISP (`-exr2-isp-{input,face,statistics,output}`). Remaining:
-   imaging with scene, on the boundary agreed with their maintainers (frame
-   types with their CFA and radiance stay in the interface; mosaic sites and
-   other processing move to the imaging crate, cached by frame identity).
+   the EXR II ISP (`-exr2-isp-{input,face,statistics,output}`), the image
+   codecs (`-image-codecs`), RAW and color processing (`-imaging`) and the
+   sensor input models the XP4 and XP5 boards share (`-sensor-input`).
+   Remaining: optics, exposure, radiometry and scene processing, on the
+   boundary agreed with their maintainers. Scene frame types keep
+   `FramePixels::Mosaic { cfa, radiance }`, with `Cfa` and `Radiance`, in the
+   interface; `MosaicSites` and `MappedSites` move to the imaging crate, and the
+   per-frame `sites` cache becomes one imaging-crate cache keyed by frame
+   identity (`Frame::same_pixels`) with no size constant. The handle and option
+   types plans name (`exposure::{Exposure, ExposureHandle, ApertureHandle,
+   Calibration}`, `optics::{Spec, FocusHandle}`, `radiometric::Spec`,
+   `analysis::{ImageLayout, GridHandle}`, `scene::clocked::Options`) stay in
+   the interface at their paths; RAF loading leaves `SensorFrames` for the
+   imaging crate, and `ClockedFrames` becomes a model reached through a
+   capability.
 4. Plan options and handles: done. Plans carry model options as JSON and the
    handles their resources share are interface types, so the plan depends on
    no model crate. Remaining: the constructor registry, after which board crates
@@ -128,9 +139,10 @@ records the rebuild costs below before and after.
    depends on the EXR II display, I2C, serial, I/O or storage crates.
    Remaining: XP4 and XP5 board code and interrupt delivery.
 6. Bindings: done. `fujimod-python` depends on no model crate.
-7. Final link. Measure the linker for the extension and test binaries: Apple
-   ld flags such as `-no_deduplicate`, `lld`, and debug info settings. Keep
-   whatever is fastest.
+7. Final link: measured, no change. Relinking the extension module takes
+   2.7–3.3 s end to end with the default Apple linker, 3.4–4.2 s with
+   `-no_deduplicate` and 3.4–10 s with `lld` (load average 14), so the default
+   stays. Release builds carry no debug info.
 
 ## Rebuild costs
 
