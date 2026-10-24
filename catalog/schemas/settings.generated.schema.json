@@ -144,6 +144,34 @@
             "bits"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One little-endian 24-bit entry count at `count`, `bits` per entry,\nrounded up to bytes.",
+          "properties": {
+            "bits": {
+              "description": "Bits per entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "count": {
+              "description": "Bank offset of the count.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "counted_list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "count",
+            "bits"
+          ],
+          "type": "object"
         }
       ]
     },

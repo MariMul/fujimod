@@ -4512,7 +4512,9 @@ class Scanout(TypedDict, total=False):
     width: Required[int]
 
 
-type SectionLength = SectionLengthVariant0 | SectionLengthVariant1
+type SectionLength = (
+    SectionLengthVariant0 | SectionLengthVariant1 | SectionLengthVariant2
+)
 
 
 class SectionLengthVariant0(TypedDict, total=False):
@@ -4524,6 +4526,12 @@ class SectionLengthVariant1(TypedDict, total=False):
     bits: Required[int]
     counts: Required[int]
     kind: Required[Literal["counted"]]
+
+
+class SectionLengthVariant2(TypedDict, total=False):
+    bits: Required[int]
+    count: Required[int]
+    kind: Required[Literal["counted_list"]]
 
 
 class SensorAssembly(TypedDict, total=False):

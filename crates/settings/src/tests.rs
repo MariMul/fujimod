@@ -73,6 +73,12 @@ fn fixture() -> (Vec<u8>, FirmwareSettings) {
                 length: SectionLength::Counted { counts: 0x280, bits: 34 },
                 basis: "Sample counted read.".into(),
             },
+            SettingsSection {
+                name: "list".into(),
+                offset: 0x3a0,
+                length: SectionLength::CountedList { count: 0x290, bits: 34 },
+                basis: "Sample single-list read.".into(),
+            },
         ],
         settings: BTreeMap::from([(
             "debug".into(),
@@ -199,9 +205,12 @@ fn camera_sections_replace_the_stock_bank_and_take_requested_settings() {
     configuration[0x202..0x204].copy_from_slice(&[0x55, 0xaa]);
     // Two 34-bit entries in the first list (two 64-bit words, 16 bytes), one in the second (5 bytes).
     configuration[0x280..0x286].copy_from_slice(&[2, 0, 0, 1, 0, 0]);
+    // Three 34-bit entries in one list: 102 bits, 13 bytes.
+    configuration[0x290..0x293].copy_from_slice(&[3, 0, 0]);
     let camera = BTreeMap::from([
         ("configuration".to_owned(), configuration.clone()),
         ("table".to_owned(), vec![0x22; 21]),
+        ("list".to_owned(), vec![0x33; 13]),
     ]);
     let requested = BTreeMap::from([("debug".into(), "on".into())]);
     let bank = build(&layout, &flash, &requested, Some(&camera)).unwrap().bank.bytes;
@@ -209,13 +218,25 @@ fn camera_sections_replace_the_stock_bank_and_take_requested_settings() {
     assert_eq!(bank[0xf7], 1, "requested bank settings still apply");
     assert_eq!(bank[0x10], 0x11, "the stock defaults table does not");
     assert_eq!(&bank[0x380..0x395], &[0x22; 21]);
-    assert!(bank[0x300..0x380].iter().chain(&bank[0x395..]).all(|&b| b == 0xff));
+    assert_eq!(&bank[0x3a0..0x3ad], &[0x33; 13]);
+    assert!(bank[0x300..0x380]
+        .iter()
+        .chain(&bank[0x395..0x3a0])
+        .chain(&bank[0x3ad..])
+        .all(|&b| b == 0xff));
 
     let short = BTreeMap::from([
         ("configuration".to_owned(), configuration.clone()),
         ("table".to_owned(), vec![0x22; 20]),
+        ("list".to_owned(), vec![0x33; 13]),
     ]);
     assert!(build(&layout, &flash, &requested, Some(&short)).unwrap_err().contains("21"));
+    let short_list = BTreeMap::from([
+        ("configuration".to_owned(), configuration.clone()),
+        ("table".to_owned(), vec![0x22; 21]),
+        ("list".to_owned(), vec![0x33; 12]),
+    ]);
+    assert!(build(&layout, &flash, &requested, Some(&short_list)).unwrap_err().contains("13"));
     let unknown = BTreeMap::from([("extra".to_owned(), vec![0])]);
     assert!(build(&layout, &flash, &requested, Some(&unknown)).unwrap_err().contains("extra"));
 }

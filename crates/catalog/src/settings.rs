@@ -92,21 +92,34 @@ pub enum SectionLength {
         /// Bits per entry.
         bits: u32,
     },
+    /// One little-endian 24-bit entry count at `count`, `bits` per entry,
+    /// rounded up to bytes.
+    CountedList {
+        /// Bank offset of the count.
+        count: u64,
+        /// Bits per entry.
+        bits: u32,
+    },
 }
 
 impl SectionLength {
     /// The byte count for a bank whose counts are already in place.
     pub fn bytes(&self, bank: &[u8]) -> Result<u64, String> {
+        let count = |offset: u64| -> Result<u64, String> {
+            let at = usize::try_from(offset).map_err(|_| "count offset too large")?;
+            let b = bank
+                .get(at..at + 3)
+                .ok_or("section counts outside the bank")?;
+            Ok(u64::from(b[0]) | u64::from(b[1]) << 8 | u64::from(b[2]) << 16)
+        };
         match self {
             Self::Fixed { bytes } => Ok(*bytes),
             Self::Counted { counts, bits } => {
-                let at = usize::try_from(*counts).map_err(|_| "count offset too large")?;
-                let count = |o: usize| -> Result<u64, String> {
-                    let b = bank.get(o..o + 3).ok_or("section counts outside the bank")?;
-                    Ok(u64::from(b[0]) | u64::from(b[1]) << 8 | u64::from(b[2]) << 16)
-                };
                 let bits = u64::from(*bits);
-                Ok(((count(at)? * bits + 63) & !63) / 8 + (count(at + 3)? * bits + 7) / 8)
+                Ok(((count(*counts)? * bits + 63) & !63) / 8 + (count(counts + 3)? * bits).div_ceil(8))
+            }
+            Self::CountedList { count: at, bits } => {
+                Ok((count(*at)? * u64::from(*bits)).div_ceil(8))
             }
         }
     }
@@ -356,6 +369,7 @@ impl FirmwareSettings {
                 SectionLength::Fixed { bytes } if bytes > 0 => within(section.offset, bytes),
                 SectionLength::Fixed { .. } => false,
                 SectionLength::Counted { counts, bits } => bits > 0 && within(counts, 6),
+                SectionLength::CountedList { count, bits } => bits > 0 && within(count, 3),
             };
             if crate::reference::validate_id(&section.name).is_err()
                 || !names.insert(section.name.as_str())
