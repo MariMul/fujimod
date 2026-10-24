@@ -101,6 +101,29 @@ impl<R: RemoteReader + ?Sized> RemoteReader for Tracked<'_, R> {
             Ok(v)
         })
     }
+    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+        Box::pin(async move {
+            let v = self.remote.readiness().await?;
+            self.reads.extend(v.reads.clone());
+            Ok(v)
+        })
+    }
+}
+/// Wait until the firmware accepts a new input.
+pub async fn wait_ready<R: Remote + ?Sized>(r: &mut R, deadline: u64) -> Result<()> {
+    loop {
+        let readiness = r.readiness().await?;
+        if readiness.ready {
+            return Ok(());
+        }
+        if r.now() >= deadline {
+            return Err(format!(
+                "Timed out waiting for input readiness: {:?}",
+                readiness.pending
+            ));
+        }
+        r.wait(&readiness.reads, deadline).await?;
+    }
 }
 pub async fn wait_until<R: Remote + ?Sized>(
     r: &mut R,
@@ -272,16 +295,25 @@ async fn step<R: Remote + ?Sized>(
     press(r, &navigation_control(facts, role)?, deadline).await?;
     loop {
         let value = r.read(reference).await?;
-        if value.state.ready && value.state != before.state {
-            return Ok(value);
+        let mut reads = value.reads.clone();
+        let mut pending = vec![];
+        // Readiness is observed only once the state has changed, so the wait
+        // for the change watches the state reads alone.
+        if value.state != before.state {
+            let readiness = r.readiness().await?;
+            if readiness.ready {
+                return Ok(value);
+            }
+            reads.extend(readiness.reads);
+            pending = readiness.pending;
         }
         if r.now() >= deadline {
             return Err(format!(
-                "Timed out waiting for {role} navigation; last state: {:?}",
+                "Timed out waiting for {role} navigation; last state: {:?}, pending: {pending:?}",
                 value.state
             ));
         }
-        r.wait(&value.reads, deadline).await?;
+        r.wait(&reads, deadline).await?;
     }
 }
 async fn root<R: Remote + ?Sized>(
@@ -397,14 +429,17 @@ async fn focus<R: Remote + ?Sized>(
                 value.state
             ));
         }
-        if !value.state.ready {
+        let readiness = r.readiness().await?;
+        if !readiness.ready {
             if r.now() >= deadline {
                 return Err(format!(
-                    "Timed out waiting for navigation readiness: {:?}",
-                    value.state
+                    "Timed out waiting for navigation readiness: {:?}, pending: {:?}",
+                    value.state, readiness.pending
                 ));
             }
-            r.wait(&value.reads, deadline).await?;
+            let mut reads = value.reads.clone();
+            reads.extend(readiness.reads);
+            r.wait(&reads, deadline).await?;
             continue;
         }
         if target.selected {

@@ -3,6 +3,7 @@ use super::*;
 pub(super) enum Output {
     Unit,
     RemoteReadResult(RemoteReadResult),
+    Readiness(Readiness),
     MemoryReads(Vec<MemoryRead>),
     Capture(Capture),
 }
@@ -68,6 +69,12 @@ impl Task {
             Output::RemoteReadResult(read_result) => Ok(pyo3::types::PyString::new(
                 py,
                 &serde_json::to_string(&read_result).map_err(|e| error(e.to_string()))?,
+            )
+            .into_any()
+            .unbind()),
+            Output::Readiness(readiness) => Ok(pyo3::types::PyString::new(
+                py,
+                &serde_json::to_string(&readiness).map_err(|e| error(e.to_string()))?,
             )
             .into_any()
             .unbind()),

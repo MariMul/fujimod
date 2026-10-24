@@ -33,22 +33,7 @@ impl<B: Backend> Connection<B> {
         self.observer = observer;
     }
     async fn ready(&mut self, deadline: u64) -> Result<()> {
-        loop {
-            let mut memory = Memory {
-                backend: &mut self.backend,
-                facts: &self.facts,
-                reads: ReadSet::default(),
-            };
-            let state = memory.state().await?;
-            let reads = memory.reads;
-            if state.ready {
-                return Ok(());
-            }
-            if self.now() >= deadline {
-                return Err(format!("Timed out waiting for input readiness: {state:?}"));
-            }
-            self.wait(&reads, deadline).await?;
-        }
+        crate::operations::wait_ready(self, deadline).await
     }
     pub async fn press(&mut self, control: &Control, deadline: u64) -> Result<()> {
         crate::operations::press(self, control, deadline).await
@@ -120,6 +105,17 @@ impl<B: Backend> RemoteReader for View<'_, B> {
                 .await
         })
     }
+    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+        Box::pin(async move {
+            Memory {
+                backend: self.backend,
+                facts: self.facts,
+                reads: ReadSet::default(),
+            }
+            .readiness()
+            .await
+        })
+    }
 }
 impl<B: Backend> RemoteReader for Connection<B> {
     fn now(&self) -> u64 {
@@ -150,6 +146,16 @@ impl<B: Backend> RemoteReader for Connection<B> {
             self.backend
                 .frame(&self.facts, &mut ReadSet::default())
                 .await
+        })
+    }
+    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+        Box::pin(async move {
+            View {
+                backend: &mut self.backend,
+                facts: &self.facts,
+            }
+            .readiness()
+            .await
         })
     }
 }

@@ -152,31 +152,29 @@ fn release_sends_off_before_any_state_or_readiness_reads() {
 fn press_has_no_observation_round_trips_between_on_and_off() {
     futures_lite::future::block_on(async {
         let mut steps = vec![];
-        // Synthetic REC state, read for readiness and control support before
-        // asserting the contact. Eight-byte flags use two bounded reads.
-        for _ in 0..2 {
-            for (address, value) in [
-                (768u32, 3u32),
-                (776, 0),
-                (784, 0),
-                (520, 0),
-                (780, 0),
-                (800, 0),
-                (804, 0),
-                (808, 0),
-                (812, 0),
-                (816, 0),
-                (820, 0),
-                (824, 1),
-            ] {
-                let mut parameters = [0; 16];
-                parameters[8..12].copy_from_slice(&address.to_le_bytes());
-                parameters[12..].copy_from_slice(&4u32.to_le_bytes());
-                steps.extend(exchanges(
-                    command(2, parameters, &[]),
-                    command(2, parameters, &value.to_le_bytes()),
-                ));
-            }
+        // Synthetic REC readiness, then the state read for control support,
+        // before asserting the contact. Eight-byte flags use two bounded reads.
+        for (address, value) in [
+            (780u32, 0u32),
+            (800, 0),
+            (804, 0),
+            (808, 0),
+            (812, 0),
+            (816, 0),
+            (820, 0),
+            (824, 1),
+            (768, 3),
+            (776, 0),
+            (784, 0),
+            (520, 0),
+        ] {
+            let mut parameters = [0; 16];
+            parameters[8..12].copy_from_slice(&address.to_le_bytes());
+            parameters[12..].copy_from_slice(&4u32.to_le_bytes());
+            steps.extend(exchanges(
+                command(2, parameters, &[]),
+                command(2, parameters, &value.to_le_bytes()),
+            ));
         }
         for payload in ["FN ON\n", "FN OFF\n"] {
             let mut parameters = [0; 16];

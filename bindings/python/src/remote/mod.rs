@@ -337,6 +337,11 @@ impl Camera {
                     remote::operations::screenshot(r, deadline).await?,
                 )),
                 "frame" => Ok(Output::Capture(r.frame().await?)),
+                "readiness" => Ok(Output::Readiness(r.readiness().await?)),
+                "wait_ready" => {
+                    remote::operations::wait_ready(r, deadline).await?;
+                    Ok(Output::Unit)
+                }
                 "wait" => {
                     let read_result = r
                         .read(reference.as_ref().ok_or("wait requires a reference")?)

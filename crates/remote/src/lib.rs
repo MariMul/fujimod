@@ -7,7 +7,7 @@ pub use reference::{Control, Menu, OptionReference, Reference, control, menu, op
 pub mod protocol;
 pub use protocol::{
     Capture, Clock, ControlSnapshot, Input, InputState, LocalFuture, MemoryRead, MenuSnapshot,
-    ReadSet, Remote, RemoteReadResult, RemoteReader, Result, State, Value,
+    ReadSet, Readiness, Remote, RemoteReadResult, RemoteReader, Result, State, Value,
 };
 pub mod backend;
 pub mod memory;

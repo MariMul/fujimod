@@ -1,4 +1,4 @@
-//! Four asynchronous primitives.
+//! Asynchronous remote primitives.
 use crate::{Control, Reference};
 use fujimod_catalog::controls::ControlOperation;
 use fujimod_recording::Frame;
@@ -102,8 +102,14 @@ pub struct State {
     pub node: u64,
     pub cursor: u32,
     pub current_key: Option<u32>,
+}
+/// Whether the firmware accepts a new input now, the checks still pending,
+/// and the reads that decided it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Readiness {
     pub ready: bool,
     pub pending: Vec<String>,
+    pub reads: ReadSet,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MenuSnapshot {
@@ -180,6 +186,8 @@ pub trait RemoteReader {
     /// Read caller-selected physical bytes without assigning them semantic meaning.
     fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead>;
     fn frame(&mut self) -> LocalFuture<'_, Capture>;
+    /// Evaluate every input-readiness check now.
+    fn readiness(&mut self) -> LocalFuture<'_, Readiness>;
 }
 pub trait Remote: RemoteReader {
     fn set_input<'a>(&'a mut self, input: &'a Input, deadline: u64) -> LocalFuture<'a, ()>;

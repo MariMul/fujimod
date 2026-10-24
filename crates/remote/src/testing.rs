@@ -44,7 +44,7 @@ pub fn facts() -> Facts {
         "native_key_names":{"rows":[],"reader":16,"size":4,"sha256":hash},
         "debug_keys":keys.iter().enumerate().map(|(n,(_,key))|json!({"name":key,"event":n})).collect::<Vec<_>>(),
         "inputs":keys.iter().enumerate().map(|(n,(id,key))|json!({"id":format!("input-{n}"),"event":n,"debug_key":key,"target":{"kind":"control","control_id":id},"scanner":null,"electrical":null})).collect::<Vec<_>>(),
-        "interfaces":{}
+        "undelivered_rows":[],"interfaces":{}
     });
     serde_json::from_value(json!({
         "physical_controls":physical_controls,
@@ -405,12 +405,11 @@ fn frame_timeout_names_condition() {
 fn rec_readiness_gates_parameter_changes_without_blocking_other_category_one_work() {
     futures_lite::future::block_on(async {
         let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
-        let reference = control("selector.down").into();
         for bit in 0..64 {
             let category = 1u64 << bit;
             remote.backend.bytes[800..808].copy_from_slice(&category.to_le_bytes());
-            let result = remote.read(&reference).await.unwrap();
-            assert_eq!(result.state.ready, bit != 9, "category-one bit {bit}");
+            let result = remote.readiness().await.unwrap();
+            assert_eq!(result.ready, bit != 9, "category-one bit {bit}");
             assert!(
                 result
                     .reads
@@ -607,9 +606,8 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
             backend.word(address, value);
         }
         let mut r = Connection::connect(backend, facts).unwrap();
-        let reference = control("selector.down").into();
-        let ready = r.read(&reference).await.unwrap();
-        assert!(ready.state.ready);
+        let ready = r.readiness().await.unwrap();
+        assert!(ready.ready);
         assert!(
             ready
                 .reads
@@ -617,24 +615,28 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
                 .iter()
                 .any(|&(lo, hi)| lo <= 35012 && hi > 35012)
         );
+        // A state read watches no readiness check.
+        let state = r.read(&control("selector.down").into()).await.unwrap();
+        assert!(
+            !state
+                .reads
+                .stores
+                .iter()
+                .any(|&(lo, hi)| lo < 36110 && hi > 800)
+        );
         r.backend.word(35068, 0);
-        assert!(!r.read(&reference).await.unwrap().state.ready);
+        assert!(!r.readiness().await.unwrap().ready);
         r.backend.word(35068, 0x12);
         r.backend.word(920, 1);
-        assert!(!r.read(&reference).await.unwrap().state.ready);
+        assert!(!r.readiness().await.unwrap().ready);
         r.backend.word(920, 0);
         r.backend.word(36108, 0x10);
-        assert!(r.read(&reference).await.unwrap_err().contains("ambiguous"));
+        assert!(r.readiness().await.unwrap_err().contains("ambiguous"));
         r.backend.word(36108, 0x30);
         r.backend.word(36048, 0x40);
-        assert!(r.read(&reference).await.unwrap_err().contains("missing"));
+        assert!(r.readiness().await.unwrap_err().contains("missing"));
         r.backend.word(904, 129);
-        assert!(
-            r.read(&reference)
-                .await
-                .unwrap_err()
-                .contains("unavailable")
-        );
+        assert!(r.readiness().await.unwrap_err().contains("unavailable"));
     });
 }
 

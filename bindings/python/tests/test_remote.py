@@ -4,7 +4,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from fujimod import _native
-from fujimod.remote import Camera, RemoteReadResult, control, menu, option
+from fujimod.remote import Camera, Readiness, RemoteReadResult, control, menu, option
 
 
 def camera():
@@ -52,6 +52,18 @@ def test_blocking_uses_the_same_actions_and_read_result_types():
     assert isinstance(value, RemoteReadResult)
     assert remote.now == before
     assert blocking.screenshot(deadline=100).frame.height == 1
+
+
+async def test_readiness_is_read_and_awaited_apart_from_state():
+    remote = camera()
+    readiness = await remote.readiness()
+    assert isinstance(readiness, Readiness)
+    assert readiness.ready and readiness.pending == []
+    assert readiness.reads["stores"]
+    await remote.wait_until_ready(deadline=100)
+    assert remote.blocking.readiness() == readiness
+    remote.blocking.wait_until_ready(deadline=100)
+    remote.close()
 
 
 async def test_task_cancellation_returns_camera_ownership():

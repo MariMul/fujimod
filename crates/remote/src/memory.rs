@@ -1,5 +1,5 @@
 //! Bounded live-memory observation. No reads advance execution.
-use crate::{InputState, ReadSet, Result, State, backend::Backend};
+use crate::{InputState, ReadSet, Readiness, Result, State, backend::Backend};
 use fujimod_catalog::{
     facts::{ConfigurationLocation, DecodedTouch},
     remote::Facts,
@@ -75,6 +75,17 @@ impl<B: Backend> Memory<'_, B> {
         } else {
             None
         };
+        Ok(State {
+            mode,
+            menu_active: active,
+            node,
+            cursor,
+            current_key,
+        })
+    }
+    /// Every check that must pass before the firmware accepts a new input.
+    pub async fn readiness(&mut self) -> Result<Readiness> {
+        let f = &self.facts.firmware.state;
         let mut pending = vec![];
         let mode_pending = self.word(f.pending_mode).await?;
         if mode_pending != 0 {
@@ -115,6 +126,11 @@ impl<B: Backend> Memory<'_, B> {
         // Every observation resolves task identity again. All descriptor and
         // receive-state reads remain in the predicate's continuation read set.
         if let Some(tasks) = self.facts.input_tasks.clone() {
+            let mode = if tasks.busy.is_empty() {
+                0
+            } else {
+                self.word(self.facts.firmware.state.ui_mode).await?
+            };
             for gate in &tasks.busy {
                 if mode == gate.mode && self.uint(gate.address, gate.width).await? != 0 {
                     pending.push(format!("Input operation busy at {:#x}", gate.address));
@@ -162,14 +178,10 @@ impl<B: Backend> Memory<'_, B> {
                 }
             }
         }
-        Ok(State {
-            mode,
-            menu_active: active,
-            node,
-            cursor,
-            current_key,
+        Ok(Readiness {
             ready: pending.is_empty(),
             pending,
+            reads: self.reads.clone(),
         })
     }
     pub async fn text(&mut self, resource: u32) -> Result<String> {

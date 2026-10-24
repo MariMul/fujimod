@@ -64,8 +64,13 @@ class State:
     node: int
     cursor: int
     current_key: int | None
+
+
+@dataclass(frozen=True)
+class Readiness:
     ready: bool
     pending: list[str]
+    reads: dict
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,8 @@ class Capture:
 def _convert(value):
     if isinstance(value, str):
         data = json.loads(value)
+        if "state" not in data:
+            return Readiness(**data)
         kind = MenuState if data["value"]["kind"] == "menu" else ControlState
         return RemoteReadResult(State(**data["state"]), kind(**data["value"]["value"]), data["reads"])
     if isinstance(value, tuple):
@@ -204,6 +211,12 @@ class Camera:
     async def wait(self, reads: dict, *, deadline: int) -> None:
         await _drive(self._native.wait_reads(json.dumps(reads), deadline))
 
+    async def readiness(self) -> Readiness:
+        return await _drive(self._task("readiness", None, 0))
+
+    async def wait_until_ready(self, *, deadline: int) -> None:
+        await _drive(self._task("wait_ready", None, deadline))
+
     async def wait_for(self, predicate: Callable[[], Awaitable[T]], *, deadline: int,
                        reads: dict, condition: str) -> T:
         """Compose async observations with the remote wait primitive.
@@ -292,6 +305,12 @@ class BlockingCamera:
 
     def read(self, reference: Reference) -> RemoteReadResult:
         return self._call("read", reference)
+
+    def readiness(self) -> Readiness:
+        return self._call("readiness")
+
+    def wait_until_ready(self, *, deadline: int) -> None:
+        self._call("wait_ready", deadline=deadline)
 
     def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
         return self._call("navigate", reference, deadline)

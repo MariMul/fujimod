@@ -4,11 +4,20 @@
 against catalog facts and live memory. Navigation and selection use native
 inputs. Reads return `RemoteReadResult` values without advancing a board.
 
-`Remote` has four asynchronous, local-future primitives: `set_input`, `read`,
-`frame` and `wait`. The `operations` module composes navigation, selection,
-presses, turns, predicate waits and screenshots over those primitives. Predicate
-waits retain the store/device reads made by their predicate. Callers supply
-absolute deadlines in the connection's clock and own their assertions.
+`Remote` has asynchronous, local-future primitives: `set_input`, `read`,
+`read_memory`, `readiness`, `frame` and `wait`. The `operations` module composes
+navigation, selection, presses, turns, predicate waits and screenshots over
+those primitives. Predicate waits retain the store/device reads made by their
+predicate. Callers supply absolute deadlines in the connection's clock and own
+their assertions.
+
+A read's `State` is the UI mode, menu, node, cursor and current row key.
+`readiness()` separately decides whether the firmware accepts a new input: no
+pending mode transition, busy UI category, pending input, alert timer or busy
+mode register, and every input task receiving. It returns the pending checks
+and its own read set, so a wait on menu state never wakes for readiness reads.
+`operations::wait_ready` waits for it; Python exposes `Camera.readiness()` and
+`Camera.wait_until_ready(deadline=...)`.
 
 Build `Facts` with `Facts::from_selection(&selection, manifest)`. A reference is
 resolved on every use; duplicate or missing rows and option names produce an
