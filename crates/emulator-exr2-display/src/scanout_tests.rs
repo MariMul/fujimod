@@ -81,6 +81,38 @@ fn render(model: &Compositor, pipe: usize, memory: &[u8]) -> Frame {
 }
 
 #[test]
+fn rectangle_registers_survive_a_disabled_display_without_publishing_a_frame() {
+    let mut model = model(2, 2, 1);
+    model.rectangle_composition = Some(RectangleComposition::DeclaredLuma);
+    for (offset, value) in [
+        (0x108, 1),
+        (0x11c, 0),
+        (0x120, 0x10001),
+        (0x174, 0),
+        (0x188, 0),
+        (0x190, 0),
+        (0x18c, 128),
+        (0x178, 220),
+        (0x16c, 1),
+    ] {
+        put(&mut model, 1, offset, value);
+    }
+    let mut read = |_, _| Err("disabled display must not read pixels".into());
+    let mut observation = Observation {
+        read: &mut read,
+        diagnostic_hashes: true,
+    };
+    assert!(model.frame(1, 0, true, &mut observation).unwrap().is_none());
+    window(&mut model, 1, 0, 0, 0x2000, [2, 2], 0, 128);
+    let memory = vec![0; 0x10000];
+    assert_eq!(render(&model, 1, &memory).rgb.unwrap(), [220; 12]);
+    put(&mut model, 1, 0x40, 0);
+    assert!(model.frame(1, 0, true, &mut observation).unwrap().is_none());
+    put(&mut model, 1, 0x40, 1);
+    assert_eq!(render(&model, 1, &memory).rgb.unwrap(), [220; 12]);
+}
+
+#[test]
 fn group1_abgr_pixels_use_byte_zero_alpha_on_both_outputs() {
     let raw = [
         255, 30, 60, 210, 0, 20, 40, 60, 255, 100, 150, 200, 64, 40, 80, 120,

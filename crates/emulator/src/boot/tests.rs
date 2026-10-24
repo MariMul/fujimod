@@ -3,7 +3,10 @@ use fujimod_catalog::configuration::Exr2RunScene;
 
 /// The reference X70's NAND sections in the catalog.
 fn reference_camera() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../catalog/bodies/x70/cameras/reference"))
+    PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../catalog/bodies/x70/cameras/reference"
+    ))
 }
 
 #[test]
@@ -545,7 +548,12 @@ fn prepared_document_must_match_the_bundled_catalog_and_its_own_preparation() {
 
     let mut moved = document.clone();
     moved["quantum"] = json!(1);
-    assert!(Prepared::from_json(&moved).is_err());
+    assert!(
+        Prepared::from_json(&moved)
+            .err()
+            .unwrap()
+            .contains("/quantum")
+    );
 
     let mut missing = document.clone();
     missing.as_object_mut().unwrap().remove("resolved");
@@ -585,6 +593,23 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
     );
 
     let prepared = prepare("x70-110-rec", &["x70-110-browser-camera".into()]).unwrap();
+    assert_eq!(
+        model(&prepared, "video_encoder")["options"]["backend"],
+        "software"
+    );
+    assert_eq!(
+        prepared
+            .resolved
+            .configuration
+            .preset
+            .as_ref()
+            .unwrap()
+            .factory_options
+            .video_encoder_backend,
+        Some(fujimod_catalog::construction::VideoEncoderBackend::Software)
+    );
+    let text = serde_json::to_string(&prepared.to_json()).unwrap();
+    assert!(Prepared::from_json(&serde_json::from_str(&text).unwrap()).is_ok());
     assert_eq!(prepared.resolved.configuration.start, RunStart::Rom);
     let sd = model(&prepared, "sd");
     assert_eq!(sd["kind"], "sd-host");

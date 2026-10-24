@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  encodeIntoSharedMemory,
+  sharedStringEncoding,
+} from '../../emulator/shared-memory-encoding.ts';
+import {
   buildPlan,
   declarationModule,
   hoistBindgenDeclarations,
@@ -12,6 +16,29 @@ import {
 
 test('builder reads the pinned public toolchains from the package root configuration', () => {
   assert.deepEqual(pinnedToolchain(), { nightly: 'nightly-2026-10-10', emsdk: '6.0.13' });
+});
+
+test('generated UTF-8 encoding preserves shared-memory slices and code point boundaries', () => {
+  const encoder = new class extends TextEncoder {
+    override encodeInto(text: string, target: Uint8Array<ArrayBuffer>) {
+      assert(target.buffer instanceof ArrayBuffer, 'Browser encoders refuse shared destinations');
+      return super.encodeInto(text, target);
+    }
+  }();
+  for (const [text, capacity] of [['MENU', 8], ['Aé🎞Z', 7], ['🎞', 3], ['é', 0]] as const) {
+    const expected = new Uint8Array(capacity);
+    const result = encoder.encodeInto(text, expected);
+    const shared = new Uint8Array(new SharedArrayBuffer(capacity + 4));
+    shared.fill(0xcc);
+    assert.deepEqual(encodeIntoSharedMemory(encoder, text, shared.subarray(2, 2 + capacity)), result);
+    assert.deepEqual(shared.subarray(2, 2 + result.written), expected.subarray(0, result.written));
+    assert(shared.subarray(0, 2).every((byte) => byte === 0xcc));
+    assert(shared.subarray(2 + result.written).every((byte) => byte === 0xcc));
+  }
+  const patched = sharedStringEncoding('const ret=cachedTextEncoder.encodeInto(arg,view);');
+  assert.match(patched, /encodeIntoSharedMemory\(cachedTextEncoder,arg,view\)/);
+  assert.doesNotMatch(patched, /cachedTextEncoder\.encodeInto/);
+  assert.throws(() => sharedStringEncoding(''), /Expected one/);
 });
 
 test('build options keep artifacts in the requested output and validate tool flags', () => {
@@ -49,6 +76,7 @@ test('build plan targets the public static library and preserves encoded Rust fl
   ]);
   assert(plan.cFlags.includes('-pthread'));
   assert(plan.cmakeConfigure.includes('--fresh'));
+  assert(plan.link.includes('-Oz'));
   assert(plan.link.includes('-pthread'));
   assert(plan.link.includes('-sPTHREAD_POOL_SIZE=2'));
   assert(plan.rust.includes('-Zbuild-std=std,panic_abort'));

@@ -709,6 +709,39 @@ pub struct InputBytes {
 /// Largest NAND input accepted from the caller: a 256 MiB image.
 const NAND_INPUT_MAX_BYTES: usize = 256 << 20;
 
+fn preparation_difference(expected: &Value, provided: &Value, path: &str) -> String {
+    match (expected, provided) {
+        (Value::Object(expected), Value::Object(provided)) => {
+            for (key, value) in expected {
+                let path = format!("{path}/{}", key.replace('~', "~0").replace('/', "~1"));
+                match provided.get(key) {
+                    Some(other) if value != other => {
+                        return preparation_difference(value, other, &path);
+                    }
+                    None => return path,
+                    _ => {}
+                }
+            }
+            if let Some(key) = provided.keys().find(|key| !expected.contains_key(*key)) {
+                return format!("{path}/{}", key.replace('~', "~0").replace('/', "~1"));
+            }
+        }
+        (Value::Array(expected), Value::Array(provided)) => {
+            for (index, (value, other)) in expected.iter().zip(provided).enumerate() {
+                if value != other {
+                    return preparation_difference(value, other, &format!("{path}/{index}"));
+                }
+            }
+            return format!("{path}/length ({} != {})", expected.len(), provided.len());
+        }
+        (Value::Number(expected), Value::Number(provided)) => {
+            return format!("{path} ({expected} != {provided})");
+        }
+        _ => {}
+    }
+    path.into()
+}
+
 impl Prepared {
     /// Restore a prepared run from its `to_json` document. The embedded identity
     /// must equal the bundled catalog's resolution, and preparing it again must
@@ -729,8 +762,12 @@ impl Prepared {
             return Err("prepared document differs from the bundled catalog".into());
         }
         let prepared = prepared(resolved)?;
-        if prepared.to_json() != *value {
-            return Err("prepared document differs from its preparation".into());
+        let expected = prepared.to_json();
+        if expected != *value {
+            return Err(format!(
+                "prepared document differs from its preparation at {}",
+                preparation_difference(&expected, value, "")
+            ));
         }
         Ok(prepared)
     }
@@ -770,7 +807,10 @@ pub fn open(options: Options) -> Result<Session, String> {
 /// The camera's compressed NAND sections in `directory`: one
 /// `nand-<section>.bin.zst` per section of the firmware's settings layout that
 /// the camera holds. A section the camera leaves empty has no file.
-fn camera_sections(prepared: &Prepared, directory: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
+fn camera_sections(
+    prepared: &Prepared,
+    directory: &Path,
+) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let layout = prepared
         .resolved
         .reference
@@ -785,7 +825,10 @@ fn camera_sections(prepared: &Prepared, directory: &Path) -> Result<BTreeMap<Str
         }
     }
     if sections.is_empty() {
-        return Err(format!("{} holds no camera NAND sections", directory.display()));
+        return Err(format!(
+            "{} holds no camera NAND sections",
+            directory.display()
+        ));
     }
     Ok(sections)
 }
@@ -865,7 +908,10 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     match &declared {
         Some(declared) => {
             if nand.is_some() || settings.is_some() {
-                return Err("a run that declares its settings takes no NAND image or settings packet".into());
+                return Err(
+                    "a run that declares its settings takes no NAND image or settings packet"
+                        .into(),
+                );
             }
             let layout = prepared
                 .resolved
@@ -875,14 +921,21 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
                 .ok_or("selected firmware has no settings layout")?;
             match (&declared.camera, camera.is_empty()) {
                 (Some(id), true) => {
-                    return Err(format!("this run boots the body's {id} camera: supply its NAND sections"));
+                    return Err(format!(
+                        "this run boots the body's {id} camera: supply its NAND sections"
+                    ));
                 }
-                (None, false) => return Err("this run boots no camera, but camera sections were supplied".into()),
+                (None, false) => {
+                    return Err(
+                        "this run boots no camera, but camera sections were supplied".into(),
+                    );
+                }
                 _ => {}
             }
             // The power controller keeps the user profile's header; the
             // camera's sections only change the settings bank.
-            let built = fujimod_settings::build(layout, &assets["nand_base"], &declared.requested, None)?;
+            let built =
+                fujimod_settings::build(layout, &assets["nand_base"], &declared.requested, None)?;
             if let Some(profile) = built.profile {
                 settings_packet(&mut devices, &prepared.mcu, &profile.header)?;
                 header_applied = true;
@@ -1009,7 +1062,11 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
 /// A stopped, passive boot observation. `rec` also identifies the first-start
 /// recording role (`system_mode == 3`) after its menus close.
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[cfg_attr(
+    feature = "typescript",
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RecReport {
     pub status: String,
     pub instructions: u64,

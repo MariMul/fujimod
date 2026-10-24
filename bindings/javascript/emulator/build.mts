@@ -14,6 +14,7 @@ import { delimiter, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { parseArgs } from 'node:util';
+import { sharedStringEncoding } from './shared-memory-encoding.ts';
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const defaultOutput = resolve(root, '../../target/emulator');
@@ -295,7 +296,8 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     join(target, 'wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a'),
     '-o',
     join(out, 'camera.mjs'),
-    '-O3',
+    // Keep the standalone module within static hosting's per-file size budget.
+    '-Oz',
     '--no-entry',
     '-pthread',
     '-sPTHREAD_POOL_SIZE=2',
@@ -474,6 +476,8 @@ export function build(selected: BuildOptions) {
   ]);
   writeFileSync(join(out, 'exports.json'), JSON.stringify(rustExports(symbols)));
   run(plan.link, plan.env);
+  const loaderPath = join(out, 'camera.mjs');
+  writeFileSync(loaderPath, sharedStringEncoding(readFileSync(loaderPath, 'utf8')));
   const declarations = join(out, 'camera.d.ts');
   const generated = hoistBindgenDeclarations(readFileSync(declarations, 'utf8'));
   writeFileSync(declarations, generated);

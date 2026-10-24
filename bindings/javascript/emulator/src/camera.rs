@@ -333,6 +333,8 @@ impl Session {
             &serde_json::to_vec(&config.prepared["devices"]).map_err(|e| e.to_string())?,
         )?;
         let (scanout, nands) = device_roles(&plan)?;
+        fujimod_emulator_exr2_board::register_board_builder();
+        fujimod_emulator_models::register();
         let prepared = fujimod_emulator::boot::Prepared::from_json(&config.prepared)?;
         let mut core = fujimod_emulator::boot::open_prepared(
             prepared,
