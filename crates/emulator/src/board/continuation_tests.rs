@@ -3,8 +3,9 @@ use super::super::{bus, factory};
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::rprofile;
 
-#[test]
-fn cached_read_watch_wakes_for_every_uncached_publication_store() {
+/// One core with cached and uncached views of RAM at 0x10000 and code RAM at
+/// 0x20000.
+fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     use super::super::memory::BusMapping;
     use factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
     let maps = vec![
@@ -72,7 +73,7 @@ fn cached_read_watch_wakes_for_every_uncached_publication_store() {
         peripherals: vec![],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
-    let mut board = graph
+    let board = graph
         .build(
             Options {
                 engine: Engine::Unicorn,
@@ -82,6 +83,12 @@ fn cached_read_watch_wakes_for_every_uncached_publication_store() {
             None,
         )
         .unwrap();
+    (board, maps)
+}
+
+#[test]
+fn cached_read_watch_wakes_for_every_uncached_publication_store() {
+    let (mut board, maps) = two_view_board();
     let code: [u32; 8] = [
         0xe3a00001, // mov r0,#1: publication busy
         0xe5810000, // str r0,[r1]: begin
@@ -176,4 +183,59 @@ fn stores_that_keep_watched_bytes_leave_the_wait_running() {
     };
     large.store(0x200, &[0]);
     assert!(large.fired);
+    let mut many = super::Stops {
+        stores: (0..512u64).map(|n| (n * 0x38, n * 0x38 + 4)).collect(),
+        values: vec![vec![0; 4]; 512],
+        ..Default::default()
+    };
+    many.store(0x38 * 300 + 4, &[1; 0x30]);
+    many.store(0x38 * 511, &[0; 4]);
+    assert!(!many.fired);
+    many.store(0x38 * 300 - 1, &[0, 0, 1]);
+    assert!(many.fired);
+}
+
+#[test]
+fn a_new_watch_set_replaces_the_retained_hooks() {
+    let (mut board, maps) = two_view_board();
+    assert_eq!(board.mappings(), maps);
+    let code: [u32; 3] = [
+        0xe5810000, // str r0,[r1]
+        0xe5810010, // str r0,[r1,#16]
+        0xeafffffe,
+    ];
+    board
+        .write_physical(
+            0x20000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.write_register(0, arm::CORE[1], 0x40010000).unwrap();
+    // Runs from the first store with a new value; returns the instructions
+    // entered and whether the watch fired.
+    let mut run = |board: &mut super::super::Board, value: u64, watched: Option<(u64, u64)>| {
+        board.write_register(0, Register::Pc, 0x20000).unwrap();
+        board.write_register(0, arm::CORE[0], value).unwrap();
+        if let Some(range) = watched {
+            board
+                .continuation_begin(vec![range], Default::default(), maps.clone())
+                .unwrap();
+        }
+        let before = board.instruction_counts()[0];
+        board.run_for_instructions(20, 7).unwrap();
+        let fired = watched.is_some() && board.continuation_end().unwrap();
+        (board.instruction_counts()[0] - before, fired)
+    };
+    let second = Some((0x10010, 0x10014));
+    assert_eq!(run(&mut board, 1, second), (2, true));
+    // The same set reuses its hooks and still stops at the changed word.
+    assert_eq!(run(&mut board, 2, second), (2, true));
+    // Another set watches only its own range.
+    assert_eq!(run(&mut board, 3, Some((0x10000, 0x10004))), (1, true));
+    // Retained hooks leave an unwatched run alone.
+    assert_eq!(run(&mut board, 4, None), (20, false));
+    assert_eq!(run(&mut board, 5, second), (2, true));
 }

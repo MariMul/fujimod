@@ -67,9 +67,9 @@ impl Board {
             .map(|name| session.node(name))
             .collect::<Result<_, _>>()
             .map_err(error)?;
-        let maps = serde_json::from_value(session.definition["execution"]["mappings"].clone())
-            .map_err(|e| error(e.to_string()))?;
-        self.board_mut()?
+        let board = self.board_mut()?;
+        let maps = board.mappings().to_vec();
+        board
             .continuation_begin(stores.unwrap_or_default(), devices, maps)
             .map_err(error)
     }

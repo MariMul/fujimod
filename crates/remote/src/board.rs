@@ -306,8 +306,7 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
             }
             let options = &self.options;
             self.now = self.owner.with_session(|s| {
-                let maps = serde_json::from_value(s.definition["execution"]["mappings"].clone())
-                    .map_err(|e| e.to_string())?;
+                let maps = s.board.mappings().to_vec();
                 s.board
                     .continuation_begin(reads.stores.clone(), reads.devices.clone(), maps)?;
                 let result = s.run_with_limits(

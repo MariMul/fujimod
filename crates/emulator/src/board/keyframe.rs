@@ -206,7 +206,7 @@ impl State {
 }
 impl Board {
     fn durable_blocker(&self) -> Option<String> {
-        if self.continuation.is_some()
+        if self.continuation.as_ref().is_some_and(|watch| watch.active)
             || self.read_set.try_borrow().map_or(true, |r| r.is_some())
             || self.isolated_core.get().is_some()
             || !self.discovery_stub_contexts.is_empty()

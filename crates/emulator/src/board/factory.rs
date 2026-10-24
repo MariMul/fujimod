@@ -317,6 +317,7 @@ impl Graph {
             ram,
         )?;
         board.state.borrow_mut().decoders = super::decoder::Decoders::new(self.decoders);
+        board.mappings = self.mappings.clone();
         for (core, p) in self.processors.iter().enumerate() {
             if let Some(config) = p.mprofile {
                 let views = self

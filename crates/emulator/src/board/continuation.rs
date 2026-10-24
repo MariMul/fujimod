@@ -27,17 +27,16 @@ const COMPARED_RANGE_BYTES: u64 = 1 << 20;
 impl Stops {
     /// A store fires the watch only when it changes a watched byte: firmware
     /// that rewrites a status word with its current value does not end a wait.
-    /// `written` holds the bytes at `address` after the store.
+    /// `written` holds the bytes at `address` after the store. `stores` is
+    /// sorted and disjoint.
     pub fn store(&mut self, address: u64, written: &[u8]) {
         let end = address.saturating_add(written.len() as u64);
-        self.fired |= self
-            .stores
+        let first = self.stores.partition_point(|&(_, hi)| hi <= address);
+        self.fired |= self.stores[first..]
             .iter()
-            .zip(&self.values)
+            .zip(&self.values[first..])
+            .take_while(|&(&(lo, _), _)| lo < end)
             .any(|(&(lo, hi), before)| {
-                if address >= hi || lo >= end {
-                    return false;
-                }
                 let (from, to) = (address.max(lo), end.min(hi));
                 before.is_empty()
                     || written[(from - address) as usize..(to - address) as usize]
@@ -54,9 +53,15 @@ pub(super) fn finish_instruction(cpu: &dyn Cpu) -> Result<(), String> {
         .ok_or("Continuation requires exact instruction progress")?;
     cpu.tighten_instruction_limit(progress)
 }
+/// Store hooks for one watched set. They stay installed after the
+/// continuation ends, so the next wait over the same set (most consecutive
+/// polls) reuses them instead of reinstalling every hook.
 pub(super) struct StoreWatch {
+    /// Each core's address views and hook spans the hooks were installed for.
+    cores: Vec<(Vec<MemoryMap>, Vec<(u64, u64)>)>,
     contexts: Vec<Box<Context>>,
     hooks: Vec<(usize, Vec<HookId>)>,
+    pub(super) active: bool,
 }
 struct Context {
     state: Weak<RefCell<State>>,
@@ -72,6 +77,10 @@ unsafe fn written(_: Access, address: u64, size: i32, _: i64, data: *mut c_void)
     let result = (|| {
         let size = u64::try_from(size).map_err(|_| "Invalid continuation store width")?;
         let state = state.borrow();
+        // Retained hooks outside a continuation observe nothing.
+        if state.continuation.borrow().stores.is_empty() {
+            return Ok(());
+        }
         let physical = state
             .decoders
             .observed_physical(context.core, address, size)
@@ -86,9 +95,17 @@ unsafe fn written(_: Access, address: u64, size: i32, _: i64, data: *mut c_void)
                     .map(|m| m.physical + address - m.address)
             });
         if let Some(physical) = physical {
-            let mut written = vec![0; size as usize];
-            cpu.read_memory(address, &mut written)?;
-            state.continuation.borrow_mut().store(physical, &written);
+            let mut buffer = [0; 64];
+            let mut large = vec![];
+            let written = match buffer.get_mut(..size as usize) {
+                Some(bytes) => bytes,
+                None => {
+                    large.resize(size as usize, 0);
+                    &mut large[..]
+                }
+            };
+            cpu.read_memory(address, written)?;
+            state.continuation.borrow_mut().store(physical, written);
             if fired(&state.continuation) {
                 finish_instruction(&*cpu)?;
             }
@@ -186,7 +203,7 @@ impl Board {
         devices: BTreeSet<usize>,
         maps: Vec<MemoryMap>,
     ) -> Result<(), String> {
-        if self.continuation.is_some() {
+        if self.continuation.as_ref().is_some_and(|watch| watch.active) {
             return Err("A continuation watch is already active".into());
         }
         if stores.len() > 4096
@@ -235,16 +252,8 @@ impl Board {
             devices,
             fired: false,
         };
-        self.physical_memory
-            .continuation
-            .replace(Some(Rc::downgrade(&stops)));
-        self.state.borrow_mut().bus.continuation(Some(stops));
-        self.continuation = Some(Box::new(StoreWatch {
-            contexts: vec![],
-            hooks: vec![],
-        }));
-        let result = (|| {
-            for (core, cpu) in self.cpus.iter().enumerate() {
+        let cores = (0..self.cpus.len())
+            .map(|core| {
                 let mut views = maps
                     .iter()
                     .filter(|m| m.core == core)
@@ -264,53 +273,87 @@ impl Board {
                         }
                     }
                 }
-                let watch = self.continuation.as_mut().unwrap();
-                watch.contexts.push(Box::new(Context {
-                    state: Rc::downgrade(&self.state),
-                    cpu: Rc::downgrade(cpu),
-                    maps: views,
-                    core,
-                }));
-                let data = (&**watch.contexts.last().unwrap() as *const Context)
-                    .cast_mut()
-                    .cast();
-                let hooks = union(spans)
-                    .into_iter()
-                    .map(|(begin, end)| Hook::CompletedStore {
-                        callback: written,
-                        data,
-                        range: HookRange::Inclusive {
-                            begin,
-                            end: end - 1,
-                        },
-                    })
-                    .collect::<Vec<_>>();
-                if !hooks.is_empty() {
-                    watch
-                        .hooks
-                        .push((core, unsafe { cpu.install_hooks(&hooks) }?));
+                (views, union(spans))
+            })
+            .collect::<Vec<_>>();
+        self.physical_memory
+            .continuation
+            .replace(Some(Rc::downgrade(&stops)));
+        self.state.borrow_mut().bus.continuation(Some(stops));
+        if let Some(watch) = self.continuation.as_mut()
+            && watch.cores == cores
+        {
+            watch.active = true;
+            return Ok(());
+        }
+        let result = self.release_store_watch().and_then(|()| {
+            let mut watch = Box::new(StoreWatch {
+                cores: cores.clone(),
+                contexts: vec![],
+                hooks: vec![],
+                active: true,
+            });
+            let installed = (|| {
+                for (core, (views, spans)) in cores.into_iter().enumerate() {
+                    let cpu = &self.cpus[core];
+                    watch.contexts.push(Box::new(Context {
+                        state: Rc::downgrade(&self.state),
+                        cpu: Rc::downgrade(cpu),
+                        maps: views,
+                        core,
+                    }));
+                    let data = (&**watch.contexts.last().unwrap() as *const Context)
+                        .cast_mut()
+                        .cast();
+                    let hooks = spans
+                        .into_iter()
+                        .map(|(begin, end)| Hook::CompletedStore {
+                            callback: written,
+                            data,
+                            range: HookRange::Inclusive {
+                                begin,
+                                end: end - 1,
+                            },
+                        })
+                        .collect::<Vec<_>>();
+                    if !hooks.is_empty() {
+                        watch
+                            .hooks
+                            .push((core, unsafe { cpu.install_hooks(&hooks) }?));
+                    }
                 }
-            }
-            Ok(())
-        })();
+                Ok::<_, String>(())
+            })();
+            self.continuation = Some(watch);
+            installed
+        });
         if result.is_err() {
             self.continuation_end()?;
+            self.release_store_watch()?;
         }
         result
     }
+    /// End the active continuation. Its hooks stay installed for the next
+    /// continuation over the same set; `release_store_watch` removes them.
     pub fn continuation_end(&mut self) -> Result<bool, String> {
         if let Some(watch) = self.continuation.as_mut() {
-            for (core, hooks) in &watch.hooks {
-                self.cpus[*core].remove_hooks(hooks)?;
-            }
+            watch.active = false;
         }
-        self.continuation = None;
         self.physical_memory.continuation.replace(None);
         let mut state = self.state.borrow_mut();
         state.bus.continuation(None);
         let fired = state.continuation.borrow().fired;
         *state.continuation.borrow_mut() = Stops::default();
         Ok(fired)
+    }
+    /// Remove the hooks retained from the last continuation.
+    pub(super) fn release_store_watch(&mut self) -> Result<(), String> {
+        if let Some(watch) = self.continuation.take() {
+            for (core, hooks) in &watch.hooks {
+                self.cpus[*core].remove_hooks(hooks)?;
+            }
+        }
+        Ok(())
     }
 }
 

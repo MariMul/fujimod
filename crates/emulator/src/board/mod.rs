@@ -132,6 +132,8 @@ pub struct Board {
     host_pause: Rc<Cell<bool>>,
     isolated_core: Cell<Option<usize>>,
     continuation: Option<Box<continuation::StoreWatch>>,
+    /// Processor address views of RAM, from the checked graph.
+    mappings: Vec<factory::MemoryMap>,
     read_set: RefCell<Option<continuation::ReadSet>>,
     watches: Vec<Box<observe::Watch>>,
     entries: Rc<RefCell<observe::Entries>>,
@@ -330,6 +332,7 @@ impl Board {
             host_pause: Default::default(),
             isolated_core: Cell::new(None),
             continuation: None,
+            mappings: vec![],
             read_set: RefCell::new(None),
             watches: vec![],
             entries: Default::default(),
@@ -410,6 +413,10 @@ impl Board {
     }
     pub fn instruction_counts(&self) -> Vec<u64> {
         self.state.borrow().instructions.clone()
+    }
+    /// Processor address views of RAM, as continuation watches take them.
+    pub fn mappings(&self) -> &[factory::MemoryMap] {
+        &self.mappings
     }
     pub fn now(&self) -> u64 {
         self.state.borrow().timeline.now()
@@ -956,6 +963,7 @@ impl Board {
 impl Drop for Board {
     fn drop(&mut self) {
         let _ = self.continuation_end();
+        let _ = self.release_store_watch();
         // The board exclusively owns processors; bindings hold only Weak
         // handles. CPUs drop before their still-valid callback contexts.
         for (core, hook) in self.hooks.drain(..) {
