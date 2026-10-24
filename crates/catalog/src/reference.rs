@@ -20,7 +20,7 @@ pub const FIRMWARE_SCHEMA_URI: &str = "https://fujimod.com/schemas/firmware.sche
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -37,17 +37,14 @@ pub enum ProcessorArchitecture {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Soc {
     /// Stable schema URI for this SoC record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(
-        feature = "typescript",
-        tsify(type = "\"https://fujimod.com/schemas/soc.schema.json\"")
-    )]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/soc.schema.json\""))]
     pub schema_uri: String,
     /// SoC record version.
     pub schema: u32,
@@ -67,7 +64,7 @@ pub struct Soc {
     pub clocks: Vec<ClockDomain>,
     /// Additional family-specific hardware parameters, when specified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "SocHardware | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "SocHardware | null"))]
     pub hardware: Option<crate::soc::SocHardware>,
     /// CPU address-space mappings used to construct a processor graph.
     pub mappings: Vec<AddressMapping>,
@@ -256,7 +253,7 @@ impl Soc {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -266,15 +263,15 @@ pub struct ProcessorCore {
     /// Implemented processor model.
     pub model: ProcessorModel,
     /// Whether this core leaves reset when the SoC starts, when known.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub released: Option<bool>,
     /// Initial architectural register values.
     pub registers: Vec<RegisterValue>,
     /// Optional M-profile hardware state.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub mprofile: Option<MProfileState>,
     /// Optional R-profile hardware state.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub rprofile: Option<RProfileState>,
 }
 
@@ -283,7 +280,7 @@ pub struct ProcessorCore {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -304,7 +301,7 @@ pub enum ProcessorModel {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -320,7 +317,7 @@ pub struct RegisterValue {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -341,7 +338,7 @@ pub enum ProcessorRegister {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -358,7 +355,7 @@ pub struct MProfileState {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -377,7 +374,7 @@ pub struct RProfileState {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -394,7 +391,7 @@ pub struct TcmState {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -415,7 +412,7 @@ pub struct MemoryRegion {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -431,7 +428,7 @@ pub enum RegionSize {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -452,7 +449,7 @@ pub enum MemoryKind {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -467,10 +464,10 @@ pub struct SocBlock {
     pub kind: SocBlockKind,
     /// Processor core directly served by this block, for per-core interrupt controllers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "string | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "string | null"))]
     pub processor_core_id: Option<String>,
     /// Clock domain supplying this block, when specified.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub clock_id: Option<String>,
 }
 
@@ -479,7 +476,7 @@ pub struct SocBlock {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -522,7 +519,7 @@ pub enum SocBlockKind {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -534,7 +531,7 @@ pub struct InterruptRoute {
     /// SoC block producing the interrupt.
     pub source_block: String,
     /// Named output or channel within the source block, when known.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub output_id: Option<String>,
 }
 
@@ -544,7 +541,7 @@ pub struct InterruptRoute {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -552,10 +549,10 @@ pub struct ClockDomain {
     /// Clock-domain identity.
     pub id: String,
     /// Clock frequency in hertz, when known.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub frequency_hz: Option<u64>,
     /// Parent clock-domain identity, when present.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub parent_id: Option<String>,
 }
 
@@ -565,7 +562,7 @@ pub struct ClockDomain {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -590,7 +587,7 @@ pub struct AddressMapping {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -613,7 +610,7 @@ pub struct DmaMapping {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -632,7 +629,7 @@ pub struct AddressDecoder {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -649,7 +646,7 @@ pub struct DecoderSelection {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -666,7 +663,7 @@ pub struct DecoderChoice {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -679,7 +676,7 @@ pub struct PeripheralMapping {
     pub address: u64,
     /// Offset in the selected block for a subwindow, when nonzero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "number | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "number | null"))]
     pub offset: Option<u64>,
 }
 
@@ -689,13 +686,13 @@ pub struct PeripheralMapping {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SocReset {
     /// Optional secondary-core release register.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub release: Option<CoreRelease>,
     /// Coprocessor register writes applied during reset.
     pub coprocessor_writes: Vec<CoprocessorWrite>,
@@ -707,7 +704,7 @@ pub struct SocReset {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -728,7 +725,7 @@ pub struct CoreRelease {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -759,17 +756,14 @@ pub struct CoprocessorWrite {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Body {
     /// Stable schema URI for this body record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(
-        feature = "typescript",
-        tsify(type = "\"https://fujimod.com/schemas/body.schema.json\"")
-    )]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/body.schema.json\""))]
     pub schema_uri: String,
     /// Body record version.
     pub schema: u32,
@@ -781,31 +775,31 @@ pub struct Body {
     pub dram_bytes: u64,
     /// Optional body-specific physical attachments and signal routing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "BodyHardware | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "BodyHardware | null"))]
     pub hardware: Option<crate::assembly::BodyHardware>,
     /// Body-mapped RAM extents when the board exposes a non-default memory map.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ram_regions: Vec<BodyRamRegion>,
     /// Optional installed NAND geometry.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub nand: Option<NandGeometry>,
     /// Optional sensor assembly and its physical characteristics.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub sensor: Option<SensorAssembly>,
     /// Optional lens assembly and its physical characteristics.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub lens: Option<LensAssembly>,
     /// Optional display assembly and its physical characteristics.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub display: Option<DisplayAssembly>,
     /// Optional MCU endpoint and its body-specific serial wiring.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub microcontroller: Option<MicrocontrollerAssembly>,
     /// Optional power-controller endpoint and its body-specific wiring.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub power_control: Option<PowerControlAssembly>,
     /// Optional removable-card slot and its body-specific contacts.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub card_slot: Option<CardSlotAssembly>,
     /// Physical control-bus devices installed in this body.
     pub control_bus_chips: Vec<ControlBusChip>,
@@ -954,7 +948,7 @@ impl Body {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -975,7 +969,7 @@ pub struct BodyRamRegion {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -996,7 +990,7 @@ pub struct NandGeometry {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1006,7 +1000,7 @@ pub struct SensorAssembly {
     /// Body connection identity carrying sensor control and data signals.
     pub connection_id: String,
     /// Body-specific serial control-bus endpoint, when documented.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub control_bus: Option<ControlBusAttachment>,
 }
 
@@ -1016,7 +1010,7 @@ pub struct SensorAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1038,7 +1032,7 @@ pub struct ControlBusAttachment {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1050,7 +1044,7 @@ pub struct SensorRaster {
     /// Active image area as `[x, y, width, height]`.
     pub image_area: [u32; 4],
     /// Sensor clock frequency in hertz when known.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub pixel_clock_hz: Option<u64>,
 }
 
@@ -1061,7 +1055,7 @@ pub struct SensorRaster {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1090,7 +1084,7 @@ pub struct SensorRadiometry {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1111,7 +1105,7 @@ pub struct SensorRollingReference {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1131,7 +1125,7 @@ pub struct SensorProjection {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1148,7 +1142,7 @@ pub enum SensorIllumination {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1165,7 +1159,7 @@ pub struct SensorControlInterface {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1179,15 +1173,15 @@ pub struct LensAssembly {
     /// Body-specific pulse-controller wiring for this lens.
     pub pulse: PulseInterface,
     /// Documented aperture positions and their optical output.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub iris: Option<IrisOptics>,
     /// Documented focus-axis response.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub focus: Option<FocusAxis>,
     /// Body connections wired to motor home switches.
     pub home_connections: Vec<LensHomeConnection>,
     /// Body connection wired to the optional rotary encoder.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub encoder_connection_id: Option<String>,
 }
 
@@ -1197,7 +1191,7 @@ pub struct LensAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1214,7 +1208,7 @@ pub struct LensHomeConnection {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1233,7 +1227,7 @@ pub struct IrisOptics {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1249,7 +1243,7 @@ pub struct AperturePosition {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1266,7 +1260,7 @@ pub enum OpticalQuantity {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1285,7 +1279,7 @@ pub struct FocusAxis {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1295,7 +1289,7 @@ pub struct DisplayAssembly {
     /// Body connection identity carrying display data.
     pub connection_id: String,
     /// Body-specific serial wiring for this panel.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub route: Option<SerialRoute>,
 }
 
@@ -1305,7 +1299,7 @@ pub struct DisplayAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1330,7 +1324,7 @@ pub struct MicrocontrollerAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1353,7 +1347,7 @@ pub struct PowerControlAssembly {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1368,7 +1362,7 @@ pub struct CardSlotAssembly {
     pub write_protect_connection_id: String,
     /// SoC removable-card controller block, when implemented.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "string | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "string | null"))]
     pub controller_id: Option<String>,
 }
 
@@ -1377,7 +1371,7 @@ pub struct CardSlotAssembly {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1396,7 +1390,7 @@ pub enum DisplayOrientation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1414,7 +1408,7 @@ pub struct BodyConnection {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1453,7 +1447,7 @@ pub enum ConnectionKind {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1467,7 +1461,7 @@ pub enum ConnectionSignal {
     /// An ADC channel and threshold.
     Adc {
         channel: u8,
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         threshold: Option<u16>,
     },
     /// A named SoC block signal.
@@ -1496,7 +1490,7 @@ pub enum ConnectionSignal {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1517,7 +1511,7 @@ pub enum BlockSignal {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1535,7 +1529,7 @@ pub struct BodyWiring {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1568,7 +1562,7 @@ pub enum WireSignal {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1591,17 +1585,14 @@ pub struct ControlBusChip {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Part {
     /// Stable schema URI for this part record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(
-        feature = "typescript",
-        tsify(type = "\"https://fujimod.com/schemas/part.schema.json\"")
-    )]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/part.schema.json\""))]
     pub schema_uri: String,
     /// Part record version.
     pub schema: u32,
@@ -1611,7 +1602,7 @@ pub struct Part {
     pub model: PartModel,
     /// Declared board attachment for this reusable part assembly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "PartAttachment | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "PartAttachment | null"))]
     pub attachment: Option<crate::parts::PartAttachment>,
 }
 
@@ -1719,7 +1710,7 @@ impl Part {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1746,10 +1737,10 @@ pub enum PartModel {
         /// Lens motors and their travel/response mechanics.
         motors: Vec<LensMotor>,
         /// Optional physical encoder input.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         encoder: Option<PartEncoder>,
         /// Optional zoom mechanism.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         zoom: Option<ZoomMechanism>,
     },
     /// A multi-pin contact actuator.
@@ -1773,7 +1764,7 @@ pub enum PartModel {
         /// Register window containing the clock counter.
         clock_registers: RegisterRange,
         /// Status register exposed by the endpoint, when present.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         status_register: Option<u32>,
         /// Other explicitly initialized register addresses accepted by a run.
         initial_registers: Vec<u32>,
@@ -1808,19 +1799,19 @@ pub enum PartModel {
         reference_white: Vec<u32>,
         /// Radiometric, timing and projection facts; absent for a sensor without a declared exposure model.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(feature = "typescript", tsify(type = "SensorRadiometry | null"))]
+        #[cfg_attr(not(target_os = "emscripten"), tsify(type = "SensorRadiometry | null"))]
         radiometry: Option<SensorRadiometry>,
     },
     /// A display panel endpoint.
     DisplayPanel {
         /// Display raster width in pixels.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         width: Option<u32>,
         /// Display raster height in pixels.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         height: Option<u32>,
         /// Display orientation relative to the body.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         orientation: Option<DisplayOrientation>,
         /// Display endpoint serial protocol.
         serial: SerialOutputKind,
@@ -1839,7 +1830,7 @@ pub enum PartModel {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1896,7 +1887,7 @@ pub enum LensClockMode {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1920,7 +1911,7 @@ pub struct PulseInterface {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1934,7 +1925,7 @@ pub struct LensMotor {
     /// Settling time after motion stops.
     pub settle_ticks: u64,
     /// Optional home-switch pin and threshold.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub home: Option<HomeSwitch>,
 }
 
@@ -1944,7 +1935,7 @@ pub struct LensMotor {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -1986,7 +1977,7 @@ pub struct LensMotorCounter {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2007,7 +1998,7 @@ pub struct PartEncoder {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2035,7 +2026,7 @@ pub struct ZoomMechanism {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2052,7 +2043,7 @@ pub struct ContactPosition {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2066,7 +2057,7 @@ pub struct SerialRoute {
     /// Body connection driving chip select.
     pub select_connection_id: String,
     /// Serial clock frequency in hertz, when known.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub clock_hz: Option<u64>,
     /// Word width in bits.
     pub word_bits: u8,
@@ -2077,7 +2068,7 @@ pub struct SerialRoute {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2098,7 +2089,7 @@ pub enum SerialOutputKind {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2117,7 +2108,7 @@ pub struct RegisterRange {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2134,7 +2125,7 @@ pub struct StatusRegister {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2161,17 +2152,14 @@ impl ContentIdentity {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct Firmware {
     /// Stable schema URI for this firmware record.
     #[serde(rename = "$schema")]
-    #[cfg_attr(
-        feature = "typescript",
-        tsify(type = "\"https://fujimod.com/schemas/firmware.schema.json\"")
-    )]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "\"https://fujimod.com/schemas/firmware.schema.json\""))]
     pub schema_uri: String,
     /// Firmware record version.
     pub schema: u32,
@@ -2182,20 +2170,20 @@ pub struct Firmware {
     /// Human-readable firmware version string.
     pub version: String,
     /// Firmware update content, when distributed for this version.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub update: Option<ContentIdentity>,
     /// Boot ROM content and its physical load address, when applicable.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub boot_rom: Option<BootRomIdentity>,
     /// Firmware installation and loader facts consumed by the emulator.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub installation: Option<FirmwareInstallation>,
     /// Generated observation facts consumed by supported runs.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub generated_facts: Option<FirmwareGeneratedFacts>,
     /// Located boot, device and persistent-storage layout facts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(type = "FirmwareLayouts | null"))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "FirmwareLayouts | null"))]
     pub layouts: Option<crate::firmware::FirmwareLayouts>,
 }
 
@@ -2277,7 +2265,7 @@ impl Firmware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2294,7 +2282,7 @@ pub struct BootRomIdentity {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2304,7 +2292,7 @@ pub struct FirmwareInstallation {
     /// Named executable entry addresses consumed by firmware tooling.
     pub entry_labels: BTreeMap<String, String>,
     /// Loader validation entry and the mapped sections required by the loader.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub loader_validation: Option<FirmwareLoaderValidation>,
     /// Named sections in the installed firmware image.
     pub image_sections: Vec<FirmwareImageSection>,
@@ -2316,7 +2304,7 @@ pub struct FirmwareInstallation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2333,7 +2321,7 @@ pub struct FirmwareLoaderValidation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2347,7 +2335,7 @@ pub struct FirmwareImageSection {
     /// SHA-256 of the mapped section.
     pub sha256: String,
     /// Native flash offset, when identified.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub native_flash_offset: Option<u64>,
 }
 
@@ -2357,33 +2345,33 @@ pub struct FirmwareImageSection {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct FirmwareGeneratedFacts {
     /// Layouts and declarations used by remote camera control.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub remote: Option<fujimod_catalog_remote::FirmwareFacts>,
     /// Firmware configuration-block location.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub cfgdata_location: Option<fujimod_catalog_controls::facts::ConfigurationLocation>,
     /// Additional playback UI mode values.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub additional_ui_modes: Option<fujimod_catalog_controls::facts::AdditionalUiModes>,
     /// Firmware menu-cursor structure base address.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub menu_cursor: Option<u64>,
     /// Logical keys used by menu controls.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub menu_keys: Option<fujimod_catalog_controls::facts::MenuKeys>,
     /// Uncached alias used to access RAM addresses.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub uncached_alias: Option<u64>,
     /// Hash-identified firmware address ranges used for identity checks.
     pub identity_checks: Vec<fujimod_catalog_controls::facts::AddressIdentity>,
     /// Addresses and values used to observe firmware readiness.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub observation: Option<FirmwareObservation>,
 }
 
@@ -2393,7 +2381,7 @@ pub struct FirmwareGeneratedFacts {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -2407,19 +2395,19 @@ pub struct ResolvedSelection {
     /// Resolved reusable parts referenced by the body.
     pub parts: Vec<Part>,
     /// The body's hand-authored physical controls, when documented.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub physical_controls: Option<fujimod_catalog_controls::PhysicalControls>,
     /// The firmware's generated located inputs, when generated.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub control_ids: Option<fujimod_catalog_controls::FirmwareControlIds>,
     /// Stock first-start menus, when located for this firmware.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub first_start: Option<crate::first_start::FirstStartMenu>,
     /// Stock diagnostic bulk reads, when located for this firmware.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
     /// Settings-bank layout, when located for this firmware.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub settings: Option<fujimod_catalog_settings::FirmwareSettings>,
 }
 
@@ -3223,7 +3211,7 @@ fn bundled_documents() -> impl Iterator<Item = (ReferenceKind, &'static str, &'s
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

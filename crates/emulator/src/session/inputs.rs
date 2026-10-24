@@ -9,10 +9,11 @@ use fujimod_emulator_devices::capability::{AnalogInputs, SerialStatus, TouchPane
 /// Host-visible controls and their current positions.
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct ControlState {
     pub inputs: Vec<ControlInput>,
-    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, string>"))]
+    #[tsify(type = "Record<string, string>")]
     pub positions: BTreeMap<String, String>,
     pub input_queue: Option<QueueState>,
 }

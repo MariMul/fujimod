@@ -599,9 +599,7 @@ impl UsbIo {
 pub(crate) enum Backend {
     Usb(UsbIo),
     Proxy(crate::proxy::ProxyIo),
-    #[cfg(feature = "testing")]
     Replay(crate::testing::Script),
-    #[cfg(feature = "testing")]
     Model(crate::testing::Model),
 }
 impl Io for Backend {
@@ -609,7 +607,6 @@ impl Io for Backend {
         match self {
             Self::Proxy(io) => io.release().await,
             Self::Usb(io) => io.release().await,
-            #[cfg(feature = "testing")]
             _ => Ok(()),
         }
     }
@@ -617,9 +614,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.endpoint(stage),
             Self::Proxy(io) => io.endpoint(stage),
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.endpoint(stage),
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.endpoint(stage),
         }
     }
@@ -627,9 +622,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.control(kind, envelope).await,
             Self::Proxy(io) => io.control(kind, envelope).await,
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.control(kind, envelope).await,
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.control(kind, envelope).await,
         }
     }
@@ -637,9 +630,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.write(bytes).await,
             Self::Proxy(io) => io.write(bytes).await,
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.write(bytes).await,
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.write(bytes).await,
         }
     }
@@ -647,9 +638,7 @@ impl Io for Backend {
         match self {
             Self::Usb(io) => io.read(maximum).await,
             Self::Proxy(io) => io.read(maximum).await,
-            #[cfg(feature = "testing")]
             Self::Replay(io) => io.read(maximum).await,
-            #[cfg(feature = "testing")]
             Self::Model(io) => io.read(maximum).await,
         }
     }

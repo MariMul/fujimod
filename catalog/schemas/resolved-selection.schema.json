@@ -508,6 +508,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Picture-plane packing, when specified."
             },
             "video_layout": {
@@ -519,6 +520,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Video-plane packing, when specified."
             }
           },
@@ -620,6 +622,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional removable-card slot and its body-specific contacts."
         },
         "connections": {
@@ -645,6 +648,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional display assembly and its physical characteristics."
         },
         "dram_bytes": {
@@ -677,6 +681,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional lens assembly and its physical characteristics."
         },
         "microcontroller": {
@@ -688,6 +693,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional MCU endpoint and its body-specific serial wiring."
         },
         "nand": {
@@ -699,6 +705,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional installed NAND geometry."
         },
         "parts": {
@@ -717,6 +724,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional power-controller endpoint and its body-specific wiring."
         },
         "ram_regions": {
@@ -741,6 +749,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional sensor assembly and its physical characteristics."
         },
         "soc_id": {
@@ -1459,6 +1468,7 @@
       "description": "A SoC clock domain.",
       "properties": {
         "frequency_hz": {
+          "default": null,
           "description": "Clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
@@ -1472,6 +1482,7 @@
           "type": "string"
         },
         "parent_id": {
+          "default": null,
           "description": "Parent clock-domain identity, when present.",
           "type": [
             "string",
@@ -1764,6 +1775,7 @@
               "type": "string"
             },
             "threshold": {
+              "default": null,
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
@@ -4257,6 +4269,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Center press input, when present."
             }
           },
@@ -4294,6 +4307,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Press input, when the dial is pushable."
             }
           },
@@ -4331,6 +4345,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Press input, when the ring is pushable."
             }
           },
@@ -5582,6 +5597,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Body-specific serial wiring for this panel."
         }
       },
@@ -5660,6 +5676,7 @@
           "description": "Analog input interpreted using located sample bands or calibration offsets.",
           "properties": {
             "callback": {
+              "default": null,
               "description": "Firmware callback evaluating the input, when present.",
               "format": "uint64",
               "minimum": 0,
@@ -5673,6 +5690,7 @@
               "type": "string"
             },
             "expected_result": {
+              "default": null,
               "description": "Callback result interpreted as active, when present.",
               "format": "uint32",
               "minimum": 0,
@@ -5940,6 +5958,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Boot ROM content and its physical load address, when applicable."
         },
         "generated_facts": {
@@ -5951,6 +5970,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Generated observation facts consumed by supported runs."
         },
         "id": {
@@ -5966,6 +5986,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Firmware installation and loader facts consumed by the emulator."
         },
         "layouts": {
@@ -5994,6 +6015,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Firmware update content, when distributed for this version."
         },
         "version": {
@@ -6397,6 +6419,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Physical-key to UI-event table of a processor whose scanner rows hold\nphysical keys; absent when the rows hold UI events directly."
         },
         "firmware_id": {
@@ -6434,6 +6457,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Native names and their source table identity, when the table was located."
         },
         "scanner": {
@@ -6940,6 +6964,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Additional playback UI mode values."
         },
         "cfgdata_location": {
@@ -6951,6 +6976,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Firmware configuration-block location."
         },
         "identity_checks": {
@@ -6961,6 +6987,7 @@
           "type": "array"
         },
         "menu_cursor": {
+          "default": null,
           "description": "Firmware menu-cursor structure base address.",
           "format": "uint64",
           "minimum": 0,
@@ -6978,6 +7005,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Logical keys used by menu controls."
         },
         "observation": {
@@ -6989,6 +7017,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Addresses and values used to observe firmware readiness."
         },
         "remote": {
@@ -7000,9 +7029,11 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Layouts and declarations used by remote camera control."
         },
         "uncached_alias": {
+          "default": null,
           "description": "Uncached alias used to access RAM addresses.",
           "format": "uint64",
           "minimum": 0,
@@ -7095,6 +7126,7 @@
           "type": "string"
         },
         "native_flash_offset": {
+          "default": null,
           "description": "Native flash offset, when identified.",
           "format": "uint64",
           "minimum": 0,
@@ -7155,6 +7187,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Loader validation entry and the mapped sections required by the loader."
         }
       },
@@ -12501,6 +12534,7 @@
       "description": "Input routines located in one firmware; a routine the locators did not find is absent.",
       "properties": {
         "calibration": {
+          "default": null,
           "description": "Routine reading 16-bit control calibration values.",
           "format": "uint64",
           "minimum": 0,
@@ -12518,6 +12552,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Routine reading stable key scanner state."
         }
       },
@@ -12669,6 +12704,7 @@
           "type": "integer"
         },
         "output_id": {
+          "default": null,
           "description": "Named output or channel within the source block, when known.",
           "type": [
             "string",
@@ -12729,6 +12765,7 @@
           "type": "string"
         },
         "encoder_connection_id": {
+          "default": null,
           "description": "Body connection wired to the optional rotary encoder.",
           "type": [
             "string",
@@ -12744,6 +12781,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Documented focus-axis response."
         },
         "home_connections": {
@@ -12762,6 +12800,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Documented aperture positions and their optical output."
         },
         "part_id": {
@@ -12913,6 +12952,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional home-switch pin and threshold."
         },
         "initial_position": {
@@ -13024,6 +13064,7 @@
       "description": "One located input's identity, ownership, and checked electrical predicates.",
       "properties": {
         "debug_key": {
+          "default": null,
           "description": "Exact debug command token for this input, absent for native-only inputs.",
           "type": [
             "string",
@@ -13039,6 +13080,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Located electrical interpretation, absent when the hardware is not modeled."
         },
         "event": {
@@ -13060,6 +13102,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Scanner row and its source witness, absent for inputs outside that table."
         },
         "target": {
@@ -14280,6 +14323,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Optional physical encoder input."
             },
             "kind": {
@@ -14333,6 +14377,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Optional zoom mechanism."
             }
           },
@@ -14421,6 +14466,7 @@
               "description": "Register address range used by the endpoint."
             },
             "status_register": {
+              "default": null,
               "description": "Status register exposed by the endpoint, when present.",
               "format": "uint32",
               "minimum": 0,
@@ -14580,6 +14626,7 @@
           "description": "A display panel endpoint.",
           "properties": {
             "height": {
+              "default": null,
               "description": "Display raster height in pixels.",
               "format": "uint32",
               "minimum": 0,
@@ -14601,6 +14648,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Display orientation relative to the body."
             },
             "serial": {
@@ -14614,6 +14662,7 @@
               "type": "integer"
             },
             "width": {
+              "default": null,
               "description": "Display raster width in pixels.",
               "format": "uint32",
               "minimum": 0,
@@ -14909,6 +14958,7 @@
           "description": "Serial NOR flash geometry and device identification, when declared.",
           "properties": {
             "erase_bytes": {
+              "default": null,
               "description": "Erase-unit capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
@@ -14918,6 +14968,7 @@
               ]
             },
             "jedec_id": {
+              "default": null,
               "description": "JEDEC identification value, when supplied by the part definition.",
               "format": "uint32",
               "minimum": 0,
@@ -14931,6 +14982,7 @@
               "type": "string"
             },
             "page_bytes": {
+              "default": null,
               "description": "Program-page capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
@@ -15199,6 +15251,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Actions defined by this control's mechanism; absent for mechanical controls."
         },
         "connection_ids": {
@@ -15209,6 +15262,7 @@
           "type": "array"
         },
         "default_function": {
+          "default": null,
           "description": "Documented initial function, when available.",
           "type": [
             "string",
@@ -15216,6 +15270,7 @@
           ]
         },
         "face": {
+          "default": null,
           "description": "Text printed on the control, when present.",
           "type": [
             "string",
@@ -15223,6 +15278,7 @@
           ]
         },
         "icon": {
+          "default": null,
           "description": "Meaning of a printed icon, when present.",
           "type": [
             "string",
@@ -15234,6 +15290,7 @@
           "description": "Surface on which the control is located."
         },
         "manual_page": {
+          "default": null,
           "description": "Manual page identifying the control, when available.",
           "format": "uint32",
           "minimum": 0,
@@ -15270,6 +15327,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Physical role required by a declared cross-body operation."
         }
       },
@@ -15444,6 +15502,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional M-profile hardware state."
         },
         "registers": {
@@ -15454,6 +15513,7 @@
           "type": "array"
         },
         "released": {
+          "default": null,
           "description": "Whether this core leaves reset when the SoC starts, when known.",
           "type": [
             "boolean",
@@ -15469,6 +15529,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional R-profile hardware state."
         }
       },
@@ -15983,6 +16044,7 @@
           "type": "string"
         },
         "tab": {
+          "default": null,
           "description": "Optional tab key.",
           "format": "uint32",
           "minimum": 0,
@@ -16337,6 +16399,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Body-specific serial control-bus endpoint, when documented."
         },
         "part_id": {
@@ -16519,6 +16582,7 @@
           "type": "array"
         },
         "pixel_clock_hz": {
+          "default": null,
           "description": "Sensor clock frequency in hertz when known.",
           "format": "uint64",
           "minimum": 0,
@@ -16596,6 +16660,7 @@
           "type": "string"
         },
         "select_connection_id": {
+          "default": null,
           "description": "Connection selecting the endpoint, when declared.",
           "type": [
             "string",
@@ -16647,6 +16712,7 @@
           "type": "integer"
         },
         "clock_hz": {
+          "default": null,
           "description": "Serial clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
@@ -16984,6 +17050,7 @@
           "type": "integer"
         },
         "clock_id": {
+          "default": null,
           "description": "Clock domain supplying this block, when specified.",
           "type": [
             "string",
@@ -17113,6 +17180,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Application-processor identification and cache topology, when declared."
         },
         "blocks": {
@@ -17131,6 +17199,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Companion-processor clock and mailbox connections, when present."
         },
         "interrupt_controller": {
@@ -17142,6 +17211,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Hardware interrupt-controller interfaces."
         },
         "interrupt_inputs": {
@@ -17341,6 +17411,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional secondary-core release register."
         }
       },
@@ -17694,6 +17765,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Stock diagnostic bulk reads, when located for this firmware."
     },
     "control_ids": {
@@ -17705,6 +17777,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "The firmware's generated located inputs, when generated."
     },
     "firmware": {
@@ -17720,6 +17793,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Stock first-start menus, when located for this firmware."
     },
     "parts": {
@@ -17738,6 +17812,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "The body's hand-authored physical controls, when documented."
     },
     "settings": {
@@ -17749,6 +17824,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Settings-bank layout, when located for this firmware."
     },
     "soc": {

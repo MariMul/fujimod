@@ -17,7 +17,8 @@ const WORD: &[usize] = &[
 const DMA: &[usize] = &[4, 12, 16, 0x20, 0x24, 0x28, 0x44];
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct EndpointOptions {
     pub transfer_ticks: u64,
     pub packet_bytes: usize,
@@ -27,7 +28,8 @@ pub struct EndpointOptions {
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct Wiring {
     pub irq: InterruptLine,
     pub dma_irq: InterruptLine,
@@ -35,7 +37,8 @@ pub struct Wiring {
 }
 /// Bus progress observed by a host, without DMA payloads.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct BusStatus {
     pub options: EndpointOptions,
     pub wiring: Wiring,

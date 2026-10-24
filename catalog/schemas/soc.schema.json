@@ -250,6 +250,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Picture-plane packing, when specified."
             },
             "video_layout": {
@@ -261,6 +262,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Video-plane packing, when specified."
             }
           },
@@ -355,6 +357,7 @@
       "description": "A SoC clock domain.",
       "properties": {
         "frequency_hz": {
+          "default": null,
           "description": "Clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
@@ -368,6 +371,7 @@
           "type": "string"
         },
         "parent_id": {
+          "default": null,
           "description": "Parent clock-domain identity, when present.",
           "type": [
             "string",
@@ -2456,6 +2460,7 @@
           "type": "integer"
         },
         "output_id": {
+          "default": null,
           "description": "Named output or channel within the source block, when known.",
           "type": [
             "string",
@@ -2634,6 +2639,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional M-profile hardware state."
         },
         "registers": {
@@ -2644,6 +2650,7 @@
           "type": "array"
         },
         "released": {
+          "default": null,
           "description": "Whether this core leaves reset when the SoC starts, when known.",
           "type": [
             "boolean",
@@ -2659,6 +2666,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional R-profile hardware state."
         }
       },
@@ -2816,6 +2824,7 @@
           "type": "integer"
         },
         "clock_id": {
+          "default": null,
           "description": "Clock domain supplying this block, when specified.",
           "type": [
             "string",
@@ -2945,6 +2954,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Application-processor identification and cache topology, when declared."
         },
         "blocks": {
@@ -2963,6 +2973,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Companion-processor clock and mailbox connections, when present."
         },
         "interrupt_controller": {
@@ -2974,6 +2985,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Hardware interrupt-controller interfaces."
         },
         "interrupt_inputs": {
@@ -3173,6 +3185,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional secondary-core release register."
         }
       },

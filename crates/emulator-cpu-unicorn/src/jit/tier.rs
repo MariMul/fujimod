@@ -11,7 +11,8 @@ use std::{
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct JitOptions {
     pub threshold: u32,
     pub batch_size: usize,
@@ -62,7 +63,8 @@ pub trait Host {
 }
 #[derive(Clone, Default, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct Stats {
     pub offered: u64,
     pub compiled: u64,
@@ -78,15 +80,16 @@ pub struct Stats {
     pub prepare_milliseconds: f64,
     pub capacity_refusals: u64,
     pub last_error: Option<String>,
-    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, number>"))]
+    #[tsify(type = "Record<string, number>")]
     pub unsupported_operations: BTreeMap<String, u64>,
 }
 /// Browser tier counters published to the host.
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct Statistics {
-    #[cfg_attr(feature = "typescript", tsify(type = "true"))]
+    #[tsify(type = "true")]
     pub enabled: bool,
     #[serde(flatten)]
     pub stats: Stats,

@@ -27,5 +27,4 @@ name = "service_capture_plan"
 required-features = ["service-capture"]
 
 [dev-dependencies]
-fujimod-usb = { workspace = true, features = ["testing"] }
 futures-lite.workspace = true

@@ -12,7 +12,6 @@ test = false
 doctest = false
 
 [features]
-testing = ["fujimod-usb/testing"]
 
 [dependencies]
 fujimod-python-service = { path = "../service" }

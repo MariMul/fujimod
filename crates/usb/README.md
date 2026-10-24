@@ -98,12 +98,12 @@ The upstream MIT notice is retained in [LICENSE.fffw](LICENSE.fffw).
 
 Run `cargo test --workspace --all-features` from the repository root.
 
-The opt-in `testing` feature supplies strict exchange scripts through
-the same session implementation. `testing::Peer` supplies synchronous virtual
-endpoint completions for firmware emulators using this same Rust core; it exists
-only in testing builds. These paths do not enumerate or open USB devices.
-Python's test build uses it to verify streaming and ownership across the language
-boundary; regular builds contain only the nusb backend.
+The `testing` module supplies strict exchange scripts through the same session
+implementation. `testing::Peer` supplies synchronous virtual endpoint
+completions for firmware emulators using this same Rust core. These paths do
+not enumerate or open USB devices; sessions reach them only through
+`testing::Script` and `testing::Peer`. Python's tests use them to verify
+streaming and ownership across the language boundary.
 
 App80 has a separate [`app80`](src/app80.rs) wire codec: `CommandCode`, bounded
 `Request` and exact `Reply`. Identifiers and argument meanings come from the
@@ -163,7 +163,7 @@ Install the Wasm standard library and a wasm-bindgen test runner matching the
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.129 --locked --root target/tooling
 PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb \
-  --target wasm32-unknown-unknown --features testing --lib --test wasm_core
+  --target wasm32-unknown-unknown --lib --test wasm_core
 ```
 
 Run from the workspace root with Node on `PATH`, or use `mise run rust-wasm-test`

@@ -22,7 +22,8 @@ pub struct Pose {
 /// One host-visible control in the session's input catalog.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct ControlInput {
     pub id: String,
     pub label: String,
@@ -30,48 +31,51 @@ pub struct ControlInput {
     pub supported: bool,
     /// Why an unsupported control is unavailable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub unavailable: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub positions: Option<Vec<ControlChoice>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub initial: Option<String>,
     /// Rotary controls accept relative steps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub relative: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub width: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub height: Option<u16>,
     /// Shutter stages after the released pose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[tsify(optional)]
     pub stages: Option<Vec<ControlChoice>>,
 }
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct ControlChoice {
     pub id: String,
     pub label: String,
 }
 /// Host input queue progress.
 #[derive(Clone, Debug, serde::Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct QueueState {
     pub pending: usize,
     pub active: Option<ActiveTransition>,
-    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, string>"))]
+    #[tsify(type = "Record<string, string>")]
     pub requested: BTreeMap<String, String>,
     pub completed: u64,
 }
 #[derive(Clone, Debug, serde::Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct ActiveTransition {
     pub id: String,
     pub position: String,

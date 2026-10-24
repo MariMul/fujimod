@@ -50,7 +50,8 @@ pub trait CoreInterrupts {
 
 /// A physical level output connected by the checked board graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub enum InterruptLine {
     Shared(u32),
     Core { core: usize, line: u32 },

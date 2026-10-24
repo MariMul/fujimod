@@ -190,6 +190,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Optional home-switch pin and threshold."
         },
         "initial_position": {
@@ -816,6 +817,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Optional physical encoder input."
             },
             "kind": {
@@ -869,6 +871,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Optional zoom mechanism."
             }
           },
@@ -957,6 +960,7 @@
               "description": "Register address range used by the endpoint."
             },
             "status_register": {
+              "default": null,
               "description": "Status register exposed by the endpoint, when present.",
               "format": "uint32",
               "minimum": 0,
@@ -1116,6 +1120,7 @@
           "description": "A display panel endpoint.",
           "properties": {
             "height": {
+              "default": null,
               "description": "Display raster height in pixels.",
               "format": "uint32",
               "minimum": 0,
@@ -1137,6 +1142,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Display orientation relative to the body."
             },
             "serial": {
@@ -1150,6 +1156,7 @@
               "type": "integer"
             },
             "width": {
+              "default": null,
               "description": "Display raster width in pixels.",
               "format": "uint32",
               "minimum": 0,
@@ -1410,6 +1417,7 @@
           "description": "Serial NOR flash geometry and device identification, when declared.",
           "properties": {
             "erase_bytes": {
+              "default": null,
               "description": "Erase-unit capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
@@ -1419,6 +1427,7 @@
               ]
             },
             "jedec_id": {
+              "default": null,
               "description": "JEDEC identification value, when supplied by the part definition.",
               "format": "uint32",
               "minimum": 0,
@@ -1432,6 +1441,7 @@
               "type": "string"
             },
             "page_bytes": {
+              "default": null,
               "description": "Program-page capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
@@ -1701,6 +1711,7 @@
           "type": "array"
         },
         "pixel_clock_hz": {
+          "default": null,
           "description": "Sensor clock frequency in hertz when known.",
           "format": "uint64",
           "minimum": 0,

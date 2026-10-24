@@ -35,7 +35,6 @@ fn nz(n: u32) -> PyResult<NonZeroU32> {
     NonZeroU32::new(n).ok_or_else(|| PyValueError::new_err("length/limit must be nonzero"))
 }
 fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
-    #[cfg(feature = "testing")]
     let error = match error {
         usb::Error::TestPeer(source) => match source.downcast::<PyErr>() {
             Ok(error) => return *error,
@@ -529,7 +528,6 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     modules.set_item("fujimod.usb.research", &research)?;
     modules.set_item("fujimod.usb.tracing", &tracing)?;
     modules.set_item("fujimod.usb.app80", &app80)?;
-    #[cfg(feature = "testing")]
     {
         let testing = testing::module(py)?;
         usb.add_submodule(&testing)?;
@@ -545,5 +543,4 @@ mod firmware;
 mod research;
 mod tracing;
 
-#[cfg(feature = "testing")]
 mod testing;

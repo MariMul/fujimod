@@ -68,7 +68,6 @@ errno = { version = "0.3" }
 fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures-io = { version = "0.3" }
-futures-task = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
@@ -96,7 +95,6 @@ errno = { version = "0.3" }
 fastrand = { version = "2" }
 form_urlencoded = { version = "1" }
 futures-io = { version = "0.3" }
-futures-task = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }

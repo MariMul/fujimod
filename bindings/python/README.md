@@ -195,11 +195,11 @@ releases host resources without issuing C4 or cleanup. Its terminal state is
 `Abandoned`, and all further I/O is rejected. Abandoning cannot stop firmware
 execution. Close or cancel an owned range reader with `await reader.aclose()`.
 
-Python protocol/ownership tests use the `testing` feature, which
-`scripts/python_extension.py` builds in; then run `pytest bindings/python/tests`.
+Python protocol/ownership tests use `fujimod.usb.testing`; build the extension
+with `scripts/python_extension.py`, then run `pytest bindings/python/tests`.
 These tests replay scripted USB exchanges through the production Rust session,
-including streaming, ownership, protocol errors and disconnects. The `testing`
-module is excluded from ordinary builds. No test opens a camera. Tests also cover
+including streaming, ownership, protocol errors and disconnects. No test opens a
+camera. Tests also cover
 asyncio wakeups, cancellation during I/O, concurrent calls and async iterators.
 
 Use `async with usb.data.read_chunks(session, window, address, length)` for a streamed

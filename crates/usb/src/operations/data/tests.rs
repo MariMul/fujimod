@@ -38,7 +38,6 @@ fn windows_check_aperture_and_require_explicit_wrapping() {
     assert!(end.validate(range(u32::MAX, 1)).is_ok());
 }
 
-#[cfg(feature = "testing")]
 mod replay {
     use super::*;
     use crate::{
@@ -171,7 +170,6 @@ mod replay {
     }
 }
 
-#[cfg(feature = "testing")]
 #[test]
 fn canceling_final_upload_acknowledgment_fences_the_session() {
     use crate::{
@@ -218,7 +216,6 @@ fn canceling_final_upload_acknowledgment_fences_the_session() {
     assert_eq!(script.remaining(), 0);
 }
 
-#[cfg(feature = "testing")]
 #[test]
 fn captured_long_upload_acknowledgment_checks_echo_reserved_and_status() {
     use crate::{

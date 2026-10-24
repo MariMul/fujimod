@@ -444,7 +444,6 @@ impl Camera {
     }
 }
 
-#[cfg(feature = "testing")]
 #[pymethods]
 impl Camera {
     #[staticmethod]

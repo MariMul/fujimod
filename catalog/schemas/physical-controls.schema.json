@@ -161,6 +161,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Center press input, when present."
             }
           },
@@ -198,6 +199,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Press input, when the dial is pushable."
             }
           },
@@ -235,6 +237,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Press input, when the ring is pushable."
             }
           },
@@ -541,6 +544,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Actions defined by this control's mechanism; absent for mechanical controls."
         },
         "connection_ids": {
@@ -551,6 +555,7 @@
           "type": "array"
         },
         "default_function": {
+          "default": null,
           "description": "Documented initial function, when available.",
           "type": [
             "string",
@@ -558,6 +563,7 @@
           ]
         },
         "face": {
+          "default": null,
           "description": "Text printed on the control, when present.",
           "type": [
             "string",
@@ -565,6 +571,7 @@
           ]
         },
         "icon": {
+          "default": null,
           "description": "Meaning of a printed icon, when present.",
           "type": [
             "string",
@@ -576,6 +583,7 @@
           "description": "Surface on which the control is located."
         },
         "manual_page": {
+          "default": null,
           "description": "Manual page identifying the control, when available.",
           "format": "uint32",
           "minimum": 0,
@@ -612,6 +620,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Physical role required by a declared cross-body operation."
         }
       },

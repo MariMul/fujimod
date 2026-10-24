@@ -45,7 +45,6 @@ impl Session {
             core: Core::open(crate::trace::Observed::new(io, trace), max_reply_bytes).await?,
         })
     }
-    #[cfg(feature = "testing")]
     pub(crate) async fn replay(
         script: crate::testing::Script,
         max_reply_bytes: u32,
@@ -59,7 +58,6 @@ impl Session {
             .await?,
         })
     }
-    #[cfg(feature = "testing")]
     pub(crate) async fn from_peer(
         peer: crate::testing::Model,
         max_reply_bytes: u32,

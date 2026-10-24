@@ -1,6 +1,14 @@
-//! Only present in instrumented builds; no production device injection path.
-use super::*;
-use session::Session;
+//! The JavaScript bindings with synthetic USB endpoints, built only for tests; the
+//! shipped package has no device injection path.
+#![cfg(target_arch = "wasm32")]
+#![forbid(unsafe_code)]
+use fujimod_javascript::{
+    error::{self, ErrorKind, error, fail},
+    session::Session,
+    types::{FirmwareLimits, TransferOptions},
+};
+use fujimod_usb as usb;
+use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct TestExchange {
@@ -99,8 +107,8 @@ impl TestScript {
     pub fn open(&self, limits: &FirmwareLimits, options: &TransferOptions) -> js_sys::Promise {
         let script = self.inner.clone();
         let limits = *limits;
-        let max = options.inner.max_reply_bytes.get();
-        let trace = options.trace.clone();
+        let max = options.max_reply_bytes();
+        let trace = options.trace();
         wasm_bindgen_futures::future_to_promise(async move {
             Ok(Session::wrap(
                 script.begin_session(max, trace).await.map_err(error)?,

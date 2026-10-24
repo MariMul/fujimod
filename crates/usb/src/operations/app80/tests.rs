@@ -9,7 +9,6 @@ fn definition_rejects_incomplete_capacity_or_address_before_io() {
     assert!(Mailbox::new(0, 0x80, nz(33)).is_ok());
 }
 
-#[cfg(feature = "testing")]
 mod replay {
     use super::*;
     use crate::{

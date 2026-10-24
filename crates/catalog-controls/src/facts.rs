@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -25,7 +25,7 @@ pub struct ManualReference {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -83,7 +83,7 @@ pub enum ControlInterface {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -101,7 +101,7 @@ pub struct DecodedTouch {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -119,7 +119,7 @@ pub struct DecodedTouchContact {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -141,7 +141,7 @@ pub enum GpioScanner {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -184,7 +184,7 @@ impl ScannerInputKind {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -206,7 +206,7 @@ pub struct ScannerRecordWitness {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -228,7 +228,7 @@ pub struct ScannerReader {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -250,7 +250,7 @@ pub struct ScannerTable {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -270,7 +270,7 @@ pub struct NativeKeyNames {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -288,7 +288,7 @@ pub struct NativeKeyName {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -306,7 +306,7 @@ pub struct AddressIdentity {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -328,7 +328,7 @@ pub enum ConfigurationLocation {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -344,7 +344,7 @@ pub struct AdditionalUiModes {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

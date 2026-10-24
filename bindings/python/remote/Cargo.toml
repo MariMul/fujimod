@@ -13,7 +13,6 @@ doctest = false
 
 [features]
 emulator = ["dep:fujimod-python-base", "dep:fujimod-emulator", "fujimod-remote/board"]
-testing = ["fujimod-remote/testing"]
 
 [dependencies]
 fujimod-python-usb-lease = { path = "../usb-lease" }

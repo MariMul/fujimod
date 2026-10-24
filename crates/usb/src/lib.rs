@@ -18,5 +18,4 @@ pub mod trace;
 
 pub use error::{Error, Result};
 
-#[cfg(feature = "testing")]
 pub mod testing;

@@ -11,7 +11,6 @@ description = "Asynchronous Fujifilm service and debug USB protocols"
 doctest = false
 
 [features]
-testing = []
 
 [dependencies]
 async-lock = "3"

@@ -21,7 +21,7 @@ pub const CONTROL_IDS_SCHEMA_URI: &str = "https://fujimod.com/schemas/control-id
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -37,7 +37,7 @@ pub struct DebugKey {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -57,10 +57,7 @@ pub struct PhysicalControls {
     pub analog_levels: Option<u16>,
     /// Confirmed inputs held while powering on.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    #[cfg_attr(
-        feature = "typescript",
-        tsify(type = "Partial<Record<BootMode, BootCombination>>")
-    )]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(type = "Partial<Record<BootMode, BootCombination>>"))]
     pub boot: BTreeMap<BootMode, BootCombination>,
     /// Controls keyed by their canonical physical identities.
     pub controls: BTreeMap<String, PhysicalControl>,
@@ -68,7 +65,7 @@ pub struct PhysicalControls {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
 #[serde(rename_all = "snake_case")]
 pub enum BootMode {
     Sd,
@@ -79,7 +76,7 @@ pub enum BootMode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -87,7 +84,7 @@ pub enum BootMode {
 pub struct BootCombination {
     /// Required USB cable state, when specified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(optional))]
     pub usb: Option<bool>,
     pub hold: Vec<BootHold>,
 }
@@ -95,7 +92,7 @@ pub struct BootCombination {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -105,7 +102,7 @@ pub struct BootHold {
     pub id: String,
     /// Shutter stage, when required.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(feature = "typescript", tsify(optional))]
+    #[cfg_attr(not(target_os = "emscripten"), tsify(optional))]
     pub stage: Option<String>,
 }
 
@@ -114,7 +111,7 @@ pub struct BootHold {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -124,13 +121,13 @@ pub struct PhysicalControl {
     /// Surface on which the control is located.
     pub location: ControlSurface,
     /// Manual page identifying the control, when available.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub manual_page: Option<u32>,
     /// Text printed on the control, when present.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub face: Option<String>,
     /// Meaning of a printed icon, when present.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub icon: Option<String>,
     /// Body connections carrying the control's electrical signals.
     pub connection_ids: Vec<String>,
@@ -141,15 +138,15 @@ pub struct PhysicalControl {
     /// Documented positions or stages, including controls with no located inputs.
     pub positions: Vec<ControlPosition>,
     /// Documented initial function, when available.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub default_function: Option<String>,
     /// Physical role required by a declared cross-body operation.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub role: Option<ControlRole>,
     /// Whether this control has no electronic action.
     pub mechanical: bool,
     /// Actions defined by this control's mechanism; absent for mechanical controls.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub behavior: Option<ControlBehavior>,
 }
 
@@ -158,7 +155,7 @@ pub struct PhysicalControl {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -172,7 +169,7 @@ pub enum ControlRole {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -198,7 +195,7 @@ pub enum ControlSurface {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -220,7 +217,7 @@ pub enum InputBinding {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -238,13 +235,10 @@ pub enum ControlBehavior {
     /// A directional pad with individually addressable direction identities.
     Pad {
         /// Inputs asserted by the four directions.
-        #[cfg_attr(
-            feature = "typescript",
-            tsify(type = "Partial<Record<PadDirection, InputBinding | null>>")
-        )]
+        #[cfg_attr(not(target_os = "emscripten"), tsify(type = "Partial<Record<PadDirection, InputBinding | null>>"))]
         directions: BTreeMap<PadDirection, Option<InputBinding>>,
         /// Center press input, when present.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         press: Option<InputBinding>,
     },
     /// A dial with positions or relative steps.
@@ -252,7 +246,7 @@ pub enum ControlBehavior {
         /// Documented positions or relative step directions.
         motion: ControlMotion,
         /// Press input, when the dial is pushable.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         press: Option<InputBinding>,
         /// Whether the mechanism rotates without an end stop.
         endless: Option<bool>,
@@ -262,7 +256,7 @@ pub enum ControlBehavior {
         /// Documented positions or relative step directions.
         motion: ControlMotion,
         /// Press input, when the ring is pushable.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         press: Option<InputBinding>,
         /// Whether the mechanism rotates without an end stop.
         endless: Option<bool>,
@@ -288,7 +282,7 @@ pub enum ControlBehavior {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -312,7 +306,7 @@ pub enum ControlMotion {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -330,7 +324,7 @@ pub struct BoundPosition {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -348,7 +342,7 @@ pub struct ControlPosition {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -380,7 +374,7 @@ impl PadDirection {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -399,11 +393,11 @@ pub struct FirmwareControlIds {
     /// Calibration and stable-state readers located in that firmware.
     pub input_readers: InputReaders,
     /// Native names and their source table identity, when the table was located.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub native_key_names: Option<NativeKeyNames>,
     /// Physical-key to UI-event table of a processor whose scanner rows hold
     /// physical keys; absent when the rows hold UI events directly.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub event_translation: Option<EventTranslation>,
     /// Exact debug command vocabulary, independent of the native names.
     pub debug_keys: Vec<DebugKey>,
@@ -421,7 +415,7 @@ pub struct FirmwareControlIds {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -441,7 +435,7 @@ pub struct EventTranslation {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -457,16 +451,16 @@ pub struct TranslatedKey {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct InputReaders {
     /// Routine reading 16-bit control calibration values.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub calibration: Option<u64>,
     /// Routine reading stable key scanner state.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub scanner: Option<ScannerReader>,
 }
 
@@ -475,7 +469,7 @@ pub struct InputReaders {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -485,15 +479,15 @@ pub struct LocatedInput {
     /// UI/native event identity established by the locator.
     pub event: u32,
     /// Exact debug command token for this input, absent for native-only inputs.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub debug_key: Option<String>,
     /// Physical control, connection detector, or unclaimed firmware input.
     pub target: InputTarget,
     /// Scanner row and its source witness, absent for inputs outside that table.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub scanner: Option<LocatedScannerRecord>,
     /// Located electrical interpretation, absent when the hardware is not modeled.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub electrical: Option<ElectricalInput>,
 }
 
@@ -502,7 +496,7 @@ pub struct LocatedInput {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -518,7 +512,7 @@ pub struct LocatedScannerRecord {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -530,10 +524,10 @@ pub enum ElectricalInput {
         /// Accepted analog intervals and the source of their bounds.
         intervals: Vec<AdcInterval>,
         /// Firmware callback evaluating the input, when present.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         callback: Option<u64>,
         /// Callback result interpreted as active, when present.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         expected_result: Option<u32>,
     },
     /// Digital contact interpreted by a located scanner predicate.
@@ -589,7 +583,7 @@ pub enum ElectricalInput {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -615,7 +609,7 @@ pub enum AdcInterval {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

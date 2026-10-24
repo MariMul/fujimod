@@ -10,7 +10,7 @@ pub const FIRST_START_SCHEMA_URI: &str =
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -45,7 +45,7 @@ pub struct FirstStartMenu {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

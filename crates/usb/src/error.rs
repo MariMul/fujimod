@@ -58,14 +58,12 @@ pub enum Error {
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]
     InvalidToken,
-    #[cfg(feature = "testing")]
     #[error("USB replay differs at exchange {position}")]
     ReplayMismatch {
         position: usize,
         expected: Option<Box<crate::testing::Exchange>>,
         actual: Box<crate::testing::Exchange>,
     },
-    #[cfg(feature = "testing")]
     #[error("virtual USB peer failed: {0}")]
     TestPeer(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("bulk read failed after {data_len} bytes: {source}")]

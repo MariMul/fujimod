@@ -23,7 +23,6 @@ emulator = [
     "dep:fujimod-python-xp4",
     "fujimod-python-remote/emulator",
 ]
-testing = ["fujimod-python-usb/testing", "fujimod-python-remote/testing"]
 
 [dependencies]
 fujimod-emulator-models.workspace = true

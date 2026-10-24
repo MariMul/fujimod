@@ -13,7 +13,7 @@ pub const BULK_SCHEMA_URI: &str = "https://fujimod.com/schemas/bulk.generated.sc
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -52,7 +52,7 @@ pub struct FirmwareBulk {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "mechanism", rename_all = "snake_case", deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
 pub enum BulkSource {
     /// A stock diagnostic query sets the source to `base`; offsets are
     /// relative to it. The callback slot, `callback_offset` bytes into the
@@ -101,7 +101,7 @@ pub enum BulkSource {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
 pub struct BulkRange {
     /// First address.
     pub address: u64,
@@ -123,7 +123,7 @@ impl BulkRange {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
 pub struct CodeCheck {
     /// Routine or region name.
     pub name: String,
@@ -140,7 +140,7 @@ pub struct CodeCheck {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
 pub struct CaptureScope {
     /// Scope name.
     pub name: String,
@@ -154,7 +154,7 @@ pub struct CaptureScope {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify))]
+#[cfg_attr(not(target_os = "emscripten"), derive(tsify::Tsify))]
 pub struct NamedRange {
     /// Range name.
     pub name: String,

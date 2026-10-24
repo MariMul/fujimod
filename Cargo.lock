@@ -4396,6 +4396,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-javascript-testing"
+version = "0.1.0"
+dependencies = [
+ "fujimod-javascript",
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "js-sys",
+ "nusb",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "fujimod-python-base"
 version = "0.1.0"
 dependencies = [
@@ -4709,7 +4722,6 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-sink",
- "futures-task",
  "futures-util",
  "generic-array",
  "getrandom 0.2.17",

@@ -10,7 +10,6 @@ publish.workspace = true
 doctest = false
 
 [features]
-testing = []
 default = ["board", "ff80"]
 board = ["dep:fujimod-emulator"]
 ff80 = ["dep:async-io", "dep:fujimod-usb"]
@@ -28,4 +27,4 @@ serde_json.workspace = true
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
-fujimod-usb = { workspace = true, features = ["testing"] }
+fujimod-usb.workspace = true

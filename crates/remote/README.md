@@ -60,7 +60,7 @@ capture = await camera.screenshot(deadline=deadline)
 capture.frame.save("quality.png")
 ```
 
-The `testing` feature supplies a synthetic transport for binding tests. Unit and
+The `testing` module supplies a synthetic transport for binding tests. Unit and
 USB replay tests use synthetic facts and memory only.
 
 `Camera.set_input(control(...), "stage", stage="half_press", deadline=...)`

@@ -1,4 +1,4 @@
-#![cfg(all(target_arch = "wasm32", feature = "testing"))]
+#![cfg(target_arch = "wasm32")]
 //! Executed as Wasm in a JS runtime, using synthetic endpoints and no USB API.
 use fujimod_usb::{
     ff80::SessionState,

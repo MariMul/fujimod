@@ -122,7 +122,7 @@ pub struct Session {
     max_reply_bytes: u32,
 }
 impl Session {
-    pub(crate) fn wrap(native: ff80::Session, limits: FirmwareLimits) -> Self {
+    pub fn wrap(native: ff80::Session, limits: FirmwareLimits) -> Self {
         let info = native.info();
         let max_reply_bytes = native.max_reply_bytes().get();
         Self {

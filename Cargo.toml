@@ -86,6 +86,7 @@ members = [
   "bindings/python/graphics",
   "bindings/python/xp4",
   "bindings/javascript",
+  "bindings/javascript/testing",
   "bindings/javascript/emulator",
   "bindings/generator",
   "crates/workspace-hack",

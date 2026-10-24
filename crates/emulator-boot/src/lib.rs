@@ -1062,11 +1062,8 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
 /// A stopped, passive boot observation. `rec` also identifies the first-start
 /// recording role (`system_mode == 3`) after its menus close.
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(
-    feature = "typescript",
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct RecReport {
     pub status: String,
     pub instructions: u64,

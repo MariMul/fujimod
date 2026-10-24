@@ -20,7 +20,7 @@ fn ids<'a>(values: impl IntoIterator<Item = &'a str>) -> Result<(), String> {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -214,7 +214,7 @@ impl ApplicationRunInputs {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -236,7 +236,7 @@ pub enum ApplicationBlockInput {
         block_id: String,
         part_id: String,
         source: ApplicationFlashSource,
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         erased_tail: Option<u8>,
         seeds: Vec<FlashSeed>,
     },
@@ -261,7 +261,7 @@ impl ApplicationBlockInput {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -277,7 +277,7 @@ pub struct GpioOutputWord {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -292,7 +292,7 @@ pub enum ApplicationFlashSource {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -309,7 +309,7 @@ pub struct FlashSeed {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -318,7 +318,7 @@ pub enum ApplicationPartInput {
     RegisterWords {
         part_id: String,
         registers: Vec<RegisterWord>,
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         rtc_ticks_per_second: Option<u64>,
     },
     /// Initial clock state for a power-controller endpoint.
@@ -355,7 +355,7 @@ impl ApplicationPartInput {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -372,7 +372,7 @@ pub struct RegisterWord {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -407,7 +407,7 @@ pub enum ApplicationTiming {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -434,7 +434,7 @@ pub enum TimingOperation {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -513,7 +513,7 @@ impl ApplicationRunScene {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -530,7 +530,7 @@ pub struct ApplicationCommandImageInput {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -540,10 +540,10 @@ pub struct ApplicationFrameInput {
     /// Period between frames in the run's virtual ticks.
     pub period_ticks: u64,
     /// Active duration within the frame period, when supplied.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub active_ticks: Option<u64>,
     /// Uniform source luma sample, when supplied.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub luma: Option<u16>,
 }
 
@@ -553,7 +553,7 @@ pub struct ApplicationFrameInput {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    not(target_os = "emscripten"),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
