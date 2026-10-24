@@ -12,6 +12,9 @@ const ROOTS: &[&str] = &[
     "BodyProfile",
     "SocProfile",
     "StabilizerCommand",
+    "PhysicalControls",
+    "BootCombination",
+    "BootHold",
 ];
 
 fn name(value: &str) -> String {
@@ -144,6 +147,7 @@ pub fn generate(directory: &Path, output: &Path) -> Result<(), String> {
         let value = render(schema, &mut pending)?;
         source.push_str(&format!("export type {} = {value};\n", name(&key)));
     }
+    source.push_str("export type BootMode = keyof NonNullable<PhysicalControls[\"boot\"]>;\n");
     fs::write(output, source).map_err(|e| e.to_string())
 }
 

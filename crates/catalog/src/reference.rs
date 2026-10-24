@@ -2487,7 +2487,7 @@ pub struct ResolvedSelection {
     )]
     #[cfg_attr(
         all(target_arch = "wasm32", not(target_os = "emscripten")),
-        tsify(type = "unknown")
+        tsify(type = "PhysicalControls | null")
     )]
     pub physical_controls: Option<serde_json::Value>,
     /// The firmware's generated located inputs, when generated.
