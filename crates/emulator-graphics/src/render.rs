@@ -512,10 +512,14 @@ pub fn render(
             .iter_mut()
             .find(|t| t.address == draw.target.0)
             .unwrap();
-        let color = draw.color.map(|v| v as f64 / 255.0);
+        let transform = |rgba: [f64; 4]| match &draw.color_transform {
+            None => rgba,
+            Some(t) => std::array::from_fn(|k| (rgba[k] * t.scale[k] + t.bias[k]).clamp(0.0, 1.0)),
+        };
+        let color = transform(draw.color.map(|v| v as f64 / 255.0));
         if let Some(gradient) = &draw.gradient {
             let colors = gradient_colors(gradient, &cover);
-            composite(target, &cover, |_, _, i| colors[i], draw.blend != 0, None);
+            composite(target, &cover, |_, _, i| transform(colors[i]), draw.blend != 0, None);
         } else if let Some(texture) = &draw.texture {
             let image = &textures[&(texture.source, texture.width, texture.height)];
             let [a, b, c, d, e, f] = texture.matrix;
@@ -528,7 +532,7 @@ pub fn render(
                 let valid = u >= 0 && v >= 0 && u < texture.valid_width && v < texture.valid_height;
                 let texel = image[(v.clamp(0, th - 1) * tw + u.clamp(0, tw - 1)) as usize];
                 let scale = if valid { 1.0 } else { 0.0 };
-                texel.map(|t| t as f64 / 255.0 * scale)
+                transform(texel.map(|t| t as f64 / 255.0)).map(|t| t * scale)
             };
             composite(target, &cover, sample, draw.blend != 0, None);
         } else {
@@ -537,7 +541,7 @@ pub fn render(
                 &cover,
                 |_, _, _| color,
                 draw.blend != 0,
-                (draw.color[3] == 255).then_some(draw.color),
+                (draw.color[3] == 255 && draw.color_transform.is_none()).then_some(draw.color),
             );
         }
         touched += cover.values.iter().filter(|&&v| v != 0.0).count() as u64 * 4;
@@ -581,4 +585,83 @@ pub fn copy_untile(input: &[u8], width: usize, height: usize) -> Vec<u8> {
         }
     }
     output
+}
+
+#[cfg(test)]
+mod color_transform_tests {
+    use super::*;
+    use crate::batch::{ColorTransform, color_transform};
+    use crate::regs::Registers;
+
+    fn halfwords(values: [i16; 8]) -> Registers {
+        let mut registers = Registers::new();
+        for index in 0..4 {
+            let (low, high) = (values[2 * index] as u16, values[2 * index + 1] as u16);
+            registers.set(0x180 + index as u32, u64::from(low) | u64::from(high) << 16);
+        }
+        registers
+    }
+
+    fn solid(color: [u8; 4], color_transform: Option<ColorTransform>) -> Draw {
+        Draw {
+            target: (0x1000, 8, 8, 1),
+            sequence: 0,
+            matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            geometry: Vec::new(),
+            samples: 1,
+            clips: vec![(0, 0, 8, 8)],
+            nonzero: true,
+            blend: 0,
+            color,
+            stroke: false,
+            texture: None,
+            gradient: None,
+            color_transform,
+            radius: 0.0,
+            cap: 0,
+            join: 0,
+            device_radius: false,
+        }
+    }
+
+    fn render_solid(draw: Draw) -> [u8; 4] {
+        let cover = std::rc::Rc::new(Coverage {
+            x0: 0,
+            y0: 0,
+            width: 8,
+            height: 8,
+            values: vec![1.0; 64],
+        });
+        let targets = HashMap::from([(0x1000u64, vec![0u8; 256])]);
+        let (output, _) = render(&[draw], &targets, &HashMap::new(), &mut |_| Ok(cover.clone())).unwrap();
+        // Order 1 stores R, G, B, A in bytes 2, 1, 0, 3.
+        let bytes = &output[0].1;
+        [bytes[2], bytes[1], bytes[0], bytes[3]]
+    }
+
+    #[test]
+    fn identity_halfwords_decode_to_no_transform() {
+        // B7F000 encodes scale 1.0 as 0x80 and bias 0 as 0.
+        let registers = halfwords([128, 128, 128, 128, 0, 0, 0, 0]);
+        assert_eq!(color_transform(&registers).unwrap(), None);
+        assert!(color_transform(&Registers::new()).is_err());
+    }
+
+    #[test]
+    fn signed_halfwords_decode_as_scales_and_byte_biases() {
+        // Scales 0.5, 2, -1, 1; biases 0.25, -0.5, 1, 0 (written as value * 255 * 128).
+        let registers = halfwords([64, 256, -128, 128, 8160, -16320, 32640, 0]);
+        let transform = color_transform(&registers).unwrap().unwrap();
+        assert_eq!(transform.scale, [0.5, 2.0, -1.0, 1.0]);
+        assert_eq!(transform.bias, [0.25, -0.5, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn solid_paint_is_scaled_biased_and_clamped_per_channel() {
+        let transform = color_transform(&halfwords([64, 256, -128, 64, 8160, -16320, 32640, 0]))
+            .unwrap();
+        assert_eq!(render_solid(solid([200, 200, 100, 255], None)), [200, 200, 100, 255]);
+        // R 200*0.5+63.75, G 200*2-127.5 clamps to 255, B -100+255, A 255*0.5.
+        assert_eq!(render_solid(solid([200, 200, 100, 255], transform)), [164, 255, 155, 128]);
+    }
 }

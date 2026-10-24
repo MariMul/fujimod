@@ -74,6 +74,10 @@ pub fn draws_key(draws: &[batch::Draw]) -> Vec<u8> {
         key.extend(draw.color);
         key.extend([draw.blend as u8]);
         key.extend(draw.sequence.to_le_bytes());
+        if let Some(t) = &draw.color_transform {
+            key.push(0xfd);
+            key.extend(t.scale.iter().chain(&t.bias).flat_map(|v| v.to_bits().to_le_bytes()));
+        }
         if let Some(t) = &draw.texture {
             key.extend(t.source.to_le_bytes());
             key.extend([t.width, t.height].iter().flat_map(|v| v.to_le_bytes()));

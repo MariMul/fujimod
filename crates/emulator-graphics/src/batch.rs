@@ -148,6 +148,39 @@ pub fn gradient(registers: &Registers) -> Result<Gradient> {
     })
 }
 
+/// The OpenVG color transform on straight paint colors, per RGBA channel:
+/// `c' = clamp(c * scale + bias, 0, 1)`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ColorTransform {
+    pub scale: [f64; 4],
+    pub bias: [f64; 4],
+}
+
+/// B7F000 writes the eight clamped transform values as signed halfwords of
+/// `value * 128` (B7F000's rounding), low then high in 0x180..0x183: scales
+/// R, G, B, A, then biases R, G, B, A already multiplied by 255. The
+/// identity transform decodes to `None`.
+pub fn color_transform(registers: &Registers) -> Result<Option<ColorTransform>> {
+    let mut halves = [0i16; 8];
+    for index in 0..4u32 {
+        let Some(word) = registers.get(0x180 + index) else {
+            return fail("Graphics UI color transform is incomplete");
+        };
+        if word >> 32 != 0 {
+            return fail("Graphics UI color transform word exceeds 32 bits");
+        }
+        halves[2 * index as usize] = word as u16 as i16;
+        halves[2 * index as usize + 1] = (word >> 16) as u16 as i16;
+    }
+    if halves == [128, 128, 128, 128, 0, 0, 0, 0] {
+        return Ok(None);
+    }
+    Ok(Some(ColorTransform {
+        scale: std::array::from_fn(|k| halves[k] as f64 / 128.0),
+        bias: std::array::from_fn(|k| halves[k + 4] as f64 / (128.0 * 255.0)),
+    }))
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Texture {
     pub source: u64,
@@ -175,6 +208,7 @@ pub struct Draw {
     pub stroke: bool,
     pub texture: Option<Texture>,
     pub gradient: Option<Gradient>,
+    pub color_transform: Option<ColorTransform>,
     /// Stroke style (stroke draws only).
     pub radius: f64,
     pub cap: u32,
@@ -264,11 +298,11 @@ pub fn batch(path_words: &[u32], fill_words: &[u32], initial_path: Option<&Regis
         if f.at(0x184) != expected_flags && f.at(0x184) != expected_flags | 0x1000000 {
             return fail("Graphics UI unsupported gamma/mask/filter paint controls");
         }
-        if f.at(0x184) & 0x1000000 != 0
-            && [(0x180u32, 0x800080u64), (0x181, 0x800080), (0x182, 0), (0x183, 0)].iter().any(|(k, v)| f.get(*k) != Some(*v))
-        {
-            return fail("Graphics UI nonidentity color transform is not supported");
-        }
+        let color_transform = if f.at(0x184) & 0x1000000 != 0 {
+            self::color_transform(f)?
+        } else {
+            None
+        };
         if [(0x190u32, 0u64), (0x1c0, 0), (0x14d, 0), (0x144, 0), (0x154, 0), (0x187, 0), (0x178, 1), (0x147, 1), (0x157, 1)]
             .iter()
             .any(|(k, v)| f.get(*k) != Some(*v))
@@ -321,6 +355,7 @@ pub fn batch(path_words: &[u32], fill_words: &[u32], initial_path: Option<&Regis
             stroke: style & 0x100 == 0,
             texture: None,
             gradient: if gradient { Some(self::gradient(f)?) } else { None },
+            color_transform,
             radius: 0.0,
             cap: 0,
             join: 0,
