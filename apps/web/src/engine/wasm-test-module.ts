@@ -218,6 +218,7 @@ export function testCameraModule(shared = false) {
         pending_mode: 0,
         pending: false,
         setup_presses: 0,
+        translation_cache_size_bytes: 0,
         scanout_instance: null,
         failure: null,
       };
