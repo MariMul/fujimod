@@ -54,7 +54,7 @@ try {
     try {
       const noJs = await browser.newContext({ javaScriptEnabled: false });
       for (const [route, text] of [
-        ['/', 'drop FPUPDATE.DAT firmware file'],
+        ['/', 'FujiMod is not ready for your camera'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
