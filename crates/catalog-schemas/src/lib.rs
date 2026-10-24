@@ -1,4 +1,5 @@
 //! JSON Schema documents generated from the public catalog Rust types.
+#![cfg(feature = "schema")]
 
 use schemars::JsonSchema;
 use serde_json::{Map, Value};
@@ -9,28 +10,28 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
         "emulator-factory-inputs.generated.schema.json",
-        schema::<crate::configuration::RunFactoryInputs>(
-            crate::configuration::RUN_FACTORY_INPUTS_SCHEMA_URI,
+        schema::<fujimod_catalog_configuration::RunFactoryInputs>(
+            fujimod_catalog_configuration::RUN_FACTORY_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(
         "emulator-rehearsal.generated.schema.json",
-        schema::<crate::rehearsal::Rehearsal>(crate::rehearsal::REHEARSAL_SCHEMA_URI),
+        schema::<fujimod_catalog::rehearsal::Rehearsal>(fujimod_catalog::rehearsal::REHEARSAL_SCHEMA_URI),
     );
     documents.insert(
         "catalog-annotations.generated.schema.json",
-        schema::<crate::provenance::CatalogAnnotations>(crate::provenance::ANNOTATIONS_SCHEMA_URI),
+        schema::<fujimod_catalog::provenance::CatalogAnnotations>(fujimod_catalog::provenance::ANNOTATIONS_SCHEMA_URI),
     );
     documents.insert(
         "emulator-hardware-inputs.generated.schema.json",
-        schema::<crate::configuration::HardwareInputs>(
-            crate::configuration::HARDWARE_INPUTS_SCHEMA_URI,
+        schema::<fujimod_catalog_configuration::HardwareInputs>(
+            fujimod_catalog_configuration::HARDWARE_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(
         "emulator-firmware-inputs.generated.schema.json",
-        schema::<crate::configuration::RunFirmwareInputs>(
-            crate::configuration::RUN_FIRMWARE_INPUTS_SCHEMA_URI,
+        schema::<fujimod_catalog_configuration::RunFirmwareInputs>(
+            fujimod_catalog_configuration::RUN_FIRMWARE_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(
@@ -45,47 +46,47 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "progress.generated.schema.json",
-        schema::<crate::progress::FirmwareProgress>(crate::progress::PROGRESS_SCHEMA_URI),
+        schema::<fujimod_catalog::progress::FirmwareProgress>(fujimod_catalog::progress::PROGRESS_SCHEMA_URI),
     );
     documents.insert(
         "first-start.generated.schema.json",
-        schema::<crate::first_start::FirstStartMenu>(crate::first_start::FIRST_START_SCHEMA_URI),
+        schema::<fujimod_catalog::first_start::FirstStartMenu>(fujimod_catalog::first_start::FIRST_START_SCHEMA_URI),
     );
     documents.insert(
         "soc.schema.json",
-        schema::<crate::reference::Soc>("https://fujimod.com/schemas/soc.schema.json"),
+        schema::<fujimod_catalog::reference::Soc>("https://fujimod.com/schemas/soc.schema.json"),
     );
     documents.insert(
         "part.schema.json",
-        schema::<crate::reference::Part>("https://fujimod.com/schemas/part.schema.json"),
+        schema::<fujimod_catalog::reference::Part>("https://fujimod.com/schemas/part.schema.json"),
     );
     documents.insert(
         "body.schema.json",
-        schema::<crate::reference::Body>("https://fujimod.com/schemas/body.schema.json"),
+        schema::<fujimod_catalog::reference::Body>("https://fujimod.com/schemas/body.schema.json"),
     );
     documents.insert(
         "firmware.schema.json",
-        schema::<crate::reference::Firmware>("https://fujimod.com/schemas/firmware.schema.json"),
+        schema::<fujimod_catalog::reference::Firmware>("https://fujimod.com/schemas/firmware.schema.json"),
     );
     documents.insert(
         "emulator-run-configuration.schema.json",
-        schema::<crate::configuration::RunConfiguration>(
-            crate::configuration::RUN_CONFIGURATION_SCHEMA_URI,
+        schema::<fujimod_catalog_configuration::RunConfiguration>(
+            fujimod_catalog_configuration::RUN_CONFIGURATION_SCHEMA_URI,
         ),
     );
     documents.insert(
         "emulator-run-overlay.schema.json",
-        schema::<crate::configuration::RunOverlay>(crate::configuration::RUN_OVERLAY_SCHEMA_URI),
+        schema::<fujimod_catalog_configuration::RunOverlay>(fujimod_catalog_configuration::RUN_OVERLAY_SCHEMA_URI),
     );
     documents.insert(
         "resolved-selection.schema.json",
-        schema::<crate::reference::ResolvedSelection>(
+        schema::<fujimod_catalog::reference::ResolvedSelection>(
             "https://fujimod.com/schemas/resolved-selection.schema.json",
         ),
     );
     documents.insert(
         "resolved-configuration.schema.json",
-        schema::<crate::configuration::ResolvedConfiguration>(
+        schema::<fujimod_catalog_configuration::ResolvedConfiguration>(
             "https://fujimod.com/schemas/resolved-configuration.schema.json",
         ),
     );

@@ -1,4 +1,5 @@
-use fujimod_catalog::{Firmware, configuration::HardwareInputs};
+use fujimod_catalog::Firmware;
+use fujimod_catalog_configuration::HardwareInputs;
 use std::{fs, path::PathBuf};
 
 #[test]
@@ -22,7 +23,7 @@ fn firmware_layouts_and_body_inputs_decode_as_closed_records() {
             assert_eq!(inputs.schema, 1);
             assert_eq!(
                 inputs.schema_uri,
-                fujimod_catalog::configuration::HARDWARE_INPUTS_SCHEMA_URI
+                fujimod_catalog_configuration::HARDWARE_INPUTS_SCHEMA_URI
             );
         }
     }

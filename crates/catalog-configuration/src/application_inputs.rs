@@ -148,9 +148,9 @@ impl ApplicationRunInputs {
     /// Check every block and installed-part identity against the selected hardware.
     pub fn validate_selection(
         &self,
-        selection: &crate::reference::ResolvedSelection,
+        selection: &fujimod_catalog::reference::ResolvedSelection,
     ) -> Result<(), String> {
-        use crate::reference::SocBlockKind;
+        use fujimod_catalog::reference::SocBlockKind;
         self.validate()?;
         let block = |id: &str| {
             selection
@@ -483,7 +483,7 @@ impl ApplicationRunScene {
     /// Validate all scene consumers against the selected SoC's block identities.
     pub fn validate_selection(
         &self,
-        selection: &crate::reference::ResolvedSelection,
+        selection: &fujimod_catalog::reference::ResolvedSelection,
     ) -> Result<(), String> {
         self.validate()?;
         for id in self

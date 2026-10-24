@@ -4,18 +4,16 @@
 //! the EXR II device implementations. Fixed model values are implementation
 //! policy; physical addresses, links, and starting inputs are resolved below.
 
-use fujimod_catalog::{
-    configuration::{
-        Exr2RunInputs, Exr2RunScene, RunBrowserCamera, RunConfiguration, RunPurpose, RunStart,
-    },
-    reference::{
-        ConnectionSignal, ControlBusChip, LensProtocol, Part, PartModel, ResolvedSelection,
-        SensorRadiometry, SocBlock, SocBlockKind,
-    },
+use fujimod_catalog::reference::{
+    ConnectionSignal, ControlBusChip, LensProtocol, Part, PartModel, ResolvedSelection,
+    SensorRadiometry, SocBlock, SocBlockKind,
+};
+use fujimod_catalog_configuration::{
+    Exr2RunInputs, Exr2RunScene, RunBrowserCamera, RunConfiguration, RunPurpose, RunStart,
 };
 use fujimod_emulator_exr2_plan::{BootEntry, Model, Node, Plan, WireKind};
 use fujimod_emulator_devices::{graph::Mapping as DeviceMapping, parts::pins::Pin};
-use fujimod_catalog::configuration::DEFAULT_CLOCK_SECONDS_2000;
+use fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 

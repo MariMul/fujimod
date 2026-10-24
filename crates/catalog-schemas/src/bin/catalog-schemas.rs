@@ -1,4 +1,4 @@
-use fujimod_catalog::schema::generated_documents;
+use fujimod_catalog_schemas::generated_documents;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ fn main() {
     let mode = env::args().nth(1).unwrap_or_else(|| "--check".into());
     if mode != "--check" && mode != "--write" {
         eprintln!(
-            "usage: cargo run -p fujimod-catalog --features schema --bin catalog-schemas -- [--check|--write]"
+            "usage: cargo run -p fujimod-catalog-schemas --features schema --bin catalog-schemas -- [--check|--write]"
         );
         std::process::exit(2);
     }

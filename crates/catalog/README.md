@@ -17,11 +17,17 @@ crate, so a consumer rebuilds only when the documents it reads change:
   `persistent_inputs`, the persistent inputs a run supplies.
 - `fujimod-catalog-bulk`: stock diagnostic bulk-read facts.
 - `fujimod-catalog` (this crate): the bundled reference catalog of SoCs,
-  parts, bodies and firmware, hardware profiles, run configurations and the
-  schema generator. It depends on every document crate above.
+  parts, bodies and firmware and their hardware profiles. It depends on every
+  document crate above.
+- `fujimod-catalog-configuration`: the bundled emulator run configurations,
+  overlays and their hardware, firmware and native inputs, resolved against
+  the reference catalog.
+- `fujimod-catalog-schemas`: the JSON Schema generator for every catalog
+  document.
 
-The facade exposes `fujimod-catalog` as `fujimod::catalog`; enabling `usb`
-exposes `fujimod-catalog-service` as `fujimod::catalog_service`. Definitions stay in
+The facade exposes `fujimod-catalog` as `fujimod::catalog` and
+`fujimod-catalog-configuration` as `fujimod::catalog_configuration`; enabling
+`usb` exposes `fujimod-catalog-service` as `fujimod::catalog_service`. Definitions stay in
 JSON rather than becoming another set of Rust constants. Callers supply the
 selected identity and SHA-256 when loading a definition. Matching those values
 qualifies the data; identifying a connected camera and checking execution
@@ -79,11 +85,12 @@ to hashed build artifacts. Open catalogs can leave options unnamed; consumers
 must refuse an unresolved named option instead of inventing a name.
 
 Schemas are generated from these Rust types with
-`cargo run -p fujimod-catalog --features schema --bin catalog-schemas -- --write`.
+`cargo run -p fujimod-catalog-schemas --features schema --bin catalog-schemas -- --write`.
 New remote schema filenames include `.generated`; `--check` verifies committed
 copies. Only the `schema` feature compiles the JSON Schema implementations, so
-emulator and binding builds skip them; this crate's `schema` and `typescript`
-features enable the same features of the document crates: derive with
+emulator and binding builds skip them; the `schema` and `typescript` features
+of this crate, the configuration crate and the schema generator enable the
+same features of the crates below them: derive with
 `#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]` and write
 schema attributes as `#[cfg_attr(feature = "schema", schemars(...))]`.
 

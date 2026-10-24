@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog::configuration::Exr2RunScene;
+use fujimod_catalog_configuration::Exr2RunScene;
 
 /// The reference X70's NAND sections in the catalog.
 fn reference_camera() -> PathBuf {
@@ -321,7 +321,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
     let clock = &model(&rtc, "serial_spi1")["routes"][rtc_route]["endpoint"]["options"]["clock"];
     assert_eq!(
         clock["initial_seconds"],
-        fujimod_catalog::configuration::DEFAULT_CLOCK_SECONDS_2000
+        fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000
     );
     assert_eq!(clock["ticks_per_second"], 24_000_000);
     assert_eq!(clock["maximum_seconds"], 999_999_999);
@@ -457,7 +457,7 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
     exr2_inputs(&mut resolved).power.spi_status.push(
-        fujimod_catalog::configuration::RunRegisterValue {
+        fujimod_catalog_configuration::RunRegisterValue {
             register: 9,
             value: 1,
         },
@@ -789,7 +789,7 @@ fn video_encoder_backend_is_selected_in_the_prepared_graph() {
 
 #[test]
 fn declared_pcm_input_selects_one_composed_receiver_in_the_prepared_graph() {
-    use fujimod_catalog::configuration::RunAudioInputProfile;
+    use fujimod_catalog_configuration::RunAudioInputProfile;
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
     resolved
         .configuration

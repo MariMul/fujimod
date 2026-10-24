@@ -14,12 +14,10 @@ use fujimod_emulator::{
     session::Session,
 };
 use fujimod_emulator_preparation as preparation;
-use fujimod_catalog::{
-    configuration::{
-        Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
-        RunPurpose, RunScene, RunStart,
-    },
-    reference::PartModel,
+use fujimod_catalog::reference::PartModel;
+use fujimod_catalog_configuration::{
+    Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
+    RunPurpose, RunScene, RunStart,
 };
 use fujimod_catalog_content::Content;
 use fujimod_catalog_controls::{
@@ -1270,7 +1268,7 @@ fn setup_calendar(
         .map(u32::try_from)
         .transpose()
         .map_err(|_| "local clock exceeds u32")?
-        .unwrap_or(fujimod_catalog::configuration::DEFAULT_CLOCK_SECONDS_2000);
+        .unwrap_or(fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000);
     let target = first_start::calendar(seconds);
     let read = |session: &Session| -> Result<([u16; 5], u8), String> {
         let mut bytes = [0; 8];

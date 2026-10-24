@@ -4,13 +4,11 @@
 //! processor reset state, decoder selections, peripherals, and RAM capacity
 //! are read from the selected catalog identities.
 
-use fujimod_catalog::{
-    configuration::RunInstructionRate,
-    reference::{
-        AddressMapping, DecoderSelection, MemoryRegion, ProcessorArchitecture, ProcessorModel,
-        ProcessorRegister, RegionSize, ResolvedSelection, Soc,
-    },
+use fujimod_catalog::reference::{
+    AddressMapping, DecoderSelection, MemoryRegion, ProcessorArchitecture, ProcessorModel,
+    ProcessorRegister, RegionSize, ResolvedSelection, Soc,
 };
+use fujimod_catalog_configuration::RunInstructionRate;
 use fujimod_emulator::board::{factory, memory::BusMapping};
 use fujimod_emulator_cpu::{Model, Register, arm};
 use serde_json::{Value, json};

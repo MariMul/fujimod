@@ -30,7 +30,7 @@ fn resolve_firmware(firmware_id: &str) -> PyResult<String> {
 #[pyo3(signature = (configuration_id, overlays=Vec::new()))]
 fn resolve_configuration(configuration_id: &str, overlays: Vec<String>) -> PyResult<String> {
     let resolved =
-        fujimod_catalog::ResolvedConfiguration::with_overlays(configuration_id, &overlays)
+        fujimod_catalog_configuration::ResolvedConfiguration::with_overlays(configuration_id, &overlays)
             .map_err(PyValueError::new_err)?;
     serde_json::to_string(&resolved).map_err(|error| PyValueError::new_err(error.to_string()))
 }

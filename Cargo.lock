@@ -3389,6 +3389,7 @@ name = "fujimod"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-configuration",
  "fujimod-catalog-service",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
@@ -3423,7 +3424,6 @@ dependencies = [
  "fujimod-catalog-remote",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
- "jsonschema",
  "schemars",
  "serde",
  "serde-wasm-bindgen",
@@ -3437,6 +3437,23 @@ dependencies = [
 name = "fujimod-catalog-bulk"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-content",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-configuration"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-construction",
  "fujimod-catalog-content",
  "fujimod-workspace-hack",
  "schemars",
@@ -3500,6 +3517,23 @@ dependencies = [
  "sha2",
  "tsify",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-catalog-schemas"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-bulk",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
+ "fujimod-catalog-settings",
+ "fujimod-workspace-hack",
+ "jsonschema",
+ "schemars",
+ "serde_json",
 ]
 
 [[package]]
@@ -3585,6 +3619,7 @@ name = "fujimod-emulator-boot"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
  "fujimod-catalog-content",
  "fujimod-catalog-controls",
@@ -4245,6 +4280,7 @@ name = "fujimod-emulator-xp5-board"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-configuration",
  "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
@@ -4375,6 +4411,7 @@ name = "fujimod-python-catalog"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
+ "fujimod-catalog-configuration",
  "fujimod-corpus",
  "fujimod-python-service",
  "fujimod-workspace-hack",

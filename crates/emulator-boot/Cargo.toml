@@ -18,6 +18,7 @@ fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-emulator-preparation.workspace = true
 fujimod-catalog.workspace = true
+fujimod-catalog-configuration.workspace = true
 fujimod-catalog-content.workspace = true
 fujimod-catalog-construction.workspace = true
 fujimod-catalog-controls.workspace = true

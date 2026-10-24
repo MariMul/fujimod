@@ -26,7 +26,7 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
     let catalog = package.join("../../catalog");
     let schema_root = catalog.join("schemas");
 
-    for (name, generated) in fujimod_catalog::schema::generated_documents() {
+    for (name, generated) in fujimod_catalog_schemas::generated_documents() {
         let path = schema_root.join(name);
         let mut expected = serde_json::to_vec_pretty(&generated).expect("generated schema");
         expected.push(b'\n');

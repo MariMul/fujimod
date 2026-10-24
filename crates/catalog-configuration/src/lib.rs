@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod application_inputs;
 pub mod hardware_inputs;
 pub use hardware_inputs::{HARDWARE_INPUTS_SCHEMA_URI, HardwareInputs, HardwareReset};
 mod firmware_inputs;
@@ -131,7 +132,7 @@ impl RunConfiguration {
     /// Check that every run-input identity exists in the selected hardware.
     pub fn validate_selection(
         &self,
-        selection: &crate::reference::ResolvedSelection,
+        selection: &fujimod_catalog::reference::ResolvedSelection,
     ) -> Result<(), String> {
         if selection.body.id != self.body_id
             || selection.soc.id != selection.body.soc_id
@@ -216,13 +217,13 @@ impl RunConfiguration {
                 .iter()
                 .any(|candidate| candidate.id == id && candidate.kind == kind)
         };
-        if !block(&inputs.gpio.block_id, crate::reference::SocBlockKind::Gpio) {
+        if !block(&inputs.gpio.block_id, fujimod_catalog::reference::SocBlockKind::Gpio) {
             return Err(format!(
                 "run GPIO input refers to an absent or non-GPIO SoC block {}",
                 inputs.gpio.block_id
             ));
         }
-        if !block(&inputs.adc.block_id, crate::reference::SocBlockKind::Adc) {
+        if !block(&inputs.adc.block_id, fujimod_catalog::reference::SocBlockKind::Adc) {
             return Err(format!(
                 "run ADC input refers to an absent or non-ADC SoC block {}",
                 inputs.adc.block_id
@@ -232,7 +233,7 @@ impl RunConfiguration {
         let connection = |id: &str| body.connections.iter().find(|item| item.id == id);
         for key in &inputs.gpio.keys {
             if !connection(&key.connection_id)
-                .is_some_and(|item| item.kind == crate::reference::ConnectionKind::Control)
+                .is_some_and(|item| item.kind == fujimod_catalog::reference::ConnectionKind::Control)
             {
                 return Err(format!(
                     "run key input refers to an absent or non-control body connection {}",
@@ -242,7 +243,7 @@ impl RunConfiguration {
         }
         for encoder in &inputs.encoders {
             let input = connection(&encoder.connection_id)
-                .filter(|item| item.kind == crate::reference::ConnectionKind::Control)
+                .filter(|item| item.kind == fujimod_catalog::reference::ConnectionKind::Control)
                 .ok_or_else(|| {
                     format!(
                         "run encoder input refers to an absent or non-control connection {}",
@@ -252,7 +253,7 @@ impl RunConfiguration {
             let gpio_signals = input
                 .signals
                 .iter()
-                .filter(|signal| matches!(signal, crate::reference::ConnectionSignal::Gpio { .. }))
+                .filter(|signal| matches!(signal, fujimod_catalog::reference::ConnectionSignal::Gpio { .. }))
                 .count();
             if gpio_signals != 2 {
                 return Err(format!(
@@ -270,7 +271,7 @@ impl RunConfiguration {
             })?;
             if !matches!(
                 target.signals.get(usize::from(output.signal_index)),
-                Some(crate::reference::ConnectionSignal::Gpio { .. })
+                Some(fujimod_catalog::reference::ConnectionSignal::Gpio { .. })
             ) {
                 return Err(format!(
                     "run GPIO output {} signal {} is absent or non-GPIO",
@@ -287,7 +288,7 @@ impl RunConfiguration {
             }
         }
         if !connection(&inputs.usb.connection_id)
-            .is_some_and(|item| item.kind == crate::reference::ConnectionKind::Usb)
+            .is_some_and(|item| item.kind == fujimod_catalog::reference::ConnectionKind::Usb)
         {
             return Err(format!(
                 "run USB input refers to an absent or non-USB body connection {}",
@@ -324,7 +325,7 @@ impl RunConfiguration {
 
         let mcu_part = part(&mcu.part_id).ok_or("body MCU part is unresolved")?;
         let (mcu_registers, packet_registers, clock_registers) = match &mcu_part.model {
-            crate::reference::PartModel::Microcontroller {
+            fujimod_catalog::reference::PartModel::Microcontroller {
                 registers,
                 packet_registers,
                 clock_registers,
@@ -341,7 +342,7 @@ impl RunConfiguration {
         {
             return Err("body MCU part has an unsupported packet or clock register layout".into());
         }
-        let in_range = |range: &crate::reference::RegisterRange, register: u32| {
+        let in_range = |range: &fujimod_catalog::reference::RegisterRange, register: u32| {
             register >= range.first && register < range.first.saturating_add(range.count)
         };
         let packet_overlaps_clock = (0..packet_registers.count)
@@ -360,10 +361,10 @@ impl RunConfiguration {
         }
         let power_part = part(&power.part_id).ok_or("body power-controller part is unresolved")?;
         let power_registers = match &power_part.model {
-            crate::reference::PartModel::PowerControl { status_registers } => status_registers,
+            fujimod_catalog::reference::PartModel::PowerControl { status_registers } => status_registers,
             _ => return Err("body power attachment refers to a non-power part".into()),
         };
-        let register_in_range = |register: u8, range: &crate::reference::RegisterRange| {
+        let register_in_range = |register: u8, range: &fujimod_catalog::reference::RegisterRange| {
             let first = u64::from(range.first);
             let end = first + u64::from(range.count);
             u64::from(register) >= first && u64::from(register) < end
@@ -397,7 +398,7 @@ impl RunConfiguration {
                 ));
             }
             let range = match &target.model {
-                crate::reference::PartModel::Microcontroller {
+                fujimod_catalog::reference::PartModel::Microcontroller {
                     registers: register_range,
                     packet_registers,
                     clock_registers,
@@ -419,8 +420,8 @@ impl RunConfiguration {
                     }
                     Some(register_range)
                 }
-                crate::reference::PartModel::SerialOutput {
-                    endpoint: crate::reference::SerialOutputKind::Registers,
+                fujimod_catalog::reference::PartModel::SerialOutput {
+                    endpoint: fujimod_catalog::reference::SerialOutputKind::Registers,
                 } => None,
                 _ => {
                     return Err(format!(
@@ -458,7 +459,7 @@ pub struct ResolvedConfiguration {
     /// Validated run configuration selected by identity.
     pub configuration: RunConfiguration,
     /// Resolved SoC, body, firmware and installed parts.
-    pub reference: crate::reference::ResolvedSelection,
+    pub reference: fujimod_catalog::reference::ResolvedSelection,
 }
 
 impl ResolvedConfiguration {
@@ -501,7 +502,7 @@ impl ResolvedConfiguration {
         mut configuration: RunConfiguration,
         overlay_ids: &[String],
     ) -> Result<Self, String> {
-        let catalog = crate::reference::ReferenceCatalog::bundled()?;
+        let catalog = fujimod_catalog::reference::ReferenceCatalog::bundled()?;
         let reference = catalog.resolve(&configuration.body_id, &configuration.firmware_id)?;
         configuration.validate_selection(&reference)?;
         let mut applied = BTreeSet::new();
@@ -1482,7 +1483,7 @@ pub struct RunPreset {
     pub files: BTreeMap<String, BTreeMap<String, String>>,
     /// Named SoC and body implementations selected through the hardware graph.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub hardware_selection: Option<crate::reference::HardwareSelection>,
+    pub hardware_selection: Option<fujimod_catalog::reference::HardwareSelection>,
     /// Caller-supplied, firmware-qualified input recipe selected by identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub firmware_inputs_id: Option<String>,
@@ -1724,7 +1725,7 @@ impl RunScene {
 
     fn validate_selection(
         &self,
-        selection: &crate::reference::ResolvedSelection,
+        selection: &fujimod_catalog::reference::ResolvedSelection,
     ) -> Result<(), String> {
         match self {
             Self::Exr2(scene) => scene.validate_selection(selection),
@@ -1799,7 +1800,7 @@ impl Exr2RunScene {
 
     fn validate_selection(
         &self,
-        _selection: &crate::reference::ResolvedSelection,
+        _selection: &fujimod_catalog::reference::ResolvedSelection,
     ) -> Result<(), String> {
         self.validate()
     }
@@ -2061,7 +2062,7 @@ mod tests {
     #[test]
     fn run_inputs_resolve_to_typed_blocks_connections_and_parts() {
         let config = RunConfiguration::bundled("x70-110-rec").unwrap();
-        let catalog = crate::reference::ReferenceCatalog::bundled().unwrap();
+        let catalog = fujimod_catalog::reference::ReferenceCatalog::bundled().unwrap();
         let selection = catalog.resolve("x70", "x70-110").unwrap();
         assert!(config.validate_selection(&selection).is_ok());
 
