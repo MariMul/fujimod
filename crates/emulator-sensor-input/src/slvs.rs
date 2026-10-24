@@ -1,6 +1,6 @@
 //! SLVS-EC causes, frame phases and explicit sensor/input-engine wiring.
 use super::sensor::Sensor;
-use crate::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -305,7 +305,7 @@ impl Device for Receiver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_host::recording::RecordingHost;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
     const BASE: u64 = 0xff940000;
     const PERIOD: u64 = 16_667_000;
     const ACTIVE: u64 = PERIOD / 2;

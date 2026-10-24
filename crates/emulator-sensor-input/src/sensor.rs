@@ -1,6 +1,6 @@
 //! Eight-byte sensor command packets fetched by programmed DMA.
 //! Completion is scheduled; stock code owns its busy polls, cleanup and retries.
-use crate::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -368,7 +368,7 @@ impl Device for Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_host::recording::RecordingHost;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
     #[test]
     fn timing_input_causes_ack_without_granting_raw_dma_support() {
         let sensor = Sensor::new(

@@ -1,6 +1,6 @@
 //! Portable software-codec regression: the same eight-frame stream on native
 //! and Wasm. An optional native output path saves the generated AVC for decoding.
-use fujimod_emulator_devices::imaging::h264::{Backend, Codec, Config};
+use fujimod_emulator_image_codecs::h264::{Backend, Codec, Config};
 use sha2::{Digest, Sha256};
 
 fn clip() -> Vec<u8> {

@@ -2,7 +2,6 @@
 #[cfg(not(target_os = "emscripten"))]
 pub(crate) mod board;
 mod discovery;
-mod display_pixels;
 mod film;
 mod jpeg;
 mod method4;
@@ -157,8 +156,6 @@ mod binding {
     use super::discovery::{FrontierEntry, Intervention};
     #[pymodule_export]
     use super::settings::settings_header;
-    #[pymodule_export]
-    use super::display_pixels::decode_display_rgb;
     #[pymodule_export]
     use super::film::FilmStage;
     #[pymodule_export]

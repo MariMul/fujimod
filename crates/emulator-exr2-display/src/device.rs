@@ -298,7 +298,7 @@ impl ScanoutHost for Observation<'_> {
         packing: &str,
         matrix: &str,
     ) -> fujimod_emulator_devices::record::Result<Vec<u8>> {
-        fujimod_emulator_devices::imaging::packed_color::decode(
+        fujimod_emulator_imaging::packed_color::decode(
             raw,
             width as u64,
             height as u64,

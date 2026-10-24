@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-imaging.workspace = true
 fujimod-python = { path = "..", default-features = false, features = ["emulator"] }
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-display.workspace = true

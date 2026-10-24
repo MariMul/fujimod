@@ -7,7 +7,7 @@ use fujimod_emulator_devices::exr2::isp::{
     due,
 };
 use fujimod_emulator_devices::imaging::analysis::sad_curve;
-use fujimod_emulator_devices::imaging::raw::{Packing, RawView};
+use fujimod_emulator_imaging::raw::{Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_devices::exr2::isp::options::phase_detection::{Options, Arithmetic};
 

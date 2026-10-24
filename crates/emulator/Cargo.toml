@@ -11,6 +11,7 @@ name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [dependencies]
+fujimod-emulator-sensor-input = { path = "../../crates/emulator-sensor-input" }
 fujimod-emulator-xp4-io = { path = "../../crates/emulator-xp4-io" }
 fujimod-emulator-xp4-display = { path = "../../crates/emulator-xp4-display" }
 fujimod-emulator-xp4-storage = { path = "../../crates/emulator-xp4-storage" }

@@ -1,5 +1,5 @@
 //! XP5 preview input-buffer and RIFP processor maps.
-use fujimod_emulator_devices::imaging::{input_buffer::{InputBuffer, Output, Wiring}, statistics::{Planes, Statistics}};
+use fujimod_emulator_sensor_input::{input_buffer::{InputBuffer, Output, Wiring}, statistics::{Planes, Statistics}};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

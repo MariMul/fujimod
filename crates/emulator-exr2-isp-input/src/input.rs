@@ -10,10 +10,8 @@ use fujimod_emulator_devices::exr2::isp::{
     parameters::ParameterHandle,
     word,
 };
-use fujimod_emulator_devices::imaging::{
-    film::Film,
-    raw::{Cfa, Packing, RawView},
-};
+use fujimod_emulator_devices::imaging::film::Film;
+use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_parts_sensor::sensor::Sensor;
 use fujimod_emulator_devices::scene::FrameEdge;
 use fujimod_emulator_devices::{Cx, Device};

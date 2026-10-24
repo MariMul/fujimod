@@ -453,7 +453,7 @@ impl Devices {
         read_gate: (u16, u8),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
     ) -> Result<(), String> {
-        use fujimod_emulator_devices::imaging::{sensor, slvs};
+        use fujimod_emulator_sensor_input::{sensor, slvs};
         let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs) = map;
         let (period, active, command_ticks, reset_ticks) = timing;
         if command_base != 0xfff6c000
@@ -497,10 +497,7 @@ impl Devices {
         )?;
         let mut extra: Vec<(u64, u64, Box<dyn Device>)> = vec![];
         if let Some((base, irq, reset, sram, bank_size, scene)) = ibuf {
-            use fujimod_emulator_devices::imaging::{
-                input_buffer::{InputBuffer, Output, Wiring},
-                statistics::{Planes, Statistics},
-            };
+            use fujimod_emulator_sensor_input::{input_buffer::{InputBuffer, Output, Wiring}, statistics::{Planes, Statistics}};
             if base != 0xfff70000
                 || sram != 0xfff10000
                 || bank_size != 0x7000

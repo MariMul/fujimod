@@ -3,7 +3,7 @@
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
 use fujimod_emulator_devices::imaging::exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle};
-use fujimod_emulator_devices::imaging::raw::{Cfa, Packing};
+use fujimod_emulator_imaging::raw::{Cfa, Packing};
 use fujimod_emulator_devices::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
@@ -36,7 +36,7 @@ mod tests {
 
     #[test]
     fn cropped_samples_keep_full_raster_projection_and_cfa_phase() {
-        use fujimod_emulator_devices::imaging::raw::RawView;
+        use fujimod_emulator_imaging::raw::RawView;
         let frames = Arc::new(Mutex::new(SensorFrames::new(
             Frame::new(
                 8,

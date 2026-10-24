@@ -1,7 +1,7 @@
 //! Input-buffer write-select enables, frame causes and statistics DMA.
 //! Processor wiring supplies the CSR layout, supported outputs and frame clock.
 use super::statistics::{Planes, Statistics};
-use crate::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -258,7 +258,7 @@ impl Device for InputBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_host::recording::RecordingHost;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
     #[test]
     fn upstream_edges_dma_and_w1c_are_independent_of_program_and_early_service() {
         fn experiment(cpu: usize, pc: u64) -> Value {

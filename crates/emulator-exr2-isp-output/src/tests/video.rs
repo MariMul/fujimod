@@ -1,7 +1,8 @@
 use fujimod_emulator_devices::exr2::isp::*;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;
-use fujimod_emulator_devices::{Device, imaging::h264};
+use fujimod_emulator_devices::Device;
+use fujimod_emulator_image_codecs::h264;
 use openh264::{decoder::Decoder, formats::YUVSource};
 
 const SOURCE: usize = 0x10000;

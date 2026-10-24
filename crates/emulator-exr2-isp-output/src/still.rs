@@ -4,10 +4,8 @@
 //! law. Spatial filtering remains unmodeled.
 use fujimod_emulator_devices::exr2::isp::dma::{Raster, Transfer, physical};
 use fujimod_emulator_devices::exr2::isp::{Irq, word};
-use fujimod_emulator_devices::imaging::{
-    film::{Film, still_offset},
-    raw::{Cfa, Packing, RawView},
-};
+use fujimod_emulator_devices::imaging::film::{Film, still_offset};
+use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
 use fujimod_emulator_devices::exr2::isp::options::still::Options;

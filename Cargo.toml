@@ -15,6 +15,9 @@ members = [
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
   "crates/emulator-devices",
+  "crates/emulator-imaging",
+  "crates/emulator-sensor-input",
+  "crates/emulator-image-codecs",
   "crates/emulator-exr2-isp-output",
   "crates/emulator-exr2-isp-statistics",
   "crates/emulator-exr2-isp-testing",
@@ -79,6 +82,9 @@ fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-imaging = { path = "crates/emulator-imaging", version = "0.1.0" }
+fujimod-emulator-sensor-input = { path = "crates/emulator-sensor-input", version = "0.1.0" }
+fujimod-emulator-image-codecs = { path = "crates/emulator-image-codecs", version = "0.1.0" }
 fujimod-emulator-exr2-isp-output = { path = "crates/emulator-exr2-isp-output", version = "0.1.0" }
 fujimod-emulator-exr2-isp-statistics = { path = "crates/emulator-exr2-isp-statistics", version = "0.1.0" }
 fujimod-emulator-exr2-isp-testing = { path = "crates/emulator-exr2-isp-testing", version = "0.1.0" }

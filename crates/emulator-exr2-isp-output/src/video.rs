@@ -4,11 +4,8 @@
 //! (setup/stop: two ticks), independent of host encoder speed.
 use fujimod_emulator_devices::exr2::isp::dma::physical;
 use fujimod_emulator_devices::exr2::isp::{Irq, due, word};
-use fujimod_emulator_devices::{
-    Cx, Device,
-    checkpoint::Checkpoint,
-    imaging::h264::{self, Codec, Config},
-};
+use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
+use fujimod_emulator_image_codecs::h264::{self, Codec, Config};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

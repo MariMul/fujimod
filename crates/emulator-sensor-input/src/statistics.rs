@@ -1,6 +1,6 @@
 //! Scene-derived IBUF color sums, with the stock 16x16/64-byte-row layout.
 //! Unmapped statistic fields remain explore accesses; see ae-pipeline.md.
-use crate::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};

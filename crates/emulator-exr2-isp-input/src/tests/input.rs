@@ -742,7 +742,7 @@ fn disabled_raw_channel_does_not_dma_or_signal_completion() {
 }
 #[test]
 fn packed_raw_readback_matches_u16_with_independent_row_padding() {
-    use fujimod_emulator_devices::imaging::raw::Packing;
+    use fujimod_emulator_imaging::raw::Packing;
     fn render(packing: Packing, padding: usize, mutate_after_start: bool) -> Vec<Vec<u8>> {
         let mut h = TestHost::new();
         let outputs: fujimod_emulator_devices::exr2::isp::memory_outputs::MemoryOutputHandle = Default::default();

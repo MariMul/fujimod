@@ -1,7 +1,7 @@
 //! RAW transport and nearest same-color reconstruction. CFA layout is body
 //! data. Full-field nearest sampling is a declared spatial approximation,
 //! separate from the measured integer film arithmetic.
-use super::film::{Film, FilmPixels};
+use fujimod_emulator_devices::imaging::film::{Film, FilmPixels};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -474,7 +474,7 @@ mod tests {
             0, 1, 0, 1, 1, 2, 1,
         ])
         .unwrap();
-        let words = crate::test_host::film_words();
+        let words = fujimod_emulator_devices::test_host::film_words();
         let mut film = Film::default();
         film.update(|o| words[o / 4]).unwrap();
         for packing in [Packing::U16, Packing::Packed12] {
@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn near_maximum_raw_x_matches_scalar_for_both_packings() {
         let cfa = Cfa::new((0..36).map(|i| [0, 1, 2, 2, 2, 2][i % 6]).collect()).unwrap();
-        let words = crate::test_host::film_words();
+        let words = fujimod_emulator_devices::test_host::film_words();
         let mut film = Film::default();
         film.update(|o| words[o / 4]).unwrap();
 
@@ -699,7 +699,7 @@ mod tests {
             0, 1, 0, 1, 1, 2, 1,
         ])
         .unwrap();
-        let words = crate::test_host::film_words();
+        let words = fujimod_emulator_devices::test_host::film_words();
         let mut film = Film::default();
         film.update(|o| words[o / 4]).unwrap();
         let gains = [713, 409, 923];
@@ -800,7 +800,7 @@ mod tests {
             packing: Packing::U16,
         };
         let cfa = Cfa::new((0..36).map(|i| (i % 3) as u8).collect()).unwrap();
-        let words = crate::test_host::film_words();
+        let words = fujimod_emulator_devices::test_host::film_words();
         let mut film = Film::default();
         film.update(|o| words[o / 4]).unwrap();
         let mut out = vec![0; 40 * 36 * 2];

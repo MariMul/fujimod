@@ -1,8 +1,8 @@
 //! Shared imaging session. Register only explicit owner-fragment windows.
 use fujimod_emulator_devices::graph::DeviceGraph;
 use fujimod_emulator_devices::graph::DeviceWindow;
-use fujimod_emulator_devices::imaging::statistics;
-use fujimod_emulator_devices::imaging::{sensor, slvs};
+use fujimod_emulator_sensor_input::statistics;
+use fujimod_emulator_sensor_input::{sensor, slvs};
 use fujimod_emulator_xp5_imaging::imaging::focus;
 use fujimod_emulator_xp5_imaging::imaging::input;
 use fujimod_emulator_xp5_imaging::imaging::iris;
