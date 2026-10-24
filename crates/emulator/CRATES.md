@@ -189,25 +189,44 @@ records the rebuild costs below before and after.
 Wall seconds after one edit: the release Python extension
 (`scripts/python_extension.py`), and the edited crate's unit tests
 (`cargo test -p` with `--no-run`). "Before step 2" was measured on a loaded
-machine, the current columns at load average 4–8.
+machine. "Before the splits" precedes the binding split of step 6 and the
+image split of step 8: the catalog and image rows were measured in the same
+checkout as the current columns, at load average 5–11, and the other rows
+repeat the measurements before them (load average 4–8).
 
-| Edit | Extension before step 2 | Extension now | Unit tests now | Target |
-|---|---|---|---|---|
-| EXR II I2C controller | 23–26 | 1.4 | 0.7 | 2–3; under 1 |
-| EXR II ISP image input | 15–19 | 1.6 | 0.9 | 2–3; under 1 |
-| Lens part | 23–26 | 2.0 | 0.8 | 2–3; under 1 |
-| XP4 I/O | | 2.0–2.1 | 0.8 | 2–3; under 1 |
-| XP5 I/O | | not linked | 0.8 | under 1 |
-| Arm interrupt controller | | 3.3–3.5 | 0.8 | 2–3; under 1 |
-| Image layer (interface) | 23–26 | 8.6–12.6 | 1.1 | |
-| EXR II plan | | 12.7–17 | 1.0 | |
+| Edit | Extension before step 2 | Before the splits | Extension now | Unit tests now | Target |
+|---|---|---|---|---|---|
+| EXR II I2C controller | 23–26 | 1.4 | 1.4 | 0.9 | 2–3; under 1 |
+| EXR II ISP image input | 15–19 | 1.6 | 1.4 | 0.8 | 2–3; under 1 |
+| Lens part | 23–26 | 2.0 | 1.8 | 0.7 | 2–3; under 1 |
+| XP4 I/O | | 2.0–2.1 | 1.6 | 0.7 | 2–3; under 1 |
+| XP5 I/O | | not linked | not linked | 0.7 | under 1 |
+| Arm interrupt controller | | 3.3–3.5 | 1.5 | 0.6 | 2–3; under 1 |
+| Image formation | | 6.5–7.8 | 2.3–4.6 | 0.7 | 2–3; under 1 |
+| Image processing | | 6.5–7.8 | 2.1–2.2 | 1.2 | 2–3; under 1 |
+| Image interface | 23–26 | 6.5–7.8 | 4.7–5.2 | 1.1 | |
+| EXR II plan | | 12.7–17 | 6.0–7.7 | 0.9 | |
+| Catalog | | 9.7–10.6 | 8.1–9.6 | 3.5 | |
 
 An EXR II model edit recompiles the model crate (0.2–0.3 s),
-`fujimod-emulator-models` (0.1 s) and the extension module (0.9–1.0 s, mostly
+`fujimod-emulator-models` (0.1 s) and the extension module (0.8–1.0 s, mostly
 linking). Before the registry it also recompiled the board crate (0.4–0.5 s;
 2.1–2.3 s in all for the I2C controller, 2.6 s for the lens part). A lens part
 edit also recompiles the EXR II serial, audio and boot serial crates, which
-depend on it. The extension links no XP5 model. An Arm interrupt controller edit recompiles the
-XP4 board and its Python bindings with the extension module; before the GIC
-trait it also recompiled the emulator and all Python bindings. Interface and plan
-edits rebuild their dependents across the workspace.
+depend on it. The extension links no XP5 model. An Arm interrupt controller
+edit recompiles the XP4 board and its Python bindings with the extension
+module; before the GIC trait it also recompiled the emulator and all Python
+bindings.
+
+Before step 8 an image formation or processing edit was an image layer edit:
+it rebuilt the plan, the emulator, every EXR II model and `fujimod-python`.
+It now recompiles the edited crate (0.2–0.3 s; 1.4 s for the first formation
+edit), the ISP, codec and sensor models that use it, the host image bindings
+and the module. An image interface edit still rebuilds the plan (0.9 s), the
+emulator (2.0–2.1 s), the EXR II models in parallel and the emulator bindings
+(0.7 s); a plan edit adds the emulator (2.6–3.7 s) and the emulator and remote
+bindings. A catalog edit rebuilds the catalog (2.8–3.8 s), then `fujimod-usb`
+(1.2–1.7 s) and `fujimod-python-usb` (2.9–3.3 s) on its critical path beside
+the emulator (2.4–2.5 s); before step 6 split the bindings, `fujimod-python`
+(3.3–3.4 s) waited for the emulator, and the USB bindings are the next
+bottleneck.
