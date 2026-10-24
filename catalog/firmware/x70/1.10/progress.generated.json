@@ -27,16 +27,16 @@
       "result": "pass"
     },
     "record-movie": {
-      "result": "not-run"
+      "result": "pass"
     },
     "control-input": {
       "result": "pass"
     },
     "focus": {
-      "result": "not-run"
+      "result": "pass"
     },
     "lens": {
-      "result": "not-run"
+      "result": "pass"
     },
     "film-simulations": {
       "result": "not-run"
@@ -45,10 +45,10 @@
       "result": "pass"
     },
     "playback-movie": {
-      "result": "not-run"
+      "result": "pass"
     },
     "develop-raw": {
-      "result": "not-run"
+      "result": "pass"
     },
     "sd": {
       "result": "pass"
