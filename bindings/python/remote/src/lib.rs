@@ -71,7 +71,7 @@ impl remote::board::SessionOwner for PythonBoard {
 impl Camera {
     #[staticmethod]
     fn from_ff80(
-        session: &fujimod_python_usb::asynchronous::AsyncSession,
+        session: &Bound<'_, PyAny>,
         facts: &str,
         read_bytes: u32,
         write_bytes: u32,
@@ -99,7 +99,11 @@ impl Camera {
             poll_interval: Duration::from_secs_f64(poll_seconds),
             output,
         };
-        let remote = remote::Ff80Remote::new(session.remote_lease()?, facts.clone(), options)
+        let remote = remote::Ff80Remote::new(
+            fujimod_python_usb_lease::lease(session)?,
+            facts.clone(),
+            options,
+        )
             .map_err(error)?;
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
@@ -448,7 +452,7 @@ impl Camera {
     #[staticmethod]
     #[pyo3(signature = (session, poll_seconds=0.001))]
     fn synthetic_ff80(
-        session: &fujimod_python_usb::asynchronous::AsyncSession,
+        session: &Bound<'_, PyAny>,
         poll_seconds: f64,
     ) -> PyResult<Self> {
         let facts =

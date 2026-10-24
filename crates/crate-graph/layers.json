@@ -65,7 +65,9 @@
       "fujimod-python-emulator",
       "fujimod-python-recording",
       "fujimod-python-remote",
+      "fujimod-python-service",
       "fujimod-python-usb",
+      "fujimod-python-usb-lease",
       "fujimod-remote"
     ],
     "final": [

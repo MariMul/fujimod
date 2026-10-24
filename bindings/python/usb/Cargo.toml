@@ -15,7 +15,8 @@ doctest = false
 testing = ["fujimod-usb/testing"]
 
 [dependencies]
-fujimod-python-catalog = { path = "../catalog" }
+fujimod-python-service = { path = "../service" }
+fujimod-python-usb-lease = { path = "../usb-lease" }
 fujimod-catalog-service.workspace = true
 fujimod-firmware.workspace = true
 fujimod-usb.workspace = true

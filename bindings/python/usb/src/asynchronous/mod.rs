@@ -191,10 +191,12 @@ pub(super) fn register(
     operations::register(py, module, app80)
 }
 
-impl AsyncSession {
-    pub fn remote_lease(&self) -> PyResult<Lease> {
-        Lease::new(self).map(|(lease, _)| lease)
-    }
+/// Lease the open ff80 session of a Python `fujimod.usb.Session` to another binding crate.
+pub(super) fn remote_lease(
+    session: &Bound<'_, PyAny>,
+) -> PyResult<fujimod_python_usb_lease::Lease> {
+    let session = session.cast::<AsyncSession>()?.get();
+    Lease::new(session).map(|(lease, _)| fujimod_python_usb_lease::Lease::new(lease))
 }
 impl std::borrow::Borrow<ff80::Session> for Lease {
     fn borrow(&self) -> &ff80::Session {

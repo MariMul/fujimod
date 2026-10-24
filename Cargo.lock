@@ -4335,10 +4335,9 @@ dependencies = [
 name = "fujimod-python-catalog"
 version = "0.1.0"
 dependencies = [
- "fujimod-bindgen",
  "fujimod-catalog",
- "fujimod-catalog-service",
  "fujimod-corpus",
+ "fujimod-python-service",
  "fujimod-workspace-hack",
  "pyo3",
  "serde",
@@ -4430,7 +4429,7 @@ dependencies = [
  "fujimod-catalog-remote",
  "fujimod-emulator",
  "fujimod-python-emulator",
- "fujimod-python-usb",
+ "fujimod-python-usb-lease",
  "fujimod-remote",
  "fujimod-usb",
  "fujimod-workspace-hack",
@@ -4441,19 +4440,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-python-service"
+version = "0.1.0"
+dependencies = [
+ "fujimod-bindgen",
+ "fujimod-catalog-service",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
 name = "fujimod-python-usb"
 version = "0.1.0"
 dependencies = [
  "fujimod-bindgen",
  "fujimod-catalog-service",
  "fujimod-firmware",
- "fujimod-python-catalog",
+ "fujimod-python-service",
+ "fujimod-python-usb-lease",
  "fujimod-usb",
  "fujimod-workflows",
  "fujimod-workspace-hack",
  "futures-channel",
  "futures-lite",
  "nusb",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-usb-lease"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "fujimod-workspace-hack",
  "pyo3",
 ]
 

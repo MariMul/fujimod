@@ -1,6 +1,6 @@
 //! Enum conversion and session adapters for the Rust service catalog.
 use super::*;
-use fujimod_python_catalog::{Codec, Definition, ServiceModes};
+use fujimod_python_service::{Codec, Definition, ServiceModes};
 use usb::app80::catalog as core;
 mod values {
     include!(concat!(env!("OUT_DIR"), "/service_values_python.rs"));

@@ -61,8 +61,11 @@ From the bottom of the graph to the top:
    over the emulator and the interface. The Python bindings are one crate per
    area, each depending only on what it binds: `fujimod-python-base` (the
    errors, values, discovery and call snapshots and the XP4 backend hook the
-   emulator bindings share), `-catalog` (catalog and corpus), `-usb` (USB,
-   app80, tracing, workflows and firmware files), `-recording`, `-remote` and
+   emulator bindings share), `-catalog` (the reference catalog and corpus),
+   `-service` (App80 service definitions, registered in the catalog module),
+   `-usb` (USB, app80, tracing, workflows and firmware files), `-usb-lease`
+   (the ff80 session lease the remote bindings borrow from a USB session
+   without depending on the USB bindings), `-recording`, `-remote` and
    `-emulator` (boards, run configurations, input assets and settings
    headers). Binding functions that call one family's model code live in that
    family's binding crate (`fujimod-python-graphics` for the graphics data
