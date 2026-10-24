@@ -171,6 +171,7 @@ machine, the current columns at load average 4–8.
 | Lens part | 23–26 | 2.0 | 0.8 | 2–3; under 1 |
 | XP4 I/O | | 2.0–2.1 | 0.8 | 2–3; under 1 |
 | XP5 I/O | | not linked | 0.8 | under 1 |
+| Arm interrupt controller | | 3.3–3.5 | 0.8 | 2–3; under 1 |
 | Image layer (interface) | 23–26 | 8.6–12.6 | 1.1 | |
 | EXR II plan | | 12.7–17 | 1.0 | |
 
@@ -179,5 +180,7 @@ An EXR II model edit recompiles the model crate (0.2–0.3 s),
 linking). Before the registry it also recompiled the board crate (0.4–0.5 s;
 2.1–2.3 s in all for the I2C controller, 2.6 s for the lens part). A lens part
 edit also recompiles the EXR II serial, audio and boot serial crates, which
-depend on it. The extension links no XP5 model. Interface and plan edits
-rebuild their dependents across the workspace.
+depend on it. The extension links no XP5 model. An Arm interrupt controller edit recompiles the
+XP4 board and its Python bindings with the extension module; before the GIC
+trait it also recompiled the emulator and `fujimod-python`. Interface and plan
+edits rebuild their dependents across the workspace.
