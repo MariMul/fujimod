@@ -509,6 +509,18 @@ mod tests {
         write(m, h, 0x34, 0xffff);
         write(m, h, 0x38, 0xffff);
     }
+    #[test]
+    fn timeout_control_is_readable_as_a_halfword() {
+        let mut m = model(Protocol::Enumeration);
+        let mut h = Ram::new(0);
+        write(&mut m, &mut h, 0x2c, 5);
+        h.now = 2;
+        m.advance(&mut h.cx());
+        write(&mut m, &mut h, 0x2e, 14);
+        let mut cx = h.cx();
+        assert_eq!(m.read(&mut cx, BASE + 0x2e, 2), 14);
+        assert_eq!(cx.refusal(), None);
+    }
     fn command(m: &mut SdioHost, h: &mut Ram, word: u32, arg: u32) {
         write(m, h, 0x30, 0xffff);
         write(m, h, 8, (arg & 65535) as u64);

@@ -95,6 +95,7 @@ pub struct TimingBank {
     pub frames: i64,
     pub stop_completions: i64,
     pub inferred_running: bool,
+    pub configured_once: bool,
 }
 impl Default for TimingBank {
     fn default() -> Self {
@@ -109,6 +110,7 @@ impl Default for TimingBank {
             frames: 0,
             stop_completions: 0,
             inferred_running: false,
+            configured_once: false,
         }
     }
 }
@@ -195,7 +197,16 @@ impl Timing {
         } else {
             self.configured(i)
         };
-        let running = candidate && host.clock_ready()?;
+        if !external && candidate {
+            self.banks[i].configured_once = true;
+        }
+        // Timing registers can be rewritten piecemeal while scanout remains
+        // active. The guest-visible register image is the programming input;
+        // it does not gate an already running physical clock between writes.
+        let running = (candidate
+            || self.phase_profile == PhaseProfile::ConfiguredClocked
+                && self.banks[i].configured_once)
+            && host.clock_ready()?;
         if running && !self.banks[i].inferred_running {
             self.validate_routes(i, host)?;
         }
@@ -334,7 +345,10 @@ impl Timing {
         }
         // A status read between events is pure, including checkpoint state.
         // Due work and clock-peer transitions remain explicit boundaries.
-        if self.deadline_with_clock(now, host.clock_ready()?).is_some_and(|at| at <= now) {
+        if self
+            .deadline_with_clock(now, host.clock_ready()?)
+            .is_some_and(|at| at <= now)
+        {
             self.tick(now, host)?;
         }
         Ok(if o == 0x30 {
@@ -458,7 +472,11 @@ impl Timing {
                 PhaseProfile::External => self.banks[i].registers.get_or_zero(0) & 0x100 != 0,
                 _ => return false,
             };
-            (candidate && clock_ready) != self.banks[i].inferred_running
+            ((candidate
+                || self.phase_profile == PhaseProfile::ConfiguredClocked
+                    && self.banks[i].configured_once)
+                && clock_ready)
+                != self.banks[i].inferred_running
         });
         self.next_event_tick()
             .into_iter()
@@ -856,6 +874,47 @@ mod native_tests {
         assert_eq!(timing.next_deadline(17), Some(17));
         advance(&mut timing, &mut host, 17);
         assert_eq!(timing.next_deadline(17), None);
+    }
+    #[test]
+    fn active_clock_continues_during_partial_timing_register_reprogramming() {
+        let (mut timing, mut clock, mut host) = fixture();
+        for (offset, _) in MASKS {
+            let value = match offset {
+                4 => 0x10001,
+                0x2c => 1,
+                _ => 0,
+            };
+            write(&mut timing, &mut host, BASES[1] + offset as u64, value);
+        }
+        write(&mut clock, &mut host, clock::BASE + 0x48, 1 << 28);
+        advance(&mut clock, &mut host, 5);
+        assert_eq!(timing.next_deadline(5), Some(5));
+        advance(&mut timing, &mut host, 5);
+        assert_eq!(timing.next_deadline(5), Some(11));
+
+        write(&mut timing, &mut host, BASES[1] + 4, 0);
+        assert!(timing.state.banks[1].inferred_running);
+        assert!(!timing.state.configured(1));
+        assert_eq!(timing.next_deadline(5), Some(11));
+        let checkpoint = timing.checkpoint().unwrap();
+        advance(&mut timing, &mut host, 11);
+        assert_eq!(timing.next_deadline(11), Some(14));
+        advance(&mut timing, &mut host, 14);
+        advance(&mut timing, &mut host, 17);
+        assert_eq!(host.irqs, [(1, 55), (1, 56), (1, 55)]);
+        assert_eq!(timing.state.banks[1].frames, 1);
+
+        // Restoring in the middle of programming must retain the active clock,
+        // even though the current register image is not a complete timing set.
+        timing.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(timing.next_deadline(5), Some(11));
+        host.now = 5;
+        write(&mut timing, &mut host, BASES[1] + 4, 0x20002);
+        assert_eq!(timing.next_deadline(5), Some(11));
+        write(&mut clock, &mut host, clock::BASE + 0x48, 0);
+        advance(&mut timing, &mut host, 5);
+        assert!(!timing.state.banks[1].inferred_running);
+        assert_eq!(timing.next_deadline(5), None);
     }
     #[test]
     fn malformed_routes_times_and_saved_registers_refuse() {
