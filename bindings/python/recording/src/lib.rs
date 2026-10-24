@@ -199,6 +199,11 @@ impl Recorder {
     fn idle_limit(&self) -> f64 {
         self.inner.idle_limit
     }
+    #[setter]
+    fn set_idle_limit(&mut self, value: f64) -> PyResult<()> {
+        self.inner.idle_limit = fujimod_recording::seconds(value).map_err(error)?;
+        Ok(())
+    }
     #[getter]
     fn skipped_seconds(&self) -> f64 {
         self.inner.skipped_seconds

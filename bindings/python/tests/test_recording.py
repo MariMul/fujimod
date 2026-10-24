@@ -34,6 +34,20 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(frame.pixels(), pixels)
         self.assertEqual(Frame.from_png(frame.png()).pixels(), pixels)
 
+    def test_idle_limit_can_preserve_a_required_observation_interval(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            recorder=Recorder(Path(directory),fps=10)
+            frame=Frame.rgb(2,1,bytes((10,20,30))*2)
+            recorder.frame(frame,0)
+            recorder.idle_limit=2.9
+            recorder.frame(frame,2.5)
+            self.assertEqual(recorder.frames,25)
+            self.assertEqual(recorder.skipped_seconds,0)
+            for value in (-1,float('nan'),float('inf')):
+                with self.assertRaises(ValueError):recorder.idle_limit=value
+            self.assertEqual(recorder.idle_limit,2.9)
+            recorder.finish()
+
     def test_screenshot_default_samples_just_the_start_and_never_requires_encoders(
         self,
     ) -> None:
