@@ -5,7 +5,7 @@ use pyo3::{
     types::{PyDict, PyList},
 };
 
-pub(crate) fn snapshot<'py>(py: Python<'py>, saved: &Snapshot) -> PyResult<Bound<'py, PyDict>> {
+pub fn snapshot<'py>(py: Python<'py>, saved: &Snapshot) -> PyResult<Bound<'py, PyDict>> {
     let result = PyDict::new(py);
     result.set_item("edges", &saved.edges)?;
     result.set_item("hits", &saved.hits)?;

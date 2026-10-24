@@ -10,6 +10,8 @@ fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     fujimod_emulator_exr2_board::register_board_builder();
     fujimod_python::register(py, module)?;
     #[cfg(feature = "emulator")]
+    fujimod_python_xp4::register();
+    #[cfg(feature = "emulator")]
     fujimod_python_graphics::register(&module.getattr("emulator")?.cast_into::<PyModule>()?)?;
     Ok(())
 }

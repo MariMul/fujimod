@@ -65,7 +65,8 @@
       "fujimod-emulator-javascript",
       "fujimod-javascript",
       "fujimod-python-graphics",
-      "fujimod-python-module"
+      "fujimod-python-module",
+      "fujimod-python-xp4"
     ],
     "other": [
       "fujimod-bindgen",

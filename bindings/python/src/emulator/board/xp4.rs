@@ -11,7 +11,7 @@ impl Xp4 {
     fn with<T>(
         &self,
         py: Python<'_>,
-        f: impl FnOnce(&super::super::xp4::Xp4Session) -> PyResult<T>,
+        f: impl FnOnce(&dyn super::xp4_backend::Xp4Backend) -> PyResult<T>,
     ) -> PyResult<T> {
         f(self.owner.try_borrow(py)?.xp4_session()?)
     }
@@ -111,8 +111,7 @@ impl Xp4 {
     }
     fn memory_watch_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         self.with(py, |s| {
-            let value = serde_json::to_string(&s.memory_watch_state())
-                .map_err(|error| crate::emulator::error(error.to_string()))?;
+            let value = s.memory_watch_state();
             py.import("json")?.call_method1("loads", (value,))
         })
     }

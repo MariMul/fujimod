@@ -5,6 +5,7 @@ mod context;
 mod loops;
 mod observation;
 mod xp4;
+pub mod xp4_backend;
 pub use checkpoint::Checkpoint;
 mod device;
 use fujimod_emulator::session::preparation;
@@ -35,7 +36,7 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
 
 enum Backend {
     Graph(fujimod_emulator::session::Session),
-    Xp4(super::xp4::Xp4Session),
+    Xp4(Box<dyn xp4_backend::Xp4Backend>),
 }
 
 #[pyclass(unsendable, module = "fujimod._native.emulator")]
@@ -135,9 +136,9 @@ impl Board {
     fn board_mut(&mut self) -> PyResult<&mut ExecutionBoard> {
         Ok(&mut self.session_mut()?.board)
     }
-    fn xp4_session(&self) -> PyResult<&super::xp4::Xp4Session> {
+    fn xp4_session(&self) -> PyResult<&dyn xp4_backend::Xp4Backend> {
         match self.backend.as_ref() {
-            Some(Backend::Xp4(session)) => Ok(session),
+            Some(Backend::Xp4(session)) => Ok(session.as_ref()),
             Some(Backend::Graph(_)) => Err(PyRuntimeError::new_err(
                 "Selected graph system does not support this XP4 operation",
             )),
@@ -189,7 +190,7 @@ impl Board {
     #[staticmethod]
     #[pyo3(signature=(definition, storage_image=None))]
     fn from_xp4(definition: &str, storage_image: Option<Vec<u8>>) -> PyResult<Self> {
-        let session = super::xp4::Xp4Session::from_definition(definition, storage_image)?;
+        let session = xp4_backend::open(definition, storage_image)?;
         Ok(Self {
             driver: None,
             memory_watch: None,

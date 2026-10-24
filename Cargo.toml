@@ -61,6 +61,7 @@ members = [
   "bindings/python",
   "bindings/python/module",
   "bindings/python/graphics",
+  "bindings/python/xp4",
   "bindings/javascript",
   "bindings/javascript/emulator",
   "bindings/generator",

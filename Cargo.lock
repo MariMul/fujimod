@@ -4153,7 +4153,6 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-emulator-storage",
- "fujimod-emulator-xp4-board",
  "fujimod-firmware",
  "fujimod-recording",
  "fujimod-remote",
@@ -4193,8 +4192,23 @@ dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-python",
  "fujimod-python-graphics",
+ "fujimod-python-xp4",
  "fujimod-workspace-hack",
  "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-xp4"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-xp4-board",
+ "fujimod-python",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
 ]
 
 [[package]]

@@ -93,7 +93,7 @@ pub(super) fn records<'py>(
         for (key, value) in record.fields.iter() {
             row.set_item(
                 key.as_ref(),
-                crate::emulator::python_values::value_to_py(py, value)?,
+                fujimod_python::emulator::python_values::value_to_py(py, value)?,
             )?;
         }
         list.append(row)?;

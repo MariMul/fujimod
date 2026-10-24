@@ -1,18 +1,17 @@
 //! Native bindings for the shared execution runtime and host algorithms.
 #[cfg(not(target_os = "emscripten"))]
-pub(crate) mod board;
-mod discovery;
+pub mod board;
+pub mod discovery;
 mod film;
 mod jpeg;
 mod method4;
 mod mono_raster;
-mod python_observation;
+pub mod python_observation;
 pub mod python_values;
 mod raf;
 mod raster;
 mod scene;
 mod settings;
-mod xp4;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -20,7 +19,7 @@ use pyo3::types::{PyBytes, PyDict, PyModule};
 
 pyo3::create_exception!(fujimod._native.emulator, NativeError, PyRuntimeError);
 
-pub(crate) fn error(message: String) -> PyErr {
+pub fn error(message: String) -> PyErr {
     NativeError::new_err(message)
 }
 
@@ -200,29 +199,4 @@ pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult
         .cast_into::<PyDict>()?;
     modules.set_item("fujimod._native.emulator", &module)?;
     Ok(())
-}
-
-pub(crate) fn client_register(id: i32) -> Result<fujimod_emulator_cpu::Register, String> {
-    use fujimod_emulator_cpu::arm::Register as R;
-    Ok(fujimod_emulator_cpu::Register::Arm32(match id {
-        66..=78 => R::R((id - 66) as u8),
-        10 => R::R(14),
-        11 => R::R(15),
-        12 => R::R(13),
-        3 => R::Cpsr,
-        13 => R::Spsr,
-        4 => R::Fpexc,
-        111 => R::Cpacr,
-        140 => {
-            return Ok(fujimod_emulator_cpu::Register::Diagnostic(
-                fujimod_emulator_cpu::Diagnostic::ExceptionSyndrome,
-            ));
-        }
-        6 => R::Fpscr,
-        8 => R::Fpsid,
-        14..=45 => R::D((id - 14) as u8),
-        50..=65 => R::Q((id - 50) as u8),
-        79..=110 => R::S((id - 79) as u8),
-        _ => return Err(format!("unknown native ARM register ID {id}")),
-    }))
 }
