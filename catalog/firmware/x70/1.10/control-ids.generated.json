@@ -6154,6 +6154,7 @@
       }
     }
   ],
+  "undelivered_rows": [],
   "interfaces": {
     "power": {
       "kind": "power_switch",

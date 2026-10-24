@@ -407,6 +407,9 @@ pub struct FirmwareControlIds {
     pub debug_keys: Vec<DebugKey>,
     /// Every located scanner or protocol input, including unclaimed connections.
     pub inputs: Vec<LocatedInput>,
+    /// Scanner rows whose physical key has no event-translation row, so the
+    /// firmware delivers no UI event for them.
+    pub undelivered_rows: Vec<LocatedScannerRecord>,
     /// Protocols outside the key scanner, keyed by physical body connection ID.
     pub interfaces: BTreeMap<String, ControlInterface>,
 }
@@ -1335,6 +1338,17 @@ impl FirmwareControlIds {
                 }
             }
         }
+        for record in &self.undelivered_rows {
+            if record.index >= self.scanner.count
+                || !rows.insert(record.index)
+                || self.ui_event(record.witness.physical_key).is_some()
+            {
+                return Err(format!(
+                    "scanner row {} is not an undelivered row",
+                    record.index
+                ));
+            }
+        }
         if rows.len() != self.scanner.count as usize {
             return Err("generated input document does not retain every scanner row".into());
         }
@@ -1606,7 +1620,7 @@ mod tests {
                 "released_value":0,"routine":{"address":8192,"size":4,"sha256":"0".repeat(64)}}},
             "native_key_names":{"rows":[{"event":61,"name":"KEY_FUNCTION3","string_address":16384},
                 {"event":1,"name":"KEY_OK","string_address":16400}],"reader":16380,"size":32,"sha256":"0".repeat(64)},
-            "debug_keys":debug_keys,"inputs":inputs,"interfaces":{}
+            "debug_keys":debug_keys,"inputs":inputs,"undelivered_rows":[],"interfaces":{}
         })).unwrap();
         (physical, firmware)
     }
@@ -1860,6 +1874,54 @@ mod tests {
                 .validate(&physical, &BTreeSet::from(["contact"]))
                 .unwrap_err()
                 .contains("undeclared debug key")
+        );
+    }
+
+    #[test]
+    fn untranslated_scanner_rows_are_recorded_as_undelivered() {
+        let (physical, mut firmware) = fixture();
+        firmware.scanner.count = 2;
+        firmware.event_translation = Some(EventTranslation {
+            address: 0x3000,
+            stride: 6,
+            sha256: "0".repeat(64),
+            rows: vec![TranslatedKey {
+                physical_key: 61,
+                event: 61,
+            }],
+        });
+        let witness = |physical_key| ScannerRecordWitness {
+            physical_key,
+            ..firmware
+                .inputs
+                .last()
+                .unwrap()
+                .scanner
+                .clone()
+                .unwrap()
+                .witness
+        };
+        firmware.undelivered_rows = vec![LocatedScannerRecord {
+            index: 1,
+            witness: witness(5),
+        }];
+        firmware
+            .validate(&physical, &BTreeSet::from(["contact"]))
+            .unwrap();
+        let mut translated = firmware.clone();
+        translated.undelivered_rows[0].witness = witness(61);
+        assert!(
+            translated
+                .validate(&physical, &BTreeSet::from(["contact"]))
+                .unwrap_err()
+                .contains("not an undelivered row")
+        );
+        firmware.undelivered_rows[0].index = 0;
+        assert!(
+            firmware
+                .validate(&physical, &BTreeSet::from(["contact"]))
+                .unwrap_err()
+                .contains("not an undelivered row")
         );
     }
 

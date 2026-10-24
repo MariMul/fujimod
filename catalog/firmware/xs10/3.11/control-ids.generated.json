@@ -2435,5 +2435,17 @@
       "electrical": null
     }
   ],
+  "undelivered_rows": [
+    {
+      "index": 3,
+      "witness": {
+        "physical_key": 5,
+        "input_kind": "kind_2",
+        "source": 4294967295,
+        "lower": 1,
+        "upper": 0
+      }
+    }
+  ],
   "interfaces": {}
 }

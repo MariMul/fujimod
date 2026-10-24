@@ -1862,6 +1862,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "undelivered_rows": {
+          "description": "Scanner rows whose physical key has no event-translation row, so the\nfirmware delivers no UI event for them.",
+          "items": {
+            "$ref": "#/$defs/LocatedScannerRecord"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -1873,6 +1880,7 @@
         "input_readers",
         "debug_keys",
         "inputs",
+        "undelivered_rows",
         "interfaces"
       ],
       "type": "object"

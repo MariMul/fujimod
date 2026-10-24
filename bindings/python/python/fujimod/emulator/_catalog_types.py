@@ -1541,6 +1541,7 @@ FirmwareControlIds = TypedDict(
         "native_key_names": NotRequired["NativeKeyNames | None"],
         "scanner": Required["ScannerTable"],
         "schema": Required["int"],
+        "undelivered_rows": Required["list[LocatedScannerRecord]"],
     },
     total=False,
 )
