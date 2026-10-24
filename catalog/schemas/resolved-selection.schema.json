@@ -11173,6 +11173,13 @@
       "additionalProperties": false,
       "description": "Declared radiometry facts.",
       "properties": {
+        "mode_change_frames": {
+          "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "pixel_clock_hz": {
           "description": "Declared pixel clock hz.",
           "format": "uint64",
@@ -11221,6 +11228,7 @@
         "pixel_clock_hz",
         "projection",
         "rolling_references",
+        "mode_change_frames",
         "saturation_lux_seconds",
         "shutter",
         "shutter_output",
@@ -16675,6 +16683,13 @@
       "additionalProperties": false,
       "description": "Radiometric, timing and projection facts of an image sensor. Each value is a\ndeclared catalog input; its basis is recorded in the part document.",
       "properties": {
+        "mode_change_frames": {
+          "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "period_ticks": {
           "description": "Sensor scan period in ticks.",
           "format": "uint64",
@@ -16742,6 +16757,7 @@
         "shutter_output",
         "shutter_closing_delay_seconds",
         "rolling_references",
+        "mode_change_frames",
         "projection"
       ],
       "type": "object"

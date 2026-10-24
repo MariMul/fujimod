@@ -679,6 +679,29 @@ fn capture_chain_uses_catalog_windows_interrupts_and_sensor_phase() {
 }
 
 #[test]
+fn sensor_sync_acquisition_uses_the_declared_part_readouts() {
+    let mut resolved = ResolvedConfiguration::with_overlays(
+        "x70-110-rec", &["x70-110-browser-camera".into()],
+    ).unwrap();
+    let mut sensors = 0;
+    for part in &mut resolved.reference.parts {
+        if let fujimod_catalog::reference::PartModel::ImageSensor {
+            radiometry: Some(radiometry),
+            ..
+        } = &mut part.model {
+            radiometry.mode_change_frames = 4;
+            sensors += 1;
+        }
+    }
+    assert_eq!(sensors, 1);
+    let prepared = prepared(resolved).unwrap();
+    assert_eq!(
+        model(&prepared, "image_input")["sensor"]["controls"]["options"]["mode_change_frames"],
+        4
+    );
+}
+
+#[test]
 fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
     use fujimod_emulator_devices::{Cx, Host, Record};
     struct Clock(u64);

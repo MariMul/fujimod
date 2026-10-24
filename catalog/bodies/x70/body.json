@@ -2321,6 +2321,7 @@
                 ]
               },
               "shutter_output": 0,
+              "mode_change_frames": 2,
               "rolling_references": [
                 {
                   "mode": 236,
@@ -5127,6 +5128,7 @@
                 ]
               },
               "shutter_output": 0,
+              "mode_change_frames": 2,
               "rolling_references": [
                 {
                   "mode": 236,

@@ -2446,6 +2446,7 @@ class HardwareProjection(TypedDict, total=False):
 
 
 class HardwareRadiometry(TypedDict, total=False):
+    mode_change_frames: Required[int]
     pixel_clock_hz: Required[int]
     projection: Required[HardwareProjection]
     rolling_references: Required[list[HardwareRollingReference]]
@@ -4625,6 +4626,7 @@ class SensorProjection(TypedDict, total=False):
 
 
 class SensorRadiometry(TypedDict, total=False):
+    mode_change_frames: Required[int]
     period_ticks: Required[int]
     projection: Required[SensorProjection]
     rolling_references: Required[list[SensorRollingReference]]

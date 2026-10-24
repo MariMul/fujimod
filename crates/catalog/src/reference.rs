@@ -1091,6 +1091,8 @@ pub struct SensorRadiometry {
     pub shutter_closing_delay_seconds: Vec<(f64, f64)>,
     /// Rolling readout references, one per readout mode.
     pub rolling_references: Vec<SensorRollingReference>,
+    /// Invalid readouts while a sensor drive-mode change acquires sync.
+    pub mode_change_frames: u8,
     /// Lens projection onto the sensor.
     pub projection: SensorProjection,
 }

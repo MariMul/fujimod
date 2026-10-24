@@ -522,6 +522,8 @@ pub struct Radiometry {
     pub projection: Projection,
     /// Declared rolling references.
     pub rolling_references: Vec<RollingReference>,
+    /// Invalid readouts while a sensor drive-mode change acquires sync.
+    pub mode_change_frames: u8,
     /// Declared saturation lux seconds.
     pub saturation_lux_seconds: f64,
     /// Declared shutter.
