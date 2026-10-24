@@ -104,11 +104,13 @@ impl Decoder {
                 return Err("JPEG decode input has no supported stream header".into());
             }
         }
+        // SOF dimensions are U16. Bound decoded work by the pixel budget and
+        // programmed output allocation below, including downsampled images.
         let options = DecoderOptions::new_safe()
             .set_use_unsafe(false)
             .set_strict_mode(true)
-            .set_max_width(8192)
-            .set_max_height(8192)
+            .set_max_width(u16::MAX as usize)
+            .set_max_height(u16::MAX as usize)
             .jpeg_set_out_colorspace(ColorSpace::RGB);
         let mut decoder =
             zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(self.source.as_ref()), options);
@@ -150,8 +152,8 @@ impl Decoder {
                 let options = DecoderOptions::new_safe()
                     .set_use_unsafe(false)
                     .set_strict_mode(true)
-                    .set_max_width(8192)
-                    .set_max_height(8192)
+                    .set_max_width(u16::MAX as usize)
+                    .set_max_height(u16::MAX as usize)
                     .jpeg_set_out_colorspace(ColorSpace::RGB);
                 let mut decoder = zune_jpeg::JpegDecoder::new_with_options(
                     ZCursor::new(source.as_ref()),

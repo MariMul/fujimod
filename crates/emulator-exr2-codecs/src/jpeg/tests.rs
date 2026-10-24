@@ -85,6 +85,62 @@ fn memory_encode_reserves_prefix_and_decoder_publishes_pixels_before_irq() {
     assert_eq!(read(&mut decoder, &mut h, 0xfff63004), 0x10000);
 }
 #[test]
+fn wide_and_tall_jpegs_decode_with_programmed_downsampling_and_bounded_dma() {
+    for (width, height) in [(9792, 8), (16, 8200)] {
+        let mut h = TestHost::new();
+        h.ram[0x10000..0x10000 + width * height * 2].fill(128);
+        h.ram[0x60000..0x60002].copy_from_slice(&[255, 216]);
+        let mut encoded = encoder(Default::default());
+        configure(&mut encoded, &mut h, false);
+        for (offset, value) in [
+            (0x44, (height << 16 | width) as u32),
+            (0x100, 0x10000),
+            (0x10c, 0x60000),
+            (0x110, 0x10000),
+            (0, 5),
+        ] {
+            write(&mut encoded, &mut h, 0xfff62000 + offset, value);
+        }
+        advance(&mut encoded, &mut h, 10);
+        let count = read(&mut encoded, &mut h, 0xfff62094) as u32;
+        let mut decoded = Decoder::new(
+            decoder::Options { completion_ticks: 5, reset_ticks: 2 },
+            Irq { core: 0, line: 76 },
+        ).unwrap();
+        for (offset, value) in [
+            (8, 0xfd0020), (0xa0, 1), (0x100, 0x80000),
+            (0x104, 1), (0x10c, 0x60000), (0x110, count),
+        ] {
+            write(&mut decoded, &mut h, 0xfff63000 + offset, value);
+        }
+        let mut cx = h.cx();
+        decoded.write(&mut cx, 0xfff63000, 4, 1);
+        assert!(cx.refusal().unwrap().contains("allocation"));
+        assert_eq!(decoded.next_deadline(10), None);
+        write(&mut decoded, &mut h, 0xfff63104, 0x30000);
+        write(&mut decoded, &mut h, 0xfff63000, 1);
+        advance(&mut decoded, &mut h, 14);
+        assert_eq!(h.irqs, [(0, 77)]);
+        advance_from_checkpoint(&mut decoded, &mut h, 15);
+        let pitch = ((width / 2 + 15) & !15) * 2;
+        for row in [0, height / 2 - 1] {
+            let start = 0x80000 + row * pitch;
+            assert_eq!(&h.ram[start..start + 4], &[128; 4]);
+        }
+        assert_eq!(h.irqs, [(0, 77), (0, 76)]);
+        assert_eq!(read(&mut decoded, &mut h, 0xfff63108), count as u64);
+        let sof = 0x60000 + h.ram[0x60000..0x60000 + count as usize]
+            .windows(2).position(|bytes| bytes == [255, 192]).unwrap();
+        h.ram[sof + 5..sof + 9].copy_from_slice(&[255, 240, 255, 240]);
+        let mut cx = h.cx();
+        decoded.write(&mut cx, 0xfff63000, 4, 1);
+        assert!(cx.refusal().unwrap().contains("dimensions are unsupported"));
+        assert_eq!(decoded.next_deadline(15), None);
+        assert_eq!(h.irqs, [(0, 77), (0, 76)]);
+    }
+}
+
+#[test]
 fn encode_capacity_failure_does_not_claim_stream_or_write_ram() {
     let mut h = TestHost::new();
     let stream: StreamHandle = Default::default();
