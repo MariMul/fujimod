@@ -311,6 +311,30 @@ const CARDS: Record<string, Card> = {
       'Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
     thanks: [],
   },
+  menu_theme_item: {
+    title: 'MENU THEME',
+    path: ['SET-UP'],
+    summary: 'Choose the appearance of the menus.',
+    choices: {},
+    related: [],
+    manual: null,
+    changes: null,
+    thanks: [],
+  },
+  touch_screen_setting: {
+    title: 'TOUCH SCREEN SETTING',
+    path: ['SET-UP'],
+    summary: null,
+    choices: {
+      ON: 'Taps choose menu rows, tabs and options, and close pop-ups.',
+      OFF: 'The screen ignores touch, in the menus too.',
+    },
+    related: [],
+    manual: 'menu_setup/touch_panel_setting',
+    changes:
+      'Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.',
+    thanks: [],
+  },
   edit_save_custom_setting: {
     title: 'EDIT/SAVE CUSTOM SETTING',
     path: ['SHOOTING MENU'],
@@ -371,7 +395,7 @@ const CARDS: Record<string, Card> = {
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('fde94c289f001f65923e04ec');
+const media = featureMedia('3d91e0dc6324bbc9a1b3f1f3');
 
 function Icon(props: { name: string }) {
   return (
@@ -847,6 +871,22 @@ export function FeatureCatalog() {
           </h4>
           <p>Display the shooting view on an HDMI device.</p>
           <div class="catalog-where">SET-UP</div>
+        </FeatureTile>
+        <FeatureTile media={media('menu_theme_item')}>
+          <h4>
+            <Icon name="theme" />
+            <Ref card="menu_theme_item">MENU THEME</Ref>
+          </h4>
+          <p>Choose the appearance of the menus.</p>
+          <div class="catalog-where">SET-UP</div>
+        </FeatureTile>
+        <FeatureTile media={media('touch_screen_setting')}>
+          <h4>
+            <Icon name="touch" />
+            <span>Menu Tap</span>
+          </h4>
+          <p>Tap a menu row, tab or option to choose it. Tap outside a pop-up to close it.</p>
+          <div class="catalog-where">SET-UP › TOUCH SCREEN SETTING</div>
         </FeatureTile>
         <FeatureTile media={media()}>
           <h4>
