@@ -27,6 +27,8 @@ struct Remaining {
     model_dependencies: BTreeMap<String, BTreeSet<String>>,
     oversize_models: BTreeSet<String>,
     interface_devices: BTreeSet<String>,
+    /// PyO3 libraries whose unit tests cannot link a native test harness.
+    untested_libraries: BTreeSet<String>,
 }
 
 struct Package {
@@ -299,5 +301,91 @@ fn the_interface_implements_no_device() {
     assert!(
         gone.is_empty(),
         "remove these moved files from remaining.interface_devices: {gone:?}"
+    );
+}
+
+/// Every `.rs` file under `directory`, skipping `bin` directories, which
+/// belong to binary targets.
+fn library_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(directory).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            if path.file_name().unwrap() != "bin" {
+                library_files(&path, files);
+            }
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+/// `cargo test --workspace` compiles and links a test harness for every
+/// library whose manifest leaves `test` on, so a library without unit tests
+/// sets `test = false`. A library that sets it may not contain tests, which
+/// would otherwise never run.
+#[test]
+fn libraries_build_a_test_harness_exactly_when_they_have_unit_tests() {
+    let untested = layers().remaining.untested_libraries;
+    let mut skipped = BTreeSet::new();
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let output = Command::new(cargo)
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--offline",
+        ])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("cargo metadata");
+    assert!(output.status.success());
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let mut wrong = vec![];
+    for package in metadata["packages"].as_array().unwrap() {
+        for target in package["targets"].as_array().unwrap() {
+            let kinds = target["kind"].as_array().unwrap();
+            if !kinds.iter().any(|k| {
+                matches!(
+                    k.as_str(),
+                    Some("lib" | "rlib" | "cdylib" | "staticlib" | "proc-macro")
+                )
+            }) {
+                continue;
+            }
+            let mut files = vec![];
+            library_files(
+                Path::new(target["src_path"].as_str().unwrap())
+                    .parent()
+                    .unwrap(),
+                &mut files,
+            );
+            let tests = files.iter().any(|path| {
+                let text = std::fs::read_to_string(path).unwrap();
+                ["#[test]", "#[tokio::test", "#[wasm_bindgen_test"]
+                    .iter()
+                    .any(|marker| text.contains(marker))
+            });
+            let name = package["name"].as_str().unwrap();
+            if tests && untested.contains(name) {
+                skipped.insert(name.to_owned());
+                continue;
+            }
+            if target["test"].as_bool().unwrap() != tests {
+                wrong.push(format!(
+                    "{name}: test = {}, unit tests: {tests}",
+                    target["test"]
+                ));
+            }
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "set [lib] test to match:\n{}",
+        wrong.join("\n")
+    );
+    assert_eq!(
+        skipped, untested,
+        "untested_libraries lists only libraries with skipped tests"
     );
 }

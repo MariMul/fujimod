@@ -120,6 +120,9 @@
     ]
   },
   "remaining": {
+    "untested_libraries": [
+      "fujimod-python-host-image"
+    ],
     "model_dependencies": {
       "fujimod-emulator-xp5-board": [
         "fujimod-emulator-ip",

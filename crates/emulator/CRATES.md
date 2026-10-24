@@ -126,8 +126,10 @@ behavior that changes often.
   same step.
 - `crates/crate-graph` checks these layers in the workspace tests: every crate
   has a layer in its `layers.json`, only model and final crates depend on model
-  crates, a model crate has at most 4,000 lines outside its tests, and the
-  interface implements no device. The violations that remain until the steps
+  crates, a model crate has at most 4,000 lines outside its tests, the
+  interface implements no device, and a library sets `test = false` exactly
+  when it has no unit tests, so `cargo test --workspace` links no empty test
+  harness and skips no test. The violations that remain until the steps
   below are done are listed there; an entry that is no longer true fails, so
   the list only shrinks.
 

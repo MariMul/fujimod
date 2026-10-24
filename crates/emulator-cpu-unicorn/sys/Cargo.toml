@@ -10,6 +10,7 @@ links = "unicorn"
 build = "build.rs"
 
 [lib]
+test = false
 doctest = false
 
 [build-dependencies]
