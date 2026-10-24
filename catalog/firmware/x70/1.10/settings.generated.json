@@ -297,6 +297,14 @@
             "basis": "Main record marker after the sequence word."
           },
           {
+            "offset": 3960,
+            "bytes": [
+              1,
+              16
+            ],
+            "basis": "Stock profile_prepare_storage copies version bytes 0xaf4aa8/0xaf4aaa into main +0xf78/+0xf79."
+          },
+          {
             "offset": 132,
             "bytes": [
               255,
@@ -447,14 +455,876 @@
           {
             "offset": 2,
             "bytes": [
-              255,
-              255
+              0,
+              0
             ],
-            "basis": "Custom record marker after the sequence word."
+            "basis": "Stock custom-record header bytes; the main-record marker is not used here."
           }
         ]
       }
-    }
+    },
+    "derived_fields": [
+      {
+        "store": "main",
+        "offset": 3962,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Main startup buffer begins erased; bytes after the two writer version bytes stay erased."
+      },
+      {
+        "store": "main",
+        "offset": 393,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 38755
+        },
+        "basis": "power_profiles_initialize copies the bank wireless-name length into profile +0x95."
+      },
+      {
+        "store": "main",
+        "offset": 720,
+        "bytes": 32,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 38722
+        },
+        "basis": "power_profiles_initialize copies the bank wireless name into profile +0x1dc."
+      },
+      {
+        "store": "main",
+        "offset": 712,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 339
+        },
+        "basis": "power_profiles_initialize copies the bank filename prefix into profile +0x1d4."
+      },
+      {
+        "store": "main",
+        "offset": 716,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 331
+        },
+        "basis": "power_profiles_initialize copies the bank directory prefix into profile +0x1d8."
+      },
+      {
+        "store": "main",
+        "offset": 705,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Japanese factory language enables the stock optional-profile flag; the later English selection changes only language."
+      },
+      {
+        "store": "main",
+        "offset": 348,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 534,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock bank flag 0x216 becomes a Boolean in profile +0x68."
+      },
+      {
+        "store": "custom",
+        "offset": 293,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 549,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 805,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1061,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1317,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1573,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "custom",
+        "offset": 1829,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the inverted bank 0x218 flag from metadata_pages_initialize."
+      },
+      {
+        "store": "main",
+        "offset": 342,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 533,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock profile +0x62 takes bank date-order values 1 or 2, otherwise zero."
+      },
+      {
+        "store": "main",
+        "offset": 453,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Stock profile +0xd1 encodes the bank image-size mode."
+      },
+      {
+        "store": "main",
+        "offset": 454,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Stock profile +0xd2 takes the bank orientation."
+      },
+      {
+        "store": "main",
+        "offset": 455,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "otherwise": 1,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Stock profile +0xd3 inverts bank flag 0x218."
+      },
+      {
+        "store": "custom",
+        "offset": 291,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 292,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 547,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 548,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 803,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 804,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1059,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1060,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1315,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1316,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1571,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1572,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      },
+      {
+        "store": "custom",
+        "offset": 1827,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank image-size mapping."
+      },
+      {
+        "store": "custom",
+        "offset": 1828,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ]
+        },
+        "basis": "Each custom page inherits the stock bank orientation."
+      }
+    ]
   },
   "settings": {
     "debug": {
@@ -484,6 +1354,15 @@
       "values": {
         "done": [
           7
+        ]
+      }
+    },
+    "date_order": {
+      "store": "main",
+      "offset": 342,
+      "values": {
+        "us": [
+          1
         ]
       }
     },

@@ -118,7 +118,8 @@ impl SectionLength {
             Self::Fixed { bytes } => Ok(*bytes),
             Self::Counted { counts, bits } => {
                 let bits = u64::from(*bits);
-                Ok(((count(*counts)? * bits + 63) & !63) / 8 + (count(counts + 3)? * bits).div_ceil(8))
+                Ok(((count(*counts)? * bits + 63) & !63) / 8
+                    + (count(counts + 3)? * bits).div_ceil(8))
             }
             Self::CountedList { count: at, bits } => {
                 Ok((count(*at)? * u64::from(*bits)).div_ceil(8))
@@ -144,6 +145,71 @@ pub struct SettingsProfile {
     pub header: UpdateRange,
     /// Journal records the stock loader requires, by name.
     pub records: BTreeMap<String, ProfileRecord>,
+    /// Fields initialized from the calibration bank or a declared fill.
+    #[serde(default)]
+    pub derived_fields: Vec<ProfileField>,
+}
+
+/// A stock initialization of a profile field, applied before requested settings.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct ProfileField {
+    /// A profile record name or `header`.
+    pub store: String,
+    /// Byte offset in that store.
+    pub offset: u64,
+    /// Field width; mapped sources require exactly one byte.
+    pub bytes: u64,
+    pub source: ProfileFieldSource,
+    /// The stock initialization that establishes this field.
+    pub basis: String,
+}
+
+/// A bounded fill, bank copy, or masked byte mapping used by stock initialization.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object)
+)]
+pub enum ProfileFieldSource {
+    /// Repeat a byte across the field, including erased padding.
+    Fill { value: u8 },
+    /// Copy an addressed bank window verbatim.
+    BankCopy { offset: u64 },
+    /// Replace only masked destination bits with the corresponding bank bits.
+    BankBits { offset: u64, mask: u8 },
+    /// Decode one bank byte and replace only the masked destination bits.
+    BankMap {
+        offset: u64,
+        mask: u8,
+        values: Vec<BankByteValue>,
+        /// Fallback when no input entry matches.
+        otherwise: u8,
+        /// Optional signed-byte fallback for unmatched inputs with bit 7 set.
+        #[serde(default)]
+        otherwise_high: Option<u8>,
+    },
+}
+
+/// One input/output pair in a bank-byte decoding table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct BankByteValue {
+    pub input: u8,
+    pub output: u8,
 }
 
 /// One journal record: stock defaults and fixed bytes, sealed with one parity
@@ -375,6 +441,49 @@ impl FirmwareSettings {
                 return fail("named setting is empty, uneven, unstored or overlaps a field");
             }
         }
+        for field in profile.into_iter().flat_map(|p| &p.derived_fields) {
+            let within = |start: u64, bytes: u64, extent: u64| {
+                bytes > 0 && start.checked_add(bytes).is_some_and(|end| end <= extent)
+            };
+            let Some((extent, _)) = stores.get(field.store.as_str()) else {
+                return fail("derived field names an absent store");
+            };
+            if field.store == "bank"
+                || field.basis.is_empty()
+                || !within(field.offset, field.bytes, *extent)
+            {
+                return fail("derived field outside its profile store");
+            }
+            match &field.source {
+                ProfileFieldSource::Fill { .. } => {}
+                ProfileFieldSource::BankCopy { offset }
+                    if within(*offset, field.bytes, bank.bytes) => {}
+                ProfileFieldSource::BankBits { offset, mask }
+                    if field.bytes == 1 && *offset < bank.bytes && *mask != 0 => {}
+                ProfileFieldSource::BankMap {
+                    offset,
+                    mask,
+                    values,
+                    otherwise,
+                    otherwise_high,
+                } if field.bytes == 1
+                    && *offset < bank.bytes
+                    && *mask != 0
+                    && values
+                        .iter()
+                        .map(|v| v.input)
+                        .collect::<BTreeSet<_>>()
+                        .len()
+                        == values.len()
+                    && values
+                        .iter()
+                        .map(|v| &v.output)
+                        .chain(std::iter::once(otherwise))
+                        .chain(otherwise_high.iter())
+                        .all(|v| v & !mask == 0) => {}
+                _ => return fail("derived field has invalid bank bounds or byte mapping"),
+            }
+        }
         let mut names = BTreeSet::new();
         for section in &self.sections {
             let within = |offset: u64, size: u64| {
@@ -399,3 +508,6 @@ impl FirmwareSettings {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

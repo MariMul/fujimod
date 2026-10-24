@@ -205,6 +205,11 @@ class ApplicationTimingVariant3(TypedDict, total=False):
     part_id: Required[str]
 
 
+class BankByteValue(TypedDict, total=False):
+    input: Required[int]
+    output: Required[int]
+
+
 class BitmapLayout(TypedDict, total=False):
     data_bytes: Required[int]
     data_offset: Required[int]
@@ -3466,6 +3471,47 @@ type ProcessorModel = Literal["cortex-r5f", "cortex-a7", "cortex-a53", "cortex-m
 type ProcessorRegister = Literal["pc", "sp", "pstate", "cpsr"]
 
 
+class ProfileField(TypedDict, total=False):
+    basis: Required[str]
+    bytes: Required[int]
+    offset: Required[int]
+    source: Required[ProfileFieldSource]
+    store: Required[str]
+
+
+type ProfileFieldSource = (
+    ProfileFieldSourceVariant0
+    | ProfileFieldSourceVariant1
+    | ProfileFieldSourceVariant2
+    | ProfileFieldSourceVariant3
+)
+
+
+class ProfileFieldSourceVariant0(TypedDict, total=False):
+    kind: Required[Literal["fill"]]
+    value: Required[int]
+
+
+class ProfileFieldSourceVariant1(TypedDict, total=False):
+    kind: Required[Literal["bank_copy"]]
+    offset: Required[int]
+
+
+class ProfileFieldSourceVariant2(TypedDict, total=False):
+    kind: Required[Literal["bank_bits"]]
+    mask: Required[int]
+    offset: Required[int]
+
+
+class ProfileFieldSourceVariant3(TypedDict, total=False):
+    kind: Required[Literal["bank_map"]]
+    mask: Required[int]
+    offset: Required[int]
+    otherwise: Required[int]
+    otherwise_high: NotRequired[int | None]
+    values: Required[list[BankByteValue]]
+
+
 class ProfileRecord(TypedDict, total=False):
     block: Required[int]
     bytes: Required[int]
@@ -4638,6 +4684,7 @@ class SettingsField(TypedDict, total=False):
 
 
 class SettingsProfile(TypedDict, total=False):
+    derived_fields: NotRequired[list[ProfileField]]
     header: Required[UpdateRange]
     records: Required[dict[str, ProfileRecord]]
 

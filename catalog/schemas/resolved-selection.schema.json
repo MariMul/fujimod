@@ -296,6 +296,29 @@
         }
       ]
     },
+    "BankByteValue": {
+      "additionalProperties": false,
+      "description": "One input/output pair in a bank-byte decoding table.",
+      "properties": {
+        "input": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "type": "object"
+    },
     "BitmapLayout": {
       "additionalProperties": false,
       "description": "Bitmap record fields, with explicit widths.",
@@ -15590,6 +15613,169 @@
         }
       ]
     },
+    "ProfileField": {
+      "additionalProperties": false,
+      "description": "A stock initialization of a profile field, applied before requested settings.",
+      "properties": {
+        "basis": {
+          "description": "The stock initialization that establishes this field.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Field width; mapped sources require exactly one byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Byte offset in that store.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/ProfileFieldSource"
+        },
+        "store": {
+          "description": "A profile record name or `header`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "store",
+        "offset",
+        "bytes",
+        "source",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "ProfileFieldSource": {
+      "description": "A bounded fill, bank copy, or masked byte mapping used by stock initialization.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Repeat a byte across the field, including erased padding.",
+          "properties": {
+            "kind": {
+              "const": "fill",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Copy an addressed bank window verbatim.",
+          "properties": {
+            "kind": {
+              "const": "bank_copy",
+              "type": "string"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "offset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Replace only masked destination bits with the corresponding bank bits.",
+          "properties": {
+            "kind": {
+              "const": "bank_bits",
+              "type": "string"
+            },
+            "mask": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "offset",
+            "mask"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Decode one bank byte and replace only the masked destination bits.",
+          "properties": {
+            "kind": {
+              "const": "bank_map",
+              "type": "string"
+            },
+            "mask": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "otherwise": {
+              "description": "Fallback when no input entry matches.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "otherwise_high": {
+              "default": null,
+              "description": "Optional signed-byte fallback for unmatched inputs with bit 7 set.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "values": {
+              "items": {
+                "$ref": "#/$defs/BankByteValue"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "offset",
+            "mask",
+            "values",
+            "otherwise"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "ProfileRecord": {
       "additionalProperties": false,
       "description": "One journal record: stock defaults and fixed bytes, sealed with one parity\nbit per data word and an XOR checksum of the data words in its last four bytes.",
@@ -16836,6 +17022,14 @@
       "additionalProperties": false,
       "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
       "properties": {
+        "derived_fields": {
+          "default": [],
+          "description": "Fields initialized from the calibration bank or a declared fill.",
+          "items": {
+            "$ref": "#/$defs/ProfileField"
+          },
+          "type": "array"
+        },
         "header": {
           "$ref": "#/$defs/UpdateRange",
           "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."

@@ -6,7 +6,7 @@
 //! the same way from the stock profile defaults. Stock firmware reads the
 //! result as it would a camera's own settings.
 #![forbid(unsafe_code)]
-use fujimod_catalog_settings::{FirmwareSettings, SectionLength, UpdateRange};
+use fujimod_catalog_settings::{FirmwareSettings, ProfileFieldSource, SectionLength, UpdateRange};
 use std::collections::BTreeMap;
 
 /// Settings ready to place before cold boot.
@@ -44,7 +44,9 @@ pub struct Bank {
 /// offset, inverted.
 pub fn flash_image(update: &[u8], flash_offset: u64) -> Result<Vec<u8>, String> {
     let offset = usize::try_from(flash_offset).map_err(|_| "flash offset overflow")?;
-    let installed = update.get(offset..).ok_or("update is shorter than its flash offset")?;
+    let installed = update
+        .get(offset..)
+        .ok_or("update is shorter than its flash offset")?;
     Ok(fujimod_firmware::invert(installed))
 }
 
@@ -67,7 +69,10 @@ fn read(section: &[u8], layout: &FirmwareSettings, range: &UpdateRange) -> Resul
     let start = (range.address - layout.source.address) as usize;
     let bytes = section[start..start + range.size as usize].to_vec();
     if fujimod_firmware::sha256(&bytes) != range.sha256 {
-        return Err(format!("stock bytes at {:#x} differ from the layout", range.address));
+        return Err(format!(
+            "stock bytes at {:#x} differ from the layout",
+            range.address
+        ));
     }
     Ok(bytes)
 }
@@ -112,8 +117,11 @@ pub fn build(
     let section = source(layout, flash)?;
     let bank = &layout.bank;
     let descriptor = read(&section, layout, &bank.descriptor)?;
-    if [word(&descriptor, 0), word(&descriptor, 4), word(&descriptor, 8)]
-        != [bank.kind, bank.blocks, bank.first_block]
+    if [
+        word(&descriptor, 0),
+        word(&descriptor, 4),
+        word(&descriptor, 8),
+    ] != [bank.kind, bank.blocks, bank.first_block]
     {
         return Err("stock bank descriptor differs from the layout".into());
     }
@@ -128,7 +136,7 @@ pub fn build(
         if table[table.len() - 4..] != [0xff, 0xff, 0, 0] {
             return Err("defaults table has no terminator".into());
         }
-        for entry in table[..table.len() - 4].chunks_exact(4) {
+        for entry in table[..table.len() - 4].as_chunks::<4>().0 {
             let offset = usize::from(u16::from_le_bytes([entry[0], entry[1]]));
             if offset >= size || entry[3] != 0 {
                 return Err("defaults entry outside the bank".into());
@@ -142,6 +150,7 @@ pub fn build(
         }
     }
     stores.insert("bank", bytes);
+    apply_requested(layout, requested, &mut stores, true)?;
     if let Some(profile) = &layout.profile {
         let header = read(&section, layout, &profile.header)?;
         if header[14] != 0xaa {
@@ -150,27 +159,59 @@ pub fn build(
         stores.insert("header", header);
         for (name, record) in &profile.records {
             let mut bytes = vec![0; record.bytes as usize];
-            put(&mut bytes, record.defaults_offset, &read(&section, layout, &record.defaults)?);
+            put(
+                &mut bytes,
+                record.defaults_offset,
+                &read(&section, layout, &record.defaults)?,
+            );
             for field in &record.fields {
                 put(&mut bytes, field.offset, &field.bytes);
             }
             stores.insert(name, bytes);
         }
+        for field in &profile.derived_fields {
+            let start = field.offset as usize;
+            let end = start + field.bytes as usize;
+            let value = match &field.source {
+                ProfileFieldSource::Fill { value } => vec![*value; field.bytes as usize],
+                ProfileFieldSource::BankCopy { offset } => stores["bank"]
+                    [*offset as usize..*offset as usize + field.bytes as usize]
+                    .to_vec(),
+                ProfileFieldSource::BankBits { offset, mask } => {
+                    vec![
+                        (stores[field.store.as_str()][start] & !mask)
+                            | (stores["bank"][*offset as usize] & mask),
+                    ]
+                }
+                ProfileFieldSource::BankMap {
+                    offset,
+                    mask,
+                    values,
+                    otherwise,
+                    otherwise_high,
+                } => {
+                    let input = stores["bank"][*offset as usize];
+                    let fallback = if input & 0x80 != 0 {
+                        otherwise_high.as_ref().unwrap_or(otherwise)
+                    } else {
+                        otherwise
+                    };
+                    vec![
+                        (stores[field.store.as_str()][start] & !mask)
+                            | values
+                                .iter()
+                                .find(|value| value.input == input)
+                                .map_or(*fallback, |value| value.output),
+                    ]
+                }
+            };
+            stores
+                .get_mut(field.store.as_str())
+                .expect("validated profile store")[start..end]
+                .copy_from_slice(&value);
+        }
     }
-    for (name, value) in requested {
-        let setting = layout
-            .settings
-            .get(name)
-            .ok_or_else(|| format!("{} has no located setting {name}", layout.firmware_id))?;
-        let encoded = setting
-            .values
-            .get(value)
-            .ok_or_else(|| format!("setting {name} has no value {value}"))?;
-        let store = stores
-            .get_mut(setting.store.as_str())
-            .ok_or_else(|| format!("setting {name} names an absent store"))?;
-        put(store, setting.offset, encoded);
-    }
+    apply_requested(layout, requested, &mut stores, false)?;
     let profile = match &layout.profile {
         None => None,
         Some(located) => {
@@ -200,6 +241,32 @@ pub fn build(
     })
 }
 
+fn apply_requested(
+    layout: &FirmwareSettings,
+    requested: &BTreeMap<String, String>,
+    stores: &mut BTreeMap<&str, Vec<u8>>,
+    bank_only: bool,
+) -> Result<(), String> {
+    for (name, value) in requested {
+        let setting = layout
+            .settings
+            .get(name)
+            .ok_or_else(|| format!("{} has no located setting {name}", layout.firmware_id))?;
+        if (setting.store == "bank") != bank_only {
+            continue;
+        }
+        let encoded = setting
+            .values
+            .get(value)
+            .ok_or_else(|| format!("setting {name} has no value {value}"))?;
+        let store = stores
+            .get_mut(setting.store.as_str())
+            .ok_or_else(|| format!("setting {name} names an absent store"))?;
+        put(store, setting.offset, encoded);
+    }
+    Ok(())
+}
+
 /// An erased bank holding a camera's sections, each checked against the length
 /// the layout declares. Fixed sections go first: counted lengths read them.
 fn camera_bank(
@@ -211,7 +278,10 @@ fn camera_bank(
         .keys()
         .find(|name| !layout.sections.iter().any(|s| &s.name == *name))
     {
-        return Err(format!("{} declares no bank section {name}", layout.firmware_id));
+        return Err(format!(
+            "{} declares no bank section {name}",
+            layout.firmware_id
+        ));
     }
     let mut bank = vec![0xff; size];
     let mut ordered: Vec<_> = layout.sections.iter().collect();
