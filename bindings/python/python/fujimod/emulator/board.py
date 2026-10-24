@@ -370,12 +370,13 @@ class Board:
         pause_at_tick: int | None = None,
         store_watches: list[tuple[int, int]] | None = None,
         device_watches: list[str] | None = None,
-    ) -> None:
+    ) -> bool:
         """Run within instruction and optional pause limits.
 
         ``store_watches`` contains half-open physical address ranges;
         ``device_watches`` contains nodes in the selected device graph.
-        Watches apply only to this call.
+        Watches apply only to this call. Return whether a watched store or
+        device publication ended the continuation, including at the current tick.
         """
         self._ensure_open()
         if type(limit) is not int or limit < 0:
@@ -388,7 +389,7 @@ class Board:
                 raise ValueError(f"{name} must be a nonnegative integer or None")
         # Stores name half-open canonical physical ranges. Device names are
         # nodes in the resolved graph. Watches last only for this host call.
-        self._native.run(
+        return self._native.run(
             limit,
             self.quantum,
             pause_after,

@@ -467,16 +467,9 @@ impl InterruptController {
                     return Err("unsupported interrupt priority".into());
                 }
                 let line = ((offset - 0x800) / 4) as usize;
-                if self
-                    .state
-                    .active
-                    .iter()
-                    .any(|s| s.line as usize == line && u32::from(s.priority) != value)
-                {
-                    return Err(
-                        "in-service IRQ priority cannot change before end of interrupt".into(),
-                    );
-                }
+                // Acknowledge latches the active priority in Source. The
+                // programmable priority selects future acknowledgments;
+                // rewriting it does not reorder the in-service stack.
                 self.state.priorities[line] = Some(value as u8);
             }
             _ => return Err(RegisterError::Unmodeled),
@@ -516,7 +509,7 @@ impl InterruptController {
             || s.active.iter().enumerate().any(|(i, a)| {
                 a.line >= 128
                     || a.priority > 15
-                    || s.priorities[a.line as usize] != Some(a.priority)
+                    || s.priorities[a.line as usize].is_none()
                     || s.active[..i].iter().any(|b| b.line == a.line)
                     || i > 0 && s.active[i - 1].priority <= a.priority
             })
@@ -762,12 +755,22 @@ mod tests {
         advance(&mut d).unwrap();
         assert_eq!(access(&mut d, 0x200, None).unwrap(), 0x10004);
         assert_eq!(access(&mut d, 0x1c0, None).unwrap(), 1);
-        assert!(
-            access(&mut d, 0x814, Some(6))
-                .unwrap_err()
-                .contains("in-service")
-        );
+        access(&mut d, 0x814, Some(1)).unwrap();
+        let saved = d.save();
+        assert_eq!(saved["registers"]["active"][0]["priority"], 7);
+        assert_eq!(access(&mut d, 0x814, None).unwrap(), 1);
+        d.restore(&saved).unwrap();
+        assert_eq!(d.save(), saved);
         access(&mut d, 0x120, Some(2)).unwrap();
+        access(&mut d, 0x200, Some(0)).unwrap();
+        assert_eq!(access(&mut d, 0x1c0, None).unwrap(), 5);
+        // The parent still has its acknowledged priority 7, so priority 6
+        // can nest even though the parent's programmed priority is now 1.
+        source(&mut d, 4, 6);
+        pins.pulse(4).unwrap();
+        advance(&mut d).unwrap();
+        assert_eq!(access(&mut d, 0x200, None).unwrap(), 0x10010);
+        access(&mut d, 0x120, Some(1 << 4)).unwrap();
         access(&mut d, 0x200, Some(0)).unwrap();
         assert_eq!(access(&mut d, 0x1c0, None).unwrap(), 5);
         access(&mut d, 0x120, Some(1 << 5)).unwrap();

@@ -105,6 +105,29 @@ def test_quiescent_false_wait_refuses_instead_of_spinning():
         wait_until(board, lambda: board.read(4) > 10, 'quiescent')
 
 
+def test_device_publications_at_the_current_tick_are_progress():
+    board = Board()
+    publications = 0
+
+    def publish(*args, **kwargs):
+        nonlocal publications
+        publications += 1
+        return True
+
+    def ready():
+        board.device('sink')
+        return publications == 2
+
+    board.run = publish
+    assert wait_until(board, ready, 'sink', instruction_limit=1, deadline=1)
+    assert publications == 2
+    assert (board.instructions, board.virtual_ticks) == (0, 0)
+    # A previous publication must not hide a subsequent quiescent return.
+    board.run = lambda *args, **kwargs: False
+    with pytest.raises(RuntimeError, match='no progress'):
+        wait_until(board, lambda: board.device('sink'), 'quiescent sink')
+
+
 def test_an_explicit_continuation_ceiling_does_not_replace_the_total_allowance():
     board = Board()
     wait_until(board, lambda: board.read(4) >= 3, 'bounded',

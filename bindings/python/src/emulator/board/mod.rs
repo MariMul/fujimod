@@ -926,7 +926,7 @@ impl Board {
         pause_at_tick: Option<u64>,
         store_watches: Option<Vec<(u64, u64)>>,
         device_watches: Option<Vec<String>>,
-    ) -> PyResult<()> {
+    ) -> PyResult<bool> {
         {
             let owner = slf.try_borrow()?;
             if let Some(Backend::Xp4(session)) = &owner.backend {
@@ -939,14 +939,14 @@ impl Board {
                         "XP4 execution does not support pause boundaries",
                     ));
                 }
-                return session.run_board(count, quantum);
+                return session.run_board(count, quantum).map(|_| false);
             }
         }
         let mut owner = slf.try_borrow_mut()?;
         owner.begin_continuation(store_watches, device_watches)?;
         let result = owner.run_graph(py, count, quantum, pause_after, pause_at_tick);
         let cleanup = owner.board_mut()?.continuation_end().map_err(error);
-        result.and(cleanup.map(|_| ()))
+        result.and(cleanup)
     }
     #[pyo3(signature = (end, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
     fn run_window(
@@ -958,7 +958,7 @@ impl Board {
         pause_at_tick: Option<u64>,
         store_watches: Option<Vec<(u64, u64)>>,
         device_watches: Option<Vec<String>>,
-    ) -> PyResult<()> {
+    ) -> PyResult<bool> {
         if self.driver.is_some() {
             return Err(error(
                 "Instruction windows require a whole-board run".into(),
@@ -974,7 +974,7 @@ impl Board {
             pause_at_tick,
         );
         let cleanup = self.board_mut()?.continuation_end().map_err(error);
-        self.outcome(result).and(cleanup.map(|_| ()))
+        self.outcome(result).and(cleanup)
     }
     fn reg_read(&self, core: usize, register: &str) -> PyResult<u64> {
         if let Some(Backend::Xp4(session)) = &self.backend {

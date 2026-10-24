@@ -33,7 +33,7 @@ def board(quantum):
 @pytest.mark.parametrize('quantum',[1,7,64])
 def test_native_store_stop_finishes_the_store_before_the_next_instruction(quantum):
     with board(quantum) as machine:
-        machine.run(20,store_watches=[(0x12000,0x12004)])
+        assert machine.run(20,store_watches=[(0x12000,0x12004)])
         assert machine.instructions == 2
         assert machine.virtual_ticks == 2
         assert machine.read_physical(0x12000,4) == struct.pack('<I',1)
@@ -68,7 +68,7 @@ def test_native_device_publication_stops_and_read_sets_resolve_graph_names():
         machine.write_memory(0x10000,struct.pack('<3I',0xe5810000,0xe3a00063,0xeafffffe))
         machine.cpus[0].reg_write({'Arm32':{'R':0}},0x300)
         machine.cpus[0].reg_write({'Arm32':{'R':1}},0xfff86000)
-        machine.run(20,device_watches=['idle'])
+        assert machine.run(20,device_watches=['idle'])
         assert machine.instructions == 1
         assert machine.cpus[0].reg_read('Pc') == 0x10004
         assert machine.cpus[0].reg_read({'Arm32':{'R':0}}) == 0x300

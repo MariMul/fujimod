@@ -24,7 +24,7 @@ class WaitBoard(Protocol):
     def virtual_ticks(self) -> int: ...
     def run(self, limit: int, *, pause_at_tick: int | None = None,
             store_watches: list[tuple[int, int]] | None = None,
-            device_watches: list[str] | None = None) -> None: ...
+            device_watches: list[str] | None = None) -> bool: ...
 
 
 @dataclass
@@ -97,12 +97,14 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
             boundaries = [t for t in (deadline, until_tick) if t is not None and t > board.virtual_ticks]
             boundary = min(boundaries) if boundaries else None
             before = board.instructions, board.virtual_ticks
-            board.run(remaining if max_run_instructions is None else min(remaining, max_run_instructions), pause_at_tick=boundary,
-                      store_watches=stores, device_watches=devices)
+            published = board.run(remaining if max_run_instructions is None else min(remaining, max_run_instructions), pause_at_tick=boundary,
+                                  store_watches=stores, device_watches=devices)
             report.continuations += 1
             if after_run is not None:
                 after_run()
-            if before == (board.instructions, board.virtual_ticks):
+            # A due device effect can publish at the current tick before any
+            # CPU runs. Its watch is progress too; reevaluate the predicate.
+            if not published and before == (board.instructions, board.virtual_ticks):
                 raise RuntimeError('Native execution made no progress: ' + description)
             yield
     finally:

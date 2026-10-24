@@ -1018,6 +1018,23 @@ fn continuation_observes_due_device_publications_without_changing_the_timeline()
 }
 
 #[test]
+fn continuation_reports_a_publication_before_time_or_instructions_advance() {
+    let (mut board, probe) = build_rprofile(bus::Mode::Strict, true);
+    probe.lock().unwrap().due = Some(0);
+    board.inputs_changed(0).unwrap();
+    board
+        .continuation_begin(vec![], [0].into(), vec![])
+        .unwrap();
+    board.run_for_instructions(20, 7).unwrap();
+    assert!(board.continuation_end().unwrap());
+    assert_eq!(board.instruction_counts(), vec![0]);
+    assert_eq!(board.state()["timeline"]["now"], 0);
+    assert_eq!(probe.lock().unwrap().value, 1);
+    board.run_for_instructions(20, 7).unwrap();
+    assert_eq!(board.instruction_counts(), vec![20]);
+}
+
+#[test]
 fn serialized_interactive_cores_share_execution_before_the_host_deadline() {
     let (mut board, _) = per_core_irq_board();
     board
