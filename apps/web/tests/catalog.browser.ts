@@ -83,7 +83,9 @@ try {
         () =>
           window.catalogError ||
           document.querySelector<HTMLElement>('#fault-heading')?.checkVisibility() ||
-          document.querySelector('#controls button[data-id="menu_ok_button"]'),
+          document.querySelector(
+            '#controls button[data-id="menu_ok_button"], #controls button[data-id="selector.press"]',
+          ),
       );
       assert.equal(await page.evaluate(() => window.catalogError), undefined);
       assert.equal(
@@ -120,6 +122,10 @@ try {
       }
       await settled();
       await waitTicks(6_000_000);
+      const menuId = await page
+        .locator('#controls button[data-id="menu_ok_button"], #controls button[data-id="selector.press"]')
+        .getAttribute('data-id');
+      assert.ok(menuId, 'The body must expose its MENU/OK contact');
       const pixels = () =>
         page.locator('#lcd-source').evaluate(async (canvas: HTMLCanvasElement) => {
           const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
@@ -127,7 +133,7 @@ try {
           return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
         });
       const shooting = await pixels();
-      await press('menu_ok_button');
+      await press(menuId);
       const menu = await pixels();
       assert.notEqual(menu, shooting, 'MENU did not change the guest LCD');
       await page.screenshot({ path: `${output}/${firmware.id}-menu.png`, fullPage: true });
