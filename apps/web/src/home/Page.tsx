@@ -69,7 +69,7 @@ export default function Home() {
             <a href="dev-tools/">Dev Tools</a>
           </nav>
           <div class="meta build-info">
-            <a href="https://github.com/justjake/fujimod">justjake/fujimod</a>
+            <a href="https://github.com/justjake/fujimod">github.com/justjake/fujimod</a>
           </div>
         </header>
         <main>
