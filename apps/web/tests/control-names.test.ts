@@ -17,7 +17,7 @@ test('X70 panel presentation uses semantic body-control IDs', () => {
   for (const id of ids) assert.ok(controls[id]?.label.trim(), `Missing presentation for ${id}`);
   assert.equal(controls.control_ring_options_button.label, 'Side Fn');
   for (const direction of ['up', 'down', 'left', 'right']) {
-    assert.equal(controls[`selector_function_buttons.${direction}`].icon, direction);
+    assert.equal(controls[`selector.${direction}`].icon, direction);
     assert.ok(icons[direction].lines.length);
   }
 });

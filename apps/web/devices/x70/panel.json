@@ -191,10 +191,10 @@
               "kind": "dpad",
               "face": ["MENU", "OK"],
               "bindings": {
-                "up": "selector_function_buttons.up",
-                "down": "selector_function_buttons.down",
-                "left": "selector_function_buttons.left",
-                "right": "selector_function_buttons.right",
+                "up": "selector.up",
+                "down": "selector.down",
+                "left": "selector.left",
+                "right": "selector.right",
                 "center": "menu_ok_button"
               }
             },

@@ -718,25 +718,25 @@
    "supported": true
   },
   {
-   "id": "selector_function_buttons.down",
+   "id": "selector.down",
    "label": "Selector/function buttons / down",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_function_buttons.left",
+   "id": "selector.left",
    "label": "Selector/function buttons / left",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_function_buttons.right",
+   "id": "selector.right",
    "label": "Selector/function buttons / right",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_function_buttons.up",
+   "id": "selector.up",
    "label": "Selector/function buttons / up",
    "kind": "button",
    "supported": true

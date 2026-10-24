@@ -1,18 +1,18 @@
 {
   "controls": {
-    "selector_function_buttons.up": {
+    "selector.up": {
       "label": "Up",
       "icon": "up"
     },
-    "selector_function_buttons.down": {
+    "selector.down": {
       "label": "Down",
       "icon": "down"
     },
-    "selector_function_buttons.left": {
+    "selector.left": {
       "label": "Left",
       "icon": "left"
     },
-    "selector_function_buttons.right": {
+    "selector.right": {
       "label": "Right",
       "icon": "right"
     },
