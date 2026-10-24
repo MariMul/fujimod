@@ -1,11 +1,8 @@
 //! EXR II board constructors for this crate's models.
 use crate::{dma, spi};
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_exr2_plan::{
-    Model, SerialEndpoint,
-    construction::{Builder, Built, Constructors, controllers, decode, line},
-    wire,
-};
+use fujimod_emulator_exr2_plan::{Model, SerialEndpoint, construction::{Builder, Built, Constructors, controllers, decode, line}};
+use fujimod_emulator_exr2_resources::wire;
 use fujimod_emulator_parts_lens::{
     lens::{LensUnit, bridge::Bridge},
     stabilizer::Stabilizer,
@@ -235,7 +232,7 @@ fn dma_controller(
 
 fn spi_endpoint(
     endpoint: SerialEndpoint,
-    resources: &mut fujimod_emulator_exr2_plan::Resources,
+    resources: &mut fujimod_emulator_exr2_resources::Resources,
     id: usize,
 ) -> Result<Box<dyn fujimod_emulator_parts_io::spi::Endpoint>, String> {
     use fujimod_emulator_parts_io::spi::{FixedInput, Panel, RegisterFile};

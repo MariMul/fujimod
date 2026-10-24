@@ -90,7 +90,7 @@ fn sd_host(builder: Builder<'_>, model: Model) -> Result<Built, String> {
             }
             resources.card_pins.insert(
                 name.to_owned(),
-                fujimod_emulator_exr2_plan::CardPins {
+                fujimod_emulator_exr2_resources::CardPins {
                     gpio: *built
                         .node_ids
                         .get(&pins.gpio)

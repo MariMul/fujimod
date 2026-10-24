@@ -6,7 +6,8 @@
 mod tests;
 use fujimod_emulator_devices::graph::{DeviceGraph, Node as GraphNode, validate_mappings};
 use fujimod_emulator_exr2_plan::construction::{Builder, Built, Constructors, constructors};
-use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan, Resources, Wire};
+use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan};
+use fujimod_emulator_exr2_resources::{Resources, Wire};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Make `Plan::build` construct boards with this crate. Final crates call

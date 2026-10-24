@@ -1314,6 +1314,7 @@ dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-io",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-exr2-storage",
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-imaging",
@@ -1347,6 +1348,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-models",
  "fujimod-emulator-preparation",
  "fujimod-recording",
@@ -1455,6 +1457,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-exr2-serial",
  "fujimod-emulator-imaging",
  "fujimod-emulator-parts-io",
@@ -1471,6 +1474,7 @@ dependencies = [
  "fujimod-emulator-exr2-display",
  "fujimod-emulator-exr2-i2c",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-exr2-serial",
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-imaging",
@@ -1500,6 +1504,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-image-processing",
  "fujimod-emulator-imaging",
@@ -1517,6 +1522,7 @@ dependencies = [
  "ciborium",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -1554,6 +1560,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-parts-controls",
  "fujimod-workspace-hack",
  "serde",
@@ -1566,6 +1573,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
@@ -1579,6 +1587,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -1592,6 +1601,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-isp-output",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-image-formation",
  "fujimod-emulator-image-processing",
  "fujimod-emulator-imaging",
@@ -1612,6 +1622,7 @@ dependencies = [
  "fujimod-emulator-exr2-isp-statistics",
  "fujimod-emulator-exr2-isp-testing",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-image-formation",
  "fujimod-emulator-image-processing",
@@ -1629,6 +1640,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-isp-testing",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-image-formation",
  "fujimod-emulator-image-processing",
  "fujimod-emulator-imaging",
@@ -1652,6 +1664,18 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-construction",
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-resources",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-resources"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -1664,6 +1688,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-imaging",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-parts-lens",
@@ -1678,6 +1703,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-ip",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-storage",
@@ -1692,6 +1718,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -1803,6 +1830,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-graphics",
  "fujimod-emulator-image-processing",
  "fujimod-emulator-imaging",
@@ -1907,6 +1935,7 @@ dependencies = [
  "fujimod-catalog-settings",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-imaging",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -2172,6 +2201,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-resources",
  "fujimod-emulator-preparation",
  "fujimod-emulator-storage",
  "fujimod-python-base",

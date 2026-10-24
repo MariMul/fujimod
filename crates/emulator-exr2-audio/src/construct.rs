@@ -1,9 +1,6 @@
 //! EXR II board constructors for this crate's models.
-use fujimod_emulator_exr2_plan::{
-    Model,
-    construction::{Builder, Built, Constructors, decode},
-    wire,
-};
+use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, decode}};
+use fujimod_emulator_exr2_resources::wire;
 use fujimod_emulator_exr2_serial::dma;
 use fujimod_emulator_parts_io::audio_sink::AudioSink;
 

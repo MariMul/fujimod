@@ -18,7 +18,8 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Register, arm};
-use fujimod_emulator_exr2_plan::{Plan, Resources};
+use fujimod_emulator_exr2_plan::Plan;
+use fujimod_emulator_exr2_resources::Resources;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,

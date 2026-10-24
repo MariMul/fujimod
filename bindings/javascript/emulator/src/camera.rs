@@ -5,7 +5,8 @@ use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
+use fujimod_emulator_exr2_resources::Resources;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};

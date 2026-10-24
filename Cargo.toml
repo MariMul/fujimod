@@ -69,6 +69,7 @@ members = [
   "crates/emulator-exr2-display",
   "crates/emulator-exr2-board",
   "crates/emulator-exr2-plan",
+  "crates/emulator-exr2-resources",
   "crates/settings",
   "crates/fujimod",
   "crates/usb",
@@ -165,6 +166,7 @@ fujimod-emulator-exr2-i2c = { path = "crates/emulator-exr2-i2c", version = "0.1.
 fujimod-emulator-exr2-display = { path = "crates/emulator-exr2-display", version = "0.1.0" }
 fujimod-emulator-exr2-board = { path = "crates/emulator-exr2-board", version = "0.1.0" }
 fujimod-emulator-exr2-plan = { path = "crates/emulator-exr2-plan", version = "0.1.0" }
+fujimod-emulator-exr2-resources = { path = "crates/emulator-exr2-resources", version = "0.1.0" }
 fujimod-emulator-cpu = { path = "crates/emulator-cpu", version = "0.1.0" }
 fujimod-emulator-cpu-unicorn = { path = "crates/emulator-cpu-unicorn", version = "0.1.0" }
 fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }

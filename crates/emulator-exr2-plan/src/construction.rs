@@ -3,11 +3,11 @@
 mod interface;
 pub use interface::register_interface_models;
 
-use crate::{BuiltBoard, Model, Resources};
+use crate::{BuiltBoard, Model};
+use fujimod_emulator_exr2_resources::Resources;
 use fujimod_emulator_devices::exr2::irq;
 use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping};
 use fujimod_emulator_imaging::exr2_isp as isp;
-use fujimod_emulator_imaging::scene::frames::SensorDecoders;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
@@ -18,16 +18,6 @@ pub fn decode<T: serde::de::DeserializeOwned>(
     serde_json::from_value(value.borrow().clone()).map_err(|e| format!("EXR II model options: {e}"))
 }
 
-/// The named wire of the given kind, recorded as used by node `$id`.
-#[macro_export]
-macro_rules! wire {
-    ($resources:expr, $id:expr, $name:expr, $kind:ident) => {
-        match $resources.wire(&$name, $id)? {
-            $crate::Wire::$kind(value) => value.clone(),
-            _ => return Err(format!("{} requires a {} wire", $name, stringify!($kind))),
-        }
-    };
-}
 pub fn route(route: isp::Irq) -> Result<isp::Irq, String> {
     if route.core >= 2 || route.line >= 128 {
         return Err("EXR II interrupt route exceeds two cores/128 sources".into());
@@ -95,12 +85,11 @@ pub type Constructor = fn(Builder<'_>, Model) -> Result<Built, String>;
 pub type DmaController =
     fn(Vec<(Vec<Mapping>, Box<dyn Device>)>) -> Result<Box<dyn Device>, String>;
 
-/// Constructors by plan model kind, and the image implementation's sensor decoders.
+/// Constructors by plan model kind.
 #[derive(Default)]
 pub struct Constructors {
     models: BTreeMap<&'static str, Constructor>,
     dma_controller: Option<DmaController>,
-    sensor_decoders: Option<SensorDecoders>,
 }
 impl Constructors {
     /// Add the constructor of one model kind; each kind has one constructor.
@@ -115,16 +104,6 @@ impl Constructors {
             self.dma_controller.replace(constructor).is_none(),
             "two EXR II DMA controllers"
         );
-    }
-    pub fn set_sensor_decoders(&mut self, decoders: SensorDecoders) {
-        assert!(
-            self.sensor_decoders.replace(decoders).is_none(),
-            "two EXR II sensor decoders"
-        );
-    }
-    /// Decoders of checkpointed sensor images and exposures and of RAF files.
-    pub fn sensor_decoders(&self) -> Option<&SensorDecoders> {
-        self.sensor_decoders.as_ref()
     }
     pub fn build(&self, builder: Builder<'_>, model: Model) -> Result<Built, String> {
         let kind = model.kind();

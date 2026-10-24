@@ -3,7 +3,7 @@
 pub mod media;
 pub mod persistent_inputs;
 
-use fujimod_emulator_exr2_plan::Inputs;
+use fujimod_emulator_exr2_resources::Inputs;
 use fujimod_emulator_imaging::{analysis::ImageLayout, scene::{Frame, FramePixels, ImageFrames, SensorFrames, StatisticsFrames, StatisticsSpan}};
 use serde::Deserialize;
 use std::{

@@ -23,6 +23,18 @@ pub struct SensorDecoders {
     pub exposure: fn(&Checkpoint) -> Result<Arc<dyn SensorExposure>, String>,
     pub raf: fn(&[u8]) -> Result<Frame, String>,
 }
+static SENSOR_DECODERS: std::sync::OnceLock<SensorDecoders> = std::sync::OnceLock::new();
+
+/// Install the image implementation's sensor decoders; there is one per process.
+pub fn install_sensor_decoders(decoders: SensorDecoders) {
+    assert!(SENSOR_DECODERS.set(decoders).is_ok(), "two sensor decoders");
+}
+
+/// The installed sensor decoders, if an image implementation installed them.
+pub fn sensor_decoders() -> Option<&'static SensorDecoders> {
+    SENSOR_DECODERS.get()
+}
+
 fn decoders(decoders: Option<&SensorDecoders>) -> Result<&SensorDecoders, String> {
     decoders.ok_or_else(|| "sensor image checkpoints need the image decoders".into())
 }

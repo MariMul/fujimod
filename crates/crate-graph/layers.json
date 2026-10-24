@@ -3,6 +3,7 @@
   "layers": {
     "interface": [
       "fujimod-emulator-devices",
+      "fujimod-emulator-exr2-resources",
       "fujimod-emulator-imaging",
       "fujimod-emulator-storage"
     ],

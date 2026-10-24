@@ -1,5 +1,6 @@
 use fujimod_emulator_devices::{Cx, test_host::ram::Ram};
 use fujimod_emulator_exr2_plan::*;
+use fujimod_emulator_exr2_resources::*;
 use serde_json::{Value, json};
 
 fn node(name: &str, base: u64, size: u64, model: Value) -> Value {
@@ -718,7 +719,8 @@ fn serial_register_access_wakes_the_coordinator_after_dma_consolidation() {
 
 #[test]
 fn board_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
-    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters, Resources};
+    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters};
+    use fujimod_emulator_exr2_resources::Resources;
     let plan = Plan::parse(
         &serde_json::json!({
             "schema": 1,

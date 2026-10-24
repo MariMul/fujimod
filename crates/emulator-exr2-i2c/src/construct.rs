@@ -1,9 +1,6 @@
 //! EXR II board constructors for this crate's models.
-use fujimod_emulator_exr2_plan::{
-    Model,
-    construction::{Builder, Built, Constructors, controllers, decode},
-    wire,
-};
+use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, controllers, decode}};
+use fujimod_emulator_exr2_resources::wire;
 
 /// Add this crate's EXR II constructors.
 pub fn register(constructors: &mut Constructors) {

@@ -1,10 +1,7 @@
 //! EXR II board constructors for this crate's models.
 use crate::{adc, hdmi, usb};
-use fujimod_emulator_exr2_plan::{
-    Model,
-    construction::{Builder, Built, Constructors, decode, line},
-    wire,
-};
+use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, decode, line}};
+use fujimod_emulator_exr2_resources::wire;
 use fujimod_emulator_parts_controls::{
     encoder::Encoder, gpio_contact_response::GpioContactResponse,
 };

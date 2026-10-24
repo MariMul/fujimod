@@ -277,4 +277,16 @@ pub struct CoreInterrupts {
     pub inputs: irq::Inputs,
 }
 
-pub mod checkpoint;
+mod checkpoint;
+pub use checkpoint::ResourceSnapshot;
+
+/// The named wire of the given kind, recorded as used by node `$id`.
+#[macro_export]
+macro_rules! wire {
+    ($resources:expr, $id:expr, $name:expr, $kind:ident) => {
+        match $resources.wire(&$name, $id)? {
+            $crate::Wire::$kind(value) => value.clone(),
+            _ => return Err(format!("{} requires a {} wire", $name, stringify!($kind))),
+        }
+    };
+}

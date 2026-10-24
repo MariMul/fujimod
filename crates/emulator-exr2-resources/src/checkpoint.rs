@@ -201,11 +201,9 @@ fn same_keys<A, B>(a: &BTreeMap<String, A>, b: &BTreeMap<String, B>) -> Result<(
         Ok(())
     }
 }
-/// The registered image implementation's decoders of checkpointed sensor images.
+/// The installed image implementation's decoders of checkpointed sensor images.
 fn sensor_decoders() -> Option<&'static SensorDecoders> {
-    crate::construction::constructors()
-        .ok()
-        .and_then(|constructors| constructors.sensor_decoders())
+    fujimod_emulator_imaging::scene::frames::sensor_decoders()
 }
 
 impl Resources {

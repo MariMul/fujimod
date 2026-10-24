@@ -1,6 +1,7 @@
 //! Constructors of the EXR II devices the interface crates still hold.
 use super::{Builder, Built, Constructors, decode, line};
-use crate::{CoreInterrupts, Model};
+use crate::Model;
+use fujimod_emulator_exr2_resources::CoreInterrupts;
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
 use fujimod_emulator_imaging::exr2_isp as isp;
 
@@ -52,7 +53,7 @@ fn interrupt_controller(builder: Builder<'_>, model: Model) -> Result<Built, Str
         }
         let enables = routes
             .map(|name| {
-                let routes = crate::wire!(resources, id, name, IrqRoutes);
+                let routes = fujimod_emulator_exr2_resources::wire!(resources, id, name, IrqRoutes);
                 Ok(Box::new(isp::dma::RouteOutput::new(routes, core)?)
                     as Box<dyn irq::EnableOutput>)
             })
@@ -73,7 +74,7 @@ fn interrupt_controller(builder: Builder<'_>, model: Model) -> Result<Built, Str
                         }
                         Ok(irq::SoftwareOutput {
                             line: output.line,
-                            pulse: crate::wire!(resources, id, output.pulse, SoftwarePulse),
+                            pulse: fujimod_emulator_exr2_resources::wire!(resources, id, output.pulse, SoftwarePulse),
                         })
                     })
                     .collect::<Result<_, String>>()?,

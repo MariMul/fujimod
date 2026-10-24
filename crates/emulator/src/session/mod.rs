@@ -14,7 +14,7 @@ pub mod usb;
 
 use crate::board::Board;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
-use fujimod_emulator_exr2_plan::Resources;
+use fujimod_emulator_exr2_resources::Resources;
 use std::collections::BTreeMap;
 use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
 
@@ -260,8 +260,7 @@ impl Session {
     /// Install a RAF's visible crop as mosaic radiance. Its recorded exposure
     /// is the normalization, so a later exposure scales the sensor counts.
     pub fn sensor_raf(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
-        let read = fujimod_emulator_exr2_plan::construction::constructors()?
-            .sensor_decoders()
+        let read = fujimod_emulator_imaging::scene::frames::sensor_decoders()
             .ok_or("RAF sensor input needs the image decoders")?
             .raf;
         self.sensor_frame(name, std::sync::Arc::new(read(bytes)?))

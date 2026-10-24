@@ -1,9 +1,6 @@
 //! EXR II board constructors for this crate's models.
-use fujimod_emulator_exr2_plan::{
-    Model,
-    construction::{Builder, Built, Constructors, decode, route},
-    wire,
-};
+use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, decode, route}};
+use fujimod_emulator_exr2_resources::wire;
 use fujimod_emulator_parts_sensor::sensor::Sensor;
 
 /// Add this crate's EXR II constructors.
@@ -15,7 +12,9 @@ pub fn register(constructors: &mut Constructors) {
     constructors.add("block11000", block11000);
     constructors.add("external-frames", external_frames);
     constructors.add("parameters", parameters);
-    constructors.set_sensor_decoders(fujimod_emulator_image_processing::sensor_decoders());
+    fujimod_emulator_imaging::scene::frames::install_sensor_decoders(
+        fujimod_emulator_image_processing::sensor_decoders(),
+    );
 }
 
 fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
