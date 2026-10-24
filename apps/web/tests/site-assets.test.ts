@@ -128,8 +128,6 @@ test('local preparation gates qualification and stages complete runtime bundles'
         ],
       }),
     );
-    const source = await readFile(new URL('../src/home/Features.tsx', import.meta.url), 'utf8');
-    const digest = /featureMedia\('([0-9a-f]{24})'\)/.exec(source)![1];
     const video = 'a'.repeat(24) + '.mp4',
       still = 'a'.repeat(24) + '.webp';
     await mkdir(inputs.media);
@@ -139,7 +137,6 @@ test('local preparation gates qualification and stages complete runtime bundles'
       join(inputs.media, 'media.json'),
       JSON.stringify({
         schema: 1,
-        catalog: digest,
         cards: { shape_aspect_item: { video, still, clips: {} } },
       }),
     );
