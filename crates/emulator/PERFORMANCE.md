@@ -136,3 +136,22 @@ runs all steps in 53.8 CPU seconds (818G, 1.82G guest instructions) and then
 fails its own light-ratio assertion: −1 to 0 EV measures 2.94 times the light,
 outside 1.6–2.5. Its `photometry/ready` prerequisite fell from 308–313G to
 258G host instructions.
+
+### Loop candidates and block hooks (ev_dial at 0.95x)
+
+Exit counters now name each loop-proof failure and each reason a block takes
+the hooked accounting path. In ev_dial every loop proof failed and none
+accelerated: about 1.36M of 1.45M entries were loops whose iteration model the
+accelerator does not support, a verdict that depends only on their code. Those
+verdicts are cached with the checked code bytes and the branch is translated as
+a plain instruction, so candidate entries fall to about 12K (11 distinct
+loops) and engine time from 8.5-9.0 s to 7.8 s, with identical final
+instructions, ticks and fingerprint. ev_dial runs 16.3 camera seconds in 17.1
+CPU seconds.
+
+The remaining hooked block entries (about 255K of 334K) are blocks larger than
+the instructions left before the next device deadline, about once every 6K
+instructions: exact stops that must split the block. Bounding every admitted
+span at the next guest tick instead stays exact but splits nearly every block
+(115M hooked entries, 44 CPU seconds), so that approach is rejected.
+
