@@ -1,6 +1,7 @@
 use super::*;
-use crate::exposure::{Calibration, Exposure, Filtered};
-use crate::scene::Frame;
+use crate::exposure::Filtered;
+use fujimod_emulator_imaging::exposure::{Calibration, Exposure};
+use fujimod_emulator_imaging::scene::Frame;
 
 fn exposure(frame: Arc<Frame>, seconds: f64) -> ExposedFrame {
     ExposedFrame::from_frame(

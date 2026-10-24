@@ -1,6 +1,31 @@
-use super::{FrameEdge, Recorded};
+use super::{Frame, FrameEdge, Recorded};
 use crate::analysis::ImageLayout;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
+use std::any::Any;
 use std::sync::{Arc, Mutex};
+
+/// A latched sensor image that the image implementation renders on demand.
+pub trait SensorImage: Any + Send + Sync {
+    fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String>;
+    fn checkpoint(&self) -> Result<Checkpoint, String>;
+    fn fingerprint(&self) -> serde_json::Value;
+}
+/// The radiance sampled at an image's exposure edge, kept for its metering.
+pub trait SensorExposure: Any + Send + Sync {
+    fn checkpoint(&self) -> Result<Checkpoint, String>;
+    fn fingerprint(&self) -> serde_json::Value;
+}
+/// The image implementation's decoders of sensor inputs: checkpointed sensor images and
+/// exposures, and RAF files.
+#[derive(Clone, Copy)]
+pub struct SensorDecoders {
+    pub image: fn(&Checkpoint) -> Result<Arc<dyn SensorImage>, String>,
+    pub exposure: fn(&Checkpoint) -> Result<Arc<dyn SensorExposure>, String>,
+    pub raf: fn(&[u8]) -> Result<Frame, String>,
+}
+fn decoders(decoders: Option<&SensorDecoders>) -> Result<&SensorDecoders, String> {
+    decoders.ok_or_else(|| "sensor image checkpoints need the image decoders".into())
+}
 
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum ImageSource {
@@ -10,7 +35,7 @@ pub enum ImageSource {
 }
 pub enum Pixels {
     Packed(Arc<[u8]>),
-    Sensor(Arc<crate::radiometric::Image>),
+    Sensor(Arc<dyn SensorImage>),
 }
 impl Pixels {
     pub fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
@@ -46,17 +71,16 @@ impl Pixels {
         }
     }
     fn from_checkpoint(
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+        saved: &Checkpoint,
         layout: ImageLayout,
+        sensor: Option<&SensorDecoders>,
     ) -> Result<Self, String> {
         let physical: bool = saved.decode("image-pixels")?;
         if physical {
             if saved.children().len() != 1 || !saved.blobs().is_empty() {
                 return Err("invalid physical image pixels checkpoint".into());
             }
-            Ok(Self::Sensor(Arc::new(
-                crate::radiometric::Image::from_checkpoint(&saved.children()[0])?,
-            )))
+            Ok(Self::Sensor((decoders(sensor)?.image)(&saved.children()[0])?))
         } else {
             if !saved.children().is_empty()
                 || saved.blobs().len() != 1
@@ -80,7 +104,7 @@ pub struct ImageFrame {
     pub pixels: Pixels,
     pub prepared: Option<Arc<[u8]>>,
     pub source: ImageSource,
-    pub radiance: Option<crate::exposure::ExposedFrame>,
+    pub radiance: Option<Arc<dyn SensorExposure>>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImageState {
@@ -122,7 +146,10 @@ impl ImageFrames {
                 .with_children(children),
         )
     }
-    fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<ImageFrame, String> {
+    fn from_checkpoint(
+        saved: &Checkpoint,
+        sensor: Option<&SensorDecoders>,
+    ) -> Result<ImageFrame, String> {
         let state: ImageState = saved.decode("image-frame")?;
         let bytes = state.layout.bytes()?;
         if saved.blobs().len() != usize::from(state.prepared)
@@ -134,23 +161,30 @@ impl ImageFrames {
         Ok(ImageFrame {
             edge: state.edge,
             layout: state.layout,
-            pixels: Pixels::from_checkpoint(&saved.children()[0], state.layout)?,
+            pixels: Pixels::from_checkpoint(&saved.children()[0], state.layout, sensor)?,
             prepared: state.prepared.then(|| saved.blobs()[0].clone()),
             source: state.source,
             radiance: if state.radiance {
-                Some(crate::exposure::ExposedFrame::from_checkpoint(
-                    &saved.children()[1],
-                )?)
+                Some((decoders(sensor)?.exposure)(&saved.children()[1])?)
             } else {
                 None
             },
         })
     }
-    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        Self::from_checkpoint(saved).map(|_| ())
+    /// `sensor` decodes sensor images and exposures; checkpoints of packed pixels need none.
+    pub fn validate_checkpoint(
+        &self,
+        saved: &Checkpoint,
+        sensor: Option<&SensorDecoders>,
+    ) -> Result<(), String> {
+        Self::from_checkpoint(saved, sensor).map(|_| ())
     }
-    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        let frame = Self::from_checkpoint(saved)?;
+    pub fn restore_checkpoint(
+        &self,
+        saved: &Checkpoint,
+        sensor: Option<&SensorDecoders>,
+    ) -> Result<(), String> {
+        let frame = Self::from_checkpoint(saved, sensor)?;
         *self.0.lock().map_err(|_| "image-frame poisoned")? = frame;
         Ok(())
     }
@@ -386,7 +420,7 @@ mod checkpoint_tests {
             &image.0.lock().unwrap().pixels.render(layout, 0).unwrap()
         ));
         image.use_analytic();
-        image.restore_checkpoint(&pending).unwrap();
+        image.restore_checkpoint(&pending, None).unwrap();
         assert_eq!(image.fingerprint(), before);
         assert!(Arc::ptr_eq(
             &pending.children()[0].blobs()[0],
@@ -404,7 +438,7 @@ mod checkpoint_tests {
         )
         .unwrap()
         .with_blobs(vec![Arc::from([0u8; 4])]);
-        assert!(image.restore_checkpoint(&invalid).is_err());
+        assert!(image.restore_checkpoint(&invalid, None).is_err());
         assert_eq!(image.fingerprint(), before);
     }
 }

@@ -128,8 +128,9 @@ fn repeated_source_runs_match_scalar_sampling_with_clips_and_per_row_rounding() 
 #[test]
 fn prepared_readouts_match_scalar_sampling() {
     use fujimod_emulator_imaging::exr2_isp::parameters::Parameters;
-    use fujimod_emulator_imaging::optics::{Illumination, Projection, Spec};
-    use fujimod_emulator_imaging::radiometric::Renderer;
+    use fujimod_emulator_image_formation::optics::Projection;
+    use fujimod_emulator_imaging::optics::{Illumination, Spec};
+    use fujimod_emulator_image_formation::radiometric::Renderer;
     use fujimod_emulator_imaging::scene::SensorFrames;
     use std::sync::Mutex;
     for [width, height] in [[7, 5], [23, 17], [40, 29]] {

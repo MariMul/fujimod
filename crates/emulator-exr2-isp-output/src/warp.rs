@@ -89,7 +89,7 @@ impl Warp {
         let source = self.source.clone();
         if r[1] == 0x40 {
             let mut stream = self.stream.lock().unwrap();
-            let plan = fujimod_emulator_imaging::resample::Endpoint::new(
+            let plan = fujimod_emulator_image_processing::resample::Endpoint::new(
                 self.source.len(),
                 src.width,
                 src.height,
@@ -118,7 +118,7 @@ impl Warp {
             }
             self.dma
                 .prepare_deferred(cx.now(), self.options.completion_ticks, active, w * 2)?;
-            let plan = match fujimod_emulator_imaging::resample::Endpoint::new(
+            let plan = match fujimod_emulator_image_processing::resample::Endpoint::new(
                 self.source.len(),
                 src.width,
                 src.height,

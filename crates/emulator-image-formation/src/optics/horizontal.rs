@@ -247,7 +247,7 @@ impl Cache {
 mod tests {
     use super::super::readout::project;
     use super::*;
-    use crate::scene::{Frame, FramePixels};
+    use fujimod_emulator_imaging::scene::{Frame, FramePixels};
     fn source() -> Arc<Scene> {
         let bytes: Vec<u8> = (0..8 * 5 * 3).map(|i| (i * 79) as u8).collect();
         let frame = Frame::new(8, 5, FramePixels::Rgb24(bytes.into())).unwrap();

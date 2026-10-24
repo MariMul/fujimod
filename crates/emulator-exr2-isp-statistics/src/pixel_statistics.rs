@@ -1,6 +1,6 @@
 //! Register-selected EXR II color windows and accumulation planes.
 //! CFA sample densities come from the selected physical sensor calibration.
-use fujimod_emulator_imaging::exposure::ExposedFrame;
+use fujimod_emulator_image_formation::exposure::ExposedFrame;
 
 /// A bounded pure memo of pixel measurements. DMA addresses, frame edges and
 /// completion clocks are handled by the producer even when these bytes repeat.

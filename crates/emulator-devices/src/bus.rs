@@ -288,6 +288,12 @@ pub trait Device: Send + std::any::Any {
     fn scanout_source_mut(&mut self) -> Option<&mut (dyn crate::capability::ScanoutSource + 'static)> {
         None
     }
+    fn frame_source(&self) -> Option<&(dyn crate::capability::FrameSource + 'static)> {
+        None
+    }
+    fn frame_source_mut(&mut self) -> Option<&mut (dyn crate::capability::FrameSource + 'static)> {
+        None
+    }
     /// Optional side-effect-free 32-bit reads for one register window. This
     /// query is observational: it must not settle time or change modeled
     /// state. Interactive runtimes may bypass `read` only while the declaration

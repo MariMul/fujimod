@@ -57,10 +57,10 @@ impl Default for Film {
     }
 }
 impl Film {
-    pub(crate) fn words(&self) -> &[u32] {
+    pub fn words(&self) -> &[u32] {
         &self.words
     }
-    pub(crate) fn matches(&self, r: impl Fn(usize) -> u32) -> bool {
+    pub fn matches(&self, r: impl Fn(usize) -> u32) -> bool {
         !self.words.is_empty()
             && GROUPS
                 .iter()

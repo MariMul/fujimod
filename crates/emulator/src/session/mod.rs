@@ -87,21 +87,20 @@ impl Session {
         &mut self,
         name: &str,
         period: u64,
-        cadence: fujimod_emulator_imaging::scene::StatisticsCadence,
+        cadence: fujimod_emulator_devices::capability::StatisticsCadence,
     ) -> Result<(), String> {
         let now = self.board.now();
         self.board
-            .edit_device::<fujimod_emulator_imaging::scene::clocked::ClockedFrames, _>(
+            .edit_capability::<dyn fujimod_emulator_devices::capability::FrameSource, _>(
                 self.node(name)?,
                 |frames| frames.configure(period, cadence, now),
             )
     }
     pub fn frame_state(&self, name: &str) -> Result<serde_json::Value, String> {
-        use fujimod_emulator_devices::Device;
         self.board
-            .inspect_device::<fujimod_emulator_imaging::scene::clocked::ClockedFrames, _>(
+            .inspect_capability::<dyn fujimod_emulator_devices::capability::FrameSource, _>(
                 self.node(name)?,
-                |frames| Ok(frames.save()),
+                |frames| Ok(frames.frame_state()),
             )
     }
     pub fn serial_state(&self, name: &str) -> Result<serde_json::Value, String> {
@@ -262,8 +261,11 @@ impl Session {
     /// Install a RAF's visible crop as mosaic radiance. Its recorded exposure
     /// is the normalization, so a later exposure scales the sensor counts.
     pub fn sensor_raf(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
-        use fujimod_emulator_imaging::scene::Frame;
-        self.sensor_frame(name, std::sync::Arc::new(Frame::from_raf_bytes(bytes)?))
+        let read = fujimod_emulator_exr2_plan::construction::constructors()?
+            .sensor_decoders()
+            .ok_or("RAF sensor input needs the image decoders")?
+            .raf;
+        self.sensor_frame(name, std::sync::Arc::new(read(bytes)?))
     }
     /// Install shared immutable sensor pixels without retaining source file bytes.
     pub fn sensor_frame(

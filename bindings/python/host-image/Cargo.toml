@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 fujimod-emulator-devices.workspace = true
-fujimod-emulator-imaging.workspace = true
+fujimod-emulator-image-processing.workspace = true
 pyo3.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -63,7 +63,7 @@ impl Scaler {
         self.source.resize(src.pitch * src.height, 0);
         cx.ram_read(src.address, &mut self.source)?;
         self.dma.prepare(cx.now(), self.delay, dst, dst.width * 2)?;
-        if let Err(e) = fujimod_emulator_imaging::resample::bilinear(
+        if let Err(e) = fujimod_emulator_image_processing::resample::bilinear(
             &self.source,
             src.width,
             src.height,

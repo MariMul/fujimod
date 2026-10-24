@@ -2,6 +2,7 @@
 mod portable;
 use super::*;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_imaging::scene::frames::SensorDecoders;
 
 #[derive(Clone)]
 pub struct ResourceSnapshot {
@@ -200,6 +201,13 @@ fn same_keys<A, B>(a: &BTreeMap<String, A>, b: &BTreeMap<String, B>) -> Result<(
         Ok(())
     }
 }
+/// The registered image implementation's decoders of checkpointed sensor images.
+fn sensor_decoders() -> Option<&'static SensorDecoders> {
+    crate::construction::constructors()
+        .ok()
+        .and_then(|constructors| constructors.sensor_decoders())
+}
+
 impl Resources {
     pub fn checkpoint(&self) -> Result<ResourceSnapshot, String> {
         Ok(ResourceSnapshot {
@@ -241,6 +249,7 @@ impl Resources {
         })
     }
     pub fn validate_checkpoint(&self, saved: &ResourceSnapshot) -> Result<(), String> {
+        let sensor = sensor_decoders();
         same_keys(&self.wires, &saved.wires)?;
         same_keys(&self.inputs.images, &saved.images)?;
         same_keys(&self.inputs.statistics, &saved.statistics)?;
@@ -250,7 +259,7 @@ impl Resources {
             v.validate_checkpoint(&saved.wires[k])?;
         }
         for (k, v) in &self.inputs.images {
-            v.validate_checkpoint(&saved.images[k])?;
+            v.validate_checkpoint(&saved.images[k], sensor)?;
         }
         for (k, v) in &self.inputs.statistics {
             v.validate_checkpoint(&saved.statistics[k])?;
@@ -271,11 +280,12 @@ impl Resources {
     }
     pub fn restore_checkpoint(&mut self, saved: &ResourceSnapshot) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
+        let sensor = sensor_decoders();
         for (k, v) in &self.wires {
             v.restore_checkpoint(&saved.wires[k])?;
         }
         for (k, v) in &self.inputs.images {
-            v.restore_checkpoint(&saved.images[k])?;
+            v.restore_checkpoint(&saved.images[k], sensor)?;
         }
         for (k, v) in &self.inputs.statistics {
             v.restore_checkpoint(&saved.statistics[k])?;

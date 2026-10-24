@@ -7,6 +7,7 @@ use crate::{BuiltBoard, Model, Resources};
 use fujimod_emulator_devices::exr2::irq;
 use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping};
 use fujimod_emulator_imaging::exr2_isp as isp;
+use fujimod_emulator_imaging::scene::frames::SensorDecoders;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
@@ -94,11 +95,12 @@ pub type Constructor = fn(Builder<'_>, Model) -> Result<Built, String>;
 pub type DmaController =
     fn(Vec<(Vec<Mapping>, Box<dyn Device>)>) -> Result<Box<dyn Device>, String>;
 
-/// Constructors by plan model kind.
+/// Constructors by plan model kind, and the image implementation's sensor decoders.
 #[derive(Default)]
 pub struct Constructors {
     models: BTreeMap<&'static str, Constructor>,
     dma_controller: Option<DmaController>,
+    sensor_decoders: Option<SensorDecoders>,
 }
 impl Constructors {
     /// Add the constructor of one model kind; each kind has one constructor.
@@ -113,6 +115,16 @@ impl Constructors {
             self.dma_controller.replace(constructor).is_none(),
             "two EXR II DMA controllers"
         );
+    }
+    pub fn set_sensor_decoders(&mut self, decoders: SensorDecoders) {
+        assert!(
+            self.sensor_decoders.replace(decoders).is_none(),
+            "two EXR II sensor decoders"
+        );
+    }
+    /// Decoders of checkpointed sensor images and exposures and of RAF files.
+    pub fn sensor_decoders(&self) -> Option<&SensorDecoders> {
+        self.sensor_decoders.as_ref()
     }
     pub fn build(&self, builder: Builder<'_>, model: Model) -> Result<Built, String> {
         let kind = model.kind();

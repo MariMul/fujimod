@@ -1,7 +1,7 @@
 //! RAW transport and nearest same-color reconstruction. CFA layout is body
 //! data. Full-field nearest sampling is a declared spatial approximation,
 //! separate from the measured integer film arithmetic.
-use crate::film::{Film, FilmPixels};
+use fujimod_emulator_imaging::film::{Film, FilmPixels};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

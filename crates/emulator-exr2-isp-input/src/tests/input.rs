@@ -6,7 +6,7 @@ use fujimod_emulator_devices::test_host::*;
 
 #[test]
 fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
-    use fujimod_emulator_imaging::raw::Cfa;
+    use fujimod_emulator_image_processing::raw::Cfa;
     let layout: Vec<u8> = (0..36).map(|i| ((i / 6 + i % 6) % 3) as u8).collect();
     let sensor = Cfa::new(layout.clone()).unwrap();
     let mut reference = None;
@@ -788,7 +788,7 @@ fn disabled_raw_channel_does_not_dma_or_signal_completion() {
 }
 #[test]
 fn packed_raw_readback_matches_u16_with_independent_row_padding() {
-    use fujimod_emulator_imaging::raw::Packing;
+    use fujimod_emulator_image_processing::raw::Packing;
     fn render(packing: Packing, padding: usize, mutate_after_start: bool) -> Vec<Vec<u8>> {
         let mut h = TestHost::new();
         let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();

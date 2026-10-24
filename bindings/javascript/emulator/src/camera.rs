@@ -151,7 +151,7 @@ pub(super) struct Preview {
     pub node: String,
     pub tick_hz: u64,
     pub period_ticks: u64,
-    pub cadence: fujimod_emulator_imaging::scene::StatisticsCadence,
+    pub cadence: fujimod_emulator_devices::capability::StatisticsCadence,
 }
 pub(super) struct Metadata {
     pub card: Option<Card>,

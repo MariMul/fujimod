@@ -1,4 +1,4 @@
-use crate::scene::{Frame, FramePixels, mosaic::MappedSites};
+use fujimod_emulator_imaging::scene::{Frame, FramePixels, mosaic::MappedSites};
 use std::{borrow::Cow, sync::Arc};
 
 /// Immutable scene irradiance. Row prefixes are independent of the lens,
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn computed_mosaic_rows_match_dense_optics_bins_and_checkpoint_restore() {
         use super::super::readout::{Coordinates, project_axes};
-        use crate::scene::mosaic::Radiance;
+        use fujimod_emulator_imaging::scene::mosaic::Radiance;
         let [width, height] = [13, 8];
         let cfa = std::array::from_fn(|y| std::array::from_fn(|x| ((x + 2 * y) % 3) as u8));
         let counts: Vec<u16> = (0..width * height)

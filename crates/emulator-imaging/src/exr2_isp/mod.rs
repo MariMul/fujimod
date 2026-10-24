@@ -9,7 +9,6 @@ pub mod memory_outputs;
 pub mod options;
 pub mod output_channels;
 pub mod parameters;
-pub use parameters::ParameterBank;
 
 /// Physical interrupt output. The board supplies the receiving core; the
 /// runtime routes the physical line through that core's interrupt controller.

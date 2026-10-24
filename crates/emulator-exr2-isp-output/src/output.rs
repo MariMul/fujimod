@@ -5,7 +5,8 @@ use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_imaging::exr2_isp::options::output::{GeometryPolicy, Options};
 use fujimod_emulator_imaging::exr2_isp::output_channels::{FrameTransfer, OutputChannels, Source};
 use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes, Raster, Transfer}, due};
-use fujimod_emulator_imaging::analysis::{ImageLayout, nearest_pairs};
+use fujimod_emulator_image_processing::analysis::nearest_pairs;
+use fujimod_emulator_imaging::analysis::ImageLayout;
 use fujimod_emulator_imaging::scene::ImageFrames;
 use fujimod_emulator_devices::{Cx, Device};
 
@@ -282,7 +283,8 @@ impl OutputChannel {
         )?;
         let result = match &frames.pixels {
             fujimod_emulator_imaging::scene::frames::Pixels::Sensor(image) => (|| {
-                let frozen = image.freeze(layout)?;
+                let frozen =
+                    fujimod_emulator_image_formation::radiometric::Image::of(image)?.freeze(layout)?;
                 transfer.pixels.defer_fallible(move |mut staging| {
                     staging.resize(layout.stride * layout.height, 0);
                     let result = frozen

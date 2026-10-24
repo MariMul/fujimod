@@ -1,5 +1,6 @@
 use super::*;
-use fujimod_emulator_imaging::{exposure::Calibration, radiometric::Renderer};
+use fujimod_emulator_image_formation::radiometric::Renderer;
+use fujimod_emulator_imaging::exposure::Calibration;
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
 use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use std::sync::{Arc, Mutex};
@@ -91,7 +92,7 @@ fn frozen_scene_jobs_keep_latched_bytes_pair_order_and_pending_restore() {
     let image = renderer.capture().unwrap().unwrap();
     // Derive the oracle from an independent restored image, leaving the queued
     // image's raster cache empty when it leaves the owner.
-    let expected = fujimod_emulator_imaging::radiometric::Image::from_checkpoint(
+    let expected = fujimod_emulator_image_formation::radiometric::Image::from_checkpoint(
         &image.checkpoint().unwrap(),
     )
     .unwrap()

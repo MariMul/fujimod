@@ -485,7 +485,7 @@ impl Decompressor {
                 ),
                 RasterKind::BoxHalf => unreachable!(),
             };
-            use fujimod_emulator_imaging::separable::Samples;
+            use fujimod_emulator_image_processing::separable::Samples;
             let input = if sf == 0 && df == 0 {
                 Samples::Scalar16
             } else {
@@ -497,9 +497,9 @@ impl Decompressor {
                 input
             };
             let row_bytes = w * output.bytes_per_pixel();
-            fujimod_emulator_imaging::separable::filter(
+            fujimod_emulator_image_processing::separable::filter(
                 &self.source[..sp * sh],
-                fujimod_emulator_imaging::separable::Geometry {
+                fujimod_emulator_image_processing::separable::Geometry {
                     width,
                     height: sh,
                     pitch: sp,

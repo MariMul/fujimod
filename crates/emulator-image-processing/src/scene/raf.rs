@@ -7,6 +7,8 @@
 //! resolution, tagged with CFA phase; a cheap linear RGB preview view is also
 //! provided for optics/preview callers.
 
+use fujimod_emulator_imaging::scene::mosaic::Radiance;
+use fujimod_emulator_imaging::scene::{Frame, FramePixels};
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Seek, SeekFrom};
 
@@ -787,6 +789,42 @@ fn parse_ifd(
     Ok(tags)
 }
 
+/// A RAF file's visible crop as a mosaic sensor frame.
+pub fn read_frame(bytes: &[u8]) -> Result<Frame, String> {
+    if bytes.len() > 64 << 20 {
+        return Err("sensor RAF input exceeds 64 MiB".into());
+    }
+    let scene = read_raf(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    frame(&scene)
+}
+/// The RAF's visible crop as a mosaic frame. The CFA pattern is re-phased
+/// to the crop origin, so sites keep their physical colors.
+pub fn frame(scene: &RafScene) -> Result<Frame, String> {
+    let (full_width, full_height) = (scene.width as usize, scene.height as usize);
+    let (left, top) = (scene.crop_left as usize, scene.crop_top as usize);
+    let (width, height) = (scene.crop_width as usize, scene.crop_height as usize);
+    if scene.counts.len() != full_width * full_height
+        || width == 0
+        || height == 0
+        || left + width > full_width
+        || top + height > full_height
+    {
+        return Err("RAF crop lies outside its radiance raster".into());
+    }
+    let cfa = std::array::from_fn(|y| {
+        std::array::from_fn(|x| scene.cfa[(y + top) % 6][(x + left) % 6])
+    });
+    let mut bytes = Vec::with_capacity(width * height * 2);
+    for y in top..top + height {
+        let row = y * full_width + left;
+        for value in &scene.counts[row..row + width] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+    let radiance = Radiance::from_bytes(bytes.into(), scene.norm)?;
+    Frame::new(width, height, FramePixels::Mosaic { cfa, radiance })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1110,5 +1148,114 @@ mod tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    use fujimod_emulator_image_formation::exposure::ExposedFrame;
+    use fujimod_emulator_imaging::exposure::{Calibration, Exposure};
+    use std::sync::Arc;
+    fn calibration() -> Calibration {
+        Calibration {
+            full_scale: 16383,
+            reference_white: [256; 3],
+            saturation_lux_seconds: 1.,
+            color_sample_weights: [2, 5, 2],
+        }
+    }
+    #[test]
+    fn raf_crop_preserves_count_values_normalization_and_cfa_phase() {
+        let scene = RafScene {
+            width: 11,
+            height: 8,
+            cfa: std::array::from_fn(|y| std::array::from_fn(|x| ((x + y) % 3) as u8)),
+            black: [1024; 3],
+            white: 16383,
+            counts: (0..88).map(|i| i * 719).collect(),
+            norm: 1. / 64800.,
+            exposure: RecordedExposure {
+                seconds: 1. / 800.,
+                f_number: 9.,
+                iso: 200,
+                dynamic_range: 100,
+            },
+            crop_top: 2,
+            crop_left: 3,
+            crop_height: 5,
+            crop_width: 7,
+        };
+        let frame = frame(&scene).unwrap();
+        let FramePixels::Mosaic { cfa, radiance } = &frame.pixels else {
+            panic!("mosaic");
+        };
+        assert_eq!(radiance.bytes().len(), 7 * 5 * 2);
+        assert_eq!(radiance.norm.to_bits(), scene.norm.to_bits());
+        for y in 0..5 {
+            for x in 0..7 {
+                assert_eq!(cfa[y % 6][x % 6], scene.cfa[(y + 2) % 6][(x + 3) % 6]);
+                assert_eq!(
+                    radiance.get(y * 7 + x).to_bits(),
+                    scene.radiance((y + 2) * 11 + x + 3).to_bits()
+                );
+            }
+        }
+    }
+    #[test]
+    fn real_raf_sites_reproduce_their_raw_counts_after_black() {
+        let Ok(path) = std::env::var("FUJIMOD_TEST_RAF") else {
+            return;
+        };
+        let bytes = std::fs::read(&path).expect("read the test RAF");
+        let scene = read_raf(std::io::Cursor::new(&bytes)).expect("parse the test RAF");
+        let recorded = scene.exposure.clone();
+        assert_eq!((recorded.iso, recorded.dynamic_range), (800, 400));
+        // Analog gain relative to ISO 200 DR100, as the RAF normalization defines it.
+        let analog_gain = f64::from(recorded.iso) / 200.
+            * match recorded.dynamic_range {
+                200 => 0.5,
+                400 => 0.25,
+                _ => 1.,
+            };
+        assert_eq!(analog_gain, 1.);
+        let exposure = Exposure {
+            seconds: recorded.seconds,
+            analog_gain,
+        };
+        let frame = frame(&scene).expect("RAF crop as mosaic");
+        let FramePixels::Mosaic { cfa, .. } = &frame.pixels else {
+            panic!("RAF crop is a mosaic frame");
+        };
+        let cfa = *cfa;
+        let (width, height) = (frame.width, frame.height);
+        let (left, top) = (scene.crop_left as usize, scene.crop_top as usize);
+        let exposed = ExposedFrame::from_frame(
+            Arc::new(frame),
+            exposure,
+            recorded.f_number * recorded.f_number,
+            calibration(),
+        )
+        .unwrap();
+        // Read the file's raw plane directly: 2048 TIFF bytes follow the raw offset.
+        let raw_offset = u32::from_be_bytes([bytes[100], bytes[101], bytes[102], bytes[103]]);
+        let samples = raw_offset as usize + 2048;
+        let raw_at = |x: usize, y: usize| {
+            let at = samples + 2 * (y * scene.width as usize + x);
+            u16::from_le_bytes([bytes[at], bytes[at + 1]])
+        };
+        let black = scene.black[0];
+        let mut lit = 0;
+        for i in 0..400usize {
+            let sx = (i * 7919 + 13) % width;
+            let sy = (i * 104_729 + 7) % height;
+            let (x, y) = (sx + left, sy + top);
+            assert_eq!(cfa[sy % 6][sx % 6], scene.cfa[y % 6][x % 6], "crop phase");
+            let raw = raw_at(x, y).saturating_sub(black);
+            lit += usize::from(raw > 0);
+            let c = usize::from(cfa[sy % 6][sx % 6]);
+            assert_eq!(exposed.sample_source(sx, sy)[c], raw, "site ({x}, {y})");
+        }
+        assert!(lit > 100, "the sample must include lit sites");
     }
 }

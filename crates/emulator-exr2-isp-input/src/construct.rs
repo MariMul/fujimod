@@ -13,6 +13,9 @@ pub fn register(constructors: &mut Constructors) {
     constructors.add("prefilter", prefilter);
     constructors.add("raw-statistics", raw_statistics);
     constructors.add("block11000", block11000);
+    constructors.add("external-frames", external_frames);
+    constructors.add("parameters", parameters);
+    constructors.set_sensor_decoders(fujimod_emulator_image_processing::sensor_decoders());
 }
 
 fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
@@ -76,7 +79,7 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                     if let Some(p) = projection {
                         let focus = wire!(resources, id, p.focus.clone(), Focus);
                         sensor.attach_projection(
-                            fujimod_emulator_imaging::optics::Projection::new(p, focus)?,
+                            fujimod_emulator_image_formation::optics::Projection::new(p, focus)?,
                         );
                     }
                 }
@@ -146,5 +149,104 @@ fn block11000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     };
     Ok(Built::Device(Box::new(crate::block11000::Block11000::new(
         options,
+    )?)))
+}
+
+fn external_frames(builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Builder {
+        id,
+        resources,
+        start_tick,
+        ..
+    } = builder;
+    let Model::ExternalFrames {
+        options,
+        sensor_clock,
+        images,
+        statistics,
+        activity,
+        position,
+        radiometric,
+        phase_edges,
+        frame_period,
+    } = model
+    else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(
+        fujimod_emulator_image_processing::scene::clocked::ClockedFrames::new(
+            options,
+            fujimod_emulator_image_processing::scene::clocked::Wiring {
+                sensor_clock: sensor_clock
+                    .map(|name| {
+                        resources
+                            .inputs
+                            .sensors
+                            .get(&name)
+                            .cloned()
+                            .ok_or_else(|| format!("missing physical sensor clock {name}"))
+                    })
+                    .transpose()?,
+                frame_period: frame_period
+                    .map(|name| Ok::<_, String>(wire!(resources, id, name, FramePeriod)))
+                    .transpose()?,
+                phase_edges: phase_edges
+                    .map(|name| Ok::<_, String>(wire!(resources, id, name, PhaseEdges)))
+                    .transpose()?,
+                position: position
+                    .map(|n| resources.optical_position(&n))
+                    .transpose()?,
+                renderer: radiometric
+                    .map(|r| {
+                        fujimod_emulator_image_formation::radiometric::Renderer::new(
+                            r.calibration,
+                            resources
+                                .inputs
+                                .sensors
+                                .get(&r.frames)
+                                .cloned()
+                                .ok_or("missing radiometric scene")?,
+                            wire!(resources, id, r.exposure, Exposure),
+                            wire!(resources, id, r.aperture, Aperture),
+                            wire!(resources, id, r.parameters, Parameters),
+                            r.projection
+                                .map(|p| {
+                                    let focus = wire!(resources, id, p.focus.clone(), Focus);
+                                    fujimod_emulator_image_formation::optics::Projection::new(p, focus)
+                                })
+                                .transpose()?,
+                        )
+                    })
+                    .transpose()?,
+                images: resources.image_input(&images, id)?,
+                statistics: resources
+                    .inputs
+                    .statistics
+                    .get(&statistics)
+                    .cloned()
+                    .ok_or("missing external statistics input")?,
+                activity: activity
+                    .map(|signal| {
+                        Ok::<_, String>((
+                            Box::new(resources.pads(&signal.gpio)?)
+                                as Box<dyn fujimod_emulator_devices::parts::pins::InputPins>,
+                            signal.selection,
+                        ))
+                    })
+                    .transpose()?,
+                start_tick,
+            },
+        )?,
+    )))
+}
+
+fn parameters(builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Builder { id, resources, .. } = builder;
+    let Model::Parameters { options, bank } = model else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device(Box::new(fujimod_emulator_image_processing::parameters::ParameterBank::new(
+        options,
+        wire!(resources, id, bank, Parameters),
     )?)))
 }

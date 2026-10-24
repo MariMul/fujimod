@@ -81,53 +81,6 @@ impl FrameCadence {
     }
 }
 
-/// The caller supplies physical S1 and declared sensor activity, never a
-/// software mode variable. Dividers retain their absolute frame phase.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum StatisticsCadence {
-    EveryNth {
-        frames: u64,
-    },
-    Activity {
-        idle_frames: u64,
-        active_frames: u64,
-    },
-}
-impl StatisticsCadence {
-    pub fn validate(self) -> Result<Self, String> {
-        let valid = match self {
-            Self::EveryNth { frames } => frames > 0,
-            Self::Activity {
-                idle_frames,
-                active_frames,
-            } => idle_frames > 0 && active_frames > 0,
-        };
-        if valid {
-            Ok(self)
-        } else {
-            Err("statistics frame dividers must be positive".into())
-        }
-    }
-    pub fn admits(self, index: u64, s1_pressed: bool, sensor_active: bool) -> Result<bool, String> {
-        self.validate()?;
-        let divisor = match self {
-            Self::EveryNth { frames } => frames,
-            Self::Activity {
-                idle_frames,
-                active_frames,
-            } => {
-                if s1_pressed || sensor_active {
-                    active_frames
-                } else {
-                    idle_frames
-                }
-            }
-        };
-        Ok(index > 0 && index.is_multiple_of(divisor))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,18 +95,6 @@ mod tests {
         c.set_period(20, 30).unwrap();
         assert_eq!(c.take_due(33), Some(FrameEdge { index: 4, tick: 33 }));
         assert_eq!(c.next_deadline(), Some(53));
-        let s = StatisticsCadence::Activity {
-            idle_frames: 4,
-            active_frames: 1,
-        };
-        assert!(!s.admits(3, false, false).unwrap());
-        assert!(s.admits(3, true, false).unwrap());
-        assert!(s.admits(3, false, true).unwrap());
-        assert!(
-            StatisticsCadence::EveryNth { frames: 0 }
-                .validate()
-                .is_err()
-        );
         let mut c = FrameCadence::new(10, u64::MAX).unwrap();
         assert!(c.take_due(u64::MAX).is_some());
         assert_eq!(c.next_deadline(), None);

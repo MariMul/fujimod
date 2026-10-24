@@ -1,4 +1,5 @@
-use super::{ImageLayout, histogram_luma};
+use super::histogram_luma;
+use fujimod_emulator_imaging::analysis::ImageLayout;
 
 fn scalar(source: &[u8], input: ImageLayout, grid: [usize; 2], window: [usize; 4]) -> [u8; 1024] {
     let [left, top, width, height] = window;

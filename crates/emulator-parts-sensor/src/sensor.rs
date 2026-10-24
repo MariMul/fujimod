@@ -2,8 +2,9 @@
 //! black level, active image area and reference white are body data. The RGB spectral response
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
-use fujimod_emulator_imaging::exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle};
-use fujimod_emulator_imaging::raw::{Cfa, Packing};
+use fujimod_emulator_image_formation::exposure::ExposedFrame;
+use fujimod_emulator_imaging::exposure::{ApertureHandle, Calibration, ExposureHandle};
+use fujimod_emulator_image_processing::raw::{Cfa, Packing};
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
@@ -36,7 +37,7 @@ mod tests {
 
     #[test]
     fn cropped_samples_keep_full_raster_projection_and_cfa_phase() {
-        use fujimod_emulator_imaging::raw::RawView;
+        use fujimod_emulator_image_processing::raw::RawView;
         let frames = Arc::new(Mutex::new(SensorFrames::new(
             Frame::new(
                 8,
@@ -145,7 +146,7 @@ mod tests {
             .unwrap();
         let focus = Arc::new(Mutex::new(0.));
         sensor.attach_projection(
-            fujimod_emulator_imaging::optics::Projection::new(
+            fujimod_emulator_image_formation::optics::Projection::new(
                 fujimod_emulator_imaging::optics::Spec {
                     focus: "lens".into(),
                     focal_length_mm: 18.5,
@@ -357,7 +358,7 @@ pub struct Sensor {
     controls: Option<Box<dyn Controls>>,
     radiometry: Option<(Calibration, ExposureHandle, ApertureHandle)>,
     exposed: Option<ExposedFrame>,
-    projection: Option<fujimod_emulator_imaging::optics::Projection>,
+    projection: Option<fujimod_emulator_image_formation::optics::Projection>,
     readout_valid: bool,
 }
 /// A validated readout from one accepted exposure. It retains immutable image
@@ -438,7 +439,7 @@ impl Sensor {
         self.controls = Some(controls);
         Ok(())
     }
-    pub fn attach_projection(&mut self, projection: fujimod_emulator_imaging::optics::Projection) {
+    pub fn attach_projection(&mut self, projection: fujimod_emulator_image_formation::optics::Projection) {
         self.projection = Some(projection);
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {

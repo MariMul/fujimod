@@ -24,6 +24,8 @@
       "fujimod-emulator-exr2-system",
       "fujimod-emulator-graphics",
       "fujimod-emulator-image-codecs",
+      "fujimod-emulator-image-formation",
+      "fujimod-emulator-image-processing",
       "fujimod-emulator-ip",
       "fujimod-emulator-ip-arm",
       "fujimod-emulator-ip-dmp",
@@ -127,9 +129,7 @@
       "fujimod-emulator-devices/src/keyed_io.rs",
       "fujimod-emulator-devices/src/lz_osd.rs",
       "fujimod-emulator-devices/src/parts/controls.rs",
-      "fujimod-emulator-devices/src/parts/hdmi_sink.rs",
-      "fujimod-emulator-imaging/src/exr2_isp/parameters.rs",
-      "fujimod-emulator-imaging/src/scene/clocked.rs"
+      "fujimod-emulator-devices/src/parts/hdmi_sink.rs"
     ]
   }
 }

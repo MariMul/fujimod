@@ -3,7 +3,7 @@
 //! numerical laws. Other pyramid/tuning words are retained without inventing
 //! their silicon effects.
 use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{self, IrqRoutes, Raster, Transfer}, due};
-use fujimod_emulator_imaging::analysis::{self, WindowGrid};
+use fujimod_emulator_image_processing::analysis::{self, WindowGrid};
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::exr2_isp::options::window_analysis::Options;
 const BASE: u64 = 0xfff42000;

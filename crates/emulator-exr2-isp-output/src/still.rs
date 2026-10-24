@@ -5,7 +5,7 @@
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
 use fujimod_emulator_imaging::exr2_isp::{Irq, word};
 use fujimod_emulator_imaging::film::{Film, still_offset};
-use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
+use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
 use fujimod_emulator_imaging::exr2_isp::options::still::Options;

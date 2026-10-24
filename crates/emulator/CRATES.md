@@ -24,10 +24,20 @@ From the bottom of the graph to the top:
 
    It contains no device implementation. Two crates sit in the same layer:
    `fujimod-emulator-storage` (FAT and media inputs, host-side services over
-   those media) and the image layer `fujimod-emulator-imaging` (scene frames,
-   exposure, optics, radiometry, image analysis, film, RAW development and color
-   processing, and the EXR II ISP interface), whose types are concrete with
-   private fields.
+   those media) and the image interface `fujimod-emulator-imaging`: scene,
+   sensor and image frames and their pixels, the handles and option and spec
+   types plans name, image layout, statistics frames, exposure and optics
+   declarations, film and packed color, and the EXR II ISP interface. Its
+   types are concrete with private fields, except the sensor images and
+   exposures an image frame carries, which are `SensorImage` and
+   `SensorExposure` trait objects; `SensorDecoders` decodes their checkpoints
+   and RAF files. The implementation is two model crates:
+   `fujimod-emulator-image-formation` (exposure sampling, optical projection,
+   radiometric rendering) and `fujimod-emulator-image-processing` (analysis
+   laws, RAW development, resampling, separable filters, RAF reading, the
+   scene's optical blur, the clocked frame source and the ISP parameter
+   bank). The EXR II ISP input crate registers the frame source and parameter
+   bank constructors and the sensor decoders.
 3. Plan crates: each family's checked board description and construction
    interface, such as `fujimod-emulator-exr2-plan`. A plan carries each model's
    options as JSON for the model crate to decode, so an option change in a
@@ -102,9 +112,10 @@ pair per capability (`card_slot()`, `card_slot_mut()`, ...) returning `None`;
 a model that offers the capability returns itself. The board's
 `inspect_capability`, `edit_capability` and `capability_input` find a node's
 capability, and `device_save` reads any device's diagnostic state. Sessions no
-longer downcast to EXR II models; generic `inspect_device::<T>` remains for
-tests and final crates. `ClockedFrames` keeps typed access because the image
-layer that holds it is interface-level.
+longer downcast to models; generic `inspect_device::<T>` remains for tests and
+final crates. `FrameSource` configures the clocked frame source's period and
+statistics cadence (`StatisticsCadence`, beside it in `capability`). A session
+reads RAF input through the sensor decoders the constructor registry holds.
 
 ## Board code outside the emulator crate
 
@@ -167,6 +178,11 @@ records the rebuild costs below before and after.
    2.7–3.3 s end to end with the default Apple linker, 3.4–4.2 s with
    `-no_deduplicate` and 3.4–10 s with `lld` (load average 14), so the default
    stays. Release builds carry no debug info.
+8. Image interface and implementation: done. The image layer split into the
+   interface and its two implementation crates, so the emulator, the plan and
+   the Python binding libraries no longer rebuild after an optics, rendering,
+   RAW or RAF edit. X70 REC live view stayed bit-identical, with identical
+   guest instruction counts, through two seconds after REC.
 
 ## Rebuild costs
 

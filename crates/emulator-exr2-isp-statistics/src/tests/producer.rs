@@ -241,12 +241,13 @@ fn statistics_dma_histogram_and_paired_ack_backpressure() {
 
 #[test]
 fn switching_from_sensor_statistics_restores_the_external_span_layout() {
-    use fujimod_emulator_imaging::exposure::{Calibration, ExposedFrame, Exposure};
+    use fujimod_emulator_image_formation::exposure::ExposedFrame;
+    use fujimod_emulator_imaging::exposure::{Calibration, Exposure};
     use fujimod_emulator_imaging::scene::{Frame, FramePixels};
     let (mut d, frames, images, _, mut m) = producer(false);
     let edge = FrameEdge { index: 1, tick: 10 };
     images.publish(edge, &[5; 16]).unwrap();
-    images.0.lock().unwrap().radiance = Some(
+    images.0.lock().unwrap().radiance = Some(std::sync::Arc::new(
         ExposedFrame::from_frame(
             std::sync::Arc::new(Frame::new(1, 1, FramePixels::Rgb24(vec![128; 3].into())).unwrap()),
             Exposure {
@@ -262,7 +263,7 @@ fn switching_from_sensor_statistics_restores_the_external_span_layout() {
             },
         )
         .unwrap(),
-    );
+    ));
     frames.publish(edge).unwrap();
     advance(&mut d, &mut m, 10);
     advance(&mut d, &mut m, 15);
@@ -436,7 +437,7 @@ fn histogram_samples_the_guest_window_and_latches_pixels_before_dma() {
 
 #[test]
 fn histogram_crop_clips_present_samples_without_resizing_or_padding() {
-    use fujimod_emulator_imaging::analysis::histogram_luma;
+    use fujimod_emulator_image_processing::analysis::histogram_luma;
     let layout = ImageLayout {
         width: 4,
         height: 2,
@@ -549,7 +550,8 @@ fn pixel_processing_precedes_statistics_dma_and_latches_the_exposure() {
 
 #[test]
 fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
-    use fujimod_emulator_imaging::exposure::{Calibration, ExposedFrame, Exposure};
+    use fujimod_emulator_image_formation::exposure::ExposedFrame;
+    use fujimod_emulator_imaging::exposure::{Calibration, Exposure};
     use fujimod_emulator_imaging::scene::{Frame, FramePixels};
     let (mut d, frames, images, _, mut m) = producer_with_metering(
         false,
@@ -560,7 +562,7 @@ fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
     );
     let edge = FrameEdge { index: 1, tick: 10 };
     images.publish(edge, &[5; 16]).unwrap();
-    images.0.lock().unwrap().radiance = Some(
+    images.0.lock().unwrap().radiance = Some(std::sync::Arc::new(
         ExposedFrame::from_frame(
             std::sync::Arc::new(Frame::new(1, 1, FramePixels::Rgb24(vec![128; 3].into())).unwrap()),
             Exposure {
@@ -576,7 +578,7 @@ fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
             },
         )
         .unwrap(),
-    );
+    ));
     frames.publish(edge).unwrap();
     m.now = edge.tick;
     let mut cx = Cx::new(&mut m, 0, 0, 0);
@@ -587,7 +589,7 @@ fn radiometric_and_packed_metering_refuse_competing_bank_sources() {
 
 #[test]
 fn histogram_coordinates_follow_the_upstream_extent_instead_of_the_display_raster() {
-    use fujimod_emulator_imaging::analysis::histogram_luma;
+    use fujimod_emulator_image_processing::analysis::histogram_luma;
     let layout = ImageLayout {
         width: 4,
         height: 4,

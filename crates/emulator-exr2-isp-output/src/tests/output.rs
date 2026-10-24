@@ -350,7 +350,9 @@ fn repeating_output_and_statistics_do_not_allocate_per_frame() {
 fn native_preview_cadence_uses_physical_input_and_keeps_image_edges_and_stats_phase() {
     use fujimod_emulator_imaging::analysis::ImageLayout;
     use fujimod_emulator_devices::parts::pins::{InputPins, Pin, Selection};
-    use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsCadence, StatisticsFrames, StatisticsSpan, clocked};
+    use fujimod_emulator_devices::capability::StatisticsCadence;
+    use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -374,13 +376,13 @@ fn native_preview_cadence_uses_physical_input_and_keeps_image_edges_and_stats_ph
         bytes: vec![0; 4],
     }])
     .unwrap();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             phase_source: None,
             period_ticks: 10,
             optics: None,
         },
-        clocked::Wiring {
+        Wiring {
             sensor_clock: None,
             frame_period: None,
 
@@ -450,6 +452,7 @@ fn native_preview_cadence_uses_physical_input_and_keeps_image_edges_and_stats_ph
 fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time() {
     use fujimod_emulator_imaging::analysis::ImageLayout;
     use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     let images = ImageFrames::new(ImageLayout {
         width: 4,
         height: 2,
@@ -462,13 +465,13 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
         bytes: vec![0; 4],
     }])
     .unwrap();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             phase_source: None,
             period_ticks: 10,
             optics: None,
         },
-        clocked::Wiring {
+        Wiring {
             sensor_clock: None,
             frame_period: None,
 
@@ -542,6 +545,7 @@ fn external_frames_latch_host_pixels_only_at_due_edges_and_animate_in_guest_time
 #[test]
 fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge() {
     use fujimod_emulator_imaging::scene::{FrameEdge, ImageFrames, StatisticsFrames, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     let images = ImageFrames::new(fujimod_emulator_imaging::analysis::ImageLayout {
         width: 2,
         height: 1,
@@ -550,13 +554,13 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
     .unwrap();
     let statistics = StatisticsFrames::new(vec![]).unwrap();
     let edges: fujimod_emulator_imaging::scene::FramePhases = Default::default();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             period_ticks: 10,
             phase_source: Some(1),
             optics: None,
         },
-        clocked::Wiring {
+        Wiring {
             sensor_clock: None,
 
             frame_period: None,
@@ -608,7 +612,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
     ): (
         fujimod_emulator_imaging::scene::FrameCadence,
         u64,
-        fujimod_emulator_imaging::scene::StatisticsCadence,
+        fujimod_emulator_devices::capability::StatisticsCadence,
         bool,
         bool,
         Option<usize>,
@@ -647,7 +651,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
         source
             .configure(
                 5,
-                fujimod_emulator_imaging::scene::StatisticsCadence::EveryNth { frames: 1 },
+                fujimod_emulator_devices::capability::StatisticsCadence::EveryNth { frames: 1 },
                 30
             )
             .is_err()
@@ -657,6 +661,7 @@ fn wired_frame_clock_publishes_pixels_and_statistics_on_the_same_physical_edge()
 #[test]
 fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     use fujimod_emulator_imaging::scene::{FrameEdge, ImageFrames, StatisticsFrames, clocked, optics};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     let images = ImageFrames::new(fujimod_emulator_imaging::analysis::ImageLayout {
         width: 8,
         height: 1,
@@ -670,7 +675,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     let edges: fujimod_emulator_imaging::scene::FramePhases = Default::default();
     let position = optics::Position::default();
     let statistics = StatisticsFrames::new(vec![]).unwrap();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             period_ticks: 99,
             phase_source: Some(0),
@@ -680,7 +685,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
                 maximum_radius: 32,
             }),
         },
-        clocked::Wiring {
+        Wiring {
             sensor_clock: None,
 
             frame_period: None,
@@ -731,7 +736,9 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 3, tick: 25 });
     fujimod_emulator_exr2_isp_testing::advance(&mut source, &mut memory, 25);
     source.restore_checkpoint(&source_snapshot).unwrap();
-    images.restore_checkpoint(&image_snapshot).unwrap();
+    images
+        .restore_checkpoint(&image_snapshot, Some(&fujimod_emulator_image_processing::sensor_decoders()))
+        .unwrap();
     statistics.restore_checkpoint(&statistics_snapshot).unwrap();
     position.publish(0);
     edges.lock().unwrap()[0] = Some(FrameEdge { index: 3, tick: 30 });
@@ -749,6 +756,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
 fn sensor_frame_clock_changes_are_causal_and_external_pixels_keep_their_clock() {
     use fujimod_emulator_imaging::analysis::ImageLayout;
     use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     let images = ImageFrames::new(ImageLayout {
         width: 2,
         height: 1,
@@ -756,13 +764,13 @@ fn sensor_frame_clock_changes_are_causal_and_external_pixels_keep_their_clock() 
     })
     .unwrap();
     let period = std::sync::Arc::new(std::sync::Mutex::new(4));
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             phase_source: None,
             optics: None,
             period_ticks: 10,
         },
-        clocked::Wiring {
+        Wiring {
             position: None,
             phase_edges: None,
 
@@ -804,8 +812,10 @@ fn sensor_frame_clock_changes_are_causal_and_external_pixels_keep_their_clock() 
 }
 #[test]
 fn radiometric_statistics_wait_for_the_physical_sensor_edge() {
-    use fujimod_emulator_imaging::{exposure::Calibration, radiometric::Renderer};
+    use fujimod_emulator_image_formation::radiometric::Renderer;
+    use fujimod_emulator_imaging::exposure::Calibration;
     use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames, StatisticsFrames, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     use std::sync::{Arc, Mutex};
     let frames = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![128; 3].into())).unwrap(),
@@ -836,13 +846,13 @@ fn radiometric_statistics_wait_for_the_physical_sensor_edge() {
         None,
     )
     .unwrap();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             phase_source: None,
             optics: None,
             period_ticks: 10,
         },
-        clocked::Wiring {
+        Wiring {
             position: None,
             phase_edges: None,
 
@@ -899,7 +909,9 @@ fn radiometric_statistics_wait_for_the_physical_sensor_edge() {
 
 #[test]
 fn delayed_external_observation_preserves_absolute_statistics_phase() {
-    use fujimod_emulator_imaging::scene::{StatisticsCadence, StatisticsFrames, StatisticsSpan, clocked};
+    use fujimod_emulator_devices::capability::StatisticsCadence;
+    use fujimod_emulator_imaging::scene::{StatisticsFrames, StatisticsSpan, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     let images = ImageFrames::new(ImageLayout {
         width: 2,
         height: 1,
@@ -912,13 +924,13 @@ fn delayed_external_observation_preserves_absolute_statistics_phase() {
         bytes: vec![0; 4],
     }])
     .unwrap();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             phase_source: None,
             optics: None,
             period_ticks: 10,
         },
-        clocked::Wiring {
+        Wiring {
             position: None,
             phase_edges: None,
 
@@ -950,8 +962,10 @@ fn delayed_external_observation_preserves_absolute_statistics_phase() {
 
 #[test]
 fn switching_frame_sources_waits_for_a_new_edge_and_keeps_external_clock_phase() {
-    use fujimod_emulator_imaging::{exposure::Calibration, radiometric::Renderer};
+    use fujimod_emulator_image_formation::radiometric::Renderer;
+    use fujimod_emulator_imaging::exposure::Calibration;
     use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames, StatisticsFrames, clocked};
+    use fujimod_emulator_image_processing::scene::clocked::{ClockedFrames, Wiring};
     use std::sync::{Arc, Mutex};
     let frames = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![128; 3].into())).unwrap(),
@@ -982,13 +996,13 @@ fn switching_frame_sources_waits_for_a_new_edge_and_keeps_external_clock_phase()
         None,
     )
     .unwrap();
-    let mut source = clocked::ClockedFrames::new(
+    let mut source = ClockedFrames::new(
         clocked::Options {
             phase_source: None,
             optics: None,
             period_ticks: 10,
         },
-        clocked::Wiring {
+        Wiring {
             position: None,
             phase_edges: None,
 

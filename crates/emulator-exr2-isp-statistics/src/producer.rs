@@ -3,7 +3,8 @@
 //! uses an explicit transfer clock. No configuration hashes or finite lifetimes.
 use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes}, due, Irq};
 use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
-use fujimod_emulator_imaging::{analysis::ImageLayout, radiometric::FrozenReadout};
+use fujimod_emulator_image_formation::radiometric::FrozenReadout;
+use fujimod_emulator_imaging::analysis::ImageLayout;
 use fujimod_emulator_devices::work::Job;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -95,7 +96,7 @@ impl RasterJobInput {
 }
 enum ImagePixelsSnapshot {
     Sensor {
-        image: Arc<fujimod_emulator_imaging::radiometric::Image>,
+        image: Arc<fujimod_emulator_image_formation::radiometric::Image>,
         readout: FrozenReadout,
     },
     Packed(Arc<[u8]>),
@@ -103,7 +104,7 @@ enum ImagePixelsSnapshot {
 impl ImagePixelsSnapshot {
     fn histogram_image(
         &self,
-    ) -> Option<&Arc<fujimod_emulator_imaging::radiometric::Image>> {
+    ) -> Option<&Arc<fujimod_emulator_image_formation::radiometric::Image>> {
         match self {
             Self::Sensor { image, .. } => Some(image),
             Self::Packed(_) => None,
@@ -120,7 +121,7 @@ struct ImageSnapshot {
     edge: Option<fujimod_emulator_imaging::scene::FrameEdge>,
     layout: ImageLayout,
     pixels: ImagePixelsSnapshot,
-    radiance: Option<fujimod_emulator_imaging::exposure::ExposedFrame>,
+    radiance: Option<fujimod_emulator_image_formation::exposure::ExposedFrame>,
 }
 
 fn reuse_spans(target: &mut Vec<StatisticsSpan>, source: &[StatisticsSpan]) {
@@ -336,9 +337,11 @@ impl Block18000 {
             let image = self.wiring.images.0.lock().unwrap();
             let pixels = match &image.pixels {
                 fujimod_emulator_imaging::scene::frames::Pixels::Sensor(physical) => {
+                    let physical =
+                        fujimod_emulator_image_formation::radiometric::Image::of(physical)?;
                     ImagePixelsSnapshot::Sensor {
-                        image: physical.clone(),
                         readout: physical.freeze(image.layout)?,
+                        image: physical,
                     }
                 }
                 fujimod_emulator_imaging::scene::frames::Pixels::Packed(pixels) => {
@@ -349,7 +352,12 @@ impl Block18000 {
                 edge: image.edge,
                 layout: image.layout,
                 pixels,
-                radiance: image.radiance.clone(),
+                radiance: image
+                    .radiance
+                    .as_deref()
+                    .map(fujimod_emulator_image_formation::exposure::ExposedFrame::of)
+                    .transpose()?
+                    .cloned(),
             }
         };
         let grid = if image.radiance.is_some() {
@@ -412,7 +420,7 @@ impl Block18000 {
                     physical.histogram(grid, window, &mut self.histogram_bytes)?
                 }
                 ImagePixelsSnapshot::Packed(pixels) => {
-                    fujimod_emulator_imaging::analysis::histogram_luma(
+                    fujimod_emulator_image_processing::analysis::histogram_luma(
                         pixels,
                         image.layout,
                         grid,

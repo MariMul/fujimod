@@ -3,7 +3,8 @@
 use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::touch_input::ContactInput;
-use fujimod_emulator_imaging::scene::{Frame, StatisticsCadence};
+use fujimod_emulator_devices::capability::StatisticsCadence;
+use fujimod_emulator_imaging::scene::Frame;
 use std::{collections::VecDeque, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

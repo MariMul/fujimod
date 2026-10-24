@@ -2,8 +2,8 @@
 //! packed12 interleaved-aperture SAD are declared numerical laws, not optical
 //! calibration. Only register-addressed rows are read, and only IRQ33 rises.
 use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{self, IrqRoutes}, due};
-use fujimod_emulator_imaging::analysis::sad_curve;
-use fujimod_emulator_imaging::raw::{Packing, RawView};
+use fujimod_emulator_image_processing::analysis::sad_curve;
+use fujimod_emulator_image_processing::raw::{Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::exr2_isp::options::phase_detection::{Options, Arithmetic};
 

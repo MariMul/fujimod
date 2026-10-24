@@ -56,7 +56,7 @@ impl Radiance {
 }
 
 /// Immutable mosaic radiance with its precomputed per-cell color means.
-pub(crate) struct MosaicSites {
+pub struct MosaicSites {
     cfa: Cfa,
     width: usize,
     cells_wide: usize,
@@ -138,7 +138,7 @@ impl MosaicSites {
 }
 
 /// Mosaic sites after a per-value law, from `MosaicSites::mapped`.
-pub(crate) struct MappedSites {
+pub struct MappedSites {
     cfa: Cfa,
     width: usize,
     cells_wide: usize,
