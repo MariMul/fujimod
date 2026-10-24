@@ -866,7 +866,7 @@ mod tests {
             .find(|word| word.offset == offset)
             .and_then(|word| match word.value {
                 FastReadValue::ClockedU32(read) => Some(read),
-                FastReadValue::AtomicU32(_) => None,
+                _ => None,
             })
             .expect("timer counter has a clocked fast read")
     }
