@@ -15,6 +15,7 @@ fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     fujimod_python_usb::register(py, module)?;
     #[cfg(feature = "emulator")]
     {
+        fujimod_python_boot::register();
         fujimod_python_emulator::register(py, module)?;
         fujimod_python_xp4::register();
         let emulator = module.getattr("emulator")?.cast_into::<PyModule>()?;

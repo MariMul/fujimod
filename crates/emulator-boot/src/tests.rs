@@ -789,7 +789,7 @@ fn video_encoder_backend_is_selected_in_the_prepared_graph() {
 
 #[test]
 fn declared_pcm_input_selects_one_composed_receiver_in_the_prepared_graph() {
-    use fujimod_catalog_configuration::RunAudioInputProfile;
+    use fujimod_catalog_run_inputs::RunAudioInputProfile;
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
     resolved
         .configuration

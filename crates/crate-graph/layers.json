@@ -63,6 +63,7 @@
     "library": [
       "fujimod",
       "fujimod-python-base",
+      "fujimod-python-boot",
       "fujimod-python-catalog",
       "fujimod-python-emulator",
       "fujimod-python-recording",
@@ -92,6 +93,7 @@
       "fujimod-catalog-content",
       "fujimod-catalog-controls",
       "fujimod-catalog-remote",
+      "fujimod-catalog-run-inputs",
       "fujimod-catalog-schemas",
       "fujimod-catalog-service",
       "fujimod-catalog-settings",

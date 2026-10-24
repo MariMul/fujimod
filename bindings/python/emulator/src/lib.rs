@@ -11,8 +11,9 @@ use pyo3::types::{PyBytes, PyDict, PyModule};
 #[pyfunction]
 #[pyo3(signature = (configuration_id, overlays=Vec::new()))]
 fn prepare_configuration(configuration_id: &str, overlays: Vec<String>) -> PyResult<String> {
-    let prepared = fujimod_emulator_boot::prepare(configuration_id, &overlays).map_err(error)?;
-    serde_json::to_string(&prepared.to_json()).map_err(|failure| error(failure.to_string()))
+    fujimod_python_base::boot::boot()?
+        .prepare(configuration_id, &overlays)
+        .map_err(error)
 }
 
 /// Load explicitly located, identity-checked inputs before constructing a board.

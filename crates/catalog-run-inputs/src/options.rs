@@ -698,7 +698,7 @@ pub enum RunWifiSdioProfile {
 }
 
 impl RunFactoryOptions {
-    pub(super) fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         if self.auxiliary_control_ticks == Some(0) {
             return Err("run auxiliary_control_ticks must be positive".into());
         }

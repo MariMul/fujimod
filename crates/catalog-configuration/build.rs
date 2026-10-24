@@ -29,10 +29,7 @@ fn main() {
     configuration_files.sort();
     let mut configuration_source =
         String::from("const BUNDLED_RUN_CONFIGURATIONS: &[(&str, &str)] = &[\n");
-    let mut overlay_source = String::from("const BUNDLED_RUN_OVERLAYS: &[(&str, &str)] = &[\n");
-    let mut hardware_input_source =
-        String::from("const BUNDLED_HARDWARE_INPUTS: &[(&str, &str)] = &[\n");
-    for path in configuration_files {
+    let mut overlay_source = String::from("const BUNDLED_RUN_OVERLAYS: &[(&str, &str)] = &[\n");    for path in configuration_files {
         let Some(relative) = path.strip_prefix(&root).ok() else {
             continue;
         };
@@ -56,27 +53,15 @@ fn main() {
                 "    ({id:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))),\n"
             ));
             println!("cargo:rerun-if-changed={}", path.display());
-        } else if path
-            .file_name()
-            .is_some_and(|name| name == "hardware-inputs.json")
-        {
-            let Some(id) = parent.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            hardware_input_source.push_str(&format!(
-                "    ({id:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))),\n"
-            ));
-            println!("cargo:rerun-if-changed={}", path.display());
         }
     }
     configuration_source.push_str("];\n");
     overlay_source.push_str("];\n");
-    hardware_input_source.push_str("];\n");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("output directory"))
         .join("bundled_configurations.rs");
     fs::write(
         &output,
-        configuration_source + &overlay_source + &hardware_input_source,
+        configuration_source + &overlay_source,
     )
     .expect("write embedded run-configuration index");
 }

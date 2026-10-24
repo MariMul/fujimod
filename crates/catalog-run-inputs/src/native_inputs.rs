@@ -1211,7 +1211,7 @@ pub struct NativeUsbEndpoints {
 }
 
 impl RunNandSceneInput {
-    pub(super) fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         let Self::Raw {
             options,
             base,
@@ -1239,7 +1239,7 @@ impl RunNandSceneInput {
 }
 
 impl RunNativeDeviceInputs {
-    pub(super) fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             Self::Gpio(input) => {
                 if input.input_levels.len() != 16

@@ -13,6 +13,7 @@ members = [
   "crates/catalog-content",
   "crates/catalog-controls",
   "crates/catalog-remote",
+  "crates/catalog-run-inputs",
   "crates/catalog-schemas",
   "crates/catalog-service",
   "crates/catalog-settings",
@@ -74,6 +75,7 @@ members = [
   "crates/usb",
   "crates/workflows",
   "bindings/python/base",
+  "bindings/python/boot",
   "bindings/python/catalog",
   "bindings/python/emulator",
   "bindings/python/host-image",
@@ -112,6 +114,7 @@ fujimod-catalog-construction = { path = "crates/catalog-construction", version =
 fujimod-catalog-content = { path = "crates/catalog-content", version = "0.1.0" }
 fujimod-catalog-controls = { path = "crates/catalog-controls", version = "0.1.0" }
 fujimod-catalog-remote = { path = "crates/catalog-remote", version = "0.1.0" }
+fujimod-catalog-run-inputs = { path = "crates/catalog-run-inputs", version = "0.1.0" }
 fujimod-catalog-schemas = { path = "crates/catalog-schemas", version = "0.1.0" }
 fujimod-catalog-service = { path = "crates/catalog-service", version = "0.1.0" }
 fujimod-catalog-settings = { path = "crates/catalog-settings", version = "0.1.0" }

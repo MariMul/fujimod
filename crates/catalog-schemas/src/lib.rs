@@ -10,8 +10,8 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
         "emulator-factory-inputs.generated.schema.json",
-        schema::<fujimod_catalog_configuration::RunFactoryInputs>(
-            fujimod_catalog_configuration::RUN_FACTORY_INPUTS_SCHEMA_URI,
+        schema::<fujimod_catalog_run_inputs::RunFactoryInputs>(
+            fujimod_catalog_run_inputs::RUN_FACTORY_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(
@@ -24,14 +24,14 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "emulator-hardware-inputs.generated.schema.json",
-        schema::<fujimod_catalog_configuration::HardwareInputs>(
-            fujimod_catalog_configuration::HARDWARE_INPUTS_SCHEMA_URI,
+        schema::<fujimod_catalog_run_inputs::HardwareInputs>(
+            fujimod_catalog_run_inputs::HARDWARE_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(
         "emulator-firmware-inputs.generated.schema.json",
-        schema::<fujimod_catalog_configuration::RunFirmwareInputs>(
-            fujimod_catalog_configuration::RUN_FIRMWARE_INPUTS_SCHEMA_URI,
+        schema::<fujimod_catalog_run_inputs::RunFirmwareInputs>(
+            fujimod_catalog_run_inputs::RUN_FIRMWARE_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(

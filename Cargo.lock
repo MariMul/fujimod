@@ -3455,6 +3455,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-construction",
  "fujimod-catalog-content",
+ "fujimod-catalog-run-inputs",
  "fujimod-workspace-hack",
  "schemars",
  "serde",
@@ -3520,6 +3521,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-run-inputs"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-construction",
+ "fujimod-catalog-content",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-catalog-schemas"
 version = "0.1.0"
 dependencies = [
@@ -3529,6 +3546,7 @@ dependencies = [
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
+ "fujimod-catalog-run-inputs",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
  "jsonschema",
@@ -3623,6 +3641,7 @@ dependencies = [
  "fujimod-catalog-construction",
  "fujimod-catalog-content",
  "fujimod-catalog-controls",
+ "fujimod-catalog-run-inputs",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
@@ -4420,6 +4439,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-python-boot"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-python-base",
+ "fujimod-workspace-hack",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-python-catalog"
 version = "0.1.0"
 dependencies = [
@@ -4440,7 +4470,6 @@ dependencies = [
  "fujimod-catalog-content",
  "fujimod-catalog-settings",
  "fujimod-emulator",
- "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
@@ -4490,6 +4519,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
+ "fujimod-python-boot",
  "fujimod-python-catalog",
  "fujimod-python-emulator",
  "fujimod-python-graphics",

@@ -9,14 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub mod application_inputs;
-pub mod hardware_inputs;
-pub use hardware_inputs::{HARDWARE_INPUTS_SCHEMA_URI, HardwareInputs, HardwareReset};
-mod firmware_inputs;
-pub use firmware_inputs::*;
-mod native_inputs;
-pub use native_inputs::*;
-mod options;
-pub use options::*;
+use fujimod_catalog_run_inputs::*;
 
 pub const RUN_CONFIGURATION_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/emulator-run-configuration.schema.json";
