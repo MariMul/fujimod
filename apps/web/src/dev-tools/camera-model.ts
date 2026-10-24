@@ -89,7 +89,6 @@ export interface ToolSession {
   deviceInfo(selector: string): Promise<{ text?: string; data: Uint8Array }>;
   configurationGeometry(): Promise<{ capacity: number; pageBytes: number }>;
   readConfiguration(offset: number, length: number): Promise<Uint8Array>;
-  readMemory(address: number, length: number): Promise<Uint8Array>;
   /**
    * Qualify the firmware's stock bulk path and read a range through it. The
    * result names diagnostic scratch the stock setup overwrote.

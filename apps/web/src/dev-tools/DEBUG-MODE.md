@@ -11,24 +11,21 @@ in a Rust workflow crate beside `fujimod-usb`, shared by every caller.
 Dev Tools opens on a service-mode entry guide, Connect camera, and a simulated
 camera choice among the emulator's saved cameras (see DESIGN.md). Service mode and debug mode both expose the
 ff80 connection; neither a model list nor the Debug Mode setting gates a
-connection. Inspector reads use a usable ff80 session. Persistent debug-mode
-workflows require the idle local USB session.
+connection. Persistent debug-mode workflows require the idle local USB session.
 
 The service-mode guide covers the power-on chord, the OFF-switch warning and
 battery-removal exit. It stops at connecting and never changes a setting.
 The separate Enter Debug Mode wizard retains the verified persistent workflow.
 
 Once connection activity starts, a 350px tool column sits beside the persistent
-console, layer/level filters and command composer. Console, Inspector, Enter/Leave
-Debug Mode, Share Camera, Bug Report and a back-to-deck link live on the left.
+console, layer/level filters and command composer. Console, Enter/Leave Debug
+Mode, Share Camera, Bug Report and a back-to-deck link live on the left.
 The log remains visible through tool changes and sharing. On phones the log
 stacks below the tools.
 
-Inspector exposes only identity selectors, configuration geometry and reads,
-and bounded memory reads. Configuration reads use the camera's reported RAM
-capacity and read size, with a 64 MiB host allocation budget and 16 KiB transfer
-budget. The diagnostic JSON bundle retains successful reads, raw reply bytes,
-and failed requests. No Inspector operation writes memory or configuration.
+The configuration dump uses the camera's reported capacity and page size, with
+a 64 MiB host allocation budget. The diagnostic bundle retains the binary dump
+and any failed operations. No Dev Tools action writes memory or configuration.
 
 Every tool forms its command from the information it has and verifies the
 camera's reply. It refuses when the command cannot be formed or verified.

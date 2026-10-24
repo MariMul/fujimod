@@ -79,7 +79,7 @@ camera is saved. Once a camera is known:
   plus Connect camera.
 - The selected camera's details, at the top of the tools column, show its identity (read automatically when it
   appears), its state, the service-mode caution, and its sharing switch.
-- Tools are grouped under Read (Dump configuration, Read memory), Console
+- Tools are grouped under Read (Dump configuration), Console
   (Console command), Write (Debug mode: Enable debug mode and Disable debug
   mode, marked as changing a camera setting, with the debug-mode explanation)
   and Export (Download diagnostic bundle).

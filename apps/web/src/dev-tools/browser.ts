@@ -125,12 +125,6 @@ try {
       await page.getByRole('button', { name: 'Dump configuration', exact: true }).waitFor();
       await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
 
-      await page.getByLabel('Address', { exact: true }).fill('0x00001000');
-      await page.getByLabel('Bytes', { exact: true }).fill('32');
-      await page.getByRole('button', { name: 'Read', exact: true }).click();
-      await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
-      assert.equal(await page.locator('.wb-status').count(), 0, 'reads report no error');
-
       await page.getByLabel('Command', { exact: true }).fill('help');
       await page.getByRole('button', { name: 'Send', exact: true }).click();
       await log.getByText('Fuji console ready', { exact: false }).first().waitFor();
@@ -141,8 +135,9 @@ try {
       const bundle = await readFile((await (await downloaded).path())!);
       assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'bundle is a zip');
       const text = bundle.toString('latin1');
-      for (const name of ['manifest.json', 'configuration.bin', 'memory-1-0x00001000.bin'])
+      for (const name of ['manifest.json', 'configuration.bin'])
         assert.ok(text.includes(name), `bundle contains ${name}`);
+      assert.ok(!text.includes('memory-'), 'bundle contains no memory dump');
       assert.ok(text.includes('"capacity": 4096'), 'manifest records the geometry');
 
       // The Connection layer filters like every other layer.
@@ -167,7 +162,7 @@ try {
       });
       assert.deepEqual(errors, []);
       console.log(
-        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, service-mode banner, configuration dump, memory read, console command, binary bundle, log filters`,
+        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, service-mode banner, configuration dump, console command, binary bundle, log filters`,
       );
     } finally {
       await browser.close();

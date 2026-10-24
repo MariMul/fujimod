@@ -1,15 +1,13 @@
 import { Show, createSignal } from 'solid-js';
 import type { Camera, CameraModel, ToolSession } from './camera-model';
-import { memoryRange } from './inspection';
 import { zipFiles } from '@fujimod/emulator-ui/archive';
 
 /** Readings collected on one camera, for the diagnostic bundle. */
 export interface Readings {
   configuration?: { capacity: number; pageBytes: number; data: Uint8Array; complete: boolean };
-  memory: { address: number; length: number; data: Uint8Array }[];
   errors: { tool: string; time: string; message: string }[];
 }
-export const emptyReadings = (): Readings => ({ memory: [], errors: [] });
+export const emptyReadings = (): Readings => ({ errors: [] });
 
 import { Wizard } from './routes';
 
@@ -20,11 +18,6 @@ function message(error: unknown) {
 /** Store-only ZIP: manifest.json plus the camera's bytes as binary files. */
 export function diagnosticBundle(camera: Camera, readings: Readings): Blob {
   const files: [string, Uint8Array<ArrayBuffer>][] = [];
-  const memory = readings.memory.map((read, index) => {
-    const file = `memory-${index + 1}-0x${read.address.toString(16).padStart(8, '0')}.bin`;
-    files.push([file, new Uint8Array(read.data)]);
-    return { file, address: read.address, length: read.length };
-  });
   let configuration;
   if (readings.configuration) {
     const { capacity, pageBytes, data, complete } = readings.configuration;
@@ -42,7 +35,6 @@ export function diagnosticBundle(camera: Camera, readings: Readings): Blob {
     createdAt: new Date().toISOString(),
     camera: { name: camera.name, transport: camera.transport, identity: camera.identity ?? {} },
     configuration,
-    memory,
     errors: readings.errors,
   };
   files.unshift(['manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2))]);
@@ -57,8 +49,6 @@ export function CameraTools(props: {
   onReadings: (update: (readings: Readings) => Readings) => void;
   onWizard: (wizard: Wizard) => void;
 }) {
-  const [address, setAddress] = createSignal('0x00000000');
-  const [length, setLength] = createSignal('256');
   const [command, setCommand] = createSignal('');
   const [running, setRunning] = createSignal('');
   const [status, setStatus] = createSignal('');
@@ -125,23 +115,6 @@ export function CameraTools(props: {
       }
     });
   }
-  function readMemory(event: SubmitEvent) {
-    event.preventDefault();
-    let range: { address: number; length: number };
-    try {
-      range = memoryRange(address(), length());
-    } catch (error) {
-      setStatus(message(error));
-      return;
-    }
-    void run('Read memory', async (session, record) => {
-      const data = await session.readMemory(range.address, range.length);
-      record((readings) => ({
-        ...readings,
-        memory: [...readings.memory, { ...range, data }],
-      }));
-    });
-  }
   function sendCommand(event: SubmitEvent) {
     event.preventDefault();
     const text = command().trim();
@@ -162,9 +135,7 @@ export function CameraTools(props: {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const hasReadings = () =>
-    Boolean(
-      props.readings.configuration || props.readings.memory.length || props.readings.errors.length,
-    );
+    Boolean(props.readings.configuration || props.readings.errors.length);
   return (
     <div class="wb-tools-body">
       <section class="wb-section" aria-labelledby="wb-read">
@@ -182,33 +153,6 @@ export function CameraTools(props: {
             Map controls
           </button>
         </div>
-        <form class="wb-tool" onSubmit={readMemory} aria-labelledby="wb-memory">
-          <div id="wb-memory" class="wb-tool-head">
-            Read memory
-          </div>
-          <div class="wb-tool-body wb-memory">
-            <label class="wb-in">
-              Address
-              <input
-                value={address()}
-                onInput={(event) => setAddress(event.currentTarget.value)}
-                spellcheck={false}
-                autocomplete="off"
-              />
-            </label>
-            <label class="wb-in">
-              Bytes
-              <input
-                value={length()}
-                onInput={(event) => setLength(event.currentTarget.value)}
-                inputmode="numeric"
-              />
-            </label>
-            <button class="wb-btn wb-primary" type="submit" disabled={!available()}>
-              Read
-            </button>
-          </div>
-        </form>
       </section>
 
       <section class="wb-section" aria-labelledby="wb-console">

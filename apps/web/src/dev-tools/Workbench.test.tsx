@@ -94,8 +94,9 @@ test('a camera held by a remote shows who holds it and disables every tool', () 
   const host = mount(test.model);
   flush();
   expect(host.querySelector('.wb-state')!.textContent).toBe('In use by fujimod-capture');
-  for (const name of ['Dump configuration', 'Read', 'Enable debug mode'])
+  for (const name of ['Dump configuration', 'Enable debug mode'])
     expect(button(host, name).disabled).toBe(true);
+  expect(host.querySelector('[aria-labelledby="wb-memory"]')).toBeNull();
 });
 
 test('sharing is an Off/On control on the camera card and never disables the tools', async () => {
@@ -129,6 +130,7 @@ test('Dump configuration reads every page into one binary configuration file', a
   test.add(testCamera('X100V'));
   const host = mount(test.model);
   flush();
+  expect(host.querySelector('[aria-labelledby="wb-memory"]')).toBeNull();
   const blobs = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:bundle');
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   button(host, 'Dump configuration').click();

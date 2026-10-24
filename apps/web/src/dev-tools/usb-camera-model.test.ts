@@ -54,7 +54,6 @@ class CameraDevice implements ModelDevice {
   closed = vi.fn();
   freed = vi.fn();
   releases = vi.fn();
-  failRead = false;
   failClose = false;
   debugByte = 1;
   failDebugRead = false;
@@ -158,12 +157,6 @@ class CameraDevice implements ModelDevice {
       abandon: () => this.update({ fenced: true }),
       deviceInfo: async () => ({ text: 'Identity', raw: new Uint8Array(), free() {} }),
       configurationGeometry: async () => ({ capacity: 16, pageBytes: 4, free() {} }),
-      readMemory: async () => {
-        if (this.failRead) throw Error('read failed');
-        this.emit();
-        this.emit(0xd1);
-        return Uint8Array.of(1, 2, 3, 4);
-      },
       readBulk: async () => ({ data: Uint8Array.of(1, 2, 3, 4), overwritten: null }),
       readConfiguration: async (...args) => {
         this.configurationReads(...args);
@@ -254,7 +247,7 @@ async function idle(model: ReturnType<typeof createUsbCameraModel>, count = 1) {
   });
 }
 
-test('multiple devices: start share → local read → stop share → local read', async () => {
+test('multiple devices: start share → local session → stop share → local session', async () => {
   const f = fixture();
   try {
     await idle(f.model);
@@ -265,15 +258,13 @@ test('multiple devices: start share → local read → stop share → local read
     await f.model.connectUsb();
     await idle(f.model, 2);
     await f.model.setSharing(d.id, true);
-    await f.model.withSession(d.id, 'memory', (s) => s.readMemory(0, 4));
+    await f.model.withSession(d.id, 'local operation', async () => {});
     await f.model.setSharing(d.id, false);
-    await f.model.withSession(d.id, 'memory', (s) => s.readMemory(0, 4));
+    await f.model.withSession(d.id, 'local operation', async () => {});
     expect(f.model.cameras()[0]).toMatchObject({ present: true, uncertain: false });
     expect(f.model.cameras()[0].sharing).toBeUndefined();
     expect(d.closed).not.toHaveBeenCalled();
-    await vi.waitFor(() =>
-      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(2),
-    );
+    expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(0);
   } finally {
     f.model.dispose();
   }
@@ -291,10 +282,10 @@ test('held and uncertain devices refuse before acquire; other cameras remain usa
       d.update(patch);
       await Promise.resolve();
       const calls = d.acquire.mock.calls.length;
-      await expect(f.model.withSession(d.id, 'read', (s) => s.readMemory(0, 1))).rejects.toThrow();
+      await expect(f.model.withSession(d.id, 'read', async () => {})).rejects.toThrow();
       expect(d.acquire).toHaveBeenCalledTimes(calls);
     }
-    await f.model.withSession('two', 'read', (s) => s.readMemory(0, 1));
+    await f.model.withSession('two', 'read', async () => {});
     let release!: () => void;
     const run = f.model.withSession(
       'two',
@@ -337,11 +328,12 @@ test('always closes and preserves primary operation failure', async () => {
   try {
     await idle(f.model);
     const d = f.devices[0];
-    d.failRead = true;
     d.failClose = true;
-    await expect(f.model.withSession(d.id, 'read', (s) => s.readMemory(0, 1))).rejects.toThrow(
-      'read failed',
-    );
+    await expect(
+      f.model.withSession(d.id, 'operation', async () => {
+        throw Error('operation failed');
+      }),
+    ).rejects.toThrow('operation failed');
     expect(d.releases).toHaveBeenCalledTimes(2);
   } finally {
     f.model.dispose();
@@ -435,7 +427,7 @@ test('remote model uses binding events and never calls USB-only sharing on remov
     await idle(f.model);
     expect(f.model.cameras()[0].transport).toBe('remote');
     await expect(f.model.setSharing(remote.id, true)).rejects.toThrow(/remote/);
-    await f.model.withSession(remote.id, 'read', (s) => s.readMemory(0, 1));
+    await f.model.withSession(remote.id, 'read', async () => {});
     await f.model.remove(remote.id);
     expect(f.model.cameras()).toHaveLength(0);
     expect(remote.closed).toHaveBeenCalledOnce();
@@ -444,7 +436,7 @@ test('remote model uses binding events and never calls USB-only sharing on remov
     f.model.dispose();
   }
 });
-test('production WebUSB owner keeps one open/claim through sharing and reads', async () => {
+test('production WebUSB owner keeps one open/claim through sharing and sessions', async () => {
   const wire = installWebUsb();
   wire.state.interfaceDelay = 20;
   wire.iface.alternates[0].endpoints = [
@@ -491,11 +483,11 @@ test('production WebUSB owner keeps one open/claim through sharing and reads', a
     const id = model.cameras()[0].id;
     model.clearLog();
     await model.setSharing(id, true);
-    await model.withSession(id, 'memory', (s) => s.readMemory(0x1000, 4));
+    await model.withSession(id, 'memory', async () => {});
     await model.setSharing(id, false);
-    await model.withSession(id, 'memory', (s) => s.readMemory(0x1000, 4));
+    await model.withSession(id, 'memory', async () => {});
     await vi.waitFor(() =>
-      expect(model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(6),
+      expect(model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(4),
     );
     expect(wire.log.filter(([kind]) => kind === 'open')).toHaveLength(1);
     expect(wire.log.filter(([kind]) => kind === 'claim')).toHaveLength(1);
@@ -778,7 +770,7 @@ test('debug changes refresh only after close and latch service mode for the curr
     expect(device.configurationReads.mock.invocationCallOrder[2]).toBeGreaterThan(
       device.releases.mock.invocationCallOrder[3],
     );
-    await f.model.withSession(device.id, 'Read memory', (session) => session.readMemory(0, 1));
+    await f.model.withSession(device.id, 'operation', async () => {});
     expect(device.configurationReads).toHaveBeenCalledTimes(3);
     device.update({ present: false });
     await vi.waitFor(() => expect(f.model.cameras()[0].present).toBe(false));
@@ -1043,17 +1035,11 @@ test('saved simulations use the same session, log, sharing and removal paths wit
       present: true,
       identity: { product: 'Identity' },
     });
-    await f.model.withSession(device.id, 'Read simulated memory', (session) =>
-      session.readMemory(0x100, 1),
-    );
+    await f.model.withSession(device.id, 'Read simulated memory', async () => {});
     await f.model.setSharing(device.id, true);
-    await f.model.withSession(device.id, 'Read while sharing', (session) =>
-      session.readMemory(0x100, 1),
-    );
+    await f.model.withSession(device.id, 'Read while sharing', async () => {});
     await f.model.setSharing(device.id, false);
-    await f.model.withSession(device.id, 'Read after sharing', (session) =>
-      session.readMemory(0x100, 1),
-    );
+    await f.model.withSession(device.id, 'Read after sharing', async () => {});
     await f.model.remove(device.id);
     expect(device.closed).toHaveBeenCalledOnce();
     expect(dispose).toHaveBeenCalledOnce();

@@ -385,9 +385,6 @@
   gap: 6px;
   padding: 8px 10px;
 }
-.wb-memory {
-  grid-template-columns: 1fr 64px auto;
-}
 .wb-command {
   grid-template-columns: 1fr auto;
 }
