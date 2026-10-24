@@ -62,6 +62,7 @@ NATIVE_EXPORTS = frozenset({
     "virtual_scene_yycbcr",
     "virtual_scene_histogram",
     "virtual_scene_statistics",
+    "raf_radiance_rgb",
     "FilmStage",
     "decode_display_rgb",
     "render_scanout_snapshot",
@@ -82,7 +83,7 @@ NATIVE_EXPORTS = frozenset({
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 55
+    assert len(NATIVE_EXPORTS) == 56
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
