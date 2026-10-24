@@ -255,3 +255,30 @@ fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_desti
         assert_eq!(host.effects, ["dma", "dma", "irq", "irq"]);
     }
 }
+
+#[test]
+fn empty_memory_readback_does_not_starve_inflight_sensor_dma() {
+    let (mut outputs, frames, _) = pair();
+    let wire: MemoryOutputHandle = Default::default();
+    for output in &mut outputs {
+        output.wiring.memory_outputs = Some(wire.clone());
+    }
+    let mut host = TestHost::new();
+    arm(&mut outputs, &mut host);
+    frames.publish(FrameEdge { index: 1, tick: 0 }, &[7; 32]).unwrap();
+    for output in &mut outputs { advance(output, &mut host, 0); }
+    // Both banks have withdrawn their next destinations while this frame
+    // drains. A memory input without output targets still has its own EOF.
+    assert_eq!(wire.lock().unwrap().destinations, [None; 2]);
+    wire.lock().unwrap().active = true;
+    assert!(wire.lock().unwrap().completed());
+    for output in &mut outputs { advance(output, &mut host, 5); }
+    assert_eq!(host.irqs, [(0,44),(0,45)]);
+    assert_eq!(&host.ram[0x4000..0x4020], &[7; 32]);
+    assert_eq!(&host.ram[0x8000..0x8020], &[7; 32]);
+    assert!(outputs.iter().all(|output| output.next_deadline(5).is_none()));
+    frames.publish(FrameEdge { index: 2, tick: 6 }, &[8; 32]).unwrap();
+    for output in &mut outputs { advance(output, &mut host, 6); }
+    assert!(outputs.iter().all(|output| output.next_deadline(6).is_none()));
+    assert_eq!(host.irqs.len(), 2);
+}

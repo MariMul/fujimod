@@ -335,9 +335,6 @@ impl OutputChannel {
             channels.armed[self.wiring.channel] = false;
             channels.transfers[self.wiring.channel] = None;
         }
-        if self.readback(cx)? {
-            return Ok(());
-        }
         {
             let mut channels = self.wiring.channels.0.lock().unwrap();
             if channels.dma.iter().any(|t| t.ready(cx.now()))
@@ -379,6 +376,12 @@ impl OutputChannel {
                     }
                 }
             }
+        }
+        // A memory readback can have no participating output banks while a
+        // previously latched sensor frame is still draining. Complete that
+        // DMA before the memory input suppresses new sensor-frame latching.
+        if self.readback(cx)? {
+            return Ok(());
         }
         self.latch(cx.now())
     }
