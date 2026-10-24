@@ -42,7 +42,10 @@
         "instructions_per_tick": 24,
         "face_register_mode": "retained_words",
         "settings": "default",
-        "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured"
+        "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+        "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+        "sd_card_present": true,
+        "sensor_frame_clock": "sensor"
       },
       "execution_scope": "emulator-only",
       "purpose": "rom_boot",
