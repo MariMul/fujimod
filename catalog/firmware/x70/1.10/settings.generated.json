@@ -1374,6 +1374,15 @@
           1
         ]
       }
+    },
+    "dynamic_range": {
+      "store": "main",
+      "offset": 468,
+      "values": {
+        "dr400": [
+          3
+        ]
+      }
     }
   },
   "sections": [
