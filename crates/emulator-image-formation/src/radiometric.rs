@@ -20,6 +20,14 @@ pub struct Renderer {
     projection: Option<Arc<super::optics::Projection>>,
     previous: Option<Arc<Image>>,
 }
+/// The live front end's fixed gain between the sensor readout the statistics
+/// measure and the image it hands the film stage (Q10; 3.78x, within 0.1 EV of
+/// the 12-bit live readout's factor of four). An X70 in REC shows its preview
+/// brighter, relative to its own color statistics, than this renderer without
+/// the gain did, by 3.78x x the 0x12c digital gain at every analog gain measured:
+/// idle runs at analog 2.86x, 2.86x and 2.60x, and S1 (analog 7.56x, 0x12c 0.34x)
+/// in proportion. research/live-view-exposure.md cites the runs and the method.
+const LIVE_FRONT_END_GAIN_Q10: u64 = 3871;
 /// A latched hardware input. All memoized readouts derive from these immutable
 /// values; no later register write or lens step changes an exposed image.
 pub struct Image {
@@ -107,19 +115,22 @@ impl Renderer {
         };
         exposure.focus_shift_mm = self.projection.as_ref().map(|p| p.focus()).transpose()?;
         let p = self.parameters.lock().map_err(|_| "film bank poisoned")?;
-        // 0x12c is the live digital gain (Q10, 1024 = 1x) the firmware raises
-        // to preview exposure compensation; it multiplies the white-balance
-        // gains. An unprogrammed bank (0) leaves them unchanged.
-        let digital = match p.words[0x12c / 4] & 0x7fff {
+        // 0x12c is the live digital gain (Q10, 1024 = 1x): the firmware raises
+        // it to preview exposure compensation and lowers it while S1 raises
+        // the analog gain. An unprogrammed bank (0) leaves the gains unchanged.
+        let digital = u64::from(match p.words[0x12c / 4] & 0x7fff {
             0 => 1024,
             g => g,
-        };
+        });
         let gain = [
             p.words[0x200 / 4] & 32767,
             p.words[0x200 / 4] >> 16 & 32767,
             p.words[0x204 / 4] & 32767,
         ]
-        .map(|wb| ((wb * digital + 512) >> 10).min(32767));
+        .map(|wb| {
+            let gained = u64::from(wb) * digital * LIVE_FRONT_END_GAIN_Q10;
+            ((gained + (1 << 19)) >> 20).min(32767) as u32
+        });
         if let Some(old) = &self.previous {
             if Arc::ptr_eq(&old.exposure.frame, &exposure.frame)
                 && old.exposure.exposure == exposure.exposure
@@ -565,18 +576,27 @@ mod tests {
         output
     }
     #[test]
-    fn live_digital_gain_multiplies_white_balance_and_unity_changes_nothing() {
-        // The firmware raises 0x12c (Q10) to preview exposure compensation:
-        // 1413 at +2 EV with the sensor exposure 1.5 stops longer.
+    fn live_gains_are_white_balance_times_digital_gain_times_the_front_end() {
+        // 0x12c (Q10) times the fixed 3.78x front end: an X70 lowers 0x12c to
+        // 348 while S1 raises the analog gain 2.9x, keeping its preview level.
         let (mut renderer, parameters, _) = renderer();
-        let unity = renderer.capture().unwrap().unwrap().gain;
+        let words = parameters.lock().unwrap().words.clone();
+        let wb = [
+            words[0x200 / 4] & 32767,
+            words[0x200 / 4] >> 16 & 32767,
+            words[0x204 / 4] & 32767,
+        ];
+        let expect = |digital: u64| {
+            wb.map(|w| {
+                ((u64::from(w) * digital * LIVE_FRONT_END_GAIN_Q10 + (1 << 19)) >> 20).min(32767)
+                    as u32
+            })
+        };
+        assert_eq!(renderer.capture().unwrap().unwrap().gain, expect(1024));
         parameters.lock().unwrap().words[0x12c / 4] = 1024;
-        assert_eq!(renderer.capture().unwrap().unwrap().gain, unity);
-        parameters.lock().unwrap().words[0x12c / 4] = 2048;
-        let doubled = renderer.capture().unwrap().unwrap().gain;
-        for (u, d) in unity.iter().zip(doubled) {
-            assert_eq!((*u * 2).min(32767), d);
-        }
+        assert_eq!(renderer.capture().unwrap().unwrap().gain, expect(1024));
+        parameters.lock().unwrap().words[0x12c / 4] = 348;
+        assert_eq!(renderer.capture().unwrap().unwrap().gain, expect(348));
     }
     #[test]
     fn exposure_publication_is_lazy_and_reuses_only_consumed_parameters() {
@@ -778,8 +798,10 @@ mod tests {
                             let color = |x| {
                                 let raw = sampled.sample(x, y, [out_width, out_height]);
                                 film.develop(std::array::from_fn(|c| {
-                                    ((u64::from(raw[c]) * [257, 193, 311][c]) >> 8).min(16383)
-                                        as u16
+                                    let gain = ([257u64, 193, 311][c] * 1024 * LIVE_FRONT_END_GAIN_Q10
+                                        + (1 << 19))
+                                        >> 20;
+                                    ((u64::from(raw[c]) * gain) >> 8).min(16383) as u16
                                 }))
                             };
                             let at = y * layout.stride + x * 2;
