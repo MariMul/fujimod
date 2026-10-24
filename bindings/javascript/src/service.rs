@@ -2,7 +2,7 @@
 use super::*;
 use catalog::{ServiceCodec, ServiceDefinition, ServiceModes};
 use error::{integer, property, record};
-use fujimod_usb_app80::catalog as core;
+use fujimod_usb_app80_types::catalog as core;
 mod values {
     include!(concat!(env!("OUT_DIR"), "/service_values_javascript.rs"));
 }
@@ -80,7 +80,7 @@ impl App80Invocation {
             .command()
             .decode_bytes(&error::buffer(raw)?)
             .map(|inner| App80CommandReply { inner })
-            .map_err(error)
+            .map_err(|source| error::fail(error::ErrorKind::Protocol, &source.to_string()))
     }
 }
 #[wasm_bindgen]
@@ -114,7 +114,7 @@ impl App80Service {
     ) -> Result<App80Invocation, JsValue> {
         self.inner
             .prepare_code(
-                fujimod_usb_app80::CommandCode(code.value()),
+                fujimod_usb_app80_types::CommandCode(code.value()),
                 modes.inner,
                 command.inner,
             )
@@ -130,7 +130,7 @@ impl App80Service {
     ) -> Result<App80Invocation, JsValue> {
         self.inner
             .prepare_research(
-                fujimod_usb_app80::CommandCode(code.value()),
+                fujimod_usb_app80_types::CommandCode(code.value()),
                 modes.inner,
                 &error::buffer(arguments)?,
             )

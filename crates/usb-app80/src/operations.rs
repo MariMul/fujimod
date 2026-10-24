@@ -1,5 +1,4 @@
 //! App80 carried by ff80 configuration commands, above both command codecs.
-use crate::{Reply, Request};
 use fujimod_usb::{
     Result,
     error::check_limit,
@@ -10,6 +9,7 @@ use fujimod_usb::{
         },
     },
 };
+use fujimod_usb_app80_types::{DecodeError, Reply, Request};
 use std::num::NonZeroU32;
 
 /// An explicit firmware mailbox definition. No camera body or offset is selected
@@ -64,7 +64,20 @@ impl Mailbox {
         let result = async {
             session.write_configuration(stage).await?;
             session.write_configuration(publish).await?;
-            Reply::decode_length(&session.read_configuration(read).await?, length as usize)
+            Reply::decode_length(&session.read_configuration(read).await?, length as usize).map_err(
+                |error| match error {
+                    DecodeError::ReplyLength { expected, actual } => {
+                        fujimod_usb::error::ProtocolError::ReplyLength { expected, actual }.into()
+                    }
+                    DecodeError::CommandEcho { expected, actual } => {
+                        fujimod_usb::error::ProtocolError::CommandEcho {
+                            expected: expected.into(),
+                            actual: actual.into(),
+                        }
+                        .into()
+                    }
+                },
+            )
         }
         .await;
         if let Some(span) = span {

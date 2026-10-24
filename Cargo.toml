@@ -80,8 +80,10 @@ members = [
   "crates/fujimod",
   "crates/usb",
   "crates/usb-app80",
+  "crates/usb-app80-types",
   "crates/workflows",
   "bindings/python/app80",
+  "bindings/python/app80-values",
   "bindings/python/base",
   "bindings/python/catalog",
   "bindings/python/emulator",
@@ -192,6 +194,8 @@ schemars = "1.2.3"
 ciborium = "0.2"
 fujimod-usb = { path = "crates/usb", version = "0.1.0" }
 fujimod-usb-app80 = { path = "crates/usb-app80", version = "0.1.0" }
+fujimod-usb-app80-types = { path = "crates/usb-app80-types", version = "0.1.0" }
+fujimod-python-app80-values = { path = "bindings/python/app80-values", version = "0.1.0" }
 fujimod-workflows = { path = "crates/workflows", version = "0.1.0" }
 nusb = "0.2.8"
 rusqlite = { version = "0.40", features = ["bundled"] }

@@ -14,10 +14,8 @@ doctest = false
 [dependencies]
 fujimod-python-service = { path = "../service" }
 fujimod-python-usb-base = { path = "../usb-base" }
-fujimod-usb.workspace = true
+fujimod-python-app80-values.workspace = true
 fujimod-usb-app80.workspace = true
+fujimod-usb-app80-types.workspace = true
 pyo3.workspace = true
 fujimod-workspace-hack.workspace = true
-
-[build-dependencies]
-fujimod-bindgen = { path = "../../generator" }

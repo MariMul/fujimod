@@ -19,7 +19,6 @@ catalog-service = ["catalog-firmware-identity", "dep:fujimod-catalog-service"]
 catalog-configuration = ["dep:fujimod-catalog-configuration"]
 catalog-resolution = ["catalog", "catalog-configuration", "dep:fujimod-catalog-resolution"]
 usb = ["dep:fujimod-usb"]
-app80 = ["usb", "catalog-service", "dep:fujimod-usb-app80"]
 workflows = ["usb", "catalog-camera", "dep:fujimod-workflows"]
 emulator = [
   "dep:fujimod-emulator",
@@ -42,7 +41,6 @@ fujimod-catalog-service = { workspace = true, optional = true }
 fujimod-catalog-configuration = { workspace = true, optional = true }
 fujimod-catalog-resolution = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
-fujimod-usb-app80 = { workspace = true, optional = true }
 fujimod-workflows = { workspace = true, optional = true }
 fujimod-emulator = { workspace = true, optional = true }
 fujimod-emulator-devices = { workspace = true, optional = true }

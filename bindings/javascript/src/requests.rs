@@ -95,7 +95,7 @@ impl ResearchReply {
 }
 #[wasm_bindgen]
 pub struct App80CommandCode {
-    inner: fujimod_usb_app80::CommandCode,
+    inner: fujimod_usb_app80_types::CommandCode,
 }
 #[wasm_bindgen]
 impl App80CommandCode {
@@ -106,7 +106,7 @@ impl App80CommandCode {
         let value = error::integer(value, u8::MAX.into())? as u8;
         Ok({
             Self {
-                inner: fujimod_usb_app80::CommandCode(value),
+                inner: fujimod_usb_app80_types::CommandCode(value),
             }
         })
     }
@@ -118,7 +118,7 @@ impl App80CommandCode {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct App80Request {
-    pub(crate) inner: fujimod_usb_app80::Request,
+    pub(crate) inner: fujimod_usb_app80_types::Request,
 }
 #[wasm_bindgen]
 impl App80Request {
@@ -129,9 +129,9 @@ impl App80Request {
     ) -> Result<Self, JsValue> {
         let arguments = error::buffer(arguments)?;
 
-        fujimod_usb_app80::Request::new(code.inner, &arguments)
+        fujimod_usb_app80_types::Request::new(code.inner, &arguments)
             .map(|inner| Self { inner })
-            .map_err(error)
+            .map_err(|source| error::fail(error::ErrorKind::InvalidArgument, &source.to_string()))
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Uint8Array")]
     pub fn raw(&self) -> JsValue {

@@ -105,7 +105,9 @@ not enumerate or open USB devices; sessions reach them only through
 `testing::Script` and `testing::Peer`. Python's tests use them to verify
 streaming and ownership across the language boundary.
 
-App80 is the separate [`fujimod-usb-app80`](../usb-app80/src/lib.rs) crate.
+App80 transport is the separate [`fujimod-usb-app80`](../usb-app80/src/lib.rs)
+crate; command codecs and value types live in
+[`fujimod-usb-app80-types`](../usb-app80-types/src/lib.rs), below USB.
 Its wire codec has `CommandCode`, bounded `Request` and exact `Reply`.
 Identifiers and argument meanings come from the selected firmware's service
 table; the codec does not equate command bytes, ff80 status words or firmware
@@ -163,7 +165,7 @@ Install the Wasm standard library and a wasm-bindgen test runner matching the
 ```sh
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.129 --locked --root target/tooling
-PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod-usb-app80 \
+PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod-usb-app80 -p fujimod-usb-app80-types \
   --target wasm32-unknown-unknown --lib --test wasm_core
 ```
 
@@ -188,13 +190,16 @@ and `apps/web`. See their README for the static-host build and mock-WebUSB tests
 
 `fujimod::catalog_service::Definition` loads the selected firmware's service
 data against a `fujimod::catalog_firmware_identity::FirmwareIdentity`.
-`fujimod_usb_app80::catalog::Catalog` resolves its ordered mode rules and typed
-codecs; `fujimod_usb_app80::operations::Service` binds those codecs to that
-definition's ff80
-mailbox. The resulting `Invocation` keeps its request and carrier together.
+`fujimod_usb_app80_types::catalog::Catalog` resolves its ordered mode rules and
+typed codecs; `fujimod_usb_app80::operations::Service` binds those codecs to
+that definition's ff80 mailbox. The resulting `Invocation` keeps its request
+and carrier together.
 Preparation does no I/O and never changes the camera's service mode.
 
 ```rust,ignore
+use fujimod_usb_app80::operations::Service;
+use fujimod_usb_app80_types::catalog::{Command, PinBank};
+
 let identity = FirmwareIdentity::new(firmware_id, firmware_sha256)?;
 let definition = Definition::from_json(&definition_json, &identity)?;
 let service = Service::new(definition)?;

@@ -543,7 +543,10 @@ pub(crate) enum Operation {
     Log(NonZeroU32),
     Research(usb::ff80::commands::research::Request),
     Upload(Vec<u8>, NonZeroU32, DataWriteMode),
-    App80(fujimod_usb_app80::operations::Mailbox, fujimod_usb_app80::Request),
+    App80(
+        fujimod_usb_app80::operations::Mailbox,
+        fujimod_usb_app80_types::Request,
+    ),
     Service(fujimod_usb_app80::operations::Invocation),
     ReadRange(MemoryRange, usb::ff80::commands::memory::DebugMemoryLimits),
     WriteRange(

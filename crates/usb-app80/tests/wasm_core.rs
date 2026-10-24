@@ -6,10 +6,10 @@ use wasm_bindgen_test::wasm_bindgen_test;
 fn selected_catalog_and_typed_replies_execute_in_wasm() {
     use fujimod_catalog_firmware_identity::FirmwareIdentity;
     use fujimod_catalog_service::{Definition, ServiceModes};
-    use fujimod_usb_app80::{
+    use fujimod_usb_app80::operations::Service;
+    use fujimod_usb_app80_types::{
         Reply,
         catalog::{Command, ReplyValue, SaveStatus},
-        operations::Service,
     };
     let json = serde_json::json!({
         "schema": 1,

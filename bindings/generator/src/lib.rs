@@ -112,7 +112,7 @@ fn choice(item: &syn::ItemEnum) -> Option<Choice> {
 impl Api {
     pub fn read(root: &Path) -> Result<Self, String> {
         let mut sources = Vec::new();
-        let file = root.join("crates/usb-app80/src/catalog.rs");
+        let file = root.join("crates/usb-app80-types/src/catalog.rs");
         sources.push((
             file.clone(),
             fs::read_to_string(&file).map_err(|e| e.to_string())?,
@@ -627,7 +627,7 @@ fn python_quantity(q: &Quantity) -> String {
         parameters.push(format!("{name}:{py_type}"));
         calls.push(match ty {
             "bytes" => format!("&{name}"),
-            "Address" => format!("usb::ff80::commands::memory::Address({name})"),
+            "Address" => format!("fujimod_usb_app80_types::Address({name})"),
             _ => name.to_owned(),
         });
     }
@@ -685,7 +685,7 @@ fn javascript_quantity(q: &Quantity) -> String {
         let checked = match ty {
             "bytes" => format!("&error::buffer({name})?"),
             "Address" => format!(
-                "usb::ff80::commands::memory::Address({})",
+                "fujimod_usb_app80_types::Address({})",
                 checked_integer(&name, "u32")
             ),
             _ => checked_integer(&name, ty),

@@ -1101,7 +1101,6 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-remote",
  "fujimod-usb",
- "fujimod-usb-app80",
  "fujimod-workflows",
  "fujimod-workspace-hack",
 ]
@@ -2210,6 +2209,7 @@ dependencies = [
  "fujimod-catalog-service",
  "fujimod-usb",
  "fujimod-usb-app80",
+ "fujimod-usb-app80-types",
  "fujimod-usb-proxy",
  "fujimod-workflows",
  "fujimod-workspace-hack",
@@ -2241,11 +2241,22 @@ dependencies = [
 name = "fujimod-python-app80"
 version = "0.1.0"
 dependencies = [
- "fujimod-bindgen",
+ "fujimod-python-app80-values",
  "fujimod-python-service",
  "fujimod-python-usb-base",
- "fujimod-usb",
  "fujimod-usb-app80",
+ "fujimod-usb-app80-types",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-app80-values"
+version = "0.1.0"
+dependencies = [
+ "fujimod-bindgen",
+ "fujimod-python-service",
+ "fujimod-usb-app80-types",
  "fujimod-workspace-hack",
  "pyo3",
 ]
@@ -2503,12 +2514,24 @@ dependencies = [
  "fujimod-catalog-firmware-identity",
  "fujimod-catalog-service",
  "fujimod-usb",
+ "fujimod-usb-app80-types",
  "fujimod-workspace-hack",
  "futures-lite",
  "nusb",
  "serde_json",
  "thiserror 2.0.21",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "fujimod-usb-app80-types"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-firmware-identity",
+ "fujimod-catalog-service",
+ "fujimod-workspace-hack",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
