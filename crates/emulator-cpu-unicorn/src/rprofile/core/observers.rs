@@ -14,13 +14,15 @@ impl Ranges {
             .map_or(&[], |(_, hooks)| hooks.as_slice())
     }
 
-    /// Whether any observer covers an address in `low..=high`.
+    /// Whether any observer covers an address in `low..=high`. A branch to
+    /// itself (`b .`, as the stock power-off loop ends) gives `low == high`.
     pub fn any_in(&self, low: u64, high: u64) -> bool {
         !self.at(low).is_empty()
-            || self
-                .0
-                .range(low.saturating_add(1)..=high)
-                .any(|(_, hooks)| !hooks.is_empty())
+            || low < high
+                && self
+                    .0
+                    .range(low + 1..=high)
+                    .any(|(_, hooks)| !hooks.is_empty())
     }
 
     /// Whether any observer is installed; removal coalescing leaves no spans
@@ -144,3 +146,15 @@ impl Index {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod range_tests {
+    use super::Ranges;
+
+    #[test]
+    fn a_self_branch_span_is_one_address() {
+        let ranges = Ranges::default();
+        assert!(!ranges.any_in(0x6d0000, 0x6d0000));
+        assert!(!ranges.any_in(0x6d0004, 0x6d0000));
+    }
+}
