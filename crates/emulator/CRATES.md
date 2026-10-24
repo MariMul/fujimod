@@ -108,13 +108,20 @@ layer that holds it is interface-level.
   engine session with the `session::Inputs` that drive its keys and GPIO
   pins, so the engine session holds no XP5 state.
 - These two board crates sit above the emulator, since they open sessions on
-  it. Their device assembly still names models; it moves to registries like
-  the EXR II one.
+  it. Their device assembly still names models. The XP5 resources hold model
+  types (mailbox pins and channel, flash storage, display configuration and
+  its pixel order) and some kinds are assembled in groups (imaging, general
+  DMA, clock banks); the XP4 session drives its ADC, GPIO and USB models by
+  type. Each needs those handles in the interface, registered group
+  assemblers and capabilities before its assembly can move to a registry.
 - X70 boot policy (`boot/x70.rs`) stays only if it names plan and interface
   types alone; otherwise it moves to the EXR II board crate.
-- ARM interrupt controllers and timers (`ip::arm`) become model crates. The
-  emulator delivers interrupts through interface traits, and board builders
-  construct the controllers.
+- The GIC is a model in `fujimod-emulator-ip-arm` that the A-profile runner
+  reaches through `gic::InterruptController` in the interface; board builders
+  construct it. The processor parts the runners drive directly live beside
+  them: the generic timer and Cortex-A53 implementation registers in
+  `board::aprofile`, the ARMv7-M NVIC in `architecture::mprofile`. The
+  emulator depends on no model crate.
 
 ## Steps
 
@@ -138,10 +145,11 @@ records the rebuild costs below before and after.
    carry model options as JSON, the handles their resources share are
    interface types, and every EXR II model is built by the constructor its
    crate registers, so neither the plan nor the board depends on a model
-   crate. Remaining: XP5 and XP4 device assembly.
-5. Capabilities: done for the EXR II sessions, so the emulator no longer
-   depends on the EXR II display, I2C, serial, I/O or storage crates. XP4
-   boards and XP5 boot left the emulator. Remaining: interrupt delivery.
+   crate. Remaining: XP5 and XP4 device assembly (see above).
+5. Capabilities and interrupt delivery: done. The EXR II sessions reach devices
+   through capabilities, XP4 boards and XP5 boot left the emulator, and the GIC
+   is reached through its interface trait, so neither the emulator nor
+   `fujimod-python` depends on a model crate.
 6. Bindings: done. `fujimod-python` depends on no model crate; XP4 sessions
    are bound in `fujimod-python-xp4`.
 7. Final link: measured, no change. Relinking the extension module takes
