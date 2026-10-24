@@ -263,6 +263,33 @@ class WalkthroughTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             guide.interaction("menu", "m/item", input_index=setup)
 
+    def test_touch_start_anchors_coverage_and_records_its_position(self) -> None:
+        camera, guide = self.guide()
+        guide._recording = True
+        start = guide.touch("start", 120, 80, 0)
+        moved = guide.touch("move", 130, 82, 0.1)
+        lifted = guide.touch("end", 130, 82, 0.2)
+        assert start is not None and moved is not None and lifted is not None
+        guide.interaction("menu", "m/item", input_index=start)
+        for index in (moved, lifted):
+            with self.assertRaises(ValueError):
+                guide.interaction("menu", "m/item", input_index=index)
+        self.assertEqual(
+            [
+                (e["kind"], e.get("phase"), e.get("x"), e.get("y"), e["pressed"])
+                for e in guide.report["inputs"]
+            ],
+            [
+                ("touch", "start", 120, 80, True),
+                ("touch", "move", 130, 82, None),
+                ("touch", "end", 130, 82, False),
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "No finger is down"):
+            guide.touch("move", 1, 1, 0.3)
+        with self.assertRaisesRegex(ValueError, "Unknown touch phase"):
+            guide.touch("hover", 1, 1, 0.3)  # ty: ignore[invalid-argument-type]
+
     def test_catching_a_failed_step_does_not_make_run_pass(self) -> None:
         camera, guide = self.guide()
 

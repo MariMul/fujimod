@@ -246,5 +246,12 @@
     "bottom": 64,
     "press_ms": 1100,
     "release_ms": 400
+  },
+  "touch": {
+    "radius": 22,
+    "fill": "#d8d8d880",
+    "border": "#ffffffc0",
+    "border_width": 2,
+    "release_ms": 300
   }
 }

@@ -52,7 +52,7 @@ pub fn fade_frames(fps: u32) -> u64 {
         .round()
         .max(1.) as u64
 }
-fn color(value: &str, alpha: u8) -> [u8; 4] {
+pub(crate) fn color(value: &str, alpha: u8) -> [u8; 4] {
     let number = u32::from_str_radix(&value[1..], 16).expect("checked badge color");
     let rgba = if value.len() == 7 {
         (number << 8) | 255
@@ -66,13 +66,13 @@ fn color(value: &str, alpha: u8) -> [u8; 4] {
         ((rgba & 255) * u32::from(alpha) / 255) as u8,
     ]
 }
-struct Canvas {
-    pixels: Vec<u8>,
-    width: i32,
-    height: i32,
+pub(crate) struct Canvas {
+    pub(crate) pixels: Vec<u8>,
+    pub(crate) width: i32,
+    pub(crate) height: i32,
 }
 impl Canvas {
-    fn pixel(&mut self, x: i32, y: i32, c: [u8; 4]) {
+    pub(crate) fn pixel(&mut self, x: i32, y: i32, c: [u8; 4]) {
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
             return;
         }
@@ -129,17 +129,22 @@ impl Canvas {
     }
 }
 pub fn draw(frame: &Frame, labels: &[(String, u8)]) -> Vec<u8> {
-    if labels.is_empty() {
-        return frame.pixels().to_vec();
-    }
-    let spec = spec();
-    let style = &spec.badge;
-    let height = style.icon_size + 2 * style.padding_y + 2 * style.border_width;
     let mut canvas = Canvas {
         pixels: frame.pixels().to_vec(),
         width: frame.width() as i32,
         height: frame.height() as i32,
     };
+    draw_on(&mut canvas, labels);
+    canvas.pixels
+}
+/// The badge stack, newest at the bottom right, over existing pixels.
+pub(crate) fn draw_on(canvas: &mut Canvas, labels: &[(String, u8)]) {
+    if labels.is_empty() {
+        return;
+    }
+    let spec = spec();
+    let style = &spec.badge;
+    let height = style.icon_size + 2 * style.padding_y + 2 * style.border_width;
     let mut y = canvas.height
         - style.bottom
         - height * labels.len() as i32
@@ -210,5 +215,4 @@ pub fn draw(frame: &Frame, labels: &[(String, u8)]) -> Vec<u8> {
         }
         y += height + style.gap;
     }
-    canvas.pixels
 }

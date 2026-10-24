@@ -1,4 +1,8 @@
-use crate::{Frame, Result, badges, video::Encoders};
+use crate::{
+    Frame, Result, badges,
+    touches::{self, Mark, Touch, TouchPhase},
+    video::Encoders,
+};
 use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
@@ -37,11 +41,13 @@ pub struct Recorder {
     latest_shown: bool,
     finished: bool,
     badges: Vec<Badge>,
+    touches: Vec<Touch>,
     encoders: Option<Encoders>,
     size: Option<(u32, u32)>,
     fitted: Option<Frame>,
     annotated: Vec<u8>,
     labels: Vec<(String, u8)>,
+    marks: Vec<Mark>,
     has_poster: bool,
 }
 pub fn seconds(value: f64) -> Result<f64> {
@@ -76,11 +82,13 @@ impl Recorder {
             latest_shown: false,
             finished: false,
             badges: Vec::new(),
+            touches: Vec::new(),
             encoders: None,
             size: None,
             fitted: None,
             annotated: Vec::new(),
             labels: Vec::new(),
+            marks: Vec::new(),
             has_poster: false,
         })
     }
@@ -112,12 +120,13 @@ impl Recorder {
             }
             if self.last.is_some() {
                 let elapsed = time - last;
-                let duration = if self.badges.is_empty() {
+                let idle = self.badges.is_empty() && self.touches.is_empty();
+                let duration = if idle {
                     elapsed.min((self.idle_limit - self.idle_kept).max(0.))
                 } else {
                     elapsed
                 };
-                if self.badges.is_empty() {
+                if idle {
                     self.idle_kept += duration;
                 }
                 self.skipped_seconds += elapsed - duration;
@@ -186,6 +195,35 @@ impl Recorder {
         }
         Ok(())
     }
+    /// One finger's touch at `x`, `y` in the coordinates of the frames being
+    /// recorded. Drawn only on the annotated video.
+    pub fn touch(&mut self, phase: TouchPhase, x: f64, y: f64, time: f64) -> Result<()> {
+        if !(x.is_finite() && y.is_finite() && x >= 0. && y >= 0.) {
+            return Err("Touch position must be finite and nonnegative".into());
+        }
+        let down = self.touches.iter().position(|t| t.lifted.is_none());
+        if (phase == TouchPhase::Start) == down.is_some() {
+            return Err(match phase {
+                TouchPhase::Start => "A finger is already down",
+                _ => "No finger is down",
+            }
+            .into());
+        }
+        self.advance(time)?;
+        self.idle_kept = 0.;
+        match (phase, down) {
+            (TouchPhase::Start, _) => self.touches.push(Touch { x, y, lifted: None }),
+            (_, Some(index)) => {
+                let touch = &mut self.touches[index];
+                (touch.x, touch.y) = (x, y);
+                if phase == TouchPhase::End {
+                    touch.lifted = Some(self.frames);
+                }
+            }
+            _ => unreachable!("checked above"),
+        }
+        Ok(())
+    }
     pub fn still(&mut self, frame: Frame, duration: f64) -> Result<()> {
         seconds(duration)?;
         if self.finished {
@@ -242,23 +280,36 @@ impl Recorder {
     }
     fn write(&mut self) -> Result<()> {
         if !self.video {
+            let fade = touches::fade_frames(self.fps);
+            self.touches
+                .retain(|t| t.lifted.is_none_or(|at| self.frames - at < fade));
             self.frames += 1;
             return Ok(());
         }
         let frame = self.last.as_ref().ok_or("No LCD frames recorded")?;
-        let size = *self.size.get_or_insert((frame.width(), frame.height()));
+        let source = (frame.width(), frame.height());
+        let size = *self.size.get_or_insert(source);
         let changed = self.fitted.is_none();
         if changed {
             self.fitted = Some(frame.fit(size.0, size.1)?);
         }
         let labels = self.current_labels();
+        let marks = touches::marks(&mut self.touches, self.frames, self.fps, source, size);
         let fitted = self.fitted.as_ref().unwrap();
-        if changed || labels != self.labels {
+        if changed || labels != self.labels || marks != self.marks {
             let start = Instant::now();
-            self.annotated = badges::draw(fitted, &labels);
+            let mut canvas = badges::Canvas {
+                pixels: fitted.pixels().to_vec(),
+                width: fitted.width() as i32,
+                height: fitted.height() as i32,
+            };
+            touches::draw_on(&mut canvas, &marks);
+            badges::draw_on(&mut canvas, &labels);
+            self.annotated = canvas.pixels;
             self.metrics.annotation_seconds += start.elapsed().as_secs_f64();
             self.metrics.annotated_frames += 1;
             self.labels = labels;
+            self.marks = marks;
         }
         if self.encoders.is_none() {
             self.encoders = Some(Encoders::open(&self.output, fitted, self.fps)?);

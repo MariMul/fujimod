@@ -5,9 +5,11 @@ mod badges;
 pub mod cache;
 pub mod frame;
 mod timeline;
+mod touches;
 mod video;
 pub use frame::{Frame, Result};
 pub use timeline::{Metrics, Recorder, seconds};
+pub use touches::TouchPhase;
 pub const CONTROLS: &str = include_str!("../assets/controls.json");
 
 /// Annotate a host copy; clean captures and their source pixels stay immutable.

@@ -1,5 +1,6 @@
 use super::*;
 use crate::cache::CaptureCache;
+use crate::touches::{self, TouchPhase};
 use std::{
     cell::{Cell, RefCell},
     sync::atomic::{AtomicU64, Ordering},
@@ -248,4 +249,71 @@ fn previous_frames_keep_their_input_state_and_final_observation_is_visible() {
     );
     // The final changed frame is encoded even with no later timestamp or hold.
     assert!(frames[9][..320 * 60 * 3].iter().all(|v| v.abs_diff(90) < 6));
+}
+
+#[test]
+fn touches_follow_the_finger_and_fade_after_lift() {
+    let output = Output::new();
+    let mut r = Recorder::new(output.0.clone(), 10, false).unwrap();
+    assert!(r.touch(TouchPhase::Move, 1., 1., 0.).is_err());
+    assert!(r.touch(TouchPhase::End, 1., 1., 0.).is_err());
+    assert!(r.touch(TouchPhase::Start, f64::NAN, 1., 0.).is_err());
+    r.touch(TouchPhase::Start, 100., 60., 0.).unwrap();
+    assert!(r.touch(TouchPhase::Start, 1., 1., 0.).is_err());
+    // A 320x240 source fitted into 640x480 doubles positions and the radius.
+    let marks =
+        |r: &mut Recorder| touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 480));
+    assert_eq!(marks(&mut r), vec![(200, 120, 44, 255)]);
+    r.touch(TouchPhase::Move, 110., 70., 0.).unwrap();
+    assert_eq!(marks(&mut r), vec![(220, 140, 44, 255)]);
+    r.touch(TouchPhase::End, 120., 70., 0.).unwrap();
+    assert_eq!(marks(&mut r), vec![(240, 140, 44, 255)]);
+    r.frames += 1;
+    assert_eq!(marks(&mut r), vec![(240, 140, 44, 170)]);
+    // A new finger may land while the previous one fades.
+    r.touch(TouchPhase::Start, 10., 10., 0.).unwrap();
+    assert_eq!(marks(&mut r).len(), 2);
+    r.frames += 2;
+    assert_eq!(marks(&mut r), vec![(20, 20, 44, 255)]);
+    // Letterboxed sources keep the centered fit offset.
+    assert_eq!(
+        touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 240)),
+        vec![(170, 10, 22, 255)]
+    );
+}
+
+#[test]
+fn touches_mark_only_the_annotated_video() {
+    if Encoders::check().is_err() {
+        return;
+    }
+    let output = Output::new();
+    let mut r = Recorder::new(output.0.clone(), 10, true).unwrap();
+    r.frame(frame(0), 0.).unwrap();
+    r.touch(TouchPhase::Start, 160., 120., 0.).unwrap();
+    r.frame(frame(0), 0.3).unwrap();
+    r.touch(TouchPhase::End, 160., 120., 0.3).unwrap();
+    r.frame(frame(0), 1.).unwrap();
+    r.finish().unwrap();
+    let decode = |name: &str| {
+        let result = std::process::Command::new("ffmpeg")
+            .args(["-v", "error", "-i"])
+            .arg(output.0.join(name))
+            .args(["-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+        result.stdout
+    };
+    let center = (120 * 320 + 160) * 3;
+    let size = 320 * 240 * 3;
+    let annotated = decode("video.mp4");
+    let clean = decode("video-clean.mp4");
+    assert!(annotated[center] > 80, "the finger is drawn while down");
+    assert!(clean.chunks(size).all(|f| f.iter().all(|&v| v < 12)));
+    let last = annotated.chunks(size).last().unwrap();
+    assert!(
+        last.iter().all(|&v| v < 12),
+        "the circle is gone after its fade"
+    );
 }

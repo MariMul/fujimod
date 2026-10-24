@@ -61,9 +61,16 @@ A camera adapter implements:
 
 It calls `guide.frame(frame, seconds)` at monotonically increasing guest times,
 `guide.input(name, pressed, seconds)` for real input edges (returns an index),
+`guide.touch(phase, x, y, seconds)` for each touch phase (`start`, `move`,
+`end`) at a position in the recorded frames' coordinates (returns an index),
 and `guide.interaction(surface, item, input_index=..., **evidence)` for observed
 interactions. Frame sampling never drives device state. Only non-fixture press
-inputs can anchor coverage. Input badges push onto a bottom-right stack, newest
+inputs or touch starts can anchor coverage. Report inputs carry `kind`
+(`control` or `touch`); a touch also records its `phase`, `x` and `y`, with
+`pressed` true at the start, false at the lift and null while moving. The
+annotated video draws a translucent circle at a finger while it is down,
+following its moves and fading after the lift; clean video and screenshots
+stay unmarked. Input badges push onto a bottom-right stack, newest
 at the bottom, retaining up to five presses. Repeated presses have separate
 entries; each remains visible for five presentation seconds after release,
 fading only during the final 0.4 seconds. New presses push the oldest entries

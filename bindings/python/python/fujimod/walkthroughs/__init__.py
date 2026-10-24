@@ -15,7 +15,7 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from string.templatelib import Template
-from typing import NotRequired, Protocol, Self, TypedDict, cast
+from typing import Literal, NotRequired, Protocol, Self, TypedDict, cast
 
 from ..recording import Frame
 from .text import (
@@ -67,11 +67,20 @@ class Scenario(Protocol):
 
 
 class Input(TypedDict):
+    """A recorded input. A control edge names its presentation; a touch is one
+    finger's phase at a screen position. ``pressed`` is True for a press or a
+    touch start (either can anchor coverage), False for a release or a lift
+    and None while a finger moves."""
+
+    kind: Literal["control", "touch"]
     name: str
-    pressed: bool
+    pressed: bool | None
     seconds: float
     video_seconds: float
     fixture: bool
+    phase: NotRequired[Literal["start", "move", "end"]]
+    x: NotRequired[int]
+    y: NotRequired[int]
 
 
 class Interaction(TypedDict):
@@ -417,11 +426,37 @@ class Guide[C: RecordingCamera]:
             return None
         self.recording.input(name, pressed, seconds)
         event: Input = dict(
+            kind="control",
             name=name,
             pressed=pressed,
             seconds=seconds,
             video_seconds=self.recording.seconds,
             fixture=not self._recording,
+        )
+        self.report["inputs"].append(event)
+        return len(self.report["inputs"]) - 1
+
+    def touch(
+        self, phase: Literal["start", "move", "end"], x: int, y: int, seconds: float
+    ) -> int | None:
+        """One finger's touch phase at ``x``, ``y`` in the frames' coordinates.
+
+        The annotated video draws it; the start can anchor coverage like a press."""
+        if self._preparing:
+            return None
+        if type(x) is not int or type(y) is not int:
+            raise ValueError("Touch position must be integer pixels")
+        self.recording.touch(phase, x, y, seconds)
+        event: Input = dict(
+            kind="touch",
+            name="touch",
+            pressed={"start": True, "move": None, "end": False}[phase],
+            seconds=seconds,
+            video_seconds=self.recording.seconds,
+            fixture=not self._recording,
+            phase=phase,
+            x=x,
+            y=y,
         )
         self.report["inputs"].append(event)
         return len(self.report["inputs"]) - 1

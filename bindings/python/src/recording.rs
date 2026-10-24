@@ -143,6 +143,10 @@ impl Recorder {
     fn input(&mut self, name: &str, pressed: bool, seconds: f64) -> PyResult<()> {
         self.inner.input(name, pressed, seconds).map_err(error)
     }
+    fn touch(&mut self, phase: &str, x: f64, y: f64, seconds: f64) -> PyResult<()> {
+        let phase = phase.parse().map_err(error)?;
+        self.inner.touch(phase, x, y, seconds).map_err(error)
+    }
     fn still(&mut self, frame: &Frame, seconds: f64) -> PyResult<()> {
         self.inner
             .still(frame.inner.clone(), seconds)
