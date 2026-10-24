@@ -28,9 +28,9 @@ Worker's dependencies for its pinned Wrangler CLI. The runtime directory contain
 `catalog.json` and one qualified bundle per advertised emulator, including
 the standalone Wasm module, its loader, cold inputs, and license notices. The patch
 directory contains a verified mod release. The media directory contains `media.json` and the
-content-addressed MP4 and WebP files it names. `media.json` records the digest of the
-feature catalog text it was rendered for; staging refuses media for any other catalog,
-and the site shows no media whose digest differs from its catalog. Locally, set
+content-addressed MP4 and WebP files it names, keyed by feature card. Each card
+shows its newest recording, even when the card's text changed after it was recorded;
+staging leaves out recordings of cards the homepage no longer has. Locally, set
 `FUJIMOD_MEDIA` to a media directory to serve it at `/artifacts/docs/`.
 
 The command validates and stages these assets, runs application checks and tests,

@@ -11,16 +11,11 @@ export interface SiteInputs {
   patches: string;
   media: string;
 }
-/** Files of media rendered for exactly the catalog text being deployed. */
+/** Files of the media for cards the homepage still shows; recordings of removed cards stay behind. */
 export function featureMediaFiles(media: FeatureMedia, featureSource: string) {
-  const catalog = /featureMedia\(\s*['"]([0-9a-f]{24})['"]\s*\)/.exec(featureSource)?.[1];
-  if (media.catalog !== catalog)
-    throw Error(`Feature media was rendered for catalog ${media.catalog}, not ${catalog}.`);
-  const cards = Object.keys(media.cards);
-  if (!cards.length) throw Error('Feature media is missing.');
-  for (const card of cards)
-    if (!featureSource.includes(`'${card}'`) && !featureSource.includes(`"${card}"`))
-      throw Error(`Unknown feature media card: ${card}`);
+  const cards = Object.keys(media.cards).filter(
+    (card) => featureSource.includes(`'${card}'`) || featureSource.includes(`"${card}"`),
+  );
   return new Set(cards.flatMap((card) => [media.cards[card].video, media.cards[card].still]));
 }
 

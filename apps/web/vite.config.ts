@@ -162,7 +162,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
     configurePreviewServer: (server) => configure(server.middlewares),
   };
 }
-// Feature media rendered for the catalog: an opt-in local directory, else the staged site assets.
+// Feature media by card: an opt-in local directory, else the staged site assets.
 function featureMedia(env: Record<string, string>) {
   const path = env.FUJIMOD_MEDIA
     ? resolve(env.FUJIMOD_MEDIA, 'media.json')

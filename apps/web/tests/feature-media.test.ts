@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import { featureMediaFiles } from '../scripts/stage-site.ts';
 import { featureMedia, validateFeatureMedia } from '../src/home/feature-media.ts';
 
-const catalog = 'a'.repeat(24);
 const manifest = validateFeatureMedia({
   schema: 1,
-  catalog,
   cards: {
     shape_aspect_item: {
       video: '1'.repeat(24) + '.mp4',
@@ -16,29 +14,20 @@ const manifest = validateFeatureMedia({
   },
 });
 
-test('media rendered for other catalog text is never shown', () => {
+test('cards show their newest recording', () => {
   assert.equal(
-    featureMedia(catalog, manifest)('missing', 'shape_aspect_item')?.still,
+    featureMedia(manifest)('missing', 'shape_aspect_item')?.still,
     '2'.repeat(24) + '.webp',
   );
-  assert.equal(featureMedia('b'.repeat(24), manifest)('shape_aspect_item'), null);
-  assert.equal(featureMedia(catalog, null)('shape_aspect_item'), null);
+  assert.equal(featureMedia(null)('shape_aspect_item'), null);
 });
 
-test('deployment stages media only for the catalog being deployed', () => {
-  const source = `const media = featureMedia('${catalog}');\nmedia('shape_aspect_item')`;
+test('deployment stages media for the cards the homepage shows', () => {
   assert.deepEqual(
-    [...featureMediaFiles(manifest, source)],
+    [...featureMediaFiles(manifest, `const media = featureMedia();\nmedia('shape_aspect_item')`)],
     ['1'.repeat(24) + '.mp4', '2'.repeat(24) + '.webp'],
   );
-  assert.throws(
-    () => featureMediaFiles(manifest, source.replace(catalog, 'b'.repeat(24))),
-    /rendered for catalog/,
-  );
-  assert.throws(
-    () => featureMediaFiles(manifest, `const media = featureMedia('${catalog}');`),
-    /Unknown feature media card/,
-  );
+  assert.deepEqual([...featureMediaFiles(manifest, 'const media = featureMedia();')], []);
   assert.throws(
     () =>
       validateFeatureMedia({

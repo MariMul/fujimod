@@ -394,8 +394,7 @@ const CARDS: Record<string, Card> = {
     thanks: [],
   },
 };
-/** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('3d91e0dc6324bbc9a1b3f1f3');
+const media = featureMedia();
 
 function Icon(props: { name: string }) {
   return (
