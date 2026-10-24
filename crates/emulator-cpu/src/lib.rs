@@ -464,6 +464,10 @@ pub enum InstructionDisposition {
     Execute,
     Observe,
     ObserveAndEndBlock,
+    /// The instruction observer performs the instruction, including a failed
+    /// condition's no-op, and leaves the PC at the instruction only to stop
+    /// before it. The backend translates no body and ends the block after it.
+    Replace,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Translation {

@@ -1028,6 +1028,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
         InstructionDisposition::Execute => 0,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
+        InstructionDisposition::Replace => 3,
     };
     action | if decision.observe_block { 4 } else { 0 }
 }

@@ -461,7 +461,9 @@ impl Execution {
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;
         Ok(Translation {
-            instruction: if !self
+            instruction: if replaced(word) {
+                InstructionDisposition::Replace
+            } else if !self
                 .observer_index
                 .borrow()
                 .instructions
@@ -667,19 +669,31 @@ impl Execution {
         }
         if thumb {
             if size == 4 {
-                if self.exclusive_instruction(word, address, size, cpsr)? {
+                if self.exclusive_instruction(word, address, size, cpsr, false)? {
                     return Ok(());
                 }
                 // T32 coprocessor transfers number fields in halfword order.
-                self.coprocessor_instruction(word.rotate_left(16), address, size, cpsr)?;
+                self.coprocessor_instruction(word.rotate_left(16), address, size, cpsr, false)?;
             }
         } else {
-            if self.exclusive_instruction(word, address, size, cpsr)? {
+            let replaced = replaced(word);
+            if self.exclusive_instruction(word, address, size, cpsr, replaced)? {
                 return Ok(());
             }
-            self.coprocessor_instruction(word, address, size, cpsr)?;
+            self.coprocessor_instruction(word, address, size, cpsr, replaced)?;
         }
         Ok(())
+    }
+    /// Finish an instruction this observer performed. A replaced ARM
+    /// instruction continues in translated code at the following instruction.
+    /// A stop requested while it ran leaves through the exit check after the
+    /// observer, which then needs the PC past it. Other instructions leave
+    /// translated code through the PC write.
+    fn complete(&self, replaced: bool, address: u64, size: u32, cpsr: u32) -> Result<(), String> {
+        if replaced && !self.user_stop.get() {
+            return Ok(());
+        }
+        self.advance(address, size, cpsr)
     }
     fn advance(&self, address: u64, size: u32, cpsr: u32) -> Result<(), String> {
         if self.thumb.get() {
@@ -696,6 +710,7 @@ impl Execution {
         address: u64,
         size: u32,
         cpsr: u32,
+        replaced: bool,
     ) -> Result<(), String> {
         if word & 0x0fe0_0f00 == 0x0c40_0f00 && word & 15 == 9 {
             return Err("R-profile 64-bit PMU execution is not implemented".into());
@@ -746,7 +761,7 @@ impl Execution {
             if read {
                 self.set(arm::CORE[target], result)?;
             }
-            return self.advance(address, size, cpsr);
+            return self.complete(replaced, address, size, cpsr);
         }
         if cp == 14 {
             let target = ((word >> 12) & 15) as usize;
@@ -754,10 +769,31 @@ impl Execution {
                 return Err("unmodeled R-profile CP14 access".into());
             }
             self.set(arm::CORE[target], self.identity_input.get())?;
-            self.advance(address, size, cpsr)?;
+            self.complete(replaced, address, size, cpsr)?;
         }
         Ok(())
     }
+}
+/// ARM instructions the instruction observer performs in place of a
+/// translated body, without leaving translated code: word exclusives, CLREX,
+/// the CP14 identity read and PMU transfers. Thumb has no translation filter.
+fn replaced(word: u32) -> bool {
+    if exclusive::replaced(word) {
+        return true;
+    }
+    if word >> 28 == 15 || word & 0x0f00_0010 != 0x0e00_0010 || (word >> 12) & 15 == 15 {
+        return false;
+    }
+    word & 0x0fff_0fff == 0x0e12_0e10
+        || pmu::selected(arm::Coprocessor {
+            cp: (word >> 8) & 15,
+            opc1: (word >> 21) & 7,
+            crn: (word >> 16) & 15,
+            crm: word & 15,
+            opc2: (word >> 5) & 7,
+            secure: 0,
+            wide: false,
+        })
 }
 fn atomic(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f

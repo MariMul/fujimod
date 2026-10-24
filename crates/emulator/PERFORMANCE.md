@@ -53,8 +53,7 @@ host instructions retired (load barely changes them):
    the accounting mode changed. Find why, and widen the interactive window.
 3. Done: interactive runs test exits at block entry with QEMU's inline test
    and no check after guest loads and stores.
-4. Exclusives without leaving translated code. LDREX, STREX and CLREX become
-   TCG helpers that call the shared monitor directly; monitor semantics stay.
+4. Done: exclusives without leaving translated code (below).
 5. Firmware decompression in whole tokens and slices instead of per byte.
 6. Translation cost: fewer generated helper calls per block (items 2 and 3)
    shrink every block; then measure what remains.
@@ -87,9 +86,25 @@ remainder is Python observation, PNG decoding and live-view scene rendering):
 | Per-access exit checks (`helper_check_exit_request`) | 7% |
 | Per-block hook helper (`helper_uc_tracecode`) | 7% |
 
-Core 0 leaves translated code 1.73M times ("check exit, no sync"), once per
-600 guest instructions: an emulated LDREX or STREX writes the PC from its
-callback. Item 4 removes those exits. Neither dropping the 15-byte slack before
-each watched range (74K to 25K restarts) nor a 64 MiB translation cache
-changed host instructions retired (227G either way), so translation is not
-driven by watch restarts or cache capacity; its cause is still to be found.
+Core 0 left translated code 1.73M times ("check exit, no sync"), once per
+600 guest instructions: an emulated LDREX, STREX or CP14 identity read wrote
+the PC from its callback, which leaves `cpu_exec`. The translation filter now
+replaces those ARM instructions (word exclusives, CLREX, the CP14 identity
+read and PMU transfers) with their instruction observer
+(`InstructionDisposition::Replace`): the block carries the hook and no body,
+ends after it, and chains to the next block. The observer writes the PC only
+when a stop was requested while it ran. A successful software STREX also
+publishes to completed-store observers, as a native store does. Thumb has no
+translation filter and keeps the PC write.
+
+| Change | ev_dial CPU seconds | Boot exits, core 0 |
+|---|---|---|
+| Before | 21.6 | 112,725 |
+| Replaced exclusives and identity reads | 15.0 | 1,951 |
+
+Boot exits count "check exit, no sync" over the first 65M instructions in
+exact policy. Guest instruction counts, board fingerprints and live-view
+frames are identical before and after. Boot host instructions did not change
+measurably (19.1–19.2G for process start, construction and 65M
+instructions), because boot leaves translated code rarely; the walkthrough's
+waits run firmware that polls exclusives and the identity register.

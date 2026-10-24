@@ -8,6 +8,7 @@ pub type Context = *mut c_void;
 pub type Error = c_int;
 pub const FEATURE_PAUSE_ACCOUNTING_LAYOUT: u32 = 1 << 3;
 pub const FEATURE_PARALLEL_TCG: u32 = 1 << 4;
+pub const FEATURE_REPLACED_INSTRUCTIONS: u32 = 1 << 5;
 pub const fn ctl(kind: u32, count: u32, direction: u32) -> u32 {
     kind | (count << 26) | (direction << 30)
 }
@@ -50,6 +51,7 @@ pub struct Extensions {
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
     // is the Thumb state while a translation filter is installed.
     // Bit 4: stoppable Thumb instruction entries with synchronized ITSTATE.
+    // Bit 32: filter decision 3 replaces an ARM instruction with its code hook.
     pub features: u32,
     // uc_embedder_accounting (features bit 2): the engine's accounting record.
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
@@ -95,6 +97,10 @@ impl Extensions {
             (
                 self.features & 3 == 3,
                 "uc_embedder_features (Thumb block state and budgeted accounting)",
+            ),
+            (
+                self.features & FEATURE_REPLACED_INSTRUCTIONS != 0,
+                "uc_embedder_features (replaced ARM instructions)",
             ),
         ]
         .into_iter()
