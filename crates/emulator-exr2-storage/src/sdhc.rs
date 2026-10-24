@@ -3,6 +3,9 @@
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use fujimod_emulator_devices::parts::sd_card::Card;
+use fujimod_emulator_devices::parts::read_fifo::ReadFifo;
+use fujimod_emulator_devices::bus::FastReadWord;
+use std::sync::{Arc, atomic::{AtomicU16, Ordering}};
 use fujimod_emulator_ip::sdhci::Clocks;
 use serde::{Deserialize, Serialize};
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
@@ -80,7 +83,6 @@ struct Request {
     address: u32,
     phase: Phase,
     due: Option<u64>,
-    fifo_position: usize,
     command: u8,
     fault: Option<usize>,
 }
@@ -153,9 +155,9 @@ pub struct SdHost {
     bus_width: u8,
     response: [u8; 16],
     request: Option<Request>,
-    fifo: [u8; 512],
+    fifo: ReadFifo,
+    status_reads: [Arc<AtomicU16>; 2],
     scratch: Box<[u8]>,
-    rom_fifo_position: usize,
     rom_fifo_ready: bool,
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
@@ -183,9 +185,9 @@ impl SdHost {
             bus_width: 1,
             response: [0; 16],
             request: None,
-            fifo: [0; 512],
+            fifo: ReadFifo::new(512)?,
+            status_reads: std::array::from_fn(|_| Arc::new(AtomicU16::new(0))),
             scratch: vec![0; 512 * 1024].into_boxed_slice(),
-            rom_fifo_position: 0,
             rom_fifo_ready: false,
             faults: Vec::new(),
             fault_history: Vec::new(),
@@ -406,7 +408,6 @@ impl SdHost {
             address: self.regs.word(0),
             phase: Phase::Command,
             due: None,
-            fifo_position: 0,
             command,
             fault: None,
         };
@@ -680,8 +681,7 @@ impl SdHost {
         if r.transfer != Transfer::Dma {
             if r.phase == Phase::Sector && r.transfer == Transfer::PioWrite {
                 if let Payload::Write(first) = r.payload {
-                    self.card
-                        .write_bytes(first as u64 * 512 + r.cursor as u64, &self.fifo)?;
+                    self.card.write_bytes(first as u64 * 512 + r.cursor as u64, &self.fifo.snapshot().0)?;
                 }
                 r.cursor += 512;
             }
@@ -695,11 +695,12 @@ impl SdHost {
             if r.transfer == Transfer::PioRead
                 && let Payload::Read(first) = r.payload
             {
-                self.card
-                    .read_bytes(first as u64 * 512 + r.cursor as u64, &mut self.fifo)?;
+                let mut bytes = [0; 512];
+                self.card.read_bytes(first as u64 * 512 + r.cursor as u64, &mut bytes)?;
+                self.fifo.restore(&bytes, 0)?;
             }
             if rom {
-                self.rom_fifo_position = 0;
+                self.fifo.rewind();
                 self.rom_fifo_ready = true;
                 return self.finish(cx, r, 0x21 & self.regs.get(0x34));
             }
@@ -709,7 +710,7 @@ impl SdHost {
                 0x20
             } | if r.phase == Phase::Command { 1 } else { 0 };
             r.phase = Phase::Ready;
-            r.fifo_position = 0;
+            self.fifo.rewind();
             self.request = Some(r);
             self.regs.set(0x30, self.regs.get(0x30) | status);
             return self.signal(cx);
@@ -768,13 +769,8 @@ impl SdHost {
             if write.is_some() || !self.rom_fifo_ready {
                 return Err("ROM SD PIO read without ready sector".into());
             }
-            let value = u32::from_le_bytes(
-                self.fifo[self.rom_fifo_position..self.rom_fifo_position + 4]
-                    .try_into()
-                    .unwrap(),
-            );
-            self.rom_fifo_position += 4;
-            if self.rom_fifo_position == 512 {
+            let value = self.fifo.read().ok_or("ROM SD PIO FIFO is empty")?;
+            if self.fifo.position() == 512 {
                 self.rom_fifo_ready = false;
                 self.regs
                     .set(0x30, self.regs.get(0x30) | (2 & self.regs.get(0x34)));
@@ -790,20 +786,13 @@ impl SdHost {
             return Err("SD PIO requires ready buffer and W1C ACK".into());
         }
         let value = if let Some(value) = write {
-            self.fifo[r.fifo_position..r.fifo_position + 4].copy_from_slice(&value.to_le_bytes());
+            self.fifo.write(value)?;
             0
         } else {
-            u32::from_le_bytes(
-                self.fifo[r.fifo_position..r.fifo_position + 4]
-                    .try_into()
-                    .unwrap(),
-            )
+            self.fifo.read().ok_or("SD PIO FIFO is empty")?
         };
-        r.fifo_position += 4;
-        if !is_write {
-            r.cursor += 4;
-        }
-        if r.fifo_position == 512 {
+        if self.fifo.position() == 512 {
+            if !is_write { r.cursor += 512; }
             r.phase = Phase::Sector;
             r.due = Some(
                 cx.now()
@@ -812,6 +801,70 @@ impl SdHost {
             );
         }
         Ok(value)
+    }
+    fn read_register(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if address == BASE + 0x2c && size == 2 {
+            return self.clocks.read(cx, address, size);
+        }
+        let offset = address.wrapping_sub(BASE) as usize;
+        if !self.valid(offset, size) {
+            cx.unmodeled();
+            return 0;
+        }
+        self.advance(cx);
+        if cx.refusal().is_some() {
+            return 0;
+        }
+        if offset == 0x20 {
+            return match self.pio(cx, None) {
+                Ok(v) => v as u64,
+                Err(e) => {
+                    cx.fail(e);
+                    0
+                }
+            };
+        }
+        if offset == 0x24 {
+            return 0x20000
+                | if self.contacts.present() { 0x10000 } else { 0 }
+                | self.request.as_ref().map_or(0, |r| {
+                    if r.phase == Phase::Ready {
+                        if r.transfer == Transfer::PioWrite {
+                            0x403
+                        } else {
+                            0x803
+                        }
+                    } else if r.quantity != 0 || matches!(r.command, 7 | 12) {
+                        3
+                    } else {
+                        1
+                    }
+                });
+        }
+        if (16..32).contains(&offset) {
+            let count = size as usize;
+            let mut bytes = [0; 4];
+            bytes[..count].copy_from_slice(&self.response[offset - 16..offset - 16 + count]);
+            return u32::from_le_bytes(bytes) as u64;
+        }
+        match size {
+            4 => self.regs.word(offset) as u64,
+            2 => self.regs.get(offset) as u64,
+            _ => (self.regs.get(offset & !1) >> ((offset % 2) * 8) & 255) as u64,
+        }
+    }
+    fn publish_reads(&self) {
+        for (i, value) in self.status_reads.iter().enumerate() {
+            value.store(self.regs.get(0x30 + i * 2), Ordering::Release);
+        }
+        let ready = if self.options.protocol == Protocol::Rom {
+            self.rom_fifo_ready
+        } else {
+            self.request.as_ref().is_some_and(|r| r.phase == Phase::Ready
+                && r.transfer == Transfer::PioRead
+                && (r.command == 17 || self.regs.get(0x30) & 0x20 == 0))
+        };
+        self.fifo.publish(ready);
     }
     fn valid(&self, offset: usize, size: u8) -> bool {
         if self.options.protocol == Protocol::Sdhc {
@@ -955,7 +1008,7 @@ struct Snapshot {
     fifo: [u8; 512],
     #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
     scratch: Box<[u8]>,
-    rom_fifo_position: usize,
+    fifo_position: usize,
     rom_fifo_ready: bool,
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
@@ -968,6 +1021,7 @@ impl Device for SdHost {
         Some(self)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        let (fifo, fifo_position) = self.fifo.snapshot();
         #[derive(Serialize)]
         struct View<'a> {
             card: &'a Card,
@@ -983,7 +1037,7 @@ impl Device for SdHost {
             fifo: &'a [u8],
             #[serde(with = "fujimod_emulator_devices::checkpoint::bytes")]
             scratch: &'a [u8],
-            rom_fifo_position: usize,
+            fifo_position: usize,
             rom_fifo_ready: bool,
             faults: &'a [DataFault],
             fault_history: &'a [DataFaultEvent],
@@ -1001,9 +1055,9 @@ impl Device for SdHost {
                 bus_width: self.bus_width,
                 response: self.response,
                 request: &self.request,
-                fifo: &self.fifo,
+                fifo: &fifo,
                 scratch: &self.scratch,
-                rom_fifo_position: self.rom_fifo_position,
+                fifo_position,
                 rom_fifo_ready: self.rom_fifo_ready,
                 faults: &self.faults,
                 fault_history: &self.fault_history,
@@ -1011,11 +1065,12 @@ impl Device for SdHost {
         )
     }
     fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        let _: Snapshot = saved.decode(self.name())?;
-        Ok(())
+        let state: Snapshot = saved.decode(self.name())?;
+        self.fifo.validate(&state.fifo, state.fifo_position)
     }
     fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         let s: Snapshot = saved.decode(self.name())?;
+        self.fifo.restore(&s.fifo, s.fifo_position)?;
         self.card = s.card;
         self.contacts.restore_level(s.contacts);
         self.regs = s.regs;
@@ -1026,16 +1081,16 @@ impl Device for SdHost {
         self.bus_width = s.bus_width;
         self.response = s.response;
         self.request = s.request;
-        self.fifo = s.fifo;
         self.scratch = s.scratch;
-        self.rom_fifo_position = s.rom_fifo_position;
         self.rom_fifo_ready = s.rom_fifo_ready;
         self.faults = s.faults;
         self.fault_history = s.fault_history;
+        self.publish_reads();
         Ok(())
     }
 
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
+        let (fifo, fifo_position) = self.fifo.snapshot();
         let request = self.request.as_ref().map(|r| {
             let payload = match r.payload {
                 Payload::None => serde_json::json!({"kind":"none"}),
@@ -1045,13 +1100,13 @@ impl Device for SdHost {
             };
             serde_json::json!({"state":r.state,"app":r.app,"block_length":r.block_length,"bus_width":r.bus_width,"response":r.response,
                 "payload":payload,"transfer":r.transfer,"quantity":r.quantity,"cursor":r.cursor,"address":r.address,"phase":r.phase,
-                "due":r.due,"fifo_position":r.fifo_position,"command":r.command,"fault":r.fault})
+                "due":r.due,"command":r.command,"fault":r.fault})
         });
         Ok(
             serde_json::json!({"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
-            "response":self.response,"request":request,"fifo":fujimod_emulator_devices::fingerprint::bytes(&self.fifo),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
-            "rom_fifo_position":self.rom_fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
+            "response":self.response,"request":request,"fifo":fujimod_emulator_devices::fingerprint::bytes(&fifo),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
+            "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
             "faults":self.faults,"fault_history":self.fault_history}),
         )
     }
@@ -1059,57 +1114,14 @@ impl Device for SdHost {
         "exr2-sdhc"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if address == BASE + 0x2c && size == 2 {
-            return self.clocks.read(cx, address, size);
-        }
-        let offset = address.wrapping_sub(BASE) as usize;
-        if !self.valid(offset, size) {
-            cx.unmodeled();
-            return 0;
-        }
-        self.advance(cx);
-        if cx.refusal().is_some() {
-            return 0;
-        }
-        if offset == 0x20 {
-            return match self.pio(cx, None) {
-                Ok(v) => v as u64,
-                Err(e) => {
-                    cx.fail(e);
-                    0
-                }
-            };
-        }
-        if offset == 0x24 {
-            return 0x20000
-                | if self.contacts.present() { 0x10000 } else { 0 }
-                | self.request.as_ref().map_or(0, |r| {
-                    if r.phase == Phase::Ready {
-                        if r.transfer == Transfer::PioWrite {
-                            0x403
-                        } else {
-                            0x803
-                        }
-                    } else if r.quantity != 0 || matches!(r.command, 7 | 12) {
-                        3
-                    } else {
-                        1
-                    }
-                });
-        }
-        if (16..32).contains(&offset) {
-            let count = size as usize;
-            let mut bytes = [0; 4];
-            bytes[..count].copy_from_slice(&self.response[offset - 16..offset - 16 + count]);
-            return u32::from_le_bytes(bytes) as u64;
-        }
-        match size {
-            4 => self.regs.word(offset) as u64,
-            2 => self.regs.get(offset) as u64,
-            _ => (self.regs.get(offset & !1) >> ((offset % 2) * 8) & 255) as u64,
-        }
+        self.fifo.publish(false);
+        let value = self.read_register(cx, address, size);
+        if cx.refusal().is_none() { self.publish_reads(); }
+        else { self.fifo.publish(false); }
+        value
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        self.fifo.publish(false);
         if address == BASE + 0x2c && size == 2 {
             if self.request.is_some() {
                 cx.fail("SD clock changed during command");
@@ -1137,12 +1149,16 @@ impl Device for SdHost {
         if let Err(reason) = self.store(cx, offset, size, value as u32) {
             cx.fail(reason);
         }
+        if cx.refusal().is_none() { self.publish_reads(); }
+        else { self.fifo.publish(false); }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        self.fifo.publish(false);
         self.clocks.advance(cx);
         if let Err(reason) = self.complete(cx) {
             cx.fail(reason);
         }
+        if cx.refusal().is_none() { self.publish_reads(); }
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
         self.advance(cx);
@@ -1165,6 +1181,22 @@ impl Device for SdHost {
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
             "clocks":self.clocks.save(), "data_faults":self.faults, "fault_history":self.fault_history
         })
+    }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let address = BASE + 0x20;
+        let end = window_base.saturating_add(window_size);
+        let mut reads = Vec::new();
+        if address >= window_base && address + 4 <= end {
+            let fifo = self.fifo.clone();
+            reads.push(FastReadWord::consuming_u32(address - window_base, Arc::new(move || fifo.read_fast())));
+        }
+        for (i, value) in self.status_reads.iter().enumerate() {
+            let address = BASE + 0x30 + i as u64 * 2;
+            if address >= window_base && address + 2 <= end {
+                reads.push(FastReadWord::atomic_u16(address - window_base, value.clone()));
+            }
+        }
+        reads
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         address != BASE + 0x20
@@ -1427,6 +1459,84 @@ mod tests {
         let mut cx = h.cx();
         m.write(&mut cx, BASE + 12, 4, 0x193a0026);
         assert!(cx.refusal().is_some());
+    }
+    #[test]
+    fn published_pio_prefix_matches_callbacks_and_restores_its_shared_cursor() {
+        for protocol in [Protocol::Rom, Protocol::Application, Protocol::Sdhc] {
+            let mut normal = host(protocol);
+            let mut fast = host(protocol);
+            let mut a = Ram::new(0x10000);
+            let mut b = Ram::new(0x10000);
+            for (m, h) in [(&mut normal, &mut a), (&mut fast, &mut b)] {
+                setup(m, h);
+                if protocol != Protocol::Rom {
+                    write(m, h, 0x38, 2, 0xffff);
+                }
+                m.state = State::Transfer;
+                let bytes = (0..128u32).flat_map(u32::to_le_bytes).collect::<Vec<_>>();
+                m.card.write_bytes(0, &bytes).unwrap();
+                write(m, h, 4, 2, 512);
+                write(m, h, 6, 2, 1);
+                if protocol == Protocol::Rom {
+                    write(m, h, 12, 2, 0x10);
+                    command(m, h, 0x113a0000, 0);
+                } else {
+                    command(m, h, 0x123a0036, 0);
+                }
+                due(m, h);
+            }
+            let words = fast.fast_reads(BASE, 0x1000);
+            let status = fast.fast_reads(BASE + 0x30, 4);
+            assert_eq!(status.iter().map(|r| (r.offset, r.value.width())).collect::<Vec<_>>(), [(0, 2), (2, 2)]);
+            let fujimod_emulator_devices::bus::FastReadValue::AtomicU16(normal_status) = &status[0].value else { panic!("normal status is not a halfword snapshot"); };
+            let fujimod_emulator_devices::bus::FastReadValue::AtomicU16(error_status) = &status[1].value else { panic!("error status is not a halfword snapshot"); };
+            let fujimod_emulator_devices::bus::FastReadValue::ConsumingU32(consume) = &words[0].value else {
+                panic!("PIO FIFO did not publish a consuming word");
+            };
+            if protocol != Protocol::Rom {
+                assert_eq!(consume(), None, "buffer-ready status requires W1C ACK");
+                write(&mut normal, &mut a, 0x30, 2, 0x21);
+                write(&mut fast, &mut b, 0x30, 2, 0x21);
+            }
+            for word in 0..127u32 {
+                assert_eq!(read(&mut normal, &mut a, 0x20, 4), u64::from(word));
+                assert_eq!(consume(), Some(word));
+                assert_eq!(normal.fingerprint().unwrap(), fast.fingerprint().unwrap());
+                assert_eq!(normal.next_deadline(a.now), fast.next_deadline(b.now));
+                assert_eq!(a.effects, b.effects);
+                assert_eq!(normal_status.load(Ordering::Acquire), normal.regs.get(0x30));
+                assert_eq!(error_status.load(Ordering::Acquire), normal.regs.get(0x32));
+                if word == 63 {
+                    let saved = fast.checkpoint().unwrap();
+                    assert_eq!(consume(), Some(64));
+                    fast.restore_checkpoint(&saved).unwrap();
+                    // The descriptor captured before restore keeps the same cursor.
+                    assert_eq!(normal.fingerprint().unwrap(), fast.fingerprint().unwrap());
+                }
+            }
+            assert_eq!(consume(), None, "completion word must use the device callback");
+            assert_eq!(read(&mut normal, &mut a, 0x20, 4), 127);
+            assert_eq!(read(&mut fast, &mut b, 0x20, 4), 127);
+            assert_eq!(consume(), None);
+            assert_eq!(normal.fingerprint().unwrap(), fast.fingerprint().unwrap());
+            assert_eq!(a.effects, b.effects);
+            if protocol != Protocol::Rom {
+                due(&mut normal, &mut a);
+                due(&mut fast, &mut b);
+            }
+            assert_eq!(normal.fingerprint().unwrap(), fast.fingerprint().unwrap());
+            assert_eq!(a.effects, b.effects);
+            assert!(!fast.busy());
+            assert_eq!(normal_status.load(Ordering::Acquire), normal.regs.get(0x30));
+            assert_eq!(error_status.load(Ordering::Acquire), normal.regs.get(0x32));
+            if protocol == Protocol::Rom {
+                write(&mut fast, &mut b, 0x2f, 1, 1);
+            } else {
+                write(&mut fast, &mut b, 0x2e, 2, 0x700);
+            }
+            assert_eq!(normal_status.load(Ordering::Acquire), 0);
+            assert_eq!(error_status.load(Ordering::Acquire), 0);
+        }
     }
     #[test]
     fn pio_sector_latency_reset_and_write_protection() {

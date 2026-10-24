@@ -5,9 +5,9 @@
 //! modeled refusals.
 
 use crate::record::Record;
-use std::sync::{Arc, atomic::AtomicU32};
+use std::sync::{Arc, atomic::{AtomicU16, AtomicU32}};
 
-/// One device-owned, side-effect-free 32-bit register read. `offset` is
+/// One device-owned register read. `offset` is
 /// relative to one declared device window. Clocked readers may decline a
 /// read when their published state is no longer valid at the supplied tick.
 #[derive(Clone)]
@@ -17,14 +17,40 @@ pub struct FastReadWord {
 }
 #[derive(Clone)]
 pub enum FastReadValue {
+    AtomicU16(Arc<AtomicU16>),
     AtomicU32(Arc<AtomicU32>),
     ClockedU32(Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>),
+    /// Consume only prepublished data; decline before IRQ, DMA, deadline or
+    /// other framework-visible effects. The device owns the shared cursor and
+    /// includes it in checkpoints. Returning None must leave it unchanged.
+    ConsumingU32(Arc<dyn Fn() -> Option<u32> + Send + Sync>),
+}
+impl FastReadValue {
+    pub fn width(&self) -> u64 {
+        match self {
+            Self::AtomicU16(_) => 2,
+            _ => 4,
+        }
+    }
 }
 impl FastReadWord {
+    pub fn atomic_u16(offset: u64, value: Arc<AtomicU16>) -> Self {
+        Self {
+            offset,
+            value: FastReadValue::AtomicU16(value),
+        }
+    }
     pub fn atomic_u32(offset: u64, value: Arc<AtomicU32>) -> Self {
         Self {
             offset,
             value: FastReadValue::AtomicU32(value),
+        }
+    }
+
+    pub fn consuming_u32(offset: u64, read: Arc<dyn Fn() -> Option<u32> + Send + Sync>) -> Self {
+        Self {
+            offset,
+            value: FastReadValue::ConsumingU32(read),
         }
     }
 
@@ -295,12 +321,14 @@ pub trait Device: Send + std::any::Any {
     fn frame_source_mut(&mut self) -> Option<&mut (dyn crate::capability::FrameSource + 'static)> {
         None
     }
-    /// Optional side-effect-free 32-bit reads for one register window. This
+    /// Optional device-published reads for one register window. This
     /// query is observational: it must not settle time or change modeled
     /// state. Interactive runtimes may bypass `read` only while the declaration
     /// remains valid; ordinary exact execution keeps using the read callback.
     /// Atomic values may also serve as exact loop-proof inputs when they stay
-    /// stable through the proof window. Clocked values never do.
+    /// stable through the proof window. Clocked and consuming values never do.
+    /// Consuming readers may advance only their device-owned FIFO cursor;
+    /// completion and other framework effects must use the ordinary callback.
     fn fast_reads(&self, _window_base: u64, _window_size: u64) -> Vec<FastReadWord> {
         Vec::new()
     }

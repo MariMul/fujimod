@@ -325,3 +325,108 @@ fn clock_poll_acceleration_preserves_device_deadlines_and_complete_board_state()
         );
     }
 }
+
+#[test]
+fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
+    use fujimod_emulator_devices::parts::read_fifo::ReadFifo;
+    struct Fifo {
+        words: ReadFifo,
+        calls: Arc<AtomicU32>,
+    }
+    impl Device for Fifo {
+        fn name(&self) -> &'static str {
+            "test-read-fifo"
+        }
+        fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            u64::from(self.words.read().unwrap())
+        }
+        fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+            cx.unmodeled();
+        }
+        fn fast_reads(&self, _: u64, _: u64) -> Vec<FastReadWord> {
+            let words = self.words.clone();
+            vec![FastReadWord::consuming_u32(
+                0,
+                Arc::new(move || words.read_fast()),
+            )]
+        }
+        fn save(&self) -> Value {
+            json!({})
+        }
+    }
+    let library = Library::linked().unwrap();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let shared = rprofile::memory::Memory::default();
+    let cpu = rprofile::core::Core::new(
+        library.open(Model::CortexR5F, 1024 * 1024).unwrap(),
+        Default::default(),
+        rprofile::core::Wiring { memory: shared },
+    )
+    .unwrap();
+    unsafe {
+        cpu.map_physical(
+            0,
+            0,
+            0x4000,
+            7,
+            std::ptr::NonNull::new(backing.as_ptr()).unwrap(),
+        )
+        .unwrap();
+    }
+    set(&cpu, Register::Pc, 0x1000).unwrap();
+    set(&cpu, Register::Pstate, 0xd3).unwrap();
+    set(&cpu, arm::CORE[2], 0x8000000).unwrap();
+    let words = ReadFifo::new(12).unwrap();
+    words
+        .restore(
+            &[1u32, 2, 3]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+            0,
+        )
+        .unwrap();
+    words.publish(true);
+    let calls = Arc::new(AtomicU32::new(0));
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(
+        0x8000000,
+        4,
+        Box::new(Fifo {
+            words: words.clone(),
+            calls: calls.clone(),
+        }),
+    )
+    .unwrap();
+    let mut board = Board::new(
+        vec![Box::new(cpu)],
+        bus,
+        Ratio::new(1, 1).unwrap(),
+        None,
+        vec![true],
+        memory::Memory::new(vec![(0, backing)], vec![memory::BusMapping::ram(0, 0x4000)]).unwrap(),
+    )
+    .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    board
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let code = [0xe5920000u32, 0xe5921000, 0xe5923000, 0xe320f003];
+    board
+        .write_memory(
+            0,
+            0x1000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.run_until(30, 1000).unwrap();
+    assert_eq!(board.read_register(0, arm::CORE[0]).unwrap(), 1);
+    assert_eq!(board.read_register(0, arm::CORE[1]).unwrap(), 2);
+    assert_eq!(board.read_register(0, arm::CORE[3]).unwrap(), 3);
+    assert_eq!(words.position(), 12);
+    assert_eq!(calls.load(Ordering::Acquire), 1);
+}

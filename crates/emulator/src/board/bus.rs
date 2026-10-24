@@ -480,7 +480,7 @@ impl Bus {
                 .as_ref()
                 .is_none_or(|stops| stops.borrow().devices.is_empty())
     }
-    /// Pure read snapshots that fall inside this CPU's physical MMIO mapping.
+    /// Published reads that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
     /// offsets relative to the requested mapping for the CPU backend.
     pub(super) fn fast_reads(
@@ -503,10 +503,11 @@ impl Bus {
                     let Some(address) = mapping.base.checked_add(offset) else {
                         continue;
                     };
-                    let Some(end) = address.checked_add(4) else {
+                    let width = value.width();
+                    let Some(end) = address.checked_add(width) else {
                         continue;
                     };
-                    if offset & 3 != 0
+                    if !offset.is_multiple_of(width)
                         || end > mapping_end
                         || address < physical_base
                         || end > physical_end
@@ -1308,6 +1309,33 @@ mod tests {
         }
         assert!(bus.access(&mut host, 0, 0, 0x2000, 8, None).is_err());
         assert!(bus.register(0x2003, 1, Box::new(Register(0))).is_err());
+    }
+
+    #[test]
+    fn halfword_publications_fit_narrow_windows_and_rebase_at_two_byte_offsets() {
+        use std::sync::{Arc, atomic::AtomicU16};
+        struct Halfword;
+        impl Device for Halfword {
+            fn name(&self) -> &'static str {
+                "halfword-snapshot"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                7
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+            fn fast_reads(&self, _: u64, _: u64) -> Vec<FastReadWord> {
+                vec![FastReadWord::atomic_u16(0, Arc::new(AtomicU16::new(7)))]
+            }
+        }
+        let mut bus = Bus::new(Mode::Strict);
+        bus.register(0x1002, 2, Box::new(Halfword)).unwrap();
+        let words = bus.fast_reads(0x1000, 4);
+        assert_eq!(words.len(), 1);
+        assert_eq!(words[0].0, 2);
+        assert_eq!(words[0].1.width(), 2);
+        assert_eq!(bus.fast_reads(0x1002, 2).len(), 1);
+        assert!(bus.fast_reads(0x1000, 3).is_empty());
+        assert!(bus.fast_reads(0x1003, 2).is_empty());
     }
 
     #[test]

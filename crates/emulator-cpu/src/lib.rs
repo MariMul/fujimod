@@ -7,7 +7,7 @@ use std::any::Any;
 use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::{Arc, Condvar, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
 
 pub mod arm;
 pub mod arm64;
@@ -216,7 +216,7 @@ pub struct Mmio {
     pub write: unsafe fn(u64, u32, u64, *mut c_void),
     pub data: *mut c_void,
 }
-/// A device-published, side-effect-free register value that can be read
+/// A device-published register value or bounded FIFO word that can be read
 /// directly by an execution backend. Clocked values are evaluated against an
 /// approximate guest tick and may decline reads outside their valid interval.
 #[derive(Clone)]
@@ -227,10 +227,19 @@ pub struct FastMmioRead {
 }
 #[derive(Clone)]
 enum FastMmioReadKind {
+    AtomicU16(Arc<AtomicU16>),
     AtomicU32(Arc<AtomicU32>),
     ClockedU32(Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>),
+    ConsumingU32(Arc<dyn Fn() -> Option<u32> + Send + Sync>),
 }
 impl FastMmioRead {
+    pub fn atomic_u16(register_offset: u64, value: Arc<AtomicU16>) -> Self {
+        Self {
+            register_offset,
+            kind: FastMmioReadKind::AtomicU16(value),
+            enabled: Arc::new(AtomicBool::new(false)),
+        }
+    }
     pub fn atomic_u32(register_offset: u64, value: Arc<AtomicU32>) -> Self {
         Self {
             register_offset,
@@ -248,38 +257,89 @@ impl FastMmioRead {
             enabled: Arc::new(AtomicBool::new(false)),
         }
     }
+    /// Consume a prepublished word; the device retains all completion effects.
+    pub fn consuming_u32(
+        register_offset: u64,
+        read: Arc<dyn Fn() -> Option<u32> + Send + Sync>,
+    ) -> Self {
+        Self {
+            register_offset,
+            kind: FastMmioReadKind::ConsumingU32(read),
+            enabled: Arc::new(AtomicBool::new(false)),
+        }
+    }
     pub fn set_enabled(&self, enabled: bool) {
         self.enabled.store(enabled, Ordering::Release);
     }
-    /// Return a constant snapshot only for the exact declared 32-bit access.
-    /// Clocked reads are excluded from instruction-loop proofs.
+    /// Return a constant snapshot only for the exact declared access width.
+    /// Clocked and consuming reads are excluded from instruction-loop proofs.
     pub fn read(&self, offset: u64, size: u32) -> Option<u64> {
-        if offset != self.register_offset || size != 4 {
+        if offset != self.register_offset || size != self.width() {
             return None;
         }
         match &self.kind {
+            FastMmioReadKind::AtomicU16(value) => Some(u64::from(value.load(Ordering::Acquire))),
             FastMmioReadKind::AtomicU32(value) => Some(u64::from(value.load(Ordering::Acquire))),
-            FastMmioReadKind::ClockedU32(_) => None,
+            FastMmioReadKind::ClockedU32(_) | FastMmioReadKind::ConsumingU32(_) => None,
         }
     }
-    /// Return a fast value for an exact 32-bit access in the enabled policy.
+    fn width(&self) -> u32 {
+        match self.kind {
+            FastMmioReadKind::AtomicU16(_) => 2,
+            _ => 4,
+        }
+    }
+    /// Return a fast value for the declared access width in the enabled policy.
     /// Clocked descriptors receive the backend's approximate guest tick.
     pub fn read_at(&self, offset: u64, size: u32, tick: Option<u64>) -> Option<u64> {
         if !self.enabled.load(Ordering::Acquire)
             || offset != self.register_offset
-            || size != 4
+            || size != self.width()
         {
             return None;
         }
         match &self.kind {
+            FastMmioReadKind::AtomicU16(value) => Some(u64::from(value.load(Ordering::Acquire))),
             FastMmioReadKind::AtomicU32(value) => Some(u64::from(value.load(Ordering::Acquire))),
             FastMmioReadKind::ClockedU32(read) => read(tick?).map(u64::from),
+            FastMmioReadKind::ConsumingU32(read) => read().map(u64::from),
         }
     }
 }
+
 #[cfg(test)]
 mod fast_mmio_read_tests {
     use super::*;
+
+    #[test]
+    fn halfword_snapshots_require_the_declared_width_and_policy() {
+        let value = Arc::new(AtomicU16::new(0x1234));
+        let read = FastMmioRead::atomic_u16(2, value.clone());
+        assert_eq!(read.read(2, 2), Some(0x1234));
+        assert_eq!(read.read_at(2, 2, None), None);
+        read.set_enabled(true);
+        for size in [1, 4] { assert_eq!(read.read_at(2, size, None), None); }
+        assert_eq!(read.read_at(0, 2, None), None);
+        value.store(0xabcd, Ordering::Release);
+        assert_eq!(read.read_at(2, 2, None), Some(0xabcd));
+    }
+
+    #[test]
+    fn consuming_reads_never_run_for_inspection_disabled_policies_or_other_widths() {
+        let consumed = Arc::new(AtomicU32::new(0));
+        let count = consumed.clone();
+        let read = FastMmioRead::consuming_u32(0x20, Arc::new(move || Some(count.fetch_add(1, Ordering::Relaxed))));
+        assert_eq!(read.read(0x20, 4), None);
+        assert_eq!(read.read_at(0x20, 4, None), None);
+        read.set_enabled(true);
+        assert_eq!(read.read_at(0x20, 2, None), None);
+        assert_eq!(read.read_at(0x21, 4, None), None);
+        assert_eq!(read.read_at(0x20, 4, None), Some(0));
+        assert_eq!(read.read(0x20, 4), None);
+        read.set_enabled(false);
+        assert_eq!(read.read_at(0x20, 4, None), None);
+        assert_eq!(consumed.load(Ordering::Relaxed), 1);
+    }
 
     #[test]
     fn clocked_reads_are_not_constant_loop_inputs_and_decline_past_validity() {
@@ -647,12 +707,12 @@ pub trait Cpu {
     /// the CPU is destroyed. Callbacks must not unwind and must obey the
     /// owner's bounded reentrancy rules. Partial unmaps retain this lifetime.
     unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String>;
-    /// Map MMIO with one pure read-only register snapshot. All other reads
-    /// and every write continue through `callbacks`.
+    /// Map MMIO with device-published register reads. Other reads and every
+    /// write continue through `callbacks`.
     /// # Safety
-    /// The callback requirements of `map_mmio` apply. The snapshot must remain
-    /// valid and be published at every guest-time boundary where its value
-    /// changes.
+    /// The callback requirements of `map_mmio` apply. Published reads must
+    /// remain valid at every guest-time boundary. Consuming readers must decline
+    /// before a read needs owner callbacks, deadlines, DMA or IRQ effects.
     unsafe fn map_mmio_fast(
         &self,
         address: u64,

@@ -11,6 +11,7 @@ pub mod lens_bridge;
 pub mod nand;
 pub mod optics;
 pub mod pins;
+pub mod read_fifo;
 pub mod sd_card;
 pub mod switch_panel;
 pub mod touch_input;

@@ -601,11 +601,17 @@ impl Board {
             .fast_reads(physical, bytes)
             .into_iter()
             .map(|(offset, value)| match value {
+                fujimod_emulator_devices::bus::FastReadValue::AtomicU16(value) => {
+                    fujimod_emulator_cpu::FastMmioRead::atomic_u16(offset, value)
+                }
                 fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => {
                     fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)
                 }
                 fujimod_emulator_devices::bus::FastReadValue::ClockedU32(read) => {
                     fujimod_emulator_cpu::FastMmioRead::clocked_u32(offset, read)
+                }
+                fujimod_emulator_devices::bus::FastReadValue::ConsumingU32(read) => {
+                    fujimod_emulator_cpu::FastMmioRead::consuming_u32(offset, read)
                 }
             })
             .collect();

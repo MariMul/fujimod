@@ -50,6 +50,9 @@ stops sampling at `camera-engine-ready` and writes:
 - `timings.json`: page marks, selected manifest settings, module hashes,
   configuration, guest instruction/tick samples, boot call times and JIT counters.
 
+A visible engine fault also ends the capture, records its message and fails the
+command, so a constructor refusal does not wait for the startup timeout.
+
 The loader wrapper records `configure`, `runUntil` and `bootToRec` calls only in
 this browser. `--sample-ticks` divides each `runUntil` into bounded synchronous
 calls and records their counters. Choose a quantum near 0.1 guest seconds using
@@ -138,3 +141,41 @@ The script records the browser identity and isolation state. Its prepared-camera
 and card-boot events also record the boot entry, instruction/tick ratio, held
 controls and boot filenames, so a ROM/SD boot is distinguishable from a loader
 handoff without inferring the start from instruction counts.
+
+## Costs found in ROM/SD startup
+
+An X70 ROM/SD boot can execute about 526M guest instructions before initialized
+REC even when a loader-entry run takes about 45M. Removing the preliminary
+30M-tick call still required about 525M instructions to reach REC. The extra
+instructions were startup work, rather than the fixed tick budget running past
+REC. Most of the difference came from an architectural cycle-counter wait and
+copying the boot image through SD PIO reads.
+
+The counter wait must retain the configured guest clock law. The R-profile
+backend recognizes a bounded A32 counter-read/compare/branch loop, proves its
+exit and advances the same instruction, counter and flag state. Its permission
+ends at the next device, interrupt or runnable-peer boundary. Inspect
+`loop_clock_poll_instructions` in the backend counters to confirm this path
+is active. Instruction and block observers disable the proof.
+
+SD transfers repeatedly enter the board callback for data and status reads.
+Interactive execution can read device-published 16-bit status snapshots and
+consume a FIFO prefix through a shared cursor. The final FIFO word still uses
+the ordinary device callback, which owns transfer completion, IRQs and the next
+deadline. The scheduler services those deadlines even while status reads use
+snapshots. Checkpoints include the cursor, and exact execution keeps the ordinary
+callback for every word. Neither optimization changes the camera's code, clock
+rate or boot entry.
+
+In the 2026-10-24 X70 ROM/SD investigation, the sampled worker startup fell from
+63.64 s to 20.77 s. A counter-only build measured 41.10 s in Chromium and 40.59 s
+in WebKit without sampling. After publishing SD data and status reads, two fresh
+unsampled contexts each measured 20.48–20.54 s in Chromium and 19.90–21.51 s in
+WebKit. Board callback inclusive time fell from 18.68 s in the counter-only
+profile to 0.60 s. These measurements used the same entry, image sizes, holds,
+24-instruction/tick ratio and 12 MHz guest clock on a shared host.
+
+The status fast path can change interactive block-boundary overshoot: the final
+build counted about 526.76M instructions to REC versus 526.34M in the earlier
+profile, a difference of about 0.08%. Record that alongside wall time; a reduced
+host callback cost does not require reducing the guest instruction count.

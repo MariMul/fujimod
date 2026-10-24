@@ -235,7 +235,10 @@ try {
   await page.goto(values.url, { waitUntil: 'networkidle' });
   await page.locator('input[type=file]').first().setInputFiles(values.update);
   await page.waitForFunction(
-    () => performance.getEntriesByName('camera-engine-ready').length > 0,
+    () => performance.getEntriesByName('camera-engine-ready').length > 0
+      || [...document.querySelectorAll<HTMLElement>('#engine-status')].some(
+        (element) => !element.hidden && element.getClientRects().length > 0,
+      ),
     null,
     { timeout: 240_000 },
   );
