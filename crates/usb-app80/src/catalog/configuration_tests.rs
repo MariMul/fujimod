@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog_camera::FirmwareIdentity;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
 fn catalog(reverse: bool) -> Catalog {
     let entries: Vec<_> = [("configuration_flags",11),("configuration_mode",2),("configuration_pack_options",4),("configuration_read_options",4),("adjustment_configuration",5),("select_adjustment_mode",1)]
         .into_iter().enumerate().map(|(n,(codec,count))| {

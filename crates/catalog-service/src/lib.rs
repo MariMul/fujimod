@@ -1,5 +1,5 @@
 //! App80 service definitions loaded from caller-selected JSON data.
-use fujimod_catalog_camera::{Digest, FirmwareIdentity, IdentityError};
+use fujimod_catalog_firmware_identity::{Digest, FirmwareIdentity, IdentityError};
 use serde::Deserialize;
 
 use std::num::NonZeroU32;

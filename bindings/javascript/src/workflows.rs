@@ -1,6 +1,7 @@
 //! Firmware-selected camera workflows share the session's ordinary lease.
 use crate::{error::property, session::Operation, session::Session, *};
-use fujimod_catalog_camera::{CameraDefinition, FirmwareIdentity};
+use fujimod_catalog_camera::CameraDefinition;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
 use fujimod_workflows::{Limits, bulk, debug_mode, service_mode};
 
 pub(crate) enum Action {

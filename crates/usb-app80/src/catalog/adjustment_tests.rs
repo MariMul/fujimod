@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog_camera::FirmwareIdentity;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
 fn catalog(reverse: bool) -> Catalog {
     let layouts = [
         ("lens_operation6", 0),

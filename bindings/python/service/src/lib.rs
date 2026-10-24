@@ -1,5 +1,5 @@
 //! Language conversion for App80 service definitions; no USB operations.
-use fujimod_catalog_camera::IdentityError;
+use fujimod_catalog_firmware_identity::IdentityError;
 use fujimod_catalog_service as core;
 use pyo3::{
     exceptions::PyValueError,
@@ -59,13 +59,13 @@ fn invalid(error: core::DefinitionError) -> PyErr {
 #[pyclass(frozen, from_py_object, module = "fujimod.catalog")]
 #[derive(Clone)]
 pub struct FirmwareIdentity {
-    pub inner: fujimod_catalog_camera::FirmwareIdentity,
+    pub inner: fujimod_catalog_firmware_identity::FirmwareIdentity,
 }
 #[pymethods]
 impl FirmwareIdentity {
     #[new]
     fn new(id: String, sha256: &str) -> PyResult<Self> {
-        fujimod_catalog_camera::FirmwareIdentity::new(id, sha256)
+        fujimod_catalog_firmware_identity::FirmwareIdentity::new(id, sha256)
             .map(|inner| Self { inner })
             .map_err(|error| invalid(error.into()))
     }

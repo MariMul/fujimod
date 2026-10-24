@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog_camera::FirmwareIdentity;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
 fn modes() -> ServiceModes {
     ServiceModes::new(1).unwrap()
 }

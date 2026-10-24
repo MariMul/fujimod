@@ -12,7 +12,7 @@ test = false
 doctest = false
 
 [dependencies]
-fujimod-catalog-camera.workspace = true
+fujimod-catalog-firmware-identity.workspace = true
 fujimod-catalog-service.workspace = true
 pyo3.workspace = true
 fujimod-workspace-hack.workspace = true

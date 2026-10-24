@@ -4,7 +4,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen_test]
 fn selected_catalog_and_typed_replies_execute_in_wasm() {
-    use fujimod_catalog_camera::FirmwareIdentity;
+    use fujimod_catalog_firmware_identity::FirmwareIdentity;
     use fujimod_catalog_service::{Definition, ServiceModes};
     use fujimod_usb_app80::{
         Reply,

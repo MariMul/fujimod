@@ -1,5 +1,5 @@
 use super::*;
-use fujimod_catalog_camera::FirmwareIdentity;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
 fn catalog(reverse: bool) -> Catalog {
     let entries:Vec<_>=[("display_option",4),("display_mode",1),("sound",3),("hdmi",19),("parameter_service",1),("charge_control",3),("charge_status",2),("audio_capture",3),("audio_playback",2),("erase_storage",2),("storage_status",1),("format_storage",0),("display_setup",0)].into_iter().enumerate().map(|(index,(codec,count))|{
   let slots:Vec<_>=(0..count).map(|slot|if reverse {31-slot}else{slot}).collect();

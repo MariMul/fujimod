@@ -306,7 +306,7 @@ mod replay {
     }
     fn selected_service() -> Service {
         use fujimod_catalog_service::Definition;
-        use fujimod_catalog_camera::FirmwareIdentity;
+        use fujimod_catalog_firmware_identity::FirmwareIdentity;
         let json = serde_json::json!({"schema":1,"firmware":{"id":"body-a-v1","model":"Synthetic","version":"1","sha256":"ab".repeat(32)},
           "mailbox":{"page":0,"offset":128,"configuration_limit":256},"entries":[
           {"code":34,"label":"save","codec":"flush_configuration","slots":[0],"enabled_modes":1,"next_mode":0,"firmware_kind":1,"handler":0,"parameter_table":0}]});

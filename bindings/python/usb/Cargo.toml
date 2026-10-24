@@ -16,6 +16,7 @@ doctest = false
 [dependencies]
 fujimod-python-usb-base = { path = "../usb-base" }
 fujimod-catalog-camera.workspace = true
+fujimod-catalog-firmware-identity.workspace = true
 fujimod-firmware.workspace = true
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true

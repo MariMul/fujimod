@@ -187,7 +187,7 @@ and `apps/web`. See their README for the static-host build and mock-WebUSB tests
 ## Firmware-qualified App80 controls
 
 `fujimod::catalog_service::Definition` loads the selected firmware's service
-data against a `fujimod::catalog_camera::FirmwareIdentity`.
+data against a `fujimod::catalog_firmware_identity::FirmwareIdentity`.
 `fujimod_usb_app80::catalog::Catalog` resolves its ordered mode rules and typed
 codecs; `fujimod_usb_app80::operations::Service` binds those codecs to that
 definition's ff80

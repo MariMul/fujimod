@@ -1,7 +1,8 @@
 //! Camera workflows on an open session. Firmware facts arrive as the selected
 //! firmware's camera table; the workflow, not Python, decides each step.
 use super::*;
-use fujimod_catalog_camera::{CameraDefinition, FirmwareIdentity};
+use fujimod_catalog_camera::CameraDefinition;
+use fujimod_catalog_firmware_identity::FirmwareIdentity;
 use fujimod_workflows::{debug_mode, service_mode};
 
 fn definition(json: &str, id: String, sha256: &str) -> PyResult<CameraDefinition> {

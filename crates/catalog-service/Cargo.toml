@@ -11,7 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-fujimod-catalog-camera.workspace = true
+fujimod-catalog-firmware-identity.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true

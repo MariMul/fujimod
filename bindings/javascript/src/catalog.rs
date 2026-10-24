@@ -1,7 +1,7 @@
 //! Shared definition types, without USB ownership or command implementation.
 use super::*;
 use error::{integer, property, record};
-use fujimod_catalog_camera::IdentityError;
+use fujimod_catalog_firmware_identity::IdentityError;
 use fujimod_catalog_service as core;
 
 include!(concat!(env!("OUT_DIR"), "/definition_codec_javascript.rs"));
@@ -54,13 +54,13 @@ pub(crate) fn invalid(source: core::DefinitionError) -> JsValue {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct FirmwareIdentity {
-    pub(crate) inner: fujimod_catalog_camera::FirmwareIdentity,
+    pub(crate) inner: fujimod_catalog_firmware_identity::FirmwareIdentity,
 }
 #[wasm_bindgen]
 impl FirmwareIdentity {
     #[wasm_bindgen(constructor)]
     pub fn new(id: String, sha256: &str) -> Result<Self, JsValue> {
-        fujimod_catalog_camera::FirmwareIdentity::new(id, sha256)
+        fujimod_catalog_firmware_identity::FirmwareIdentity::new(id, sha256)
             .map(|inner| Self { inner })
             .map_err(|error| invalid(error.into()))
     }
