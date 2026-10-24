@@ -371,7 +371,7 @@ const CARDS: Record<string, Card> = {
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('4953e0cf04ad0ac6b0fb2e48');
+const media = featureMedia('fde94c289f001f65923e04ec');
 
 function Icon(props: { name: string }) {
   return (
@@ -603,10 +603,7 @@ export function FeatureCatalog() {
             <Icon name="highlight" />
             <Ref card="photometry">PHOTOMETRY</Ref>
           </h4>
-          <p>
-            Choose HIGHLIGHT to meter exposure in multiple areas of the frame with emphasis on the
-            bright areas.
-          </p>
+          <p>Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.</p>
           <div class="catalog-chips">
             <span class="catalog-chip stock">MULTI</span>
             <span class="catalog-chip stock">SPOT</span>
