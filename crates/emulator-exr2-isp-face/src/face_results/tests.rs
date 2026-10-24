@@ -79,12 +79,17 @@ fn completion_latches_start_endpoint_and_ignores_later_masking() {
     assert_eq!(model.next_deadline(host.now), None);
     tick(&mut model, &mut host);
     assert_eq!(host.interrupts.len(), 1);
-    assert!(write(&mut model, &mut host, 0, 4, 1).is_some());
+    // Rearming while both controllers mask the line keeps the bank its last
+    // unique enable established.
+    assert_eq!(write(&mut model, &mut host, 0, 4, 1), None);
+    host.now += LATENCY;
+    tick(&mut model, &mut host);
+    assert_eq!(host.interrupts[1], (0, 47, 2 * LATENCY));
     routes.set(47, Some(1)).unwrap();
     assert_eq!(write(&mut model, &mut host, 0, 4, 1), None);
     host.now += LATENCY;
     tick(&mut model, &mut host);
-    assert_eq!(host.interrupts[1], (1, 47, 2 * LATENCY));
+    assert_eq!(host.interrupts[2], (1, 47, 3 * LATENCY));
 }
 
 #[test]
