@@ -68,57 +68,6 @@
         129
       ],
       "basis": "Internal version."
-    },
-    {
-      "offset": 38929,
-      "bytes": [
-        1
-      ],
-      "basis": "Explicit synthetic active normal-read accelerometer setting; stock 0x6ea9e0 masks this configuration byte with 0x1f and writes sensor CTRL_REG1 (0x2a)."
-    },
-    {
-      "offset": 123904,
-      "bytes": [
-        0,
-        250,
-        72,
-        238,
-        144,
-        226,
-        216,
-        214,
-        32,
-        203,
-        104,
-        191,
-        176,
-        179,
-        248,
-        167,
-        64,
-        156,
-        136,
-        144,
-        208,
-        132,
-        24,
-        121,
-        96,
-        109,
-        168,
-        97,
-        240,
-        85,
-        56,
-        74,
-        128,
-        62,
-        200,
-        50,
-        16,
-        39
-      ],
-      "basis": "Declared synthetic focus conversion knots: stock 0x779b30 reads 19 little-endian U16 inputs here, computes reciprocal spline coordinates, and clamps a zero focal-group count to one. Positive decreasing inputs make the coordinates strictly increasing after its fixed first knot. Not measured lens calibration."
     }
   ],
   "profile": {
