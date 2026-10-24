@@ -1,3 +1,5 @@
+// First, so errors during hydration are logged.
+import './error-log';
 import { lazy, Loading } from 'solid-js';
 import { getRequestEvent } from '@solidjs/web';
 import { isDevToolsPath } from './dev-tools/routes';

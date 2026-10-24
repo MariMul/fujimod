@@ -3,6 +3,7 @@ import type { ShareRoom, TurnBudget } from './worker.ts';
 export interface Env {
   ISSUE_REPORTS: R2Bucket;
   ISSUE_LIMIT: RateLimit;
+  ERROR_LIMIT: RateLimit;
   CONNECTIONS: RateLimit;
   ALLOWED_ORIGINS?: string;
   TURN_TTL_SECONDS?: string;

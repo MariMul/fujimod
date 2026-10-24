@@ -1,6 +1,7 @@
 import { test, vi } from 'vite-plus/test';
 import assert from 'node:assert/strict';
 import { LocalReports } from './local-reports';
+import type { EngineFault } from '../engine/fault';
 
 test('both sources save crash metadata before requesting a snapshot and deduplicate the same error', async () => {
   const marker = document.createElement('meta');
@@ -47,8 +48,15 @@ test('both sources save crash metadata before requesting a snapshot and deduplic
         throw Error('must not capture on published site');
       },
     );
+    const faults: string[] = [];
+    const announce = (event: Event) =>
+      faults.push(String((event as CustomEvent<EngineFault>).detail.details.error));
+    addEventListener('fujimod-fault', announce);
     reports.crash(Error('published site'));
+    reports.crash(Error('uncaught on published site'), true);
+    removeEventListener('fujimod-fault', announce);
     assert.equal(requests.length, 4);
+    assert.deepEqual(faults, ['published site']);
   } finally {
     fetch.mockRestore();
     marker.remove();

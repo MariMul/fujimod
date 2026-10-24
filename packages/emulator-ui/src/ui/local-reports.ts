@@ -61,8 +61,15 @@ export class LocalReports {
     if (!saved.ok) throw Error(`Local report archive failed (${saved.status})`);
     return true;
   }
-  crash(error: unknown) {
-    if (!this.available()) return;
+  /** Saves a local report when a local sink exists. Otherwise a caught fault is announced
+   * as a `fujimod-fault` window event for the host page's error log; uncaught errors
+   * (`uncaught`) already reach it through the window's own error events. */
+  crash(error: unknown, uncaught = false) {
+    if (!this.available()) {
+      if (!uncaught)
+        dispatchEvent(new CustomEvent<EngineFault>('fujimod-fault', { detail: faultFrom(error) }));
+      return;
+    }
     const key = error instanceof EngineError ? error.fault : error;
     if (key && typeof key === 'object') {
       if (this.seen.has(key)) return;
@@ -77,8 +84,8 @@ export class LocalReports {
     );
   }
   listen() {
-    const error = (event: ErrorEvent) => this.crash(event.error ?? event.message);
-    const rejection = (event: PromiseRejectionEvent) => this.crash(event.reason);
+    const error = (event: ErrorEvent) => this.crash(event.error ?? event.message, true);
+    const rejection = (event: PromiseRejectionEvent) => this.crash(event.reason, true);
     document.documentElement.dataset.reportsReady = 'true';
     window.addEventListener('error', error);
     window.addEventListener('unhandledrejection', rejection);

@@ -8,8 +8,16 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types"],
+    "types": [],
     "skipLibCheck": true
   },
-  "include": ["worker.ts", "issue-reports.ts", "env.ts", "../domain-endpoint/worker.ts"]
+  "include": [
+    "node_modules/@cloudflare/workers-types/index.d.ts",
+    "worker.ts",
+    "issue-reports.ts",
+    "error-logs.ts",
+    "client-error-log.ts",
+    "env.ts",
+    "../domain-endpoint/worker.ts"
+  ]
 }

@@ -1,12 +1,18 @@
 import { Miniflare } from 'miniflare';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+// Test files run in parallel; each bundles the Worker into its own directory.
+const outdir = mkdtempSync(join(tmpdir(), 'fujimod-sharing-worker-'));
 execFileSync(
   fileURLToPath(new URL('./node_modules/.bin/wrangler', import.meta.url)),
-  ['deploy', '--dry-run', '--outdir', 'build/worker-test'],
+  ['deploy', '--dry-run', '--outdir', outdir],
   { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: 'pipe' },
 );
+const worker = readFileSync(join(outdir, 'worker.js'), 'utf8');
+rmSync(outdir, { recursive: true });
 const origin = 'https://justjake.github.io';
 export function runtime(
   options: {
@@ -25,10 +31,7 @@ export function runtime(
             modules: {
               'worker.mjs': {
                 type: 'esm',
-                contents: readFileSync(
-                  new URL('./build/worker-test/worker.js', import.meta.url),
-                  'utf8',
-                ),
+                contents: worker,
               },
             },
           },
@@ -44,6 +47,11 @@ export function runtime(
               type: 'rate-limit',
               namespace: '1002',
               simple: { limit: 5, period: 60 },
+            },
+            ERROR_LIMIT: {
+              type: 'rate-limit',
+              namespace: '1003',
+              simple: { limit: 30, period: 60 },
             },
             ROOMS: { type: 'durable-object', worker: 'sharing', exportName: 'ShareRoom' },
             TURN_BUDGET: { type: 'durable-object', worker: 'sharing', exportName: 'TurnBudget' },
