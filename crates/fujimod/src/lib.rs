@@ -14,9 +14,6 @@ pub use fujimod_catalog_configuration as catalog_configuration;
 #[cfg(feature = "catalog-service")]
 pub use fujimod_catalog_service as catalog_service;
 
-#[cfg(feature = "simulation")]
-pub use fujimod_simulation as simulation;
-
 #[cfg(feature = "emulator")]
 pub use fujimod_emulator as emulator;
 

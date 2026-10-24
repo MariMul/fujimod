@@ -38,7 +38,7 @@ jobs:
         run: cargo test -p fujimod-usb
       - name: Check shared simulation
         working-directory: .
-        run: cargo test -p fujimod-simulation --lib
+        run: cargo test --locked --manifest-path crates/simulation/Cargo.toml --lib
       - run: npm test
       - run: npm run build
       - name: Install browser test runtimes

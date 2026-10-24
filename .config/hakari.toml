@@ -13,8 +13,3 @@ platforms = [
   "wasm32-unknown-unknown",
   "wasm32-unknown-emscripten",
 ]
-
-[traversal-excludes]
-# Bevy's graph is only built for the simulation; unifying it would pull its
-# dependencies into every emulator build.
-workspace-members = ["fujimod-simulation"]

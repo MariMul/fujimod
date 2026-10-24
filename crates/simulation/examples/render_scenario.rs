@@ -1,5 +1,5 @@
 //! Native, windowless scenario rendering using the same world and renderer as the web.
-//! cargo run -p fujimod-simulation --example render_scenario -- ENVIRONMENT_JSON FRESH_OUTPUT
+//! cargo run --manifest-path crates/simulation/Cargo.toml --example render_scenario -- ENVIRONMENT_JSON FRESH_OUTPUT
 use bevy::{
     asset::AssetMetaCheck,
     prelude::*,

@@ -96,11 +96,13 @@ scenario output stay in ignored build/output directories.
 
 ## Build and checks
 
-From the FujiMod workspace, use its Mise toolchain:
+The simulation is its own Cargo workspace, with its own lockfile and target
+directory, so Bevy's dependency features never reach the emulator's builds.
+From the FujiMod repository, use its Mise toolchain:
 
 ```sh
-cargo test -p fujimod-simulation --lib
-cargo check -p fujimod-simulation --examples
+cargo test --locked --manifest-path crates/simulation/Cargo.toml --lib
+cargo check --locked --manifest-path crates/simulation/Cargo.toml --examples
 npm ci --prefix crates/simulation/tools
 node crates/simulation/build-web.ts
 python3 crates/simulation/environments/crouch-end-station/test_prepare.py
@@ -133,7 +135,7 @@ LCD-only mode disables the observer camera and its texture uploads. Imported tex
 After installing an environment, render a native scenario without a window:
 
 ```sh
-cargo run -p fujimod-simulation --example render_scenario -- \
+cargo run --manifest-path crates/simulation/Cargo.toml --example render_scenario -- \
   crates/simulation/environments/crouch-end-station/environment.json \
   target/simulation-runs/a-fresh-run apps/web/devices/x70/parts.json
 ```

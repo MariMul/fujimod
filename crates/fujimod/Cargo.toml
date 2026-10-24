@@ -12,7 +12,6 @@ doctest = false
 [features]
 remote = ["dep:fujimod-remote"]
 default = []
-simulation = ["dep:fujimod-simulation"]
 catalog = ["dep:fujimod-catalog"]
 catalog-service = ["dep:fujimod-catalog-service"]
 catalog-configuration = ["catalog", "dep:fujimod-catalog-configuration"]
@@ -32,7 +31,6 @@ emulator-cpu-hvf = ["emulator-cpu", "dep:fujimod-emulator-cpu-hvf"]
 
 [dependencies]
 fujimod-remote = { workspace = true, optional = true }
-fujimod-simulation = { workspace = true, optional = true }
 fujimod-catalog = { workspace = true, optional = true }
 fujimod-catalog-service = { workspace = true, optional = true }
 fujimod-catalog-configuration = { workspace = true, optional = true }

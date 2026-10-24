@@ -5,7 +5,6 @@ members = [
   "crates/remote",
   "crates/firmware",
   "crates/usb-proxy",
-  "crates/simulation",
   "crates/catalog",
   "crates/catalog-bulk",
   "crates/catalog-configuration",
@@ -94,6 +93,9 @@ members = [
   "crates/workspace-hack",
 ]
 resolver = "3"
+# The Bevy simulation is its own workspace with its own lockfile and target
+# directory, so its dependency features never widen the emulator's.
+exclude = ["crates/simulation"]
 
 [workspace.package]
 version = "0.1.0"
@@ -105,8 +107,6 @@ publish = false
 [workspace.dependencies]
 fujimod-remote = { path = "crates/remote", version = "0.1.0" }
 fujimod-recording = { path = "crates/recording", version = "0.1.0" }
-bevy = { version = "=0.20.0", default-features = false }
-fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-catalog-bulk = { path = "crates/catalog-bulk", version = "0.1.0" }
 fujimod-catalog-configuration = { path = "crates/catalog-configuration", version = "0.1.0" }
@@ -227,14 +227,3 @@ strip = "debuginfo"
 # Build executables stay unstripped; distribution profiles apply to libraries.
 [profile.release.build-override]
 strip = "none"
-
-[profile.simulation-web]
-inherits = "dist"
-incremental = false
-opt-level = "s"
-codegen-units = 1
-lto = "thin"
-strip = "debuginfo"
-
-[profile.simulation-web.package."*"]
-opt-level = "s"
