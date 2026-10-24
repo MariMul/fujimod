@@ -34,7 +34,6 @@ export async function wasmSessionFixture() {
       firmwareId: 'generated-session',
       bootSource: 'internal',
       quantum: 100,
-      translationCacheBytes: 1048576,
       execution: {
         processors: [
           {
