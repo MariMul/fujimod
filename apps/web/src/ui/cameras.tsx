@@ -107,7 +107,7 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
               {(owner, index) => (
                 <>
                   {index() ? ', ' : ''}
-                  <a href={`https://github.com/${owner.github}`}>{owner.name}</a>
+                  <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
                 </>
               )}
             </For>

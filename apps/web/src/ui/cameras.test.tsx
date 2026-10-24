@@ -217,8 +217,8 @@ test('bodies a contributor owns are outlined and the camera popover names the ow
       link.getAttribute('href'),
     ]),
   ).toEqual([
-    ['One', 'https://github.com/one'],
-    ['Two', 'https://github.com/two'],
+    ['@one', 'https://github.com/one'],
+    ['@two', 'https://github.com/two'],
   ]);
   expect(owned?.querySelector('.help')?.textContent).toBe('Have an X70? Help test it');
   expect(unowned?.querySelector('.tip-value')?.textContent).toBe('Needs an owner');
