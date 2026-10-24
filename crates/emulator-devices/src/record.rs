@@ -2,7 +2,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 /// A structured scalar, sequence or mapping in an event-log record.
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize)]
 pub enum Value {
     None,
     Int(i128),
@@ -16,6 +16,53 @@ pub enum Value {
     Bytes(Vec<u8>),
     /// Ordered dictionaries in declared endpoint data and transaction records.
     Dict(Vec<(Value, Value)>),
+    /// A hexadecimal integer formatted only when a record is serialized.
+    Hex(u128),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::None, Self::None) => true,
+            (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::Hex(a), Self::Hex(b)) => a == b,
+            (Self::Hex(a), Self::Str(b)) | (Self::Str(b), Self::Hex(a)) => b == &format!("{a:#x}"),
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::Str(a), Self::Str(b)) => a == b,
+            (Self::Static(a), Self::Static(b)) => a == b,
+            (Self::List(a), Self::List(b)) | (Self::Tuple(a), Self::Tuple(b)) => a == b,
+            (Self::Bytes(a), Self::Bytes(b)) => a == b,
+            (Self::Dict(a), Self::Dict(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl serde::Serialize for Value {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            Self::None => serializer.serialize_unit_variant("Value", 0, "None"),
+            Self::Int(value) => serializer.serialize_newtype_variant("Value", 1, "Int", value),
+            Self::Float(value) => serializer.serialize_newtype_variant("Value", 2, "Float", value),
+            Self::Bool(value) => serializer.serialize_newtype_variant("Value", 3, "Bool", value),
+            Self::Str(value) => serializer.serialize_newtype_variant("Value", 4, "Str", value),
+            Self::Hex(value) => {
+                let value = format!("{value:#x}");
+                serializer.serialize_newtype_variant("Value", 4, "Str", &value)
+            }
+            Self::Static(value) => {
+                serializer.serialize_newtype_variant("Value", 5, "Static", value)
+            }
+            Self::List(value) => serializer.serialize_newtype_variant("Value", 6, "List", value),
+            Self::Tuple(value) => serializer.serialize_newtype_variant("Value", 7, "Tuple", value),
+            Self::Bytes(value) => serializer.serialize_newtype_variant("Value", 8, "Bytes", value),
+            Self::Dict(value) => serializer.serialize_newtype_variant("Value", 9, "Dict", value),
+        }
+    }
 }
 
 impl Value {
@@ -27,7 +74,7 @@ impl Value {
 
     /// Python's `hex(value)`.
     pub fn hex(value: u128) -> Value {
-        Value::Str(format!("{value:#x}"))
+        Value::Hex(value)
     }
     pub fn int(value: impl Into<i128>) -> Value {
         Value::Int(value.into())
@@ -157,5 +204,22 @@ mod tests {
         assert_eq!(restored, record);
         let decoded: OwnedRecord = ciborium::from_reader(after.as_slice()).unwrap();
         assert_eq!(decoded, owned);
+    }
+
+    #[test]
+    fn hexadecimal_values_keep_the_existing_serialized_string_shape() {
+        let lazy = Value::hex(0x12345);
+        let eager = Value::Str("0x12345".into());
+        assert_eq!(
+            serde_json::to_vec(&lazy).unwrap(),
+            serde_json::to_vec(&eager).unwrap()
+        );
+        let mut lazy_cbor = Vec::new();
+        let mut eager_cbor = Vec::new();
+        ciborium::into_writer(&lazy, &mut lazy_cbor).unwrap();
+        ciborium::into_writer(&eager, &mut eager_cbor).unwrap();
+        assert_eq!(lazy_cbor, eager_cbor);
+        let restored: Value = ciborium::from_reader(lazy_cbor.as_slice()).unwrap();
+        assert_eq!(restored, lazy);
     }
 }

@@ -6,7 +6,7 @@
 //! Fractional coverage and nonsolid paint retain the reference f64 order.
 //! Full-coverage opaque solids use its exact RGBA8 byte result.
 
-use super::batch::{Draw, Gradient};
+use super::batch::{ColorTransform, Draw, Gradient, Texture};
 use super::geometry::{self, Point};
 use fujimod_emulator_devices::record::{Result, Unsupported};
 use std::collections::HashMap;
@@ -283,58 +283,179 @@ fn clip(value: f64, low: f64, high: f64) -> f64 {
 }
 
 /// Per-pixel linear-ramp colors over the coverage rectangle.
-fn gradient_colors(gradient: &Gradient, cover: &Coverage) -> Vec<[f64; 4]> {
-    let (a, c, e, f) = gradient.coefficients;
-    let table: Vec<[f64; 4]> = gradient
+fn transform_color(rgba: [f64; 4], transform: Option<&ColorTransform>) -> [f64; 4] {
+    match transform {
+        None => rgba,
+        Some(transform) => [
+            (rgba[0] * transform.scale[0] + transform.bias[0]).clamp(0.0, 1.0),
+            (rgba[1] * transform.scale[1] + transform.bias[1]).clamp(0.0, 1.0),
+            (rgba[2] * transform.scale[2] + transform.bias[2]).clamp(0.0, 1.0),
+            (rgba[3] * transform.scale[3] + transform.bias[3]).clamp(0.0, 1.0),
+        ],
+    }
+}
+
+fn gradient_table(gradient: &Gradient) -> Vec<[f64; 4]> {
+    gradient
         .colors
         .iter()
-        .map(|rgba| rgba.map(|v| v as f64 / 255.0))
-        .collect();
-    let mut out = Vec::with_capacity(cover.values.len());
-    for row in 0..cover.height {
-        for column in 0..cover.width {
-            let (xx, yy) = (column as f64, row as f64);
-            let x = xx + cover.x0 as f64 + 0.5;
-            let y = yy + cover.y0 as f64 + 0.5;
-            let mut amount = if let Some(radial) = &gradient.radial {
-                // B7F000 encodes focus-relative coordinates divided by
-                // R²-|F-C|², with zero-axis terms kept for the quadratic.
-                // This solves the ray/circle intersection in that encoding.
-                let u = a * x + c;
-                let v = e * y + f;
-                let cross = if radial.zero_x || radial.zero_y { 0.0 } else { 2.0 * u * v };
-                let root = (radial.quadratics[0] * u * u + radial.quadratics[1] * v * v + cross).max(0.0).sqrt();
-                let linear = (if radial.zero_x { 0.0 } else { u }) + (if radial.zero_y { 0.0 } else { v });
-                if radial.negative_denominator { linear - root } else { linear + root }
-            } else {
-                a * x + c + e * y + f
-            };
-            amount = match gradient.spread {
-                0 => clip(amount, 0.0, 1.0),
-                1 => remainder(amount, 1.0),
-                _ => 1.0 - (remainder(amount, 2.0) - 1.0).abs(),
-            };
-            let position = clip(amount * 127.0 + 0.5, 0.0, 127.0);
-            let low = position.floor() as i64;
-            let fraction = position - low as f64;
-            let (t0, t1) = (table[low as usize], table[(low + 1).min(127) as usize]);
-            let mut source = [0.0f64; 4];
-            for k in 0..4 {
-                source[k] = t0[k] * (1.0 - fraction) + t1[k] * fraction;
-            }
-            if gradient.premultiplied {
-                let alpha = source[3];
-                for value in &mut source[..3] {
-                    *value = if alpha != 0.0 { *value / alpha } else { 0.0 };
-                }
-            }
-            out.push(source);
+        .map(|rgba| rgba.map(|value| value as f64 / 255.0))
+        .collect()
+}
+
+#[inline]
+fn gradient_color(
+    gradient: &Gradient,
+    table: &[[f64; 4]],
+    x: f64,
+    y: f64,
+    transform: Option<&ColorTransform>,
+) -> [f64; 4] {
+    let (a, c, e, f) = gradient.coefficients;
+    let mut amount = if let Some(radial) = &gradient.radial {
+        // B7F000 encodes focus-relative coordinates divided by
+        // R²-|F-C|², with zero-axis terms kept for the quadratic.
+        // This solves the ray/circle intersection in that encoding.
+        let u = a * x + c;
+        let v = e * y + f;
+        let cross = if radial.zero_x || radial.zero_y {
+            0.0
+        } else {
+            2.0 * u * v
+        };
+        let root = (radial.quadratics[0] * u * u + radial.quadratics[1] * v * v + cross)
+            .max(0.0)
+            .sqrt();
+        let linear = (if radial.zero_x { 0.0 } else { u }) + (if radial.zero_y { 0.0 } else { v });
+        if radial.negative_denominator {
+            linear - root
+        } else {
+            linear + root
+        }
+    } else {
+        a * x + c + e * y + f
+    };
+    amount = match gradient.spread {
+        0 => clip(amount, 0.0, 1.0),
+        1 => remainder(amount, 1.0),
+        _ => 1.0 - (remainder(amount, 2.0) - 1.0).abs(),
+    };
+    let position = clip(amount * 127.0 + 0.5, 0.0, 127.0);
+    let low = position.floor() as i64;
+    let fraction = position - low as f64;
+    let (t0, t1) = (table[low as usize], table[(low + 1).min(127) as usize]);
+    let mut source = [0.0f64; 4];
+    for k in 0..4 {
+        source[k] = t0[k] * (1.0 - fraction) + t1[k] * fraction;
+    }
+    if gradient.premultiplied {
+        let alpha = source[3];
+        for value in &mut source[..3] {
+            *value = if alpha != 0.0 { *value / alpha } else { 0.0 };
         }
     }
-    out
+    transform_color(source, transform)
+}
+
+#[inline]
+fn texture_color(
+    texture: &Texture,
+    image: &[[u8; 4]],
+    x: f64,
+    y: f64,
+    transform: Option<&ColorTransform>,
+) -> [f64; 4] {
+    let [a, b, c, d, e, f] = texture.matrix;
+    let u = (a * x + b * y + c).floor() as i64;
+    let v = (d * x + e * y + f).floor() as i64;
+    let valid = u >= 0 && v >= 0 && u < texture.valid_width && v < texture.valid_height;
+    let at = (v.clamp(0, texture.height as i64 - 1) * texture.width as i64
+        + u.clamp(0, texture.width as i64 - 1)) as usize;
+    let texel = image[at];
+    let source = transform_color(
+        [
+            texel[0] as f64 / 255.0,
+            texel[1] as f64 / 255.0,
+            texel[2] as f64 / 255.0,
+            texel[3] as f64 / 255.0,
+        ],
+        transform,
+    );
+    let scale = if valid { 1.0 } else { 0.0 };
+    [
+        source[0] * scale,
+        source[1] * scale,
+        source[2] * scale,
+        source[3] * scale,
+    ]
+}
+
+fn gradient_colors(
+    gradient: &Gradient,
+    cover: &Coverage,
+    transform: Option<&ColorTransform>,
+) -> Vec<[f64; 4]> {
+    let table = gradient_table(gradient);
+    let mut colors = Vec::with_capacity(cover.values.len());
+    for row in 0..cover.height {
+        for column in 0..cover.width {
+            let xx = column as f64;
+            let yy = row as f64;
+            let x = xx + cover.x0 as f64 + 0.5;
+            let y = yy + cover.y0 as f64 + 0.5;
+            colors.push(gradient_color(gradient, &table, x, y, transform));
+        }
+    }
+    colors
+}
+
+fn texture_colors(
+    texture: &Texture,
+    image: &[[u8; 4]],
+    cover: &Coverage,
+    transform: Option<&ColorTransform>,
+) -> Vec<[f64; 4]> {
+    let (cx, cy) = (cover.x0 as f64 + 0.5, cover.y0 as f64 + 0.5);
+    let mut colors = vec![[0.0; 4]; cover.values.len()];
+    for row in 0..cover.height {
+        let yy = row as f64 + cy;
+        for column in 0..cover.width {
+            let index = row * cover.width + column;
+            if cover.values[index] == 0.0 {
+                continue;
+            }
+            let xx = column as f64 + cx;
+            colors[index] = texture_color(texture, image, xx, yy, transform);
+        }
+    }
+    colors
+}
+
+#[inline]
+fn blend_channel(
+    source: f64,
+    destination: f64,
+    alpha: f64,
+    destination_alpha: f64,
+    retained: f64,
+    out_alpha: f64,
+) -> f64 {
+    let numerator = source * alpha + destination * destination_alpha * retained;
+    if out_alpha != 0.0 {
+        numerator / out_alpha
+    } else {
+        0.0
+    }
+}
+
+#[allow(clippy::manual_clamp)]
+#[inline]
+fn byte(value: f64) -> u8 {
+    (value.max(0.0).min(1.0) * 255.0 + 0.5).floor() as u8
 }
 
 /// One pixel of the reference blend, in place (straight RGBA8).
+#[inline]
 fn blend_pixel(pixel: &mut [u8; 4], c: f64, [sr, sg, sb, sa]: [f64; 4], blend: bool) {
     let alpha = sa * c;
     if c == 0.0 || (blend && alpha == 0.0) {
@@ -348,21 +469,10 @@ fn blend_pixel(pixel: &mut [u8; 4], c: f64, [sr, sg, sb, sa]: [f64; 4], blend: b
     );
     let retained = if blend { 1.0 - alpha } else { 1.0 - c };
     let out_alpha = alpha + da * retained;
-    let channel = |src: f64, dst: f64| {
-        let numerator = src * alpha + dst * da * retained;
-        if out_alpha != 0.0 {
-            numerator / out_alpha
-        } else {
-            0.0
-        }
-    };
-    // Keep the reference's NaN-to-zero min/max behavior before quantizing.
-    #[allow(clippy::manual_clamp)]
-    let byte = |value: f64| (value.max(0.0).min(1.0) * 255.0 + 0.5).floor() as u8;
     *pixel = [
-        byte(channel(sr, dr)),
-        byte(channel(sg, dg)),
-        byte(channel(sb, db)),
+        byte(blend_channel(sr, dr, alpha, da, retained, out_alpha)),
+        byte(blend_channel(sg, dg, alpha, da, retained, out_alpha)),
+        byte(blend_channel(sb, db, alpha, da, retained, out_alpha)),
         byte(out_alpha),
     ];
 }
@@ -379,14 +489,52 @@ pub struct Target {
 // Morton columns within one 8x8 tile, in words.
 const TILE_COLUMNS: [usize; 8] = [0, 1, 4, 5, 16, 17, 20, 21];
 
-/// Paint is monomorphized: the texture sampler can use row/column directly,
-/// and solid draws pay no indirect call per pixel. Keep a separate function
-/// for each paint so profiles can attribute its inner loop.
-#[inline(never)]
-fn composite<F: Fn(usize, usize, usize) -> [f64; 4]>(
+fn composite_span(
+    tile: &mut [u8],
+    local_y: usize,
+    coverage: &[f64],
+    local_xs: &[usize],
+    source: impl Iterator<Item = [f64; 4]>,
+    channels: [usize; 4],
+    blend: bool,
+) {
+    for ((&c, &local_x), source) in coverage.iter().zip(local_xs).zip(source) {
+        if c == 0.0 || (blend && source[3] * c == 0.0) {
+            continue;
+        }
+        blend_target_pixel(tile, local_y, local_x, c, source, channels, blend);
+    }
+}
+
+#[inline]
+fn blend_target_pixel(
+    tile: &mut [u8],
+    local_y: usize,
+    local_x: usize,
+    coverage: f64,
+    source: [f64; 4],
+    channels: [usize; 4],
+    blend: bool,
+) {
+    let at = local_y + local_x * 4;
+    let bytes: &mut [u8; 4] = (&mut tile[at..at + 4]).try_into().unwrap();
+    let mut pixel = [
+        bytes[channels[0]],
+        bytes[channels[1]],
+        bytes[channels[2]],
+        bytes[channels[3]],
+    ];
+    blend_pixel(&mut pixel, coverage, source, blend);
+    bytes[channels[0]] = pixel[0];
+    bytes[channels[1]] = pixel[1];
+    bytes[channels[2]] = pixel[2];
+    bytes[channels[3]] = pixel[3];
+}
+
+fn composite_solid(
     target: &mut Target,
     cover: &Coverage,
-    source: F,
+    color: [f64; 4],
     blend: bool,
     opaque_solid: Option<[u8; 4]>,
 ) {
@@ -395,13 +543,56 @@ fn composite<F: Fn(usize, usize, usize) -> [f64; 4]>(
     } else {
         [2, 1, 0, 3]
     };
-    let packed = opaque_solid.map(|rgba| {
-        let mut bytes = [0; 4];
-        for (channel, &byte) in channels.iter().enumerate() {
-            bytes[byte] = rgba[channel];
+    if let Some(rgba) = opaque_solid {
+        let packed = if target.order == 0 {
+            [rgba[3], rgba[2], rgba[1], rgba[0]]
+        } else {
+            [rgba[2], rgba[1], rgba[0], rgba[3]]
+        };
+        let pair = [
+            packed[0], packed[1], packed[2], packed[3], packed[0], packed[1], packed[2], packed[3],
+        ];
+        for (row, coverage) in cover.values.chunks_exact(cover.width).enumerate() {
+            let y = cover.y0 as usize + row;
+            let tile_row = (y >> 3) * (target.width >> 3) * 256;
+            let local_y = ((y & 1) << 1 | (y & 2) << 2 | (y & 4) << 3) * 4;
+            let mut column = 0;
+            while column < cover.width {
+                let x = cover.x0 as usize + column;
+                let lane = x & 7;
+                let span = (8 - lane).min(cover.width - column);
+                let base = tile_row + (x >> 3) * 256;
+                let tile = &mut target.bytes[base..base + 256];
+                let mut offset = 0;
+                while offset < span {
+                    let c = coverage[column + offset];
+                    let local_x = TILE_COLUMNS[lane + offset];
+                    if (lane + offset) & 1 == 0
+                        && offset + 1 < span
+                        && c == 1.0
+                        && coverage[column + offset + 1] == 1.0
+                    {
+                        let at = local_y + local_x * 4;
+                        tile[at..at + 8].copy_from_slice(&pair);
+                        offset += 2;
+                        continue;
+                    }
+                    if c != 0.0 {
+                        let at = local_y + local_x * 4;
+                        if c == 1.0 {
+                            tile[at..at + 4].copy_from_slice(&packed);
+                        } else {
+                            blend_target_pixel(tile, local_y, local_x, c, color, channels, blend);
+                        }
+                    }
+                    offset += 1;
+                }
+                column += span;
+            }
         }
-        bytes
-    });
+        return;
+    }
+
     for (row, coverage) in cover.values.chunks_exact(cover.width).enumerate() {
         let y = cover.y0 as usize + row;
         let tile_row = (y >> 3) * (target.width >> 3) * 256;
@@ -413,39 +604,47 @@ fn composite<F: Fn(usize, usize, usize) -> [f64; 4]>(
             let span = (8 - lane).min(cover.width - column);
             let base = tile_row + (x >> 3) * 256;
             let tile = &mut target.bytes[base..base + 256];
-            for (offset, (&c, &local_x)) in coverage[column..column + span]
-                .iter()
-                .zip(&TILE_COLUMNS[lane..lane + span])
-                .enumerate()
-            {
-                // The reference preserves all bytes under zero coverage.
-                // No source lookup or destination gather is needed there.
-                if c == 0.0 {
-                    continue;
-                }
-                let at = local_y + local_x * 4;
-                let bytes: &mut [u8; 4] = (&mut tile[at..at + 4]).try_into().unwrap();
-                if c == 1.0
-                    && let Some(packed) = packed
-                {
-                    // Opaque solid + full coverage gives retained=0,
-                    // out_alpha=1 and the exact original RGBA8 color in
-                    // both SRC and SRC_OVER. Fractional coverage, gradient
-                    // and texture paints keep the reference f64 sequence.
-                    *bytes = packed;
-                    continue;
-                }
-                let mut pixel = channels.map(|byte| bytes[byte]);
-                blend_pixel(
-                    &mut pixel,
-                    c,
-                    source(row, column + offset, row * cover.width + column + offset),
-                    blend,
-                );
-                for (channel, &byte) in channels.iter().enumerate() {
-                    bytes[byte] = pixel[channel];
-                }
-            }
+            composite_span(
+                tile,
+                local_y,
+                &coverage[column..column + span],
+                &TILE_COLUMNS[lane..lane + span],
+                std::iter::repeat_n(color, span),
+                channels,
+                blend,
+            );
+            column += span;
+        }
+    }
+}
+
+fn composite_pixels(target: &mut Target, cover: &Coverage, colors: &[[f64; 4]], blend: bool) {
+    let channels: [usize; 4] = if target.order == 0 {
+        [3, 2, 1, 0]
+    } else {
+        [2, 1, 0, 3]
+    };
+    for (row, coverage) in cover.values.chunks_exact(cover.width).enumerate() {
+        let y = cover.y0 as usize + row;
+        let tile_row = (y >> 3) * (target.width >> 3) * 256;
+        let local_y = ((y & 1) << 1 | (y & 2) << 2 | (y & 4) << 3) * 4;
+        let source_row = &colors[row * cover.width..(row + 1) * cover.width];
+        let mut column = 0;
+        while column < cover.width {
+            let x = cover.x0 as usize + column;
+            let lane = x & 7;
+            let span = (8 - lane).min(cover.width - column);
+            let base = tile_row + (x >> 3) * 256;
+            let tile = &mut target.bytes[base..base + 256];
+            composite_span(
+                tile,
+                local_y,
+                &coverage[column..column + span],
+                &TILE_COLUMNS[lane..lane + span],
+                source_row[column..column + span].iter().copied(),
+                channels,
+                blend,
+            );
             column += span;
         }
     }
@@ -512,37 +711,28 @@ pub fn render(
             .iter_mut()
             .find(|t| t.address == draw.target.0)
             .unwrap();
-        let transform = |rgba: [f64; 4]| match &draw.color_transform {
-            None => rgba,
-            Some(t) => std::array::from_fn(|k| (rgba[k] * t.scale[k] + t.bias[k]).clamp(0.0, 1.0)),
-        };
-        let color = transform(draw.color.map(|v| v as f64 / 255.0));
+        let color_transform = draw.color_transform.as_ref();
+        let color = transform_color(
+            draw.color.map(|value| value as f64 / 255.0),
+            color_transform,
+        );
         if let Some(gradient) = &draw.gradient {
-            let colors = gradient_colors(gradient, &cover);
-            composite(target, &cover, |_, _, i| transform(colors[i]), draw.blend != 0, None);
+            let colors = gradient_colors(gradient, &cover, color_transform);
+            composite_pixels(target, &cover, &colors, draw.blend != 0);
         } else if let Some(texture) = &draw.texture {
             let image = &textures[&(texture.source, texture.width, texture.height)];
-            let [a, b, c, d, e, f] = texture.matrix;
-            let (tw, th) = (texture.width as i64, texture.height as i64);
-            let (cx, cy) = (cover.x0 as f64 + 0.5, cover.y0 as f64 + 0.5);
-            let sample = |row: usize, column: usize, _: usize| -> [f64; 4] {
-                let (xx, yy) = (column as f64 + cx, row as f64 + cy);
-                let u = (a * xx + b * yy + c).floor() as i64;
-                let v = (d * xx + e * yy + f).floor() as i64;
-                let valid = u >= 0 && v >= 0 && u < texture.valid_width && v < texture.valid_height;
-                let texel = image[(v.clamp(0, th - 1) * tw + u.clamp(0, tw - 1)) as usize];
-                let scale = if valid { 1.0 } else { 0.0 };
-                transform(texel.map(|t| t as f64 / 255.0)).map(|t| t * scale)
-            };
-            composite(target, &cover, sample, draw.blend != 0, None);
+            let colors = texture_colors(texture, image, &cover, color_transform);
+            composite_pixels(target, &cover, &colors, draw.blend != 0);
         } else {
-            composite(
-                target,
-                &cover,
-                |_, _, _| color,
-                draw.blend != 0,
-                (draw.color[3] == 255 && draw.color_transform.is_none()).then_some(draw.color),
-            );
+            if draw.blend == 0 || color[3] != 0.0 {
+                composite_solid(
+                    target,
+                    &cover,
+                    color,
+                    draw.blend != 0,
+                    (draw.color[3] == 255 && draw.color_transform.is_none()).then_some(draw.color),
+                );
+            }
         }
         touched += cover.values.iter().filter(|&&v| v != 0.0).count() as u64 * 4;
     }
@@ -633,7 +823,10 @@ mod color_transform_tests {
             values: vec![1.0; 64],
         });
         let targets = HashMap::from([(0x1000u64, vec![0u8; 256])]);
-        let (output, _) = render(&[draw], &targets, &HashMap::new(), &mut |_| Ok(cover.clone())).unwrap();
+        let (output, _) = render(&[draw], &targets, &HashMap::new(), &mut |_| {
+            Ok(cover.clone())
+        })
+        .unwrap();
         // Order 1 stores R, G, B, A in bytes 2, 1, 0, 3.
         let bytes = &output[0].1;
         [bytes[2], bytes[1], bytes[0], bytes[3]]
@@ -658,10 +851,16 @@ mod color_transform_tests {
 
     #[test]
     fn solid_paint_is_scaled_biased_and_clamped_per_channel() {
-        let transform = color_transform(&halfwords([64, 256, -128, 64, 8160, -16320, 32640, 0]))
-            .unwrap();
-        assert_eq!(render_solid(solid([200, 200, 100, 255], None)), [200, 200, 100, 255]);
+        let transform =
+            color_transform(&halfwords([64, 256, -128, 64, 8160, -16320, 32640, 0])).unwrap();
+        assert_eq!(
+            render_solid(solid([200, 200, 100, 255], None)),
+            [200, 200, 100, 255]
+        );
         // R 200*0.5+63.75, G 200*2-127.5 clamps to 255, B -100+255, A 255*0.5.
-        assert_eq!(render_solid(solid([200, 200, 100, 255], transform)), [164, 255, 155, 128]);
+        assert_eq!(
+            render_solid(solid([200, 200, 100, 255], transform)),
+            [164, 255, 155, 128]
+        );
     }
 }

@@ -16,6 +16,7 @@ pub fn value_to_py<'py>(py: Python<'py>, value: &Value) -> PyResult<Bound<'py, P
     Ok(match value {
         Value::None => py.None().into_bound(py),
         Value::Int(v) => v.into_pyobject(py)?.into_any(),
+        Value::Hex(v) => format!("{v:#x}").into_pyobject(py)?.into_any(),
         Value::Float(v) => v.into_pyobject(py)?.into_any(),
         Value::Bool(v) => pyo3::types::PyBool::new(py, *v).to_owned().into_any(),
         Value::Str(v) => v.into_pyobject(py)?.into_any(),

@@ -1,9 +1,10 @@
 //! Runtime connection for the vector engine: physical DMA, routed IRQs and
 //! exact completion deadlines. The peripheral has no processor capability.
-use super::{CommandProcessor, IRQ, Inputs, Profile};
+use super::{CommandProcessor, IRQ, Inputs, Profile, recording};
 use fujimod_emulator_devices::{Action, Cx, Device, Unsupported};
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,10 +25,12 @@ pub struct VectorGpu {
     state: CommandProcessor,
     controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2],
     due: BTreeMap<u64, u64>,
+    recording: Option<recording::Recorder>,
 }
 impl VectorGpu {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] = Default::default();
+        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] =
+            Default::default();
         for (core, inputs) in wiring.controllers {
             if core >= 2 || controllers[core].is_some() {
                 return Err("invalid vector engine interrupt wiring".into());
@@ -60,20 +63,28 @@ impl VectorGpu {
         {
             return Err("invalid vector engine configuration, bounds or IRQ connections".into());
         }
+        let state = CommandProcessor {
+            ram_bytes: options.ram_bytes,
+            max_fill_bytes: options.max_fill_bytes,
+            max_copy_bytes: options.max_copy_bytes,
+            max_command_capture_bytes: options.max_command_capture_bytes,
+            max_clear_bytes: options.max_clear_bytes,
+            bytes_per_tick: options.bytes_per_tick,
+            copy_profile: options.copy_profile,
+            clear_profile: options.clear_profile,
+            ..CommandProcessor::default()
+        };
+        let recording = std::env::var_os("FUJIMOD_VECTOR_GPU_RECORD")
+            .map(|path| {
+                recording::Recorder::create(Path::new(&path), &recording::Header::from(&state))
+                    .map_err(|error| format!("could not start vector GPU recording: {error}"))
+            })
+            .transpose()?;
         Ok(Self {
-            state: CommandProcessor {
-                ram_bytes: options.ram_bytes,
-                max_fill_bytes: options.max_fill_bytes,
-                max_copy_bytes: options.max_copy_bytes,
-                max_command_capture_bytes: options.max_command_capture_bytes,
-                max_clear_bytes: options.max_clear_bytes,
-                bytes_per_tick: options.bytes_per_tick,
-                copy_profile: options.copy_profile,
-                clear_profile: options.clear_profile,
-                ..CommandProcessor::default()
-            },
+            state,
             controllers,
             due: BTreeMap::new(),
+            recording,
         })
     }
     fn actions(&mut self, cx: &mut Cx<'_>, actions: Vec<Action>) -> Result<(), String> {
@@ -104,8 +115,13 @@ impl VectorGpu {
         ready.sort_unstable();
         for (_, token) in ready {
             let (_, outputs) = self.state.output(token).map_err(|e| e.0)?;
-            for (address, bytes) in outputs {
-                cx.ram_write(address, &bytes)?;
+            for (address, bytes) in &outputs {
+                cx.ram_write(*address, bytes)?;
+            }
+            if let Some(recording) = &mut self.recording {
+                recording
+                    .completion(cx.now(), token, &outputs)
+                    .map_err(|error| format!("could not write vector GPU recording: {error}"))?;
             }
             let mut actions = Vec::new();
             self.state
@@ -121,6 +137,9 @@ struct Connected<'a, 'b> {
     cx: &'a mut Cx<'b>,
     controllers: &'a [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2],
     dma_failure: Option<String>,
+    capture: bool,
+    memory_reads: Vec<recording::MemoryRead>,
+    target_samples: Vec<recording::TargetSample>,
 }
 impl Inputs for Connected<'_, '_> {
     fn has_reader(&self) -> bool {
@@ -132,16 +151,39 @@ impl Inputs for Connected<'_, '_> {
     fn routed(&self) -> bool {
         true
     }
-    fn read(&mut self, _cpu: i64, address: u64, length: u64) -> Result<Vec<u8>, String> {
-        let size =
-            usize::try_from(length).map_err(|_| "vector DMA length exceeds host address space")?;
-        match self.cx.ram_bytes(address, size) {
+    fn read(&mut self, cpu: i64, address: u64, length: u64) -> Result<Vec<u8>, String> {
+        let size = match usize::try_from(length) {
+            Ok(size) => size,
+            Err(_) => {
+                let error = "vector DMA length exceeds host address space".to_owned();
+                self.dma_failure = Some(error.clone());
+                if self.capture {
+                    self.memory_reads.push(recording::MemoryRead {
+                        cpu,
+                        address,
+                        length,
+                        result: Err(error.clone()),
+                    });
+                }
+                return Err(error);
+            }
+        };
+        let result = match self.cx.ram_bytes(address, size) {
             Ok(bytes) => Ok(bytes),
             Err(error) => {
                 self.dma_failure = Some(error.clone());
                 Err(error)
             }
+        };
+        if self.capture {
+            self.memory_reads.push(recording::MemoryRead {
+                cpu,
+                address,
+                length,
+                result: result.clone(),
+            });
         }
+        result
     }
     fn targets(&mut self) -> fujimod_emulator_devices::record::Result<(usize, i64)> {
         let mut count = 0;
@@ -155,7 +197,12 @@ impl Inputs for Connected<'_, '_> {
                 count += 1;
             }
         }
-        Ok((count, selected))
+        let result = Ok((count, selected));
+        if self.capture {
+            self.target_samples
+                .push(recording::TargetSample::Routed { count, selected });
+        }
+        result
     }
 }
 impl Device for VectorGpu {
@@ -168,42 +215,110 @@ impl Device for VectorGpu {
         "vector-gpu"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        let now = cx.now();
+        let cpu = cx.cpu as i64;
         if let Err(error) = self.settle(cx) {
             cx.fail(error);
             return 0;
         }
-        match self.state.read(address, size.into()) {
+        let result = self
+            .state
+            .read(address, size.into())
+            .map_err(|error| error.0);
+        if let Some(recording) = &mut self.recording
+            && let Err(error) = recording.register_read(&recording::RegisterRead {
+                now,
+                cpu,
+                address,
+                size,
+                result: result.clone(),
+            })
+        {
+            cx.fail(format!("could not write vector GPU recording: {error}"));
+            return 0;
+        }
+        match result {
             Ok(value) => value.into(),
             Err(error) => {
-                cx.unsupported(error.0);
+                cx.unsupported(error);
                 0
             }
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        let now = cx.now();
+        let cpu = cx.cpu as i64;
         if let Err(error) = self.settle(cx) {
             cx.fail(error);
             return;
         }
         let Ok(value) = u32::try_from(value) else {
+            if let Err(error) = record_write(
+                &mut self.recording,
+                now,
+                cpu,
+                address,
+                size,
+                value,
+                Err("vector GPU word exceeds 32 bits".into()),
+                Vec::new(),
+                Vec::new(),
+            ) {
+                cx.fail(error);
+                return;
+            }
             cx.unsupported("vector GPU word exceeds 32 bits");
             return;
         };
         if size != 4 {
+            if let Err(error) = record_write(
+                &mut self.recording,
+                now,
+                cpu,
+                address,
+                size,
+                u64::from(value),
+                Err("vector GPU requires aligned word accesses".into()),
+                Vec::new(),
+                Vec::new(),
+            ) {
+                cx.fail(error);
+                return;
+            }
             cx.unsupported("vector GPU requires aligned word accesses");
             return;
         }
-        let cpu = cx.cpu as i64;
         let mut host = Connected {
             cx,
             controllers: &self.controllers,
             dma_failure: None,
+            capture: self.recording.is_some(),
+            memory_reads: Vec::new(),
+            target_samples: Vec::new(),
         };
         let mut actions = Vec::new();
         let result = self
             .state
             .write_native(cpu, address, value, &mut host, &mut actions);
         let dma_failure = host.dma_failure.take();
+        let memory_reads = std::mem::take(&mut host.memory_reads);
+        let target_samples = std::mem::take(&mut host.target_samples);
+        drop(host);
+        let access_result = result.as_ref().map(|_| ()).map_err(|error| error.0.clone());
+        if let Err(error) = record_write(
+            &mut self.recording,
+            now,
+            cpu,
+            address,
+            size,
+            u64::from(value),
+            access_result,
+            memory_reads,
+            target_samples,
+        ) {
+            cx.fail(error);
+            return;
+        }
         if let Some(error) = dma_failure {
             cx.fail(error);
             return;
@@ -228,10 +343,9 @@ impl Device for VectorGpu {
         if self
             .next_deadline(cx.now())
             .is_some_and(|at| at <= cx.now())
+            && let Err(error) = self.settle(cx)
         {
-            if let Err(error) = self.settle(cx) {
-                cx.fail(error);
-            }
+            cx.fail(error);
         }
     }
     fn save(&self) -> serde_json::Value {
@@ -253,6 +367,34 @@ impl Device for VectorGpu {
             "next_token":s.next_token,"next_job":s.next_job
         },"deadlines":self.due})
     }
+}
+
+fn record_write(
+    recording: &mut Option<recording::Recorder>,
+    now: u64,
+    cpu: i64,
+    address: u64,
+    size: u8,
+    value: u64,
+    result: std::result::Result<(), String>,
+    memory_reads: Vec<recording::MemoryRead>,
+    target_samples: Vec<recording::TargetSample>,
+) -> Result<(), String> {
+    if let Some(recording) = recording {
+        recording
+            .register_write(&recording::RegisterWrite {
+                now,
+                cpu,
+                address,
+                size,
+                value,
+                result,
+                memory_reads,
+                target_samples,
+            })
+            .map_err(|error| format!("could not write vector GPU recording: {error}"))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

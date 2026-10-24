@@ -1,6 +1,6 @@
 //! Register banks with a Python dict's insertion order.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 /// Register index -> value, iterating in first-insertion order.
 /// Device state and fingerprints preserve that order.
@@ -14,15 +14,46 @@ impl Registers {
     pub fn new() -> Self {
         Self::default()
     }
+    #[inline]
     pub fn get(&self, key: u32) -> Option<u64> {
         self.values.get(&key).copied()
     }
     pub fn contains(&self, key: u32) -> bool {
         self.values.contains_key(&key)
     }
+    #[inline]
     pub fn set(&mut self, key: u32, value: u64) {
-        if self.values.insert(key, value).is_none() {
-            self.order.push(key);
+        match self.values.entry(key) {
+            Entry::Occupied(mut entry) => {
+                if *entry.get() != value {
+                    entry.insert(value);
+                }
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+                self.order.push(key);
+            }
+        }
+    }
+    /// Apply selected byte lanes using one hash-table lookup.
+    #[inline]
+    pub fn write_masked(&mut self, key: u32, mask: u64, value: u64) -> (Option<u64>, bool) {
+        match self.values.entry(key) {
+            Entry::Occupied(mut entry) => {
+                let previous = *entry.get();
+                let next = previous & !mask | value & mask;
+                if next == previous {
+                    (Some(previous), false)
+                } else {
+                    entry.insert(next);
+                    (Some(previous), true)
+                }
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(value & mask);
+                self.order.push(key);
+                (None, true)
+            }
         }
     }
     /// `dict.update(other)`.

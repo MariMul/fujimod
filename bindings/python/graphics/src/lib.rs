@@ -14,8 +14,6 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(python_graphics::clear_render, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::copy_untile, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::gpu_ui_render, module)?)?;
-    module.add_function(wrap_pyfunction!(python_graphics::graphics_memo_clear, module)?)?;
-    module.add_function(wrap_pyfunction!(python_graphics::graphics_memo_len, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::math_check, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::ui_batch, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::ui_initialize, module)?)?;

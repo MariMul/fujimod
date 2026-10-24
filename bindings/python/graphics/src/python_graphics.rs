@@ -4,9 +4,9 @@
 //! cross as dicts in insertion order; draws stay native in a `UiBatch`
 //! (`draw_dicts()` gives the reference structure for tests).
 
-use fujimod_python_base::values::{DeviceRefusal, value_to_py};
 use fujimod_emulator_devices::Unsupported;
 use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render};
+use fujimod_python_base::values::{DeviceRefusal, value_to_py};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyTuple};
 use std::collections::HashMap;
@@ -111,8 +111,6 @@ fn draw_dict<'py>(py: Python<'py>, draw: &batch::Draw) -> PyResult<Bound<'py, Py
     Ok(d)
 }
 
-use fujimod_emulator_graphics::cache::cached_coverage;
-
 /// A validated UI batch (`_ui_batch`'s draws and register banks).
 #[pyclass(module = "fujimod._native.emulator", unsendable)]
 pub struct UiBatch {
@@ -182,11 +180,6 @@ impl UiBatch {
         }
         Ok(list)
     }
-    /// A byte string identifying every draw field (render memo key).
-    fn key<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let key = fujimod_emulator_graphics::cache::draws_key(&self.draws);
-        PyBytes::new(py, &key)
-    }
     /// Render with the snapshots `reads()` asked for: `targets` maps address
     /// to bytes, `textures` (source, width, height) to bytes. Returns
     /// ([(address, bytes)] in first-use order, covered byte count).
@@ -207,8 +200,10 @@ impl UiBatch {
                 value.extract::<Vec<u8>>()?,
             );
         }
-        let (outputs, touched) =
-            render::render(&self.draws, &t, &x, &mut cached_coverage).map_err(refusal)?;
+        let (outputs, touched) = render::render(&self.draws, &t, &x, &mut |draw| {
+            render::coverage(draw).map(std::rc::Rc::new)
+        })
+        .map_err(refusal)?;
         let list = PyList::empty(py);
         for (address, bytes) in outputs {
             list.append((address, PyBytes::new(py, &bytes)))?;
@@ -426,21 +421,21 @@ impl fujimod_emulator_exr2_gpu::Inputs for RasterInput<'_> {
         Err("pure raster input has no interrupt routing".into())
     }
 }
-/// Render memo and snapshot orchestration are part of the portable Rust model.
+/// Snapshot orchestration is part of the portable Rust model.
 #[pyfunction]
-#[pyo3(signature = (batch, reader: "MemoryReader", cpu) -> "tuple[list[tuple[int, bytes]], int, dict[str, str]]")]
+#[pyo3(signature = (batch, reader: "MemoryReader", cpu) -> "tuple[list[tuple[int, bytes]], int]")]
 pub fn gpu_ui_render<'py>(
     py: Python<'py>,
     batch: &UiBatch,
     reader: Bound<'py, PyAny>,
     cpu: i64,
-) -> PyResult<(Bound<'py, PyList>, u64, Bound<'py, PyAny>)> {
+) -> PyResult<(Bound<'py, PyList>, u64)> {
     let mut host = RasterInput {
         reader,
         error: None,
     };
     let result = fujimod_emulator_exr2_gpu::ui_render(&batch.draws, cpu, &mut host);
-    let (outputs, touched, hashes) = match result {
+    let (outputs, touched) = match result {
         Ok(out) => out,
         Err(e) => {
             if let Some((message, error)) = host.error
@@ -455,14 +450,5 @@ pub fn gpu_ui_render<'py>(
     for (a, p) in outputs {
         out.append((a, PyBytes::new(py, &p)))?;
     }
-    Ok((out, touched, value_to_py(py, &hashes)?))
-}
-
-#[pyfunction]
-pub fn graphics_memo_len() -> usize {
-    fujimod_emulator_exr2_gpu::memo_len()
-}
-#[pyfunction]
-pub fn graphics_memo_clear() {
-    fujimod_emulator_exr2_gpu::memo_clear();
+    Ok((out, touched))
 }

@@ -3,7 +3,6 @@
 //! These modules parse and render declared graphics command data. Device
 //! register laws are wired outside this module.
 pub mod batch;
-pub mod cache;
 pub mod clear;
 pub mod commands;
 pub mod gamma;

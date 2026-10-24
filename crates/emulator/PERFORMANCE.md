@@ -155,3 +155,52 @@ instructions: exact stops that must split the block. Bounding every admitted
 span at the next guest tick instead stays exact but splits nearly every block
 (115M hooked entries, 44 CPU seconds), so that approach is rejected.
 
+## GPU input recordings
+
+To capture one run, set `FUJIMOD_VECTOR_GPU_RECORD` in the environment that
+launches the walkthrough. The path must name a new file. The capture starts
+when the vector GPU is constructed and records register accesses, virtual
+ticks, IRQ routing samples, every DMA read and its bytes, plus output addresses
+and digests. Close the walkthrough runner normally to finish the file.
+
+For the `controls/hero/ev_dial` walkthrough, run this in the same shell that
+starts the usual walkthrough command:
+
+```sh
+export FUJIMOD_VECTOR_GPU_RECORD="${TMPDIR:-/tmp}/ev-dial.vgpu"
+# Start controls/hero/ev_dial with the usual walkthrough runner.
+```
+
+Replay the resulting recording with:
+
+```sh
+cargo run -p fujimod-emulator-exr2-gpu --bin fujimod-gpu-replay -- "$FUJIMOD_VECTOR_GPU_RECORD"
+```
+
+The replay reports elapsed model and rasterizer time per submission and
+register access, then prints the digest of every output write and verifies it
+against the capture.
+
+## Host GPU path
+
+Evaluate a host GPU backend as a separate step after profiling the CPU
+rasterizer. Keep the CPU implementation as the bit-exact reference and as the
+fallback on every target.
+
+A host GPU operation is eligible only when its complete output can match the
+CPU reference on every supported implementation. The shader must use integer
+arithmetic with explicitly defined overflow, rounding and division. Pixel
+packing and unpacking must preserve every bit, and blending must implement the
+same integer equations and rounding as the CPU path. Texture access must use
+exact texel reads with no filtering, implicit conversion, color-space transform
+or implementation-dependent precision. Readback and synchronization must also
+preserve the exact output bytes and ordering visible to the emulated device.
+
+Qualify each operation against the CPU reference on every supported host API
+and device, using output digests from real GPU input recordings. A mismatch or
+an API/device without the required integer formats keeps that operation on the
+CPU. Fixed-function OpenGL ES 1.1 blending, filtering and format conversion do
+not provide the controls needed to guarantee these integer results, so that
+pipeline is not a suitable exact backend. A shader-based path is a later
+candidate only for operations whose arithmetic and memory behavior meet these
+conditions; it is not part of the current implementation.

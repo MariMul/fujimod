@@ -40,33 +40,19 @@ pub fn parse(
     path: bool,
     initial: Option<&Registers>,
 ) -> Result<(Vec<StreamDraw>, Registers)> {
-    let commands = commands::decode(words, path)?;
-    if !path {
-        // These are three flush register operations, not an opaque footer blob.
-        // Unselected value bits are ignored by the same lane law as any write.
-        let flush = [
-            (0x28, 15, 0x12345678),
-            (0x31, 1, 0xf0),
-            (0x18, 15, 0x12345678),
-        ];
-        let Some(tail) = commands.get(commands.len().saturating_sub(3)..) else {
-            unreachable!()
-        };
-        if tail.len() != 3 || tail.iter().zip(flush).any(|(command, (index, lanes, value))| {
-            !matches!(command, Command::Write(write) if write.index == index && write.lanes == lanes && write.apply(0) == value)
-        }) {
-            return fail("Graphics fill list requires all three terminal flush operations");
-        }
-    }
     let mut registers = initial.cloned().unwrap_or_default();
     let mut draws = Vec::new();
     let mut geometry = Vec::new();
-    let mut geometry_state: Option<Vec<Option<u64>>> = None;
+    let mut geometry_started = false;
+    let mut geometry_original: [Option<Option<u64>>; 12] = [None; 12];
     let (mut previous, mut pending) = (None::<u64>, None::<u64>);
     const STATE_KEYS: [u32; 12] = [
         0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x60, 0x69, 0x6a,
     ];
-    for command in commands {
+    let mut semantic_error = None;
+    let mut tail = [None; 3];
+    let mut command_count = 0usize;
+    let mut process = |command| -> Result<()> {
         match command {
             Command::Write(write) => {
                 let (index, lanes, value) = (write.index, write.lanes, u64::from(write.value));
@@ -76,7 +62,14 @@ pub fn parse(
                         if path { "path" } else { "fill" }
                     ));
                 }
-                registers.set(index, write.apply(registers.get(index).unwrap_or(0)));
+                let (previous_value, changed) = registers.write_masked(index, write.mask(), value);
+                if changed
+                    && geometry_started
+                    && let Some(state_index) = STATE_KEYS.iter().position(|&key| key == index)
+                    && geometry_original[state_index].is_none()
+                {
+                    geometry_original[state_index] = Some(previous_value);
+                }
                 if !path && (index == 0x16b || index == 0x16c) {
                     if registers.get(0x140).unwrap_or(0) & 0x400 != 0 {
                         if index == 0x16b {
@@ -138,11 +131,11 @@ pub fn parse(
                         if geometry.is_empty() {
                             return fail("Graphics path draw has no geometry");
                         }
-                        if let Some(state) = &geometry_state
-                            && STATE_KEYS
-                                .iter()
-                                .zip(state)
-                                .any(|(&key, &value)| registers.get(key) != value)
+                        if geometry_started
+                            && STATE_KEYS.iter().enumerate().any(|(index, &key)| {
+                                geometry_original[index]
+                                    .is_some_and(|previous| registers.get(key) != previous)
+                            })
                         {
                             return fail(
                                 "Graphics UI path transform/style changed during geometry",
@@ -153,7 +146,8 @@ pub fn parse(
                             registers: registers.clone(),
                             geometry: Some(std::mem::take(&mut geometry)),
                         });
-                        geometry_state = None;
+                        geometry_started = false;
+                        geometry_original = [None; 12];
                     } else {
                         if pending.is_some() {
                             return fail("Graphics UI fill fence is missing its draw");
@@ -188,13 +182,44 @@ pub fn parse(
                 {
                     return fail("Graphics UI geometry is nonfinite or outside the declared bound");
                 }
-                if geometry_state.is_none() {
-                    geometry_state =
-                        Some(STATE_KEYS.iter().map(|&key| registers.get(key)).collect());
+                if !geometry_started {
+                    geometry_started = true;
+                    geometry_original = [None; 12];
                 }
                 geometry.push((code, flags, values));
             }
         }
+        Ok(())
+    };
+    commands::visit(words, path, |command| {
+        tail.copy_within(1..3, 0);
+        tail[2] = Some(command);
+        command_count += 1;
+        if semantic_error.is_none()
+            && let Err(error) = process(command)
+        {
+            semantic_error = Some(error);
+        }
+    })?;
+    drop(process);
+    if !path {
+        // These are three flush register operations, not an opaque footer blob.
+        // Unselected value bits are ignored by the same lane law as any write.
+        let flush = [
+            (0x28, 15, 0x12345678),
+            (0x31, 1, 0xf0),
+            (0x18, 15, 0x12345678),
+        ];
+        if command_count < 3
+            || tail.iter().copied().zip(flush).any(|(command, (index, lanes, value))| {
+                !matches!(command, Some(Command::Write(write)) if write.index == index && write.lanes == lanes && write.apply(0) == value)
+            })
+        {
+            return fail("Graphics fill list requires all three terminal flush operations");
+        }
+    }
+    if let Some(error) = semantic_error {
+        return Err(error);
     }
     if !geometry.is_empty() || pending.is_some() {
         return fail("Graphics UI list ends before its draw fence");

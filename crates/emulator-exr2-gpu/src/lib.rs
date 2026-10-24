@@ -3,9 +3,11 @@
 //! bytes, and clear lists use decoded rectangles. All UI pixel, AA, stroke,
 //! snapshot and throughput laws
 //! remain declared software assumptions, not measured hardware semantics.
-//! Command validation, records, render memo and completion tokens live here.
+//! Command validation, records and completion tokens live here.
 pub mod construct;
-use fujimod_emulator_graphics::{batch, cache, clear, init, regs::Registers, render, stream};
+pub mod recording;
+pub mod replay;
+use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render, stream};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 mod device;
@@ -33,7 +35,7 @@ impl Profile {
 }
 use fujimod_emulator_devices::record::Result;
 use fujimod_emulator_devices::{Action, Record, Unsupported, Value, WordMap};
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 pub const BASE: u64 = 0xfff78000;
@@ -51,7 +53,7 @@ const COMMAND: [u32; 6] = [0x10d4, 0x10dc, 0x10e4, 0x10ec, 0x20e0, 0x20e8];
 const COPY: [u32; 8] = [0xc00, 0xc04, 0xc08, 0xc0c, 0xc10, 0xc20, 0xc24, 0xc28];
 const TRIGGERS: [u32; 3] = [0x10d0, 0x10e0, 0x20f0];
 pub type DmaOutput = Vec<(u64, Arc<Vec<u8>>)>;
-pub type RenderedBatch = (DmaOutput, u64, Value);
+pub type RenderedBatch = (DmaOutput, u64);
 pub type Fields = Vec<(&'static str, Value)>;
 pub type JobFields = Vec<(Cow<'static, str>, Value)>;
 
@@ -92,6 +94,11 @@ pub struct Job {
     pub id: u64,
     pub revision: u64,
     pub fields: JobFields,
+    #[serde(skip, default = "record_receipts_default")]
+    record_receipts: bool,
+}
+fn record_receipts_default() -> bool {
+    true
 }
 fn fail<T>(s: impl Into<String>) -> Result<T> {
     Err(Unsupported(s.into()))
@@ -113,6 +120,9 @@ fn set(fields: &mut JobFields, k: &'static str, v: Value) {
     }
 }
 fn update(j: &mut Job, fields: Fields) {
+    if !j.record_receipts {
+        return;
+    }
     for (k, v) in fields {
         set(&mut j.fields, k, v);
     }
@@ -147,16 +157,15 @@ fn dset(d: &mut Value, k: &str, v: Value) {
         }
     }
 }
-fn truth(v: Option<&Value>) -> bool {
-    match v {
-        None | Some(Value::None) => false,
-        Some(Value::Bool(b)) => *b,
-        Some(Value::Int(n)) => *n != 0,
-        Some(Value::Str(s)) => !s.is_empty(),
-        _ => true,
+fn append_capture_stream(job: &mut Job, name: &'static str, stream: Value) {
+    if let Some((_, Value::Dict(streams))) = job.fields.iter_mut().find(|(k, _)| *k == "streams") {
+        streams.push((Value::constant(name), stream));
     }
 }
 fn log(actions: &mut Vec<Action>, name: &'static str, j: &Job) {
+    if !j.record_receipts {
+        return;
+    }
     actions.push(Action::Log(Record::new(name, j.fields.clone())));
 }
 
@@ -214,7 +223,6 @@ pub struct Completion {
     pub job: Job,
     pub event: CompletionEvent,
     pub ui: bool,
-    pub empty_hash: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommandProcessor {
@@ -321,15 +329,27 @@ pub fn offset(address: u64, size: u32) -> Result<u32> {
 }
 impl CommandProcessor {
     pub fn new_job(&mut self, fields: Fields) -> Job {
+        self.new_job_with_receipts(true, || fields)
+    }
+    fn new_job_with_receipts(
+        &mut self,
+        record_receipts: bool,
+        fields: impl FnOnce() -> Fields,
+    ) -> Job {
         let id = self.next_job;
         self.next_job += 1;
         Job {
             id,
             revision: 0,
-            fields: fields
-                .into_iter()
-                .map(|(k, v)| (Cow::Borrowed(k), v))
-                .collect(),
+            fields: if record_receipts {
+                fields()
+                    .into_iter()
+                    .map(|(k, v)| (Cow::Borrowed(k), v))
+                    .collect()
+            } else {
+                Vec::new()
+            },
+            record_receipts,
         }
     }
     pub fn read(&self, address: u64, size: u32) -> Result<u32> {
@@ -379,32 +399,52 @@ impl CommandProcessor {
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
     ) -> Result<()> {
+        self.write_with_receipts(cpu, address, size, value, host, actions, true)
+    }
+    fn write_with_receipts(
+        &mut self,
+        cpu: i64,
+        address: u64,
+        size: u32,
+        value: u32,
+        host: &mut dyn Inputs,
+        actions: &mut Vec<Action>,
+        record_receipts: bool,
+    ) -> Result<()> {
         let o = offset(address, size)?;
         if o == 0x34 || o == 0x105c {
             return fail("Graphics completion status is read-only");
         }
         if TRIGGERS.contains(&o) {
             self.store(o, value);
-            let mut capture = self.capture(cpu, o, value, true, host, actions);
+            let mut capture = self.capture(cpu, o, value, true, record_receipts, host, actions);
             if self.clear_profile.is_none() || o == 0x20f0 {
                 return fail("Graphics command-list rasterization is not modeled");
             }
-            if let Err(error) = self.start_commands(cpu, o, value, &mut capture, host, actions) {
-                capture.hex_words();
-                update(&mut capture.job, vec![("rejection", text(&error.0))]);
-                log(
-                    actions,
-                    if self.ui() {
-                        "Graphics UI command rejected"
-                    } else {
-                        "Graphics clear-only command rejected"
-                    },
-                    &capture.job,
-                );
-                self.last_job = Some(capture.job);
+            if let Err(error) =
+                self.start_commands(cpu, o, value, &mut capture, host, actions, record_receipts)
+            {
+                if record_receipts {
+                    capture.hex_words();
+                    update(&mut capture.job, vec![("rejection", text(&error.0))]);
+                    log(
+                        actions,
+                        if self.ui() {
+                            "Graphics UI command rejected"
+                        } else {
+                            "Graphics clear-only command rejected"
+                        },
+                        &capture.job,
+                    );
+                }
+                if record_receipts {
+                    self.last_job = Some(capture.job);
+                }
                 return Err(error);
             }
-            self.last_job = Some(capture.job);
+            if record_receipts {
+                self.last_job = Some(capture.job);
+            }
             return Ok(());
         }
         if o == 0xc18 {
@@ -413,7 +453,7 @@ impl CommandProcessor {
                     self.store(o, value);
                     return fail("Graphics image copy/untile is not modeled");
                 }
-                return self.start_copy(cpu, value, host, actions);
+                return self.start_copy(cpu, value, host, actions, record_receipts);
             }
             if self.busy {
                 return fail("Graphics copy abort semantics are not modeled");
@@ -421,14 +461,16 @@ impl CommandProcessor {
             if self.status() & COPY_STATUS != 0 {
                 self.regs.insert(0x34, self.status() & !COPY_STATUS);
                 self.acknowledgments += 1;
-                actions.push(Action::Log(Record::new(
-                    "Graphics copy status acknowledged",
-                    [("cpu", num(cpu))],
-                )));
+                if record_receipts {
+                    actions.push(Action::Log(Record::new(
+                        "Graphics copy status acknowledged",
+                        [("cpu", num(cpu))],
+                    )));
+                }
             }
         } else if o == 0x1c {
             if value != 0 {
-                return self.start_fill(cpu, value, host, actions);
+                return self.start_fill(cpu, value, host, actions, record_receipts);
             }
             if self.busy {
                 return fail("Graphics fill abort semantics are not modeled");
@@ -436,10 +478,12 @@ impl CommandProcessor {
             if self.status() & FILL_STATUS != 0 {
                 self.regs.insert(0x34, self.status() & !FILL_STATUS);
                 self.acknowledgments += 1;
-                actions.push(Action::Log(Record::new(
-                    "Graphics fill status acknowledged",
-                    [("cpu", num(cpu))],
-                )));
+                if record_receipts {
+                    actions.push(Action::Log(Record::new(
+                        "Graphics fill status acknowledged",
+                        [("cpu", num(cpu))],
+                    )));
+                }
             }
         } else if let Some(values) = init_values(o) {
             if !values.contains(&value) {
@@ -453,10 +497,12 @@ impl CommandProcessor {
                 if self.clear_ack_offsets == BTreeSet::from([0x1800, 0x1020]) {
                     self.regs.insert(0x34, self.status() & !CLEAR_STATUS);
                     self.acknowledgments += 1;
-                    actions.push(Action::Log(Record::new(
-                        "Graphics clear bit31 acknowledged by both actual ISR stores",
-                        [("cpu", num(cpu))],
-                    )));
+                    if record_receipts {
+                        actions.push(Action::Log(Record::new(
+                            "Graphics clear bit31 acknowledged by both actual ISR stores",
+                            [("cpu", num(cpu))],
+                        )));
+                    }
                 }
             }
         } else if let Some(values) = setup(o) {
@@ -489,21 +535,47 @@ impl CommandProcessor {
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
     ) -> Result<()> {
+        self.write_native_with_receipts(cpu, address, value, host, actions, true)
+    }
+    pub(crate) fn write_native_for_replay(
+        &mut self,
+        cpu: i64,
+        address: u64,
+        value: u32,
+        host: &mut dyn Inputs,
+        actions: &mut Vec<Action>,
+    ) -> Result<()> {
+        self.write_native_with_receipts(cpu, address, value, host, actions, false)
+    }
+    fn write_native_with_receipts(
+        &mut self,
+        cpu: i64,
+        address: u64,
+        value: u32,
+        host: &mut dyn Inputs,
+        actions: &mut Vec<Action>,
+        record_receipts: bool,
+    ) -> Result<()> {
         let o = offset(address, 4)?;
         if TRIGGERS.contains(&o) {
-            let mut capture = self.capture(cpu, o, value, false, host, actions);
+            let mut capture = self.capture(cpu, o, value, false, record_receipts, host, actions);
             if self.clear_profile.is_none() || o == 0x20f0 {
                 return fail("Graphics command-list rasterization is not modeled");
             }
-            self.start_commands(cpu, o, value, &mut capture, host, actions)?;
+            self.start_commands(cpu, o, value, &mut capture, host, actions, record_receipts)?;
             self.store(o, value);
-            self.last_job = Some(capture.job);
+            if record_receipts {
+                self.last_job = Some(capture.job);
+            }
             return Ok(());
         }
-        if o == 0xc18 && value != 0 && self.copy_profile.is_none() {
-            return fail("Graphics image copy/untile is not modeled");
+        if o == 0xc18 && value != 0 {
+            if self.copy_profile.is_none() {
+                return fail("Graphics image copy/untile is not modeled");
+            }
+            return self.start_copy(cpu, value, host, actions, record_receipts);
         }
-        self.write(cpu, address, 4, value, host, actions)
+        self.write_with_receipts(cpu, address, 4, value, host, actions, record_receipts)
     }
 
     fn schedule(&mut self, completion: Completion, delay: u64, actions: &mut Vec<Action>) {
@@ -530,26 +602,11 @@ impl CommandProcessor {
         self.busy = false;
         self.jobs_completed += 1;
         self.bytes_completed += c.bytes as i64;
-        let digest = if c.ui {
-            dict(
-                c.output
-                    .iter()
-                    .map(|(a, p)| (format!("{a:#x}"), text(&sha256(p)))),
-            )
-        } else if c.empty_hash {
-            Value::None
-        } else {
-            text(&sha256(&c.output[0].1))
-        };
-        update(
-            &mut c.job,
-            vec![
-                ("completed", Value::Bool(true)),
-                (if c.ui { "output_sha256" } else { "sha256" }, digest),
-            ],
-        );
+        if c.job.record_receipts {
+            update(&mut c.job, vec![("completed", Value::Bool(true))]);
+        }
         self.regs.insert(0x34, self.status() | c.status);
-        if self.last_job.as_ref().is_some_and(|job| job.id == c.job.id) {
+        if c.job.record_receipts && self.last_job.as_ref().is_some_and(|job| job.id == c.job.id) {
             self.last_job = Some(c.job.clone());
         }
         log(actions, c.event.name(), &c.job);
@@ -557,12 +614,27 @@ impl CommandProcessor {
         actions.push(Action::QueueIrq(c.irq_cpu as u8, IRQ));
         Ok(c.job)
     }
+    /// Commit replay state after the recorder's independent output digest check.
+    /// Replay discards diagnostic records, so it does not build another receipt.
+    pub(crate) fn complete_for_replay(&mut self, token: u64, _now: u64) -> Result<()> {
+        let c = self
+            .completions
+            .remove(&token)
+            .ok_or_else(|| Unsupported("Unknown graphics completion token".into()))?;
+        self.busy = false;
+        self.jobs_completed += 1;
+        self.bytes_completed += c.bytes as i64;
+        self.regs.insert(0x34, self.status() | c.status);
+        self.irqs_raised += 1;
+        Ok(())
+    }
     fn start_fill(
         &mut self,
         cpu: i64,
         control: u32,
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
+        record_receipts: bool,
     ) -> Result<()> {
         if control != FILL_CONTROL {
             return fail(format!("Unknown graphics fill control {control:#x}"));
@@ -605,36 +677,40 @@ impl CommandProcessor {
         self.busy = true;
         self.store(0x1c, control);
         self.jobs_started += 1;
-        let j = self.new_job(vec![
-            ("cpu", num(cpu)),
-            ("start_register", hex(start)),
-            ("end_exclusive_register", hex(end)),
-            ("destination", hex(destination)),
-            ("bytes", num(count)),
-            ("pattern_word", hex(word)),
-            (
-                "pattern_little_endian",
-                text(
-                    &pattern
-                        .iter()
-                        .map(|b| format!("{b:02x}"))
-                        .collect::<String>(),
+        let j = self.new_job_with_receipts(record_receipts, || {
+            vec![
+                ("cpu", num(cpu)),
+                ("start_register", hex(start)),
+                ("end_exclusive_register", hex(end)),
+                ("destination", hex(destination)),
+                ("bytes", num(count)),
+                ("pattern_word", hex(word)),
+                (
+                    "pattern_little_endian",
+                    text(
+                        &pattern
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect::<String>(),
+                    ),
                 ),
-            ),
-            ("control", hex(control)),
-            ("irq_cpu", num(irq_cpu)),
-            (
-                "irq_routing",
-                Value::constant(if host.routed() {
-                    "configured bank"
-                } else {
-                    "submitting CPU fixture"
-                }),
-            ),
-            ("latency_ticks", num(delay)),
-            ("completed", Value::Bool(false)),
-        ]);
-        self.last_job = Some(j.clone());
+                ("control", hex(control)),
+                ("irq_cpu", num(irq_cpu)),
+                (
+                    "irq_routing",
+                    Value::constant(if host.routed() {
+                        "configured bank"
+                    } else {
+                        "submitting CPU fixture"
+                    }),
+                ),
+                ("latency_ticks", num(delay)),
+                ("completed", Value::Bool(false)),
+            ]
+        });
+        if record_receipts {
+            self.last_job = Some(j.clone());
+        }
         log(actions, "Graphics fill started", &j);
         // Atomic DMA uses the same repeating little-endian word as Python.
         self.schedule(
@@ -647,7 +723,6 @@ impl CommandProcessor {
                 job: j,
                 event: CompletionEvent::Fill,
                 ui: false,
-                empty_hash: false,
             },
             delay,
             actions,
@@ -660,6 +735,7 @@ impl CommandProcessor {
         trigger: u32,
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
+        record_receipts: bool,
     ) -> Result<()> {
         if trigger != 1 {
             return fail(format!("Unknown graphics copy trigger {trigger:#x}"));
@@ -723,9 +799,10 @@ impl CommandProcessor {
         self.busy = true;
         self.store(0xc18, trigger);
         self.jobs_started += 1;
-        let j = self.new_job(vec![
+        let profile = self.copy_profile.unwrap().value();
+        let j = self.new_job_with_receipts(record_receipts, || vec![
             ("operation", Value::constant("copy")),
-            ("profile", self.copy_profile.unwrap().value()),
+            ("profile", profile),
             ("cpu", num(cpu)),
             ("source_register", hex(sreg)),
             ("destination_register", hex(dreg)),
@@ -736,7 +813,6 @@ impl CommandProcessor {
             ("bytes", num(count)),
             ("control", hex(control)),
             ("trigger", num(trigger)),
-            ("source_sha256", text(&sha256(&input))),
             ("irq_cpu", num(irq_cpu)),
             (
                 "irq_routing",
@@ -753,8 +829,12 @@ impl CommandProcessor {
                 Value::constant("Morton 8x8 untile, bottom-up rows, bytes unchanged; direct hardware tile interpretation is unverified"),
             ),
         ]);
-        self.last_job = Some(j.clone());
-        log(actions, "Graphics software-profile copy started", &j);
+        if record_receipts {
+            self.last_job = Some(j.clone());
+        }
+        if record_receipts {
+            log(actions, "Graphics software-profile copy started", &j);
+        }
         self.schedule(
             Completion {
                 cpu,
@@ -765,7 +845,6 @@ impl CommandProcessor {
                 job: j,
                 event: CompletionEvent::Copy,
                 ui: false,
-                empty_hash: false,
             },
             delay,
             actions,
@@ -778,83 +857,121 @@ impl CommandProcessor {
         o: u32,
         trigger: u32,
         publish: bool,
+        record_receipts: bool,
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
     ) -> Capture {
-        let deferred = self.ui() && o == 0x10e0;
-        let mut j = self.new_job(vec![
-            ("operation", Value::constant("command-list")),
-            ("cpu", num(cpu)),
-            ("trigger_logical_offset", hex(o)),
-            ("trigger", hex(trigger)),
-            ("completed", Value::Bool(false)),
-            ("accepted", Value::Bool(false)),
-            ("streams", dict([])),
-            (
-                "capture_bound_bytes_each",
-                num(self.max_command_capture_bytes),
-            ),
-        ]);
+        let capture_bound = self.max_command_capture_bytes;
+        let mut j = self.new_job_with_receipts(record_receipts, || {
+            vec![
+                ("operation", Value::constant("command-list")),
+                ("cpu", num(cpu)),
+                (
+                    "trigger_logical_offset",
+                    Value::constant(match o {
+                        0x10d0 => "0x10d0",
+                        0x10e0 => "0x10e0",
+                        _ => "0x20f0",
+                    }),
+                ),
+                (
+                    "trigger",
+                    match (o, trigger) {
+                        (0x10d0, 0x10001) => Value::constant("0x10001"),
+                        (0x10e0 | 0x20f0, 1) => Value::constant("0x1"),
+                        _ => hex(trigger),
+                    },
+                ),
+                ("completed", Value::Bool(false)),
+                ("accepted", Value::Bool(false)),
+                ("streams", dict([])),
+                ("capture_bound_bytes_each", num(capture_bound)),
+            ]
+        });
         let mut words = HashMap::new();
-        let streams = &mut j
-            .fields
-            .iter_mut()
-            .find(|(k, _)| *k == "streams")
-            .unwrap()
-            .1;
-        let Value::Dict(streams) = streams else {
-            unreachable!()
-        };
+        let mut invalid = BTreeSet::new();
         for (name, a, c) in [("path", 0x10d4, 0x10dc), ("fill", 0x10e4, 0x10ec)] {
             if o == 0x20f0 {
                 continue;
             }
-            let s = dict([
-                ("address_register_logical_offset".into(), hex(a)),
-                ("count_register_logical_offset".into(), hex(c)),
-            ]);
-            streams.push((Value::constant(name), s));
-            let s = &mut streams.last_mut().unwrap().1;
+            let mut s = if record_receipts {
+                dict([
+                    (
+                        "address_register_logical_offset".into(),
+                        Value::constant(match a {
+                            0x10d4 => "0x10d4",
+                            _ => "0x10e4",
+                        }),
+                    ),
+                    (
+                        "count_register_logical_offset".into(),
+                        Value::constant(match c {
+                            0x10dc => "0x10dc",
+                            _ => "0x10ec",
+                        }),
+                    ),
+                ])
+            } else {
+                Value::None
+            };
             if !self.written.contains(&a) || !self.written.contains(&c) {
+                invalid.insert(name);
                 dset(
-                    s,
+                    &mut s,
                     "capture_error",
                     Value::constant("descriptor not yet written"),
                 );
+                if record_receipts {
+                    append_capture_stream(&mut j, name, s);
+                }
                 continue;
             }
             let address = self.regs.get_or_zero(a);
             let count = self.regs.get_or_zero(c);
             let declared = count as u64 * 8;
-            dset(s, "address_register", hex(address));
-            dset(s, "count_register", hex(count));
-            dset(s, "declared_bytes", num(declared));
+            dset(&mut s, "address_register", hex(address));
+            dset(&mut s, "count_register", hex(count));
+            dset(&mut s, "declared_bytes", num(declared));
             let alias = address & 0xc0000000;
             let physical = (address - alias) as u64;
             if ![0, 0x40000000].contains(&alias)
                 || address & 3 != 0
                 || physical + declared > self.ram_bytes
             {
+                invalid.insert(name);
                 dset(
-                    s,
+                    &mut s,
                     "capture_error",
                     Value::constant("unresolved RAM range/alias/alignment"),
                 );
+                if record_receipts {
+                    append_capture_stream(&mut j, name, s);
+                }
                 continue;
             }
             if !host.has_reader() {
+                invalid.insert(name);
                 dset(
-                    s,
+                    &mut s,
                     "capture_error",
                     Value::constant("no memory reader configured"),
                 );
+                if record_receipts {
+                    append_capture_stream(&mut j, name, s);
+                }
                 continue;
             }
             let length = declared.min(self.max_command_capture_bytes);
             let payload = match host.read(cpu, physical, length) {
                 Ok(p) => p,
                 Err(e) => {
-                    dset(s, "capture_error", text(&e));
+                    invalid.insert(name);
+                    if record_receipts {
+                        dset(&mut s, "capture_error", text(&e));
+                    }
+                    if record_receipts {
+                        append_capture_stream(&mut j, name, s);
+                    }
                     continue;
                 }
             };
@@ -864,27 +981,29 @@ impl CommandProcessor {
                 .iter()
                 .map(|b| u32::from_le_bytes(*b))
                 .collect();
-            dset(s, "physical_address", hex(physical));
-            dset(s, "captured_bytes", num(payload.len() as u64));
+            dset(&mut s, "physical_address", hex(physical));
+            dset(&mut s, "captured_bytes", num(payload.len() as u64));
             dset(
-                s,
+                &mut s,
                 "truncated",
                 Value::Bool(payload.len() as u64 != declared),
             );
-            dset(s, "sha256_captured", text(&sha256(&payload)));
-            if !deferred {
+            words.insert(name, ints);
+            if payload.len() as u64 != declared || payload.len() as u64 != length {
+                invalid.insert(name);
+            }
+            if payload.len() as u64 != length {
                 dset(
-                    s,
-                    "words",
-                    Value::List(ints.iter().map(|n| hex(*n)).collect()),
+                    &mut s,
+                    "capture_error",
+                    Value::constant("short memory read"),
                 );
             }
-            words.insert(name, ints);
-            if payload.len() as u64 != length {
-                dset(s, "capture_error", Value::constant("short memory read"));
+            if record_receipts {
+                append_capture_stream(&mut j, name, s);
             }
         }
-        if o == 0x20f0 {
+        if o == 0x20f0 && record_receipts {
             update(
                 &mut j,
                 vec![
@@ -904,26 +1023,21 @@ impl CommandProcessor {
                 ],
             );
         }
-        if publish {
+        if publish && record_receipts {
             self.last_job = Some(j.clone());
         }
-        let mut observed = j.clone();
-        if self.ui()
-            && let Some((_, Value::Dict(streams))) =
-                observed.fields.iter_mut().find(|(k, _)| *k == "streams")
-        {
-            for (_, stream) in streams {
-                if let Value::Dict(fields) = stream {
-                    fields.retain(|(k, _)| !k.is_key("words"));
-                }
-            }
+        if record_receipts {
+            log(
+                actions,
+                "Graphics command-list payload captured before validation",
+                &j,
+            );
         }
-        log(
-            actions,
-            "Graphics command-list payload captured before validation",
-            &observed,
-        );
-        Capture { job: j, words }
+        Capture {
+            job: j,
+            words,
+            invalid,
+        }
     }
     fn start_commands(
         &mut self,
@@ -933,6 +1047,7 @@ impl CommandProcessor {
         c: &mut Capture,
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
+        record_receipts: bool,
     ) -> Result<()> {
         if self.busy || self.status() & (FILL_STATUS | COPY_STATUS | CLEAR_STATUS) != 0 {
             return fail("Graphics clear requires idle and acknowledged previous completion");
@@ -953,16 +1068,19 @@ impl CommandProcessor {
                 clear::path_descriptor(&words, self.ram_bytes, self.max_clear_bytes)?;
             }
             self.command_pending = Some((cpu, words));
-            update(
-                &mut c.job,
-                vec![
-                    (
-                        "stage",
-                        Value::constant("path validated; awaiting separate fill stream"),
-                    ),
-                    ("accepted", Value::Bool(true)),
-                ],
-            );
+            c.compact();
+            if record_receipts {
+                update(
+                    &mut c.job,
+                    vec![
+                        (
+                            "stage",
+                            Value::constant("path validated; awaiting separate fill stream"),
+                        ),
+                        ("accepted", Value::Bool(true)),
+                    ],
+                );
+            }
             return Ok(());
         }
         if o != 0x10e0 || trigger != 1 || self.command_pending.is_none() {
@@ -990,9 +1108,9 @@ impl CommandProcessor {
         };
         let mut draws = None;
         if parsed.is_none() {
-            let pj = stream::parse(&pw, true, Some(&p))?.0.len();
-            let fj = stream::parse(&fw, false, Some(&f))?.0.len();
-            if pj == 0 && fj == 0 {
+            let (path_draws, path_bank) = stream::parse(&pw, true, Some(&p))?;
+            let (fill_draws, fill_bank) = stream::parse(&fw, false, Some(&f))?;
+            if path_draws.is_empty() && fill_draws.is_empty() {
                 parsed = Some(init::initialize(
                     &pw,
                     &fw,
@@ -1001,11 +1119,11 @@ impl CommandProcessor {
                     self.max_clear_bytes,
                 )?);
             } else {
-                draws = Some(batch::batch(
-                    &pw,
-                    &fw,
-                    Some(&p),
-                    Some(&f),
+                draws = Some(batch::batch_parsed(
+                    path_draws,
+                    fill_draws,
+                    path_bank,
+                    fill_bank,
                     self.ram_bytes,
                     self.max_clear_bytes,
                 )?);
@@ -1013,13 +1131,21 @@ impl CommandProcessor {
         }
         let irq_cpu = self.irq_cpu(cpu, "clear", host)?;
         if let Some((draws, banks)) = draws {
-            return self.start_ui((cpu, irq_cpu), c, &draws, banks, host, actions);
+            return self.start_ui(
+                (cpu, irq_cpu),
+                c,
+                draws.as_slice(),
+                banks,
+                host,
+                actions,
+                record_receipts,
+            );
         }
         let (descriptor, (pb, fb)) = parsed.unwrap();
         let initialization =
             matches!(clear::get(&descriptor,"operation"),Some(Value::Str(s)) if s=="initialize");
-        let (source, output, changed) = if initialization {
-            (None, Vec::new(), 0)
+        let (output, changed) = if initialization {
+            (Vec::new(), 0)
         } else {
             let address = clear::int(&descriptor, "destination") as u64;
             let length = clear::int(&descriptor, "frame_bytes") as u64;
@@ -1046,7 +1172,6 @@ impl CommandProcessor {
                 pixel,
             );
             (
-                Some(source),
                 vec![(address, Arc::new(payload))],
                 ((r[2] - r[0]) * (r[3] - r[1]) * 4) as u64,
             )
@@ -1061,48 +1186,48 @@ impl CommandProcessor {
         if self.ui() {
             c.compact();
         }
-        update(
-            &mut c.job,
-            vec![
-                (
-                    "operation",
-                    clear::get(&descriptor, "operation").unwrap().clone(),
-                ),
-                ("profile", self.clear_profile.unwrap().value()),
-                ("accepted", Value::Bool(true)),
-                (
-                    "descriptor",
-                    dict(
-                        descriptor
-                            .iter()
-                            .filter(|(k, _)| *k != "pixel_bytes")
-                            .map(|(k, v)| (k.to_string(), v.clone())),
+        if record_receipts {
+            update(
+                &mut c.job,
+                vec![
+                    (
+                        "operation",
+                        clear::get(&descriptor, "operation").unwrap().clone(),
                     ),
-                ),
-                ("changed_bytes", num(changed)),
-                ("irq_cpu", num(irq_cpu)),
-                ("latency_ticks", num(delay)),
-                (
-                    "source_sha256",
-                    source.as_ref().map_or(Value::None, |s| text(&sha256(s))),
-                ),
-                (
-                    "pixel_semantics",
-                    Value::constant(if initialization {
-                        "No pixel writes: state-only initialization without geometry"
-                    } else {
-                        "GPU profile uses a declared software layout; hardware draw behavior is unverified"
-                    }),
-                ),
-                (
-                    "completion_semantics",
-                    Value::constant(
-                        "cross-stream fence/draw and bit31 completion are explicit software-derived assumptions",
+                    ("profile", self.clear_profile.unwrap().value()),
+                    ("accepted", Value::Bool(true)),
+                    (
+                        "descriptor",
+                        dict(
+                            descriptor
+                                .iter()
+                                .filter(|(k, _)| *k != "pixel_bytes")
+                                .map(|(k, v)| (k.to_string(), v.clone())),
+                        ),
                     ),
-                ),
-            ],
-        );
-        log(actions, "Graphics clear-only started", &c.job);
+                    ("changed_bytes", num(changed)),
+                    ("irq_cpu", num(irq_cpu)),
+                    ("latency_ticks", num(delay)),
+                    (
+                        "pixel_semantics",
+                        Value::constant(if initialization {
+                            "No pixel writes: state-only initialization without geometry"
+                        } else {
+                            "GPU profile uses a declared software layout; hardware draw behavior is unverified"
+                        }),
+                    ),
+                    (
+                        "completion_semantics",
+                        Value::constant(
+                            "cross-stream fence/draw and bit31 completion are explicit software-derived assumptions",
+                        ),
+                    ),
+                ],
+            );
+        }
+        if record_receipts {
+            log(actions, "Graphics clear-only started", &c.job);
+        }
         self.schedule(
             Completion {
                 cpu,
@@ -1113,7 +1238,6 @@ impl CommandProcessor {
                 job: c.job.clone(),
                 event: CompletionEvent::Clear,
                 ui: false,
-                empty_hash: initialization,
             },
             delay,
             actions,
@@ -1128,9 +1252,10 @@ impl CommandProcessor {
         banks: batch::Banks,
         host: &mut dyn Inputs,
         actions: &mut Vec<Action>,
+        record_receipts: bool,
     ) -> Result<()> {
         let (cpu, irq_cpu) = cpus;
-        let (output, touched, hashes) = ui_render(draws, cpu, host)?;
+        let (output, touched) = ui_render(draws, cpu, host)?;
         let bytes = output.iter().map(|(_, p)| p.len() as u64).sum();
         // Whole-surface snapshots preserve untouched pixels for the software
         // renderer. They are host storage, not GPU work: charge the covered
@@ -1143,73 +1268,74 @@ impl CommandProcessor {
         self.busy = true;
         self.jobs_started += 1;
         c.compact();
-        update(
-            &mut c.job,
-            vec![
-                ("operation", Value::constant("ui-primitives")),
-                ("profile", self.clear_profile.unwrap().value()),
-                ("accepted", Value::Bool(true)),
-                ("draw_count", num(draws.len() as u64)),
-                (
-                    "filled_paths",
-                    num(draws
-                        .iter()
-                        .filter(|d| !d.stroke && d.texture.is_none())
-                        .count() as u64),
-                ),
-                (
-                    "stroked_paths",
-                    num(draws.iter().filter(|d| d.stroke).count() as u64),
-                ),
-                (
-                    "sampled_images",
-                    num(draws.iter().filter(|d| d.texture.is_some()).count() as u64),
-                ),
-                (
-                    "linear_gradients",
-                    num(draws
-                        .iter()
-                        .filter(|d| d.gradient.as_ref().is_some_and(|g| g.radial.is_none()))
-                        .count() as u64),
-                ),
-                (
-                    "destinations",
-                    Value::List(
-                        output
+        if record_receipts {
+            update(
+                &mut c.job,
+                vec![
+                    ("operation", Value::constant("ui-primitives")),
+                    ("profile", self.clear_profile.unwrap().value()),
+                    ("accepted", Value::Bool(true)),
+                    ("draw_count", num(draws.len() as u64)),
+                    (
+                        "filled_paths",
+                        num(draws
                             .iter()
-                            .map(|(a, p)| {
-                                dict([
-                                    ("address".into(), hex(*a)),
-                                    ("bytes".into(), num(p.len() as u64)),
-                                ])
-                            })
-                            .collect(),
+                            .filter(|d| !d.stroke && d.texture.is_none())
+                            .count() as u64),
                     ),
-                ),
-                ("changed_bytes", num(bytes)),
-                ("covered_bytes_in_draw_order", num(touched)),
-                ("irq_cpu", num(irq_cpu)),
-                ("latency_ticks", num(delay)),
-                ("source_sha256", hashes),
-                (
-                    "pixel_semantics",
-                    Value::constant(
-                        "declared software RGBA8 SRC/SRC_OVER, affine paths, regular-grid AA, centerline strokes, nearest Morton images, linear ramp interpolation; hardware pixels unmeasured",
+                    (
+                        "stroked_paths",
+                        num(draws.iter().filter(|d| d.stroke).count() as u64),
                     ),
-                ),
-                (
-                    "completion_semantics",
-                    Value::constant(
-                        "atomic validated whole batch before bit31/physicalIRQ3c; throughput timing unmeasured",
+                    (
+                        "sampled_images",
+                        num(draws.iter().filter(|d| d.texture.is_some()).count() as u64),
                     ),
-                ),
-            ],
-        );
+                    (
+                        "linear_gradients",
+                        num(draws
+                            .iter()
+                            .filter(|d| d.gradient.as_ref().is_some_and(|g| g.radial.is_none()))
+                            .count() as u64),
+                    ),
+                    (
+                        "destinations",
+                        Value::List(
+                            output
+                                .iter()
+                                .map(|(a, p)| {
+                                    dict([
+                                        ("address".into(), hex(*a)),
+                                        ("bytes".into(), num(p.len() as u64)),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    ),
+                    ("changed_bytes", num(bytes)),
+                    ("covered_bytes_in_draw_order", num(touched)),
+                    ("irq_cpu", num(irq_cpu)),
+                    ("latency_ticks", num(delay)),
+                    (
+                        "pixel_semantics",
+                        Value::constant(
+                            "declared software RGBA8 SRC/SRC_OVER, affine paths, regular-grid AA, centerline strokes, nearest Morton images, linear ramp interpolation; hardware pixels unmeasured",
+                        ),
+                    ),
+                    (
+                        "completion_semantics",
+                        Value::constant(
+                            "atomic validated whole batch before bit31/physicalIRQ3c; throughput timing unmeasured",
+                        ),
+                    ),
+                ],
+            );
+        }
         let radial_count = draws
             .iter()
             .filter(|d| d.gradient.as_ref().is_some_and(|g| g.radial.is_some()))
             .count();
-        if radial_count != 0 {
+        if record_receipts && radial_count != 0 {
             update(
                 &mut c.job,
                 vec![
@@ -1223,7 +1349,9 @@ impl CommandProcessor {
                 ],
             );
         }
-        log(actions, "Graphics declared UI batch started", &c.job);
+        if record_receipts {
+            log(actions, "Graphics declared UI batch started", &c.job);
+        }
         self.schedule(
             Completion {
                 cpu,
@@ -1234,7 +1362,6 @@ impl CommandProcessor {
                 job: c.job.clone(),
                 event: CompletionEvent::Batch,
                 ui: true,
-                empty_hash: false,
             },
             delay,
             actions,
@@ -1245,24 +1372,11 @@ impl CommandProcessor {
 struct Capture {
     job: Job,
     words: HashMap<&'static str, Vec<u32>>,
+    invalid: BTreeSet<&'static str>,
 }
 impl Capture {
-    fn streams(&self) -> &Value {
-        &self
-            .job
-            .fields
-            .iter()
-            .find(|(k, _)| *k == "streams")
-            .unwrap()
-            .1
-    }
     fn words(&self, bank: &str) -> Result<Vec<u32>> {
-        let s = dget(self.streams(), bank);
-        if s.is_none()
-            || truth(s.and_then(|s| dget(s, "capture_error")))
-            || truth(s.and_then(|s| dget(s, "truncated")))
-            || !self.words.contains_key(bank)
-        {
+        if self.invalid.contains(bank) || !self.words.contains_key(bank) {
             return fail(format!(
                 "Graphics clear-only {bank} requires a complete bounded payload capture"
             ));
@@ -1270,6 +1384,9 @@ impl Capture {
         Ok(self.words[bank].clone())
     }
     fn hex_words(&mut self) {
+        if !self.job.record_receipts {
+            return;
+        }
         let fields = &mut self.job.fields;
         let streams = &mut fields.iter_mut().find(|(k, _)| *k == "streams").unwrap().1;
         for (name, words) in &self.words {
@@ -1287,6 +1404,9 @@ impl Capture {
         self.job.revision += 1;
     }
     fn compact(&mut self) {
+        if !self.job.record_receipts {
+            return;
+        }
         let fields = &mut self.job.fields;
         let streams = &mut fields.iter_mut().find(|(k, _)| *k == "streams").unwrap().1;
         for (name, words) in &self.words {
@@ -1299,23 +1419,9 @@ impl Capture {
     }
 }
 
-type RenderOutput = (DmaOutput, u64);
-const RENDER_BUDGET: usize = 8 << 20;
-fn memo_bytes(key: &[u8], output: &RenderOutput) -> usize {
-    key.len() + output.0.iter().map(|(_, bytes)| bytes.len()).sum::<usize>()
-}
-thread_local! {static MEMO:std::cell::RefCell<VecDeque<(Vec<u8>,RenderOutput)>>=const {std::cell::RefCell::new(VecDeque::new())};}
-pub fn memo_len() -> usize {
-    MEMO.with(|m| m.borrow().len())
-}
-pub fn memo_clear() {
-    MEMO.with(|m| m.borrow_mut().clear());
-}
 pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Result<RenderedBatch> {
     let mut targets = HashMap::new();
     let mut textures = HashMap::new();
-    let mut hashes = Vec::new();
-    let mut texture_hashes = Vec::new();
     for d in draws {
         let (a, w, h, _) = d.target;
         if let std::collections::hash_map::Entry::Vacant(entry) = targets.entry(a) {
@@ -1325,7 +1431,6 @@ pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Resu
             if p.len() as u64 != w as u64 * h as u64 * 4 {
                 return fail("Graphics UI destination/texture snapshot is incomplete");
             }
-            hashes.push((format!("{a:#x}"), text(&sha256(&p))));
             entry.insert(p);
         }
         if let Some(t) = &d.texture {
@@ -1337,67 +1442,18 @@ pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Resu
                 if p.len() as u64 != t.width as u64 * t.height as u64 * 4 {
                     return fail("Graphics UI destination/texture snapshot is incomplete");
                 }
-                texture_hashes.push((k, sha256(&p)));
                 entry.insert(p);
             }
         }
     }
-    let mut key = cache::draws_key(draws);
-    for (a, h) in &hashes {
-        key.extend(a.as_bytes());
-        if let Value::Str(h) = h {
-            key.extend(h.as_bytes());
-        }
-    }
-    for ((a, w, h), hash) in texture_hashes {
-        key.extend(a.to_le_bytes());
-        key.extend(w.to_le_bytes());
-        key.extend(h.to_le_bytes());
-        key.extend(hash.as_bytes());
-    }
-    let hit = MEMO.with(|m| {
-        let mut m = m.borrow_mut();
-        let i = m.iter().position(|(k, _)| *k == key)?;
-        let entry = m.remove(i).unwrap();
-        let out = entry.1.clone();
-        m.push_back(entry);
-        Some(out)
-    });
-    let (output, touched) = if let Some(hit) = hit {
-        hit
-    } else {
-        let (output, touched) =
-            render::render(draws, &targets, &textures, &mut cache::cached_coverage)?;
-        // The cache owns immutable byte data and reuses it.
-        // Share the same immutable payloads across the memo and completion;
-        // command submissions and completions must not copy whole frames.
-        let out: RenderOutput = (
-            output.into_iter().map(|(a, p)| (a, Arc::new(p))).collect(),
-            touched,
-        );
-        MEMO.with(|m| {
-            if memo_bytes(&key, &out) > RENDER_BUDGET {
-                return;
-            }
-            let mut m = m.borrow_mut();
-            m.push_back((key, out.clone()));
-            while m.len() > 4
-                || m.iter()
-                    .map(|(key, out)| memo_bytes(key, out))
-                    .sum::<usize>()
-                    > RENDER_BUDGET
-            {
-                m.pop_front();
-            }
-        });
-        out
-    };
-    Ok((output, touched, dict(hashes)))
-}
-
-/// Standard SHA-256 receipts, with the crate's portable CPU acceleration.
-pub fn sha256(bytes: &[u8]) -> String {
-    cache::content_sha256(bytes)
+    let (output, touched) = render::render(draws, &targets, &textures, &mut |draw| {
+        render::coverage(draw).map(std::rc::Rc::new)
+    })?;
+    let output = output
+        .into_iter()
+        .map(|(address, bytes)| (address, Arc::new(bytes)))
+        .collect();
+    Ok((output, touched))
 }
 
 impl CommandProcessor {
