@@ -373,6 +373,7 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
     for tick in [10, 20] {
         advance(&mut d, &mut h, tick);
         assert_eq!(edges.lock().unwrap()[0], None);
+        assert_eq!(frames.lock().unwrap().edge, None);
         assert!(h.irqs.is_empty());
     }
     advance(&mut d, &mut h, 30);

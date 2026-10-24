@@ -360,7 +360,6 @@ pub struct Sensor {
     radiometry: Option<(Calibration, ExposureHandle, ApertureHandle)>,
     exposed: Option<ExposedFrame>,
     projection: Option<fujimod_emulator_image_formation::optics::Projection>,
-    readout_valid: bool,
 }
 /// A validated readout from one accepted exposure. It retains immutable image
 /// inputs, never the live sensor, controller, frame clock, or exposure handles.
@@ -426,7 +425,6 @@ impl Sensor {
             radiometry: None,
             exposed: None,
             projection: None,
-            readout_valid: true,
         })
     }
     pub fn attach_controls(
@@ -576,22 +574,23 @@ impl Sensor {
             state
         })
     }
-    pub fn latch(&mut self, tick: u64) -> Result<FrameEdge, String> {
-        self.readout_valid = match &mut self.controls {
+    pub fn latch(&mut self, tick: u64) -> Result<Option<FrameEdge>, String> {
+        let valid = match &mut self.controls {
             Some(controls) => controls.frame()?,
             None => true,
         };
+        // The controller still advances integration during sync acquisition,
+        // but no completed readout exists for RAW or live statistics yet.
+        if !valid {
+            return Ok(None);
+        }
         if let Some((calibration, exposure, aperture)) = &self.radiometry {
             self.exposed = ExposedFrame::capture(&self.frames, exposure, aperture, *calibration)?;
             if let (Some(projection), Some(frame)) = (&self.projection, &mut self.exposed) {
                 frame.focus_shift_mm = Some(projection.focus()?);
             }
         }
-        self.frames.lock().unwrap().latch(tick)
-    }
-    /// Whether the last latched readout carried a valid frame.
-    pub fn readout_valid(&self) -> bool {
-        self.readout_valid
+        self.frames.lock().unwrap().latch(tick).map(Some)
     }
     pub fn freeze_readout(
         &mut self,

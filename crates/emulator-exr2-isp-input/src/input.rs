@@ -628,8 +628,7 @@ impl ImageInput {
         let Some(sensor) = &mut self.wiring.sensor else {
             return Ok(true);
         };
-        sensor.latch(cx.now())?;
-        if !sensor.readout_valid() {
+        if sensor.latch(cx.now())?.is_none() {
             return Ok(false);
         }
         let State {
