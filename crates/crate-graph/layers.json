@@ -115,14 +115,13 @@
       "fujimod-usb-app80",
       "fujimod-usb-app80-types",
       "fujimod-usb-proxy",
+      "fujimod-virtual-scene",
       "fujimod-workflows",
       "fujimod-workspace-hack"
     ]
   },
   "remaining": {
-    "untested_libraries": [
-      "fujimod-python-host-image"
-    ],
+    "untested_libraries": [],
     "model_dependencies": {
       "fujimod-emulator-xp5-board": [
         "fujimod-emulator-ip",

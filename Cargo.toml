@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/corpus",
+  "crates/virtual-scene",
   "crates/recording",
   "crates/remote",
   "crates/firmware",
@@ -142,6 +143,7 @@ fujimod-emulator-xp4-board = { path = "crates/emulator-xp4-board", version = "0.
 fujimod-emulator-imaging = { path = "crates/emulator-imaging", version = "0.1.0" }
 fujimod-emulator-image-formation = { path = "crates/emulator-image-formation", version = "0.1.0" }
 fujimod-emulator-image-processing = { path = "crates/emulator-image-processing", version = "0.1.0" }
+fujimod-virtual-scene = { path = "crates/virtual-scene", version = "0.1.0" }
 fujimod-emulator-sensor-input = { path = "crates/emulator-sensor-input", version = "0.1.0" }
 fujimod-emulator-image-codecs = { path = "crates/emulator-image-codecs", version = "0.1.0" }
 fujimod-emulator-exr2-isp-output = { path = "crates/emulator-exr2-isp-output", version = "0.1.0" }

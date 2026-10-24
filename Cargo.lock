@@ -2334,6 +2334,7 @@ dependencies = [
  "cc",
  "fujimod-emulator-devices",
  "fujimod-emulator-image-processing",
+ "fujimod-virtual-scene",
  "fujimod-workspace-hack",
  "pkg-config",
  "pyo3",
@@ -2567,6 +2568,14 @@ dependencies = [
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fujimod-virtual-scene"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "serde",
 ]
 
 [[package]]
