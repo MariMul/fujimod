@@ -180,7 +180,7 @@ struct BrowserFields {
 }
 
 /// A prepared run and its browser fields, `{schema, prepared, browser}`.
-/// `prepared` is `fujimod_emulator::boot::Prepared::to_json` output.
+/// `prepared` is `fujimod_emulator_boot::Prepared::to_json` output.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PreparedConfig {
@@ -335,10 +335,10 @@ impl Session {
         let (scanout, nands) = device_roles(&plan)?;
         fujimod_emulator_exr2_board::register_board_builder();
         fujimod_emulator_models::register();
-        let prepared = fujimod_emulator::boot::Prepared::from_json(&config.prepared)?;
-        let mut core = fujimod_emulator::boot::open_prepared(
+        let prepared = fujimod_emulator_boot::Prepared::from_json(&config.prepared)?;
+        let mut core = fujimod_emulator_boot::open_prepared(
             prepared,
-            fujimod_emulator::boot::InputBytes {
+            fujimod_emulator_boot::InputBytes {
                 update,
                 boot_rom,
                 nand,
@@ -402,7 +402,7 @@ impl Session {
         }
         if let Some(clock) = c.clock_seconds2000 {
             let mut devices = definition["devices"].clone();
-            fujimod_emulator::boot::apply_clock(&mut devices, clock)?;
+            fujimod_emulator_boot::apply_clock(&mut devices, clock)?;
             g.devices = Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?;
             definition["devices"] = devices;
         }

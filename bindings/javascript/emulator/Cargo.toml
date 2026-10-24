@@ -24,6 +24,7 @@ fujimod-emulator-ip-arm.workspace = true
 fujimod-emulator-graphics.workspace = true
 ciborium.workspace = true
 fujimod-emulator = { workspace = true, default-features = false, features = ["typescript"] }
+fujimod-emulator-boot = { workspace = true, features = ["typescript"] }
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-cpu-unicorn = { workspace = true, features = ["typescript"] }
 fujimod-emulator-devices = { workspace = true, features = ["typescript"] }

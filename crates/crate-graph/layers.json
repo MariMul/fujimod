@@ -53,6 +53,7 @@
     ],
     "engine": [
       "fujimod-emulator",
+      "fujimod-emulator-boot",
       "fujimod-emulator-cpu",
       "fujimod-emulator-cpu-hvf",
       "fujimod-emulator-cpu-unicorn",

@@ -13,6 +13,7 @@ doctest = false
 [dependencies]
 fujimod-catalog.workspace = true
 fujimod-emulator.workspace = true
+fujimod-emulator-boot.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-sensor-input.workspace = true

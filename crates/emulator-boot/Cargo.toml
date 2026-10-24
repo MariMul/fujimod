@@ -1,0 +1,45 @@
+[package]
+name = "fujimod-emulator-boot"
+description = "Boot assembly and run preparation from the reference catalog and run configurations"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-emulator-cpu-unicorn.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-exr2-plan.workspace = true
+fujimod-catalog.workspace = true
+fujimod-catalog-content.workspace = true
+fujimod-catalog-construction.workspace = true
+fujimod-catalog-controls.workspace = true
+fujimod-settings.workspace = true
+fujimod-recording.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+tsify = { workspace = true, optional = true }
+serde-wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true, optional = true }
+fujimod-workspace-hack.workspace = true
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { workspace = true, features = ["asm-aarch64"] }
+
+[dev-dependencies]
+fujimod-emulator-exr2-board.workspace = true
+fujimod-emulator-models.workspace = true
+
+[features]
+# TypeScript declarations for boot reports in wasm-bindgen builds.
+typescript = ["dep:tsify", "dep:serde-wasm-bindgen", "dep:wasm-bindgen"]
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"

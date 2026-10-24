@@ -6,7 +6,7 @@ mod first_start;
 pub mod graph;
 mod x70;
 
-use crate::{
+use fujimod_emulator::{
     board::{
         bus::{Bus, Mode},
         factory,

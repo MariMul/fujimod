@@ -7,13 +7,11 @@ use super::{
     },
     session::Session,
 };
-use fujimod_emulator::{
-    boot::RecReport,
-    session::{
-        card::{CardState, CardTree},
-        history::Input,
-    },
+use fujimod_emulator::session::{
+    card::{CardState, CardTree},
+    history::Input,
 };
+use fujimod_emulator_boot::RecReport;
 
 impl Session {
     fn card_node(&self) -> Result<&str, String> {
@@ -233,7 +231,7 @@ impl Session {
     }
     /// Native first-start and REC observation, bounded by an instruction budget.
     pub fn boot_to_rec(&mut self, limit: u64) -> Result<RecReport, String> {
-        fujimod_emulator::boot::to_rec(&mut self.core, limit)
+        fujimod_emulator_boot::to_rec(&mut self.core, limit)
     }
     pub fn set_power(&mut self, on: bool) -> Result<SessionState, String> {
         self.power(on)?;

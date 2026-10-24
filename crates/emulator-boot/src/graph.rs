@@ -4,7 +4,6 @@
 //! processor reset state, decoder selections, peripherals, and RAM capacity
 //! are read from the selected catalog identities.
 
-use crate::board::{factory, memory::BusMapping};
 use fujimod_catalog::{
     configuration::RunInstructionRate,
     reference::{
@@ -12,6 +11,7 @@ use fujimod_catalog::{
         ProcessorRegister, RegionSize, ResolvedSelection, Soc,
     },
 };
+use fujimod_emulator::board::{factory, memory::BusMapping};
 use fujimod_emulator_cpu::{Model, Register, arm};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -54,7 +54,7 @@ fn build_processor(
     model: ProcessorModel,
     registers: &[(Register, u64)],
     released: bool,
-    mprofile: Option<crate::board::mprofile::Config>,
+    mprofile: Option<fujimod_emulator::board::mprofile::Config>,
     rprofile: Option<&fujimod_catalog::reference::RProfileState>,
     architecture: ProcessorArchitecture,
 ) -> Result<factory::Processor, String> {
@@ -136,7 +136,7 @@ fn decoder_selection(
     mappings: &BTreeMap<&str, factory::MemoryMap>,
     dma: &BTreeMap<&str, BusMapping>,
     decoder_id: &str,
-) -> Result<crate::board::decoder::Choice, String> {
+) -> Result<fujimod_emulator::board::decoder::Choice, String> {
     let processors = selection
         .processors
         .iter()
@@ -155,7 +155,7 @@ fn decoder_selection(
                 .ok_or_else(|| format!("decoder {decoder_id} refers to absent DMA mapping {id}"))
         })
         .collect::<Result<_, _>>()?;
-    Ok(crate::board::decoder::Choice { processors, dma })
+    Ok(fujimod_emulator::board::decoder::Choice { processors, dma })
 }
 
 /// Construct and validate the processor/address graph for one resolved body.
@@ -241,7 +241,7 @@ pub fn assemble_with_starts(
                             soc.id, companion.clock_id
                         )
                     })?;
-                Some(crate::board::mprofile::Config {
+                Some(fujimod_emulator::board::mprofile::Config {
                     clock_hz,
                     board_ticks_per_second: board_ticks_per_second
                         .ok_or("M-profile companion requires a run timebase")?,
@@ -359,7 +359,7 @@ pub fn assemble_with_starts(
                     choices.push(initial);
                     index
                 });
-            Ok::<_, String>(crate::board::decoder::Decoder {
+            Ok::<_, String>(fujimod_emulator::board::decoder::Decoder {
                 initial: initial_index,
                 choices,
             })

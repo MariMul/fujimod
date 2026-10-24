@@ -31,7 +31,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// firmware startup profile. The profile is data; opening the board does not
 /// inspect firmware instructions or select a profile by firmware identity.
 pub struct FirmwareStartup {
-    pub processors: Vec<fujimod_emulator::boot::graph::ProcessorStart>,
+    pub processors: Vec<fujimod_emulator_boot::graph::ProcessorStart>,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
 }
@@ -126,7 +126,7 @@ pub fn startup_from_profile(
                 }
             }
             insert_start_register(&mut registers, "MPIDR_EL1", *affinity)?;
-            Ok(fujimod_emulator::boot::graph::ProcessorStart {
+            Ok(fujimod_emulator_boot::graph::ProcessorStart {
                 processor_id: processor.id.clone(),
                 released: cpu.running,
                 registers,

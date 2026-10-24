@@ -54,9 +54,12 @@ From the bottom of the graph to the top:
 5. Board crates: validation, wiring, resources and DMA consolidation. They
    construct nodes through the constructor registry and depend on the interface
    and plan crates only.
-6. `fujimod-emulator`: execution, scheduling, sessions and boot orchestration.
-   It depends on the CPU, interface and plan crates. Sessions reach devices
-   through capability traits, never through concrete model types.
+6. `fujimod-emulator`: execution, scheduling and sessions. It depends on the
+   CPU, interface and plan crates and on no catalog crate above the interface's
+   own inputs. Sessions reach devices through capability traits, never through
+   concrete model types. `fujimod-emulator-boot` sits above it: it prepares
+   runs from the reference catalog and run configurations, assembles the CPU
+   graph and the X70 plan, and opens sessions.
 7. Binding libraries (the Python binding crates, the JavaScript bindings)
    over the emulator and the interface. The Python bindings are one crate per
    area, each depending only on what it binds: `fujimod-python-base` (the

@@ -51,7 +51,7 @@ or execution frontier, and 1 for invalid inputs or screenshot errors. A requeste
 PNG captures the currently composed LCD without advancing the guest. Input
 files are read only; firmware-written settings remain in the session's medium.
 
-Rust embedding uses `fujimod_emulator::boot::{Options, open, to_rec, screenshot}`;
+Rust embedding uses `fujimod_emulator_boot::{Options, open, to_rec, screenshot}`;
 set `Options.configuration_id` and `Options.overlays` to select the run.
 `open` returns an unexecuted `session::Session`; its `board` owns execution and
 its other methods supply external inputs and passive observations. `to_rec`
@@ -89,7 +89,7 @@ a fresh session directly. Browser reports include this complete
 ## XP5 board and session API
 
 Rust callers can open an XP5 board through
-`fujimod_emulator::boot::open_xp5`. `Xp5OpenOptions` supplies a validated CPU
+`fujimod_emulator_xp5_board::boot::open`. `OpenOptions` supplies a validated CPU
 graph, explicit device windows, interrupt state, A-profile setup, resistor-key
 options, device resources, and initial memory images. The function builds the
 same `board::factory::Graph`, strict device bus and `session::Session` used by

@@ -1,6 +1,6 @@
 //! File-based construction and synchronous execution on the Python owner thread.
 use super::*;
-use fujimod_emulator::boot;
+use fujimod_emulator_boot as boot;
 use std::{
     marker::PhantomData,
     ptr::NonNull,

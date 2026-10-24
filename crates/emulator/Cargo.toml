@@ -13,17 +13,13 @@ crate-type = ["rlib"]
 [dependencies]
 fujimod-emulator-imaging = { path = "../../crates/emulator-imaging" }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
-fujimod-settings = { path = "../../crates/settings" }
 fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
 fujimod-emulator-exr2-plan = { path = "../emulator-exr2-plan" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
-fujimod-catalog = { path = "../catalog" }
-fujimod-catalog-construction.workspace = true
 fujimod-catalog-content.workspace = true
-fujimod-catalog-controls.workspace = true
 serde_json = "1"
 toml = "0.9"
 sha2 = "0.10"

@@ -1,5 +1,5 @@
 //! Native boot command; every binary input is selected by path.
-use fujimod_emulator::boot::{self, Options};
+use fujimod_emulator_boot::{self as boot, Options};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode};
 

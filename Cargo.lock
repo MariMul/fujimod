@@ -3555,10 +3555,7 @@ dependencies = [
 name = "fujimod-emulator"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
- "fujimod-catalog-construction",
  "fujimod-catalog-content",
- "fujimod-catalog-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
@@ -3572,7 +3569,6 @@ dependencies = [
  "fujimod-emulator-models",
  "fujimod-emulator-storage",
  "fujimod-recording",
- "fujimod-settings",
  "fujimod-workspace-hack",
  "libc",
  "serde",
@@ -3585,11 +3581,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-boot"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-content",
+ "fujimod-catalog-controls",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-models",
+ "fujimod-recording",
+ "fujimod-settings",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha2",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-content",
  "fujimod-emulator",
+ "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
@@ -4020,6 +4043,7 @@ version = "0.1.0"
 dependencies = [
  "ciborium",
  "fujimod-emulator",
+ "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
@@ -4208,6 +4232,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-emulator",
+ "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
@@ -4351,6 +4376,7 @@ dependencies = [
  "fujimod-catalog-content",
  "fujimod-catalog-settings",
  "fujimod-emulator",
+ "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
