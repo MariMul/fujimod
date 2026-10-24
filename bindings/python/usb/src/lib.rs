@@ -474,7 +474,9 @@ impl BindingError {
         }
     }
 }
-pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+/// Add `fujimod.firmware` and `fujimod.usb` with its submodules to `m`.
+pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    firmware::register(py, m, "fujimod.firmware")?;
     let usb = PyModule::new(py, "fujimod.usb")?;
     usb.add("__path__", PyList::empty(py))?;
     usb.add_class::<InfoSelector>()?;
@@ -536,8 +538,9 @@ pub(crate) fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> 
 }
 
 mod app80;
-pub(crate) mod asynchronous;
+pub mod asynchronous;
 mod data;
+mod firmware;
 mod research;
 mod tracing;
 

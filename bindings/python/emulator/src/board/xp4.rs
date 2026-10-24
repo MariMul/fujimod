@@ -11,7 +11,7 @@ impl Xp4 {
     fn with<T>(
         &self,
         py: Python<'_>,
-        f: impl FnOnce(&dyn super::xp4_backend::Xp4Backend) -> PyResult<T>,
+        f: impl FnOnce(&dyn fujimod_python_base::xp4_backend::Xp4Backend) -> PyResult<T>,
     ) -> PyResult<T> {
         f(self.owner.try_borrow(py)?.xp4_session()?)
     }
@@ -207,7 +207,7 @@ impl Xp4 {
         &self,
         py: Python<'_>,
         by_count: bool,
-    ) -> PyResult<Vec<crate::emulator::discovery::FrontierEntry>> {
+    ) -> PyResult<Vec<fujimod_python_base::discovery::FrontierEntry>> {
         self.with(py, |s| Ok(s.frontier(by_count)))
     }
     fn discovery_shadow(&self, py: Python<'_>) -> PyResult<Vec<(u64, u8)>> {
@@ -216,7 +216,7 @@ impl Xp4 {
     fn interventions(
         &self,
         py: Python<'_>,
-    ) -> PyResult<Vec<crate::emulator::discovery::Intervention>> {
+    ) -> PyResult<Vec<fujimod_python_base::discovery::Intervention>> {
         self.with(py, |s| Ok(s.interventions()))
     }
 }

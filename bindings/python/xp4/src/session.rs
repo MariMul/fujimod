@@ -18,7 +18,7 @@ pub struct Xp4Session {
 macro_rules! forward {
     ($name:ident($($argument:ident: $kind:ty),* $(,)?) -> $result:ty) => {
         pub fn $name(&self, $($argument: $kind),*) -> PyResult<$result> {
-            self.inner.$name($($argument),*).map_err(fujimod_python::emulator::error)
+            self.inner.$name($($argument),*).map_err(fujimod_python_base::error)
         }
     };
 }
@@ -28,7 +28,7 @@ impl Xp4Session {
         let definition: Definition = serde_json::from_str(definition)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let inner =
-            Session::new(definition, storage_image).map_err(fujimod_python::emulator::error)?;
+            Session::new(definition, storage_image).map_err(fujimod_python_base::error)?;
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
         inner.set_instruction_observer(Some(Rc::new(move |core, address| {
@@ -116,7 +116,7 @@ impl Xp4Session {
     ) -> PyResult<Option<Bound<'py, PyDict>>> {
         self.inner
             .function_watch_state()
-            .map(|saved| fujimod_python::emulator::python_observation::snapshot(py, &saved))
+            .map(|saved| fujimod_python_base::observation::snapshot(py, &saved))
             .transpose()
     }
     forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize) -> ());
@@ -130,16 +130,16 @@ impl Xp4Session {
     pub fn reg_read(&self, core: usize, register: i32) -> PyResult<u32> {
         let value = self.read_register(
             core,
-            client_register(register).map_err(fujimod_python::emulator::error)?,
+            client_register(register).map_err(fujimod_python_base::error)?,
         )?;
         u32::try_from(value).map_err(|_| {
-            fujimod_python::emulator::error("ARMv7-A scalar register exceeds 32 bits".into())
+            fujimod_python_base::error("ARMv7-A scalar register exceeds 32 bits".into())
         })
     }
     pub fn reg_write(&self, core: usize, register: i32, value: u32) -> PyResult<()> {
         self.write_register(
             core,
-            client_register(register).map_err(fujimod_python::emulator::error)?,
+            client_register(register).map_err(fujimod_python_base::error)?,
             u64::from(value),
         )
     }
@@ -152,11 +152,11 @@ impl Xp4Session {
     ) -> PyResult<Bound<'py, PyBytes>> {
         self.inner
             .validate_read(address, size)
-            .map_err(fujimod_python::emulator::error)?;
+            .map_err(fujimod_python_base::error)?;
         PyBytes::new_with(py, size, |out| {
             self.inner
                 .read(address, out)
-                .map_err(fujimod_python::emulator::error)
+                .map_err(fujimod_python_base::error)
         })
     }
     forward!(write(address: usize, data: &[u8]) -> ());
@@ -170,7 +170,7 @@ impl Xp4Session {
         let bytes = self
             .inner
             .read_virtual(core, address, size)
-            .map_err(fujimod_python::emulator::error)?;
+            .map_err(fujimod_python_base::error)?;
         Ok(PyBytes::new(py, &bytes))
     }
     forward!(run(core: usize, budget: usize) -> ());
@@ -195,7 +195,7 @@ impl Xp4Session {
             py,
             self.inner
                 .interrupt_state()
-                .map_err(fujimod_python::emulator::error)?,
+                .map_err(fujimod_python_base::error)?,
         )
     }
     pub fn device_records<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
@@ -207,7 +207,7 @@ impl Xp4Session {
     pub fn frontier(
         &self,
         by_count: bool,
-    ) -> Vec<fujimod_python::emulator::discovery::FrontierEntry> {
+    ) -> Vec<fujimod_python_base::discovery::FrontierEntry> {
         self.inner
             .frontier(by_count)
             .into_iter()
@@ -217,7 +217,7 @@ impl Xp4Session {
     pub fn discovery_shadow(&self) -> Vec<(u64, u8)> {
         self.inner.discovery_shadow()
     }
-    pub fn interventions(&self) -> Vec<fujimod_python::emulator::discovery::Intervention> {
+    pub fn interventions(&self) -> Vec<fujimod_python_base::discovery::Intervention> {
         self.inner
             .interventions()
             .into_iter()
@@ -226,7 +226,7 @@ impl Xp4Session {
     }
 }
 
-impl fujimod_python::emulator::board::xp4_backend::Xp4Backend for Xp4Session {
+impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()> {
         Xp4Session::run_board(self, limit, quantum)
     }
@@ -407,13 +407,13 @@ impl fujimod_python::emulator::board::xp4_backend::Xp4Backend for Xp4Session {
     fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>> {
         Xp4Session::state(self, py, observations)
     }
-    fn frontier(&self, by_count: bool) -> Vec<fujimod_python::emulator::discovery::FrontierEntry> {
+    fn frontier(&self, by_count: bool) -> Vec<fujimod_python_base::discovery::FrontierEntry> {
         Xp4Session::frontier(self, by_count)
     }
     fn discovery_shadow(&self) -> Vec<(u64, u8)> {
         Xp4Session::discovery_shadow(self)
     }
-    fn interventions(&self) -> Vec<fujimod_python::emulator::discovery::Intervention> {
+    fn interventions(&self) -> Vec<fujimod_python_base::discovery::Intervention> {
         Xp4Session::interventions(self)
     }
 }

@@ -5,8 +5,8 @@ mod context;
 mod loops;
 mod observation;
 mod xp4;
-pub mod xp4_backend;
 pub use checkpoint::Checkpoint;
+use fujimod_python_base::xp4_backend;
 mod device;
 use fujimod_emulator::session::preparation;
 mod run;
@@ -28,7 +28,7 @@ use pyo3::{
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 fn error(message: String) -> PyErr {
-    crate::emulator::error(message)
+    fujimod_python_base::error(message)
 }
 fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
     serde_json::from_str(value).map_err(|e| PyValueError::new_err(e.to_string()))
@@ -121,7 +121,7 @@ impl Board {
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
-    pub(crate) fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator::session::Session> {
+    pub fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator::session::Session> {
         match self.backend.as_mut() {
             Some(Backend::Graph(session)) => Ok(session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
@@ -247,7 +247,7 @@ impl Board {
             .as_ref()
             .map(|watch| {
                 watch.check().map_err(error)?;
-                crate::emulator::python_observation::snapshot(
+                fujimod_python_base::observation::snapshot(
                     py,
                     &watch.recorder.borrow().snapshot(),
                 )

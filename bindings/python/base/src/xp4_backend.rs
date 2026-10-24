@@ -1,6 +1,6 @@
-//! What the shared bindings call on an XP4 session. `fujimod-python-xp4` implements it and
-//! registers its factory, so these bindings depend on no XP4 crate.
-use crate::emulator::discovery::{FrontierEntry, Intervention};
+//! What the emulator bindings call on an XP4 session. `fujimod-python-xp4` implements it and
+//! registers its factory, so the emulator bindings depend on no XP4 crate.
+use crate::discovery::{FrontierEntry, Intervention};
 use fujimod_emulator_cpu::{Register, arm};
 use pyo3::{
     PyTraverseError, PyVisit,
@@ -104,7 +104,7 @@ pub fn set_xp4_factory(factory: Xp4Factory) {
     FACTORY.get_or_init(|| factory);
 }
 
-pub(crate) fn open(
+pub fn open(
     definition: &str,
     storage_image: Option<Vec<u8>>,
 ) -> PyResult<Box<dyn Xp4Backend>> {

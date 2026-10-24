@@ -15,13 +15,25 @@ doctest = false
 
 [features]
 default = ["emulator"]
-emulator = ["fujimod-python/emulator", "dep:fujimod-emulator-exr2-board", "dep:fujimod-python-graphics", "dep:fujimod-python-xp4"]
-testing = ["fujimod-python/testing"]
+emulator = [
+    "dep:fujimod-emulator-exr2-board",
+    "dep:fujimod-python-emulator",
+    "dep:fujimod-python-graphics",
+    "dep:fujimod-python-host-image",
+    "dep:fujimod-python-xp4",
+    "fujimod-python-remote/emulator",
+]
+testing = ["fujimod-python-usb/testing", "fujimod-python-remote/testing"]
 
 [dependencies]
 fujimod-emulator-models.workspace = true
-fujimod-python = { path = "..", default-features = false }
+fujimod-python-catalog = { path = "../catalog" }
+fujimod-python-emulator = { path = "../emulator", optional = true }
 fujimod-python-graphics = { path = "../graphics", optional = true }
+fujimod-python-host-image = { path = "../host-image", optional = true }
+fujimod-python-recording = { path = "../recording" }
+fujimod-python-remote = { path = "../remote" }
+fujimod-python-usb = { path = "../usb" }
 fujimod-python-xp4 = { path = "../xp4", optional = true }
 fujimod-emulator-exr2-board = { path = "../../../crates/emulator-exr2-board", optional = true }
 pyo3.workspace = true

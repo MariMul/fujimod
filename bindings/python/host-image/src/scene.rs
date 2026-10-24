@@ -316,7 +316,7 @@ impl HostImage {
     fn film_yycbcr<'py>(
         &self,
         py: Python<'py>,
-        film: &crate::emulator::film::FilmStage,
+        film: &crate::film::FilmStage,
         width: &Bound<'py, PyAny>,
         height: &Bound<'py, PyAny>,
         stride: &Bound<'py, PyAny>,
@@ -358,7 +358,7 @@ impl HostImage {
                 } else {film.color(sample(x,y))}
             };
             output_pairs(scene,crop,width,height,stride,
-                |x0,x1,y| crate::emulator::film::FilmStage::pack(color(x0,y),color(x1,y)))
+                |x0,x1,y| crate::film::FilmStage::pack(color(x0,y),color(x1,y)))
         })?;
         Ok(PyBytes::new(py, &bytes))
     }

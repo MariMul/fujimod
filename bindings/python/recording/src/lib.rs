@@ -218,7 +218,7 @@ fn controls() -> &'static str {
     fujimod_recording::CONTROLS
 }
 
-pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let module = PyModule::new(py, "fujimod.recording")?;
     module.add_class::<Frame>()?;
     module.add_class::<Recorder>()?;

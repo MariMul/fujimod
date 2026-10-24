@@ -1,8 +1,11 @@
 # FujiMod Python package
 
-This directory holds the `fujimod` Python package. PyO3 source lives in
-`src/`; the USB implementation lives in the workspace's `crates/usb/`.
-Python source lives in `python/fujimod/`. Native Python loads the compiled
+This directory holds the `fujimod` Python package. Its PyO3 bindings are
+crates by area, which compile in parallel: `catalog/`, `usb/`, `recording/`,
+`remote/`, `emulator/` (boards and run configurations), `host-image/`,
+`graphics/` and `xp4/`, over the shared errors and values in `base/`.
+`module/` links them into `fujimod._native`. The USB implementation lives in
+the workspace's `crates/usb/`. Python source lives in `python/fujimod/`. Native Python loads the compiled
 `fujimod._native` extension; Pyodide uses the same public `fujimod.usb`
 namespace through the [WebUSB adapter](PYODIDE.md).
 

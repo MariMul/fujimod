@@ -269,7 +269,7 @@ fn align_sequences(
     py.detach(|| fujimod_corpus::align_sequences(&left, &right))
 }
 
-pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let module = PyModule::new(py, "corpus")?;
     module.add_class::<CorpusIndex>()?;
     module.add_function(wrap_pyfunction!(align_sequences, &module)?)?;

@@ -50,7 +50,7 @@ impl Drop for Lease {
     }
 }
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
-struct PythonBoard(Py<crate::emulator::board::Board>);
+struct PythonBoard(Py<fujimod_python_emulator::board::Board>);
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
 impl remote::board::SessionOwner for PythonBoard {
     fn with_session<T>(
@@ -71,7 +71,7 @@ impl remote::board::SessionOwner for PythonBoard {
 impl Camera {
     #[staticmethod]
     fn from_ff80(
-        session: &crate::usb::asynchronous::AsyncSession,
+        session: &fujimod_python_usb::asynchronous::AsyncSession,
         facts: &str,
         read_bytes: u32,
         write_bytes: u32,
@@ -390,7 +390,7 @@ fn facts_from_selection(selection: &str, manifest: &str) -> PyResult<String> {
     let facts = Facts::from_selection(&selection, manifest).map_err(error)?;
     serde_json::to_string(&facts).map_err(|e| error(e.to_string()))
 }
-pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let module = PyModule::new(py, "remote")?;
     module.add_function(wrap_pyfunction!(facts_from_selection, &module)?)?;
     module.add_class::<Camera>()?;
@@ -406,7 +406,7 @@ impl Camera {
     #[staticmethod]
     #[pyo3(signature = (board, facts, options, observer=None))]
     fn from_board(
-        board: Py<crate::emulator::board::Board>,
+        board: Py<fujimod_python_emulator::board::Board>,
         facts: &str,
         options: &str,
         observer: Option<Py<PyAny>>,
@@ -448,7 +448,7 @@ impl Camera {
     #[staticmethod]
     #[pyo3(signature = (session, poll_seconds=0.001))]
     fn synthetic_ff80(
-        session: &crate::usb::asynchronous::AsyncSession,
+        session: &fujimod_python_usb::asynchronous::AsyncSession,
         poll_seconds: f64,
     ) -> PyResult<Self> {
         let facts =

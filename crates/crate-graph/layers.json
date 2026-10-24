@@ -58,7 +58,12 @@
     ],
     "library": [
       "fujimod",
-      "fujimod-python",
+      "fujimod-python-base",
+      "fujimod-python-catalog",
+      "fujimod-python-emulator",
+      "fujimod-python-recording",
+      "fujimod-python-remote",
+      "fujimod-python-usb",
       "fujimod-remote"
     ],
     "final": [
@@ -67,6 +72,7 @@
       "fujimod-emulator-models",
       "fujimod-javascript",
       "fujimod-python-graphics",
+      "fujimod-python-host-image",
       "fujimod-python-module",
       "fujimod-python-xp4"
     ],

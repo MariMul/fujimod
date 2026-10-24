@@ -73,7 +73,7 @@ impl Slot {
 }
 #[pyclass(name = "Session", frozen, from_py_object, module = "fujimod.usb")]
 #[derive(Clone)]
-pub(crate) struct AsyncSession {
+pub struct AsyncSession {
     inner: Arc<Mutex<Slot>>,
     limits: FirmwareLimits,
     token: u16,
@@ -116,7 +116,7 @@ enum Resource {
     Closing,
     Closed,
 }
-pub(crate) struct Lease {
+pub struct Lease {
     owner: Arc<Mutex<Slot>>,
     resource: Resource,
 }
@@ -192,7 +192,7 @@ pub(super) fn register(
 }
 
 impl AsyncSession {
-    pub(crate) fn remote_lease(&self) -> PyResult<Lease> {
+    pub fn remote_lease(&self) -> PyResult<Lease> {
         Lease::new(self).map(|(lease, _)| lease)
     }
 }

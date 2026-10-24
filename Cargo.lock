@@ -4182,30 +4182,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-python"
+name = "fujimod-python-base"
 version = "0.1.0"
 dependencies = [
- "cc",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-catalog"
+version = "0.1.0"
+dependencies = [
  "fujimod-bindgen",
  "fujimod-catalog",
  "fujimod-corpus",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-emulator"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
- "fujimod-emulator-imaging",
  "fujimod-emulator-storage",
- "fujimod-firmware",
- "fujimod-recording",
- "fujimod-remote",
+ "fujimod-python-base",
  "fujimod-settings",
- "fujimod-usb",
- "fujimod-workflows",
  "fujimod-workspace-hack",
- "futures-channel",
- "futures-lite",
- "nusb",
- "pkg-config",
  "pyo3",
  "serde",
  "serde_json",
@@ -4221,9 +4233,23 @@ dependencies = [
  "fujimod-emulator-exr2-gpu",
  "fujimod-emulator-graphics",
  "fujimod-emulator-imaging",
- "fujimod-python",
+ "fujimod-python-base",
  "fujimod-workspace-hack",
  "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-host-image"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "pkg-config",
+ "pyo3",
+ "serde",
  "serde_json",
 ]
 
@@ -4233,10 +4259,58 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
- "fujimod-python",
+ "fujimod-python-catalog",
+ "fujimod-python-emulator",
  "fujimod-python-graphics",
+ "fujimod-python-host-image",
+ "fujimod-python-recording",
+ "fujimod-python-remote",
+ "fujimod-python-usb",
  "fujimod-python-xp4",
  "fujimod-workspace-hack",
+ "pyo3",
+]
+
+[[package]]
+name = "fujimod-python-recording"
+version = "0.1.0"
+dependencies = [
+ "fujimod-recording",
+ "fujimod-workspace-hack",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-remote"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator",
+ "fujimod-python-emulator",
+ "fujimod-python-usb",
+ "fujimod-remote",
+ "fujimod-usb",
+ "fujimod-workspace-hack",
+ "futures-lite",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-python-usb"
+version = "0.1.0"
+dependencies = [
+ "fujimod-bindgen",
+ "fujimod-catalog",
+ "fujimod-firmware",
+ "fujimod-python-catalog",
+ "fujimod-usb",
+ "fujimod-workflows",
+ "fujimod-workspace-hack",
+ "futures-channel",
+ "futures-lite",
+ "nusb",
  "pyo3",
 ]
 
@@ -4248,7 +4322,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-xp4-board",
- "fujimod-python",
+ "fujimod-python-base",
  "fujimod-workspace-hack",
  "pyo3",
  "serde_json",

@@ -1,21 +1,10 @@
 fn main() {
-    #[cfg(feature = "emulator")]
     build_jpeg(std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("emscripten"));
-    let root = std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
-    fujimod_bindgen::Api::build(&root, &out);
     println!("cargo:rerun-if-changed=build.rs");
 }
-
-#[cfg(feature = "emulator")]
 fn build_jpeg(wasm: bool) {
     let mut jpeg = cc::Build::new();
-    jpeg.file("src/emulator/jpeg_scanlines.c").warnings(true).pic(true);
+    jpeg.file("src/jpeg_scanlines.c").warnings(true).pic(true);
     if wasm {
         jpeg.flag("-sMAIN_MODULE=2")
             .flag("-sUSE_LIBJPEG=1")
@@ -56,5 +45,5 @@ fn build_jpeg(wasm: bool) {
             .probe("libjpeg")
             .expect("libjpeg development library");
     }
-    println!("cargo:rerun-if-changed=src/emulator/jpeg_scanlines.c");
+    println!("cargo:rerun-if-changed=src/jpeg_scanlines.c");
 }

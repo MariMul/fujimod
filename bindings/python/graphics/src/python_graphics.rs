@@ -4,7 +4,7 @@
 //! cross as dicts in insertion order; draws stay native in a `UiBatch`
 //! (`draw_dicts()` gives the reference structure for tests).
 
-use fujimod_python::emulator::python_values::{DeviceRefusal, value_to_py};
+use fujimod_python_base::values::{DeviceRefusal, value_to_py};
 use fujimod_emulator_devices::Unsupported;
 use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render};
 use pyo3::prelude::*;

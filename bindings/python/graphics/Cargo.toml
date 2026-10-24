@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 fujimod-emulator-imaging.workspace = true
-fujimod-python = { path = "..", default-features = false, features = ["emulator"] }
+fujimod-python-base = { path = "../base" }
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-display.workspace = true
 fujimod-emulator-exr2-gpu.workspace = true

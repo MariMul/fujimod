@@ -6,6 +6,8 @@ use pyo3::{
     types::{PyDict, PyList, PyModule, PyTuple},
 };
 
+mod corpus;
+
 include!(concat!(env!("OUT_DIR"), "/definition_codec_python.rs"));
 pyo3::create_exception!(fujimod.catalog, DefinitionError, PyValueError);
 
@@ -79,8 +81,8 @@ fn invalid(error: core::DefinitionError) -> PyErr {
 
 #[pyclass(frozen, from_py_object, module = "fujimod.catalog")]
 #[derive(Clone)]
-pub(crate) struct FirmwareIdentity {
-    pub(crate) inner: core::FirmwareIdentity,
+pub struct FirmwareIdentity {
+    pub inner: core::FirmwareIdentity,
 }
 #[pymethods]
 impl FirmwareIdentity {
@@ -102,8 +104,8 @@ impl FirmwareIdentity {
 
 #[pyclass(frozen, eq, from_py_object, module = "fujimod.catalog.service")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ServiceModes {
-    pub(crate) inner: core::ServiceModes,
+pub struct ServiceModes {
+    pub inner: core::ServiceModes,
 }
 #[pymethods]
 impl ServiceModes {
@@ -217,8 +219,8 @@ impl Mailbox {
 }
 #[pyclass(frozen, from_py_object, module = "fujimod.catalog.service")]
 #[derive(Clone)]
-pub(crate) struct Definition {
-    pub(crate) inner: core::Definition,
+pub struct Definition {
+    pub inner: core::Definition,
 }
 #[pymethods]
 impl Definition {
@@ -265,7 +267,9 @@ impl Definition {
     }
 }
 
-pub(crate) fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+/// Add `corpus` and `fujimod.catalog` with its `service` submodule to `parent`.
+pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    corpus::register(py, parent)?;
     let catalog = PyModule::new(py, "fujimod.catalog")?;
     catalog.add_function(wrap_pyfunction!(resolve_reference, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_firmware, &catalog)?)?;

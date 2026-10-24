@@ -47,11 +47,18 @@ From the bottom of the graph to the top:
 6. `fujimod-emulator`: execution, scheduling, sessions and boot orchestration.
    It depends on the CPU, interface and plan crates. Sessions reach devices
    through capability traits, never through concrete model types.
-7. Binding libraries (`fujimod-python`, the JavaScript bindings) over the
-   emulator and the interface. Binding functions that call one family's model
-   code live in that family's binding crate (`fujimod-python-graphics` for the
-   graphics data path, EXR II GPU and scanout), which sits with the final
-   crates and registers its functions on the module the final crate builds.
+7. Binding libraries (the Python binding crates, the JavaScript bindings)
+   over the emulator and the interface. The Python bindings are one crate per
+   area, each depending only on what it binds: `fujimod-python-base` (the
+   errors, values, discovery and call snapshots and the XP4 backend hook the
+   emulator bindings share), `-catalog` (catalog and corpus), `-usb` (USB,
+   app80, tracing, workflows and firmware files), `-recording`, `-remote` and
+   `-emulator` (boards, run configurations, input assets and settings
+   headers). Binding functions that call one family's model code live in that
+   family's binding crate (`fujimod-python-graphics` for the graphics data
+   path, EXR II GPU and scanout, `-xp4` for XP4 sessions, `-host-image` for
+   host image algorithms), which sits with the final crates and registers its
+   functions on the module the final crate builds.
 8. Final crates of a few lines each: the Python module (`_native`), the CLI
    and worker binaries, and the JavaScript module. Each links everything,
    registers constructors, board builders and family bindings, then starts.
@@ -102,8 +109,9 @@ layer that holds it is interface-level.
 ## Board code outside the emulator crate
 
 - XP4 boards live in `fujimod-emulator-xp4-board`, and their Python bindings
-  in `fujimod-python-xp4`; the shared bindings reach an XP4 session through
-  `Xp4Backend`, whose factory the `_native` module registers.
+  in `fujimod-python-xp4`; the emulator bindings reach an XP4 session through
+  `Xp4Backend` in `fujimod-python-base`, whose factory the `_native` module
+  registers.
 - XP5 boot lives in `fujimod-emulator-xp5-board`: `boot::open` returns the
   engine session with the `session::Inputs` that drive its keys and GPIO
   pins, so the engine session holds no XP5 state.
@@ -149,9 +157,12 @@ records the rebuild costs below before and after.
 5. Capabilities and interrupt delivery: done. The EXR II sessions reach devices
    through capabilities, XP4 boards and XP5 boot left the emulator, and the GIC
    is reached through its interface trait, so neither the emulator nor
-   `fujimod-python` depends on a model crate.
-6. Bindings: done. `fujimod-python` depends on no model crate; XP4 sessions
-   are bound in `fujimod-python-xp4`.
+   the Python binding libraries depend on a model crate.
+6. Bindings: done. The Python binding libraries depend on no model crate;
+   XP4 sessions are bound in `fujimod-python-xp4`. The former single
+   `fujimod-python` crate is split by area into crates that compile in
+   parallel, so a catalog edit no longer waits for every binding to rebuild
+   after the emulator.
 7. Final link: measured, no change. Relinking the extension module takes
    2.7–3.3 s end to end with the default Apple linker, 3.4–4.2 s with
    `-no_deduplicate` and 3.4–10 s with `lld` (load average 14), so the default
@@ -182,5 +193,5 @@ linking). Before the registry it also recompiled the board crate (0.4–0.5 s;
 edit also recompiles the EXR II serial, audio and boot serial crates, which
 depend on it. The extension links no XP5 model. An Arm interrupt controller edit recompiles the
 XP4 board and its Python bindings with the extension module; before the GIC
-trait it also recompiled the emulator and `fujimod-python`. Interface and plan
+trait it also recompiled the emulator and all Python bindings. Interface and plan
 edits rebuild their dependents across the workspace.

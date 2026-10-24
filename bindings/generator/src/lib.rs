@@ -330,7 +330,7 @@ impl Api {
             ("service_values_javascript.rs", self.javascript()),
             (
                 "definition_codec_python.rs",
-                python_choice(&self.codec, "fujimod.catalog.service", "pub(crate)"),
+                python_choice(&self.codec, "fujimod.catalog.service", "pub"),
             ),
             (
                 "definition_codec_javascript.rs",
