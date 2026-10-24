@@ -473,7 +473,6 @@ impl Session {
             cpu.coprocessor(c.register, Some(value | c.set_bits))?;
         }
         let core = fujimod_emulator::session::Session {
-            xp5: None,
             definition,
             controls: None,
             contact_driver: None,

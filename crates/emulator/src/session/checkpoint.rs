@@ -12,7 +12,6 @@ pub struct Snapshot {
     contacts: Vec<String>,
     pub(crate) board: Keyframe,
     resources: ResourceSnapshot,
-    xp5: bool,
     controls: Option<SwitchPanel>,
     contact_driver: Option<super::contact_driver::Driver>,
 }
@@ -47,7 +46,6 @@ impl Session {
             contacts: self.contacts.keys().cloned().collect(),
             board,
             resources,
-            xp5: self.xp5.is_some(),
             controls: self.controls.clone(),
             contact_driver: self.contact_driver.clone(),
         })

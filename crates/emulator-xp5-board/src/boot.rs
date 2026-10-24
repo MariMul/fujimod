@@ -4,7 +4,7 @@
 //! values supplied to those devices; neither the caller nor a board runner
 //! needs a second copy of the register-window map.
 
-use crate::board::{
+use fujimod_emulator::board::{
     InterruptMap, aprofile,
     bus::{Bus, Mode},
     factory,
@@ -21,7 +21,7 @@ use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
 use fujimod_emulator_parts_controls::resistor_keys::{Options as ResistorKeysOptions, ResistorKeys};
 use fujimod_emulator_ip_arm::{generic_timer, gicv3::Gic};
-use fujimod_emulator_xp5_board::board as xp5_board;
+use crate::board as xp5_board;
 use serde_json::Value;
 use std::time::Duration;
 use std::{collections::BTreeMap, sync::Arc};
@@ -30,7 +30,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// firmware startup profile. The profile is data; opening the board does not
 /// inspect firmware instructions or select a profile by firmware identity.
 pub struct FirmwareStartup {
-    pub processors: Vec<super::graph::ProcessorStart>,
+    pub processors: Vec<fujimod_emulator::boot::graph::ProcessorStart>,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
 }
@@ -125,7 +125,7 @@ pub fn startup_from_profile(
                 }
             }
             insert_start_register(&mut registers, "MPIDR_EL1", *affinity)?;
-            Ok(super::graph::ProcessorStart {
+            Ok(fujimod_emulator::boot::graph::ProcessorStart {
                 processor_id: processor.id.clone(),
                 released: cpu.running,
                 registers,
@@ -464,7 +464,7 @@ pub fn windows(
 /// An XP5 device bus assembled from the selected SoC profile.
 pub struct DeviceAssembly {
     pub bus: Bus,
-    pub inputs: super::super::session::xp5::State,
+    pub inputs: crate::session::Inputs,
     pub nodes: BTreeMap<String, usize>,
 }
 
@@ -527,7 +527,7 @@ pub fn assemble_devices(
     let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
         bus,
-        inputs: super::super::session::xp5::State::new(
+        inputs: crate::session::Inputs::new(
             resources.pins,
             controls,
             gpio_devices,
@@ -595,8 +595,11 @@ fn validate_images(graph: &factory::Graph, images: &[MemoryImage]) -> Result<(),
 }
 
 /// Open a caller-described XP5 board using FujiMod's standard bus, CPU factory
-/// and session. Firmware selection and byte identity policy belong to caller.
-pub fn open(options: OpenOptions) -> Result<super::super::session::Session, String> {
+/// and session, with the inputs that drive its keys and GPIO pins. Firmware
+/// selection and byte identity policy belong to caller.
+pub fn open(
+    options: OpenOptions,
+) -> Result<(fujimod_emulator::session::Session, crate::session::Inputs), String> {
     validate_images(&options.processors, &options.images)?;
     options.processors.validate()?;
     let assembly = assemble_devices(
@@ -622,17 +625,15 @@ pub fn open(options: OpenOptions) -> Result<super::super::session::Session, Stri
     if let Some(scene) = options.scene.as_ref() {
         board.set_scene(scene)?;
     }
-    let mut session = super::super::session::Session {
+    let session = fujimod_emulator::session::Session {
         definition: options.definition,
         board,
         controls: None,
         contact_driver: None,
         resources: Default::default(),
-        xp5: None,
         nodes: assembly.nodes,
         contacts: BTreeMap::new(),
         recording_frames: Default::default(),
     };
-    session.xp5 = Some(assembly.inputs);
-    Ok(session)
+    Ok((session, assembly.inputs))
 }

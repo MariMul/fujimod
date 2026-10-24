@@ -11,6 +11,10 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-catalog.workspace = true
+fujimod-emulator.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-sensor-input.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-ip.workspace = true

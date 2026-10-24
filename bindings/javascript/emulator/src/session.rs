@@ -320,7 +320,6 @@ impl Session {
             construction: Some(construction),
             capture_order: std::cell::Cell::new(1),
             core: fujimod_emulator::session::Session {
-                xp5: None,
                 definition,
                 controls: None,
                 contact_driver: None,

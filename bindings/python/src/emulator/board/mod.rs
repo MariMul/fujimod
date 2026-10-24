@@ -524,7 +524,6 @@ impl Board {
                 contacts: built.contacts,
                 recording_frames: Default::default(),
                 resources: built.resources,
-                xp5: None,
             })),
             objects: adapters.objects,
             failures: adapters.failures,

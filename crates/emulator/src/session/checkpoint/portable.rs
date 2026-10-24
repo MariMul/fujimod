@@ -4,14 +4,13 @@ use super::*;
 use fujimod_emulator_devices::checkpoint::Checkpoint as Encoded;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-const KIND: &str = "emulator-session-v1";
+const KIND: &str = "emulator-session-v2";
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Header<C, D> {
     definition: serde_json::Value,
     nodes: BTreeMap<String, usize>,
     contacts: Vec<String>,
-    xp5: bool,
     controls: C,
     contact_driver: D,
 }
@@ -24,7 +23,6 @@ impl Snapshot {
             definition: self.definition.clone(),
             nodes: self.nodes.clone(),
             contacts: self.contacts.clone(),
-            xp5: self.xp5,
             controls: &self.controls,
             contact_driver: &self.contact_driver,
         };
@@ -37,7 +35,6 @@ impl Session {
         if saved.definition != self.definition
             || saved.nodes != self.nodes
             || saved.contacts != self.contacts.keys().cloned().collect::<Vec<_>>()
-            || saved.xp5 != self.xp5.is_some()
         {
             return Err("snapshot session definition or attachments differ".into());
         }
@@ -73,7 +70,6 @@ impl Session {
             contacts: header.contacts,
             board,
             resources,
-            xp5: header.xp5,
             controls: header.controls,
             contact_driver: header.contact_driver,
         };

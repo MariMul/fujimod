@@ -86,7 +86,6 @@ fn card_session() -> Session {
         controls: None,
         contact_driver: None,
         resources,
-        xp5: None,
         nodes: BTreeMap::from([("sd".into(), id), ("adc".into(), adc)]),
         contacts: BTreeMap::from([("sd".into(), contacts)]),
         recording_frames: Default::default(),

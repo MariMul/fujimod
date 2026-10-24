@@ -87,8 +87,7 @@
   "remaining": {
     "model_dependencies": {
       "fujimod-emulator": [
-        "fujimod-emulator-ip-arm",
-        "fujimod-emulator-parts-controls"
+        "fujimod-emulator-ip-arm"
       ],
       "fujimod-emulator-exr2-board": [
         "fujimod-emulator-exr2-audio",
@@ -115,6 +114,7 @@
         "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",
         "fujimod-emulator-ip-dmp",
+        "fujimod-emulator-parts-controls",
         "fujimod-emulator-parts-io",
         "fujimod-emulator-sensor-input",
         "fujimod-emulator-xp5-display",

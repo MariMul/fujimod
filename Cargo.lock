@@ -3466,9 +3466,7 @@ dependencies = [
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-imaging",
  "fujimod-emulator-ip-arm",
- "fujimod-emulator-parts-controls",
  "fujimod-emulator-storage",
- "fujimod-emulator-xp5-board",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -4031,10 +4029,14 @@ dependencies = [
 name = "fujimod-emulator-xp5-board"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
+ "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-sensor-input",
  "fujimod-emulator-xp5-display",

@@ -12,8 +12,6 @@ crate-type = ["rlib"]
 
 [dependencies]
 fujimod-emulator-imaging = { path = "../../crates/emulator-imaging" }
-fujimod-emulator-xp5-board = { path = "../../crates/emulator-xp5-board" }
-fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls" }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
 fujimod-settings = { path = "../../crates/settings" }
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }

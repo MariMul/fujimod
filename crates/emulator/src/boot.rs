@@ -3,24 +3,8 @@
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
 mod first_start;
-mod graph;
+pub mod graph;
 mod x70;
-mod xp5;
-
-/// Caller-supplied processor reset state for catalog-resolved XP5 execution.
-pub use graph::ProcessorStart as Xp5ProcessorStart;
-/// Assemble the checked catalog CPU, RAM, peripheral, and mapping graph for XP5.
-pub use graph::assemble_with_starts as xp5_execution_graph;
-
-/// Resolve device windows from a selected XP5 hardware profile.
-pub use xp5::windows as xp5_device_windows;
-/// An XP5 device bus assembled from the selected SoC hardware profile.
-pub use xp5::{
-    DeviceAssembly as Xp5DeviceAssembly, FirmwareStartup as Xp5FirmwareStartup,
-    MemoryImage as Xp5MemoryImage, OpenOptions as Xp5OpenOptions,
-    apply_run_scene as xp5_apply_run_scene, assemble_devices as assemble_xp5_devices,
-    open as open_xp5, startup_from_profile as xp5_startup_from_profile,
-};
 
 use crate::{
     board::{
@@ -1014,7 +998,6 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
         controls: None,
         contact_driver: None,
         resources: built.resources,
-        xp5: None,
         nodes: built.node_ids,
         contacts: built.contacts,
         recording_frames: Default::default(),
