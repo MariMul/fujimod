@@ -1,6 +1,7 @@
 /** Build and upload the site and generated assets directly to Cloudflare. */
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { resolve } from 'node:path';
 import { stageSite } from './stage-site.ts';
 const { values } = parseArgs({
   options: {
@@ -17,7 +18,15 @@ console.log(
 );
 if (!values['prepare-only']) {
   const run = (command: string, args: string[]) =>
-    execFileSync(command, args, { stdio: 'inherit', env: process.env });
+    execFileSync(command, args, {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        FUJIMOD_RUNTIME: resolve('public/runtime'),
+        FUJIMOD_PATCHES: resolve('public/artifacts'),
+        FUJIMOD_MEDIA: resolve('public/artifacts/docs'),
+      },
+    });
   run('npm', ['run', 'check']);
   run('npm', ['test']);
   run('npm', ['run', 'build']);
