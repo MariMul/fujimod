@@ -57,7 +57,7 @@ const CARDS: Record<string, Card> = {
     related: [
       {
         card: 'image_size',
-        reason: 'the crop fits within the image size',
+        reason: 'set the max width and height before applying the crop',
       },
     ],
     manual: null,
@@ -141,12 +141,27 @@ const CARDS: Record<string, Card> = {
       HIGHLIGHT:
         'Exposure is reduced when bright areas dominate the scene. A small bright detail may still be overexposed.',
       'RAW HIGHLIGHT':
-        'RAW HIGHLIGHT: Exposure is set so that the brightest areas of the frame are recorded as brightly as possible without loss of detail in RAW images. Available when a RAW option is selected for IMAGE QUALITY.',
+        'Expose To The Right (ETTR): Exposure is set so that the brightest areas of the frame are recorded as brightly as possible without loss of detail in RAW images.',
     },
-    related: [],
+    related: [
+      {
+        card: 'raw_view',
+        reason: 'previews the RAW headroom that RAW HIGHLIGHT exposes for',
+      },
+    ],
     manual: 'menu_shooting/photometry',
     changes:
       'Adds HIGHLIGHT, which reduces exposure when bright areas dominate the scene. The shooting, Fn and Q displays mark it with an asterisk in brackets.',
+  },
+  raw_view: {
+    title: 'RAW VIEW',
+    path: [],
+    summary:
+      'Press a button assigned to RAW VIEW to preview RAW headroom. Press it again to return to the normal live view. Recorded images are unchanged.',
+    choices: {},
+    related: [],
+    manual: null,
+    changes: null,
   },
   f_log_recording_item: {
     title: 'F-Log RECORDING',
@@ -272,15 +287,6 @@ const CARDS: Record<string, Card> = {
     changes:
       'Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
   },
-  menu_theme_item: {
-    title: 'MENU THEME',
-    path: ['SET-UP'],
-    summary: 'Choose the appearance of the menus.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
   edit_save_custom_setting: {
     title: 'EDIT/SAVE CUSTOM SETTING',
     path: ['SHOOTING MENU'],
@@ -336,7 +342,7 @@ const CARDS: Record<string, Card> = {
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('d1b1dde3e1d9a0f1c5deb64c');
+const media = featureMedia('155b1104e2a6049184ba1145');
 
 function Icon(props: { name: string }) {
   return (
@@ -562,6 +568,13 @@ export function FeatureCatalog() {
           </div>
           <div class="catalog-where">SHOOTING MENU</div>
         </FeatureTile>
+        <FeatureTile media={media('raw_view')}>
+          <h4>
+            <Icon name="highlight" />
+            <Ref card="raw_view">RAW VIEW</Ref>
+          </h4>
+          <p>Assign RAW VIEW to a function button to preview RAW headroom.</p>
+        </FeatureTile>
         <FeatureTile media={media('edit_save_custom_setting')}>
           <h4>
             <Icon name="recipes" />
@@ -781,14 +794,6 @@ export function FeatureCatalog() {
             <Ref card="hdmi_rec_behavior_item">HDMI OUTPUT</Ref>
           </h4>
           <p>Display the shooting view on an HDMI device.</p>
-          <div class="catalog-where">SET-UP</div>
-        </FeatureTile>
-        <FeatureTile media={media('menu_theme_item')}>
-          <h4>
-            <Icon name="theme" />
-            <Ref card="menu_theme_item">MENU THEME</Ref>
-          </h4>
-          <p>Choose the appearance of the menus.</p>
           <div class="catalog-where">SET-UP</div>
         </FeatureTile>
         <FeatureTile media={media()}>
