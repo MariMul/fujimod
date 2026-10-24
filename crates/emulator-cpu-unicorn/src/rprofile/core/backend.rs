@@ -582,6 +582,10 @@ impl Cpu for Core {
         #[cfg(debug_assertions)]
         l.log_unsupported_models();
         counters.insert("loop_poll_instructions", l.poll_instructions.get());
+        counters.insert(
+            "loop_clock_poll_instructions",
+            l.clock_poll_instructions.get(),
+        );
         counters.insert("loop_counted_instructions", l.counted_instructions.get());
         counters.insert(
             "loop_accelerated_instructions",

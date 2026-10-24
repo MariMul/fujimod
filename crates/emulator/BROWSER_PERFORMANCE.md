@@ -20,9 +20,13 @@ it does not select a debug build. Keep `build.json` with the capture: it records
 compiler versions, optimization settings, JIT source identity and output hashes.
 Use the same output directory for subsequent builds so Cargo reuses its output.
 
-Serve the web app normally with its camera runtime available. The profiler can
-replace just `camera.mjs` and `camera.wasm` in its browser context, so a profiling
-module does not need to be published or installed into the served bundle.
+Serve the web app locally with its camera runtime available. Replace both
+`camera.mjs` and `camera.wasm` in that served runtime bundle with the profiling
+build. Nested Emscripten workers must receive the same loader as their parent;
+intercepting only the parent worker's fetch can produce mismatched Wasm imports.
+Keep the profiling build local, and use camera data matching the catalog
+compiled into that module. A prepared-document identity failure means the bundle
+and module need to be rebuilt together.
 
 ## Capture the worker
 
@@ -32,7 +36,6 @@ From `apps/web`, with a firmware update accepted by the page:
 node scripts/profile-boot.ts \
   --url https://your-preview.example/ \
   --update /path/to/UPDATE.DAT \
-  --module ../../target/emulator \
   --out ../../target/boot-profile \
   --sample-ticks 1200000
 ```
@@ -97,6 +100,13 @@ invalidations and compiled/chained executions before assuming a JIT problem.
 A small compilation total does not establish that execution stays in generated
 code; helper and callback stacks reveal repeated exits.
 
+For a prepared camera, `--boot-ticks 0` removes only the preliminary fixed-tick
+run and lets `bootToRec` observe readiness from reset. Compare its final
+instruction count with the ordinary boot: similar counts mean the extra work
+precedes REC. Record the boot entry and held inputs too. ROM/SD boot and a
+loader-handoff run execute different startup code; their instruction counts
+cannot serve as interchangeable readiness baselines.
+
 `configure` records the actual module options. An omitted `executionPolicy`
 selects `interactive`; the manifest can override it. Interactive policy permits
 block-boundary instruction overshoot and controls scheduling/accounting. It does
@@ -113,7 +123,6 @@ Repeat without CPU sampling or diagnostic slicing:
 node scripts/profile-boot.ts \
   --url https://your-preview.example/ \
   --update /path/to/UPDATE.DAT \
-  --module ../../target/emulator \
   --out ../../target/boot-timing --no-profile
 ```
 
@@ -123,3 +132,9 @@ report the range. Confirm REC and usable controls, then repeat the ordinary boot
 in Chromium and WebKit. Sampling builds and captures locate costs; unsampled
 runs establish wall-time improvements. Keep generated modules, profiles and
 receipts in ignored build output.
+
+For an unsampled WebKit comparison, add `--browser webkit --no-profile`.
+The script records the browser identity and isolation state. Its prepared-camera
+and card-boot events also record the boot entry, instruction/tick ratio, held
+controls and boot filenames, so a ROM/SD boot is distinguishable from a loader
+handoff without inferring the start from instruction counts.

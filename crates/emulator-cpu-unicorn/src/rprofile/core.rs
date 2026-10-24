@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{ffi::c_void, ptr::NonNull};
 
 mod backend;
+mod clock_poll;
 mod exclusive;
 mod loops;
 mod mapping;
@@ -719,6 +720,9 @@ impl Execution {
             )? == Some(0)
         {
             self.tighten(self.count.get())?;
+        }
+        if !thumb && self.clock_poll(address, word, cpsr)? {
+            return Ok(());
         }
         let hint = if thumb && size == 2 {
             match word {

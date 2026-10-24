@@ -6,7 +6,7 @@ export interface CpuProfile {
 }
 export function summarizeProfile(profile: CpuProfile) {
   if (profile.samples.length !== profile.timeDeltas.length)
-    throw Error("CPU profile sample and time-delta lengths differ.");
+    throw Error('CPU profile sample and time-delta lengths differ.');
   const nodes = new Map(profile.nodes.map((node) => [node.id, node]));
   const parents = new Map(
     profile.nodes.flatMap((node) =>
@@ -26,15 +26,15 @@ export function summarizeProfile(profile: CpuProfile) {
     const { functionName: name, url } = node.callFrame;
     self.set(name, (self.get(name) ?? 0) + delta);
     const category =
-      name === "(idle)"
-        ? "idle"
-        : url.startsWith("wasm://")
-          ? "generated Wasm"
-          : url.includes("camera.wasm")
-            ? "emulator Wasm"
-            : ["(program)", "(garbage collector)"].includes(name)
+      name === '(idle)'
+        ? 'idle'
+        : url.startsWith('wasm://')
+          ? 'generated Wasm'
+          : url.includes('camera.wasm')
+            ? 'emulator Wasm'
+            : ['(program)', '(garbage collector)'].includes(name)
               ? name
-              : "JavaScript and glue";
+              : 'JavaScript and glue';
     categories.set(category, (categories.get(category) ?? 0) + delta);
     const stack = new Set<string>();
     let current: number | undefined = id;

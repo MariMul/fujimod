@@ -13,6 +13,7 @@ pub(super) struct Loops {
     pub bypass: Cell<Option<u64>>,
     pub poll_instructions: Cell<u64>,
     pub counted_instructions: Cell<u64>,
+    pub clock_poll_instructions: Cell<u64>,
     pub accelerated_instructions: Cell<u64>,
     pub candidate_entries: Cell<u64>,
     pub proofs_attempted: Cell<u64>,

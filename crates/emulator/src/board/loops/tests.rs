@@ -260,3 +260,68 @@ fn device_continuations_keep_every_poll_observable() {
         0
     );
 }
+
+#[test]
+fn interactive_clock_poll_windows_require_one_runnable_processor() {
+    let mut single = board(false, true, false, false, LoopMode::Accelerate);
+    single
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(single.state.borrow().loop_window());
+    let mut peers = board(false, true, true, false, LoopMode::Accelerate);
+    peers
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(!peers.state.borrow().loop_window());
+}
+
+#[test]
+fn clock_poll_acceleration_preserves_device_deadlines_and_complete_board_state() {
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut off = board(false, true, false, false, LoopMode::Disabled);
+        let mut on = board(false, true, false, false, LoopMode::Accelerate);
+        for board in [&mut off, &mut on] {
+            board.set_execution_policy(policy).unwrap();
+            board
+                .write_memory(
+                    0,
+                    0x1000,
+                    &[0xee190f1du32, 0xe3500064, 0x3afffffc, 0xe320f003]
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes)
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
+            let cpu = board.cpu(0).unwrap();
+            cpu.set_guest_clock(fujimod_emulator_cpu::Clock {
+                now: 0,
+                phase: 0,
+                ratio: board.state.borrow().timeline.ratio(),
+            })
+            .unwrap();
+            for (crm, opc2, value) in [(12, 0, 1), (12, 1, 0x80000000)] {
+                cpu.coprocessor(
+                    fujimod_emulator_cpu::arm::Coprocessor {
+                        cp: 15,
+                        opc1: 0,
+                        crn: 9,
+                        crm,
+                        opc2,
+                        secure: 0,
+                        wide: false,
+                    },
+                    Some(value),
+                )
+                .unwrap();
+            }
+            board.run_until(200, 1000).unwrap();
+        }
+        assert_eq!(on.fingerprint().unwrap(), off.fingerprint().unwrap());
+        assert!(
+            on.loop_statistics().unwrap()[0]["loop_clock_poll_instructions"]
+                .as_u64()
+                .unwrap()
+                > 0
+        );
+    }
+}
