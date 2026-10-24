@@ -183,11 +183,22 @@ test('portable snapshot loading resolves a relative runtime bundle before dispat
 test('the X70 boots and restores its default with original RAF bytes', async () => {
   const f = setup();
   const bytes = new Uint8Array([82, 65, 70]);
+  const gzip = await new Response(
+    new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip')),
+  ).arrayBuffer();
   const original = globalThis.fetch;
   const urls: string[] = [];
   globalThis.fetch = async (input) => {
-    urls.push(String(input));
-    return new Response(bytes);
+    urls.push(input instanceof Request ? input.url : input.toString());
+    return new Response(gzip);
+  };
+  const sent = async (action: string) => {
+    for (let wait = 0; wait < 500; wait++) {
+      const last = f.sent.at(-1);
+      if (last?.type === 'rpc' && last.request.action === action) return last;
+      await new Promise<void>((resolve) => setTimeout(resolve, 1));
+    }
+    throw Error(`No ${action} request`);
   };
   try {
     const boot = f.engine.boot(
@@ -195,16 +206,14 @@ test('the X70 boots and restores its default with original RAF bytes', async () 
       { ...testConfig(), firmwareId: 'x70-110' },
       () => {},
     );
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    const request = f.sent.at(-1)!;
+    const request = await sent('boot');
     assert(request.type === 'rpc' && request.request.action === 'boot');
     assert.deepEqual(request.request.scene, { raf: bytes });
-    assert.match(urls[0], /build\/assets\/default-scene\.raf/);
+    assert.match(urls[0], /build\/assets\/default-scene\.raf\.gz/);
     f.resolve([]);
     await boot;
     const restore = f.engine.setScene(null);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    const message = f.sent.at(-1)!;
+    const message = await sent('scene');
     assert(message.type === 'rpc');
     assert.deepEqual(message.request, { action: 'scene', scene: { raf: bytes } });
     f.resolve();

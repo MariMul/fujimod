@@ -139,10 +139,12 @@ photographed by the project's author with an X70.
   compressed losslessly with Zstandard (Git LFS). It is never edited.
 - **Derived file:** `scripts/assets/default-scene.ts` decompresses it to
   `build/assets/default-scene.raf` (ignored), skipping the work when the
-  output's SHA-256 already matches the recorded original. Every consumer reads
-  that one file: the web build serves it as an asset, and native runs and tests
+  output's SHA-256 already matches the recorded original. Native runs and tests
   load it through `fujimod.scenes.default_scene_raf()`, which runs the script
-  when the file is missing or stale.
+  when the file is missing or stale. The same script writes
+  `build/assets/default-scene.raf.gz`, which the website serves (Cloudflare
+  assets are limited to 25 MiB; the RAF is 32 MiB) and the browser decompresses
+  with `DecompressionStream`.
 - **Sensor input:** the RAF reaches the sensor through the RAF input (per-site
   linear radiance on the sensor's color filter pattern, normalized by the
   RAF's recorded exposure), not the RGB input. The browser `Scene` is a union
