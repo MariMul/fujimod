@@ -210,7 +210,6 @@ fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_desti
         arm(&mut outputs, &mut host);
         {
             let mut memory = wire.lock().unwrap();
-            memory.raw_input = true;
             memory.active_destinations = memory.destinations;
             memory.active = true;
             for i in 0..2 {

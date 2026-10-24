@@ -6,8 +6,6 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct MemoryOutputs {
-    /// FFF10004 bit0 selects RAW transport instead of direct image output.
-    pub raw_input: bool,
     pub destinations: [Option<Raster>; 2],
     pub active_destinations: [Option<Raster>; 2],
     pub transfers: [Transfer; 2],
@@ -17,13 +15,12 @@ pub type MemoryOutputHandle = Arc<Mutex<MemoryOutputs>>;
 impl MemoryOutputs {
     pub fn fingerprint(&self) -> serde_json::Value {
         let Self {
-            raw_input,
             destinations,
             active_destinations,
             transfers,
             active,
         } = self;
-        serde_json::json!({"raw_input":raw_input,"destinations":destinations,
+        serde_json::json!({"destinations":destinations,
             "active_destinations":active_destinations,"active":active,
             "transfers":transfers.iter().map(Transfer::fingerprint).collect::<Vec<_>>()})
     }

@@ -229,14 +229,9 @@ impl OutputChannel {
             return Ok(());
         }
         self.seen_frame = edge.index;
-        if self
-            .wiring
-            .memory_outputs
-            .as_ref()
-            .is_some_and(|wire| wire.lock().unwrap().raw_input)
-        {
-            return Ok(());
-        }
+        // RAW sensor capture and preview output are concurrent. Only an
+        // active memory-readback transfer owns these banks exclusively; run()
+        // handles that ownership before consuming a sensor frame here.
         if self.registers[0] != 0x10001 {
             return Ok(());
         }
