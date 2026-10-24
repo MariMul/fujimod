@@ -99,6 +99,14 @@ try {
       page.on('console', (msg) => {
         if (/hydration|unclaimed|\[[A-Z_]+\]/i.test(msg.text())) diagnostics.push(msg.text());
       });
+      // Browser extensions add nodes to <head> while it is parsed; hydration must not walk it.
+      await page.addInitScript(() => {
+        new MutationObserver((_, observer) => {
+          if (!document.head) return;
+          document.head.prepend(document.createElement('style'));
+          observer.disconnect();
+        }).observe(document, { childList: true, subtree: true });
+      });
       // The static-host test exercises hydration/UI; firmware execution has its own real-runtime gate.
       await page.addInitScript(() => {
         window.__hydrationDOM = null;
@@ -155,6 +163,8 @@ try {
       const connect = page.getByRole('button', { name: 'Connect camera', exact: true });
       await connect.waitFor();
       assert.equal(await connect.isEnabled(), await page.evaluate(() => 'usb' in navigator));
+      await page.getByRole('button', { name: 'Show instructions', exact: true }).click();
+      await page.waitForURL(base + '/dev-tools/service/');
       await page.goto(base + '/bug/');
       await page
         .getByRole('alert')
