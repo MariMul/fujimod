@@ -1,13 +1,18 @@
 //! Two-contact, eleven-byte panel protocol.
 //! Wire layout follows the controller command and data framing.
-//! 100 Hz reporting, 8-unit tap slop, 250 ms tap time and 400 units/s
-//! flick threshold are declared model inputs, not measured silicon timing.
+//! 100 Hz reporting, 8-unit tap slop and 400 units/s flick threshold are
+//! declared model inputs, not measured silicon timing. As on an X70 panel, a
+//! contact lifted within 110 ms reports Tap, a single contact held within the
+//! slop reports Long Press 130 ms after touch-down, and a held contact that
+//! stays within the slop reports Press, not Drag, when it moves.
 //! Only timed external contacts and completed bus reads drive this part.
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
 
 pub const REPORT_HZ: u64 = 100;
+const TAP_MS: u64 = 110;
+const LONG_PRESS_MS: u64 = 130;
 const QUEUE_LIMIT: usize = 4096;
 
 
@@ -37,6 +42,8 @@ pub struct TouchController {
     sample_origin: u64,
     sample_tick: Option<u64>,
     pair_distance: Option<i64>,
+    #[serde(default)]
+    long_press_tick: Option<u64>,
     pub reports_sent: u64,
     pub reports_completed: u64,
 }
@@ -58,6 +65,7 @@ impl TouchController {
             sample_origin: 0,
             sample_tick: None,
             pair_distance: None,
+            long_press_tick: None,
             reports_sent: 0,
             reports_completed: 0,
         })
@@ -113,7 +121,7 @@ impl TouchController {
     /// acknowledged report or newly enabled route due now, without polling.
     pub fn next_event_tick(&self, now: u64, reads: u64, route_enabled: bool) -> Option<u64> {
         let mut deadline = self.inputs.front().map(|e| e.tick);
-        if let Some(tick) = self.sample_tick {
+        for tick in [self.sample_tick, self.long_press_tick].into_iter().flatten() {
             deadline = Some(deadline.map_or(tick, |old| old.min(tick)));
         }
         if self.current.is_some_and(|before| reads > before) {
@@ -162,10 +170,21 @@ impl TouchController {
             };
             self.pair_distance = Some(distance);
             kind
-        } else {
+        } else if self.contacts.iter().any(|c| c.active && c.moved) {
             3
+        } else {
+            2
         };
         self.report(kind)
+    }
+
+    fn long_press(&mut self) -> Result<(), String> {
+        self.long_press_tick = None;
+        let held: Vec<_> = self.contacts.iter().filter(|c| c.active).collect();
+        if held.len() == 1 && !held[0].moved && !held[0].paired {
+            self.report(9)?;
+        }
+        Ok(())
     }
 
     fn input(&mut self, e: ContactInput) -> Result<(), String> {
@@ -189,6 +208,13 @@ impl TouchController {
                         c.paired = true;
                     }
                     self.pair_distance = Some(self.distance());
+                    self.long_press_tick = None;
+                } else {
+                    self.long_press_tick = Some(
+                        e.tick
+                            .checked_add(self.ticks_per_second * LONG_PRESS_MS / 1000)
+                            .ok_or("Touch time overflow")?,
+                    );
                 }
                 self.report(2)?;
             }
@@ -199,6 +225,9 @@ impl TouchController {
                     c.x = e.x;
                     c.y = e.y;
                     c.moved |= c.x.abs_diff(c.start.0).max(c.y.abs_diff(c.start.1)) > 8;
+                    if c.moved {
+                        self.long_press_tick = None;
+                    }
                     self.sample_tick = Some(
                         self.sample_origin
                             + (e.tick - self.sample_origin).div_ceil(self.period) * self.period,
@@ -211,7 +240,7 @@ impl TouchController {
                     }
                     let c = self.contacts[i];
                     if !c.paired {
-                        if !c.moved && e.tick - c.down_tick <= self.ticks_per_second / 4 {
+                        if !c.moved && e.tick - c.down_tick <= self.ticks_per_second * TAP_MS / 1000 {
                             self.report(1)?;
                         } else if c.moved {
                             let distance =
@@ -226,6 +255,7 @@ impl TouchController {
                     }
                     self.contacts[i].active = false;
                     self.pair_distance = None;
+                    self.long_press_tick = None;
                     self.report(0)?;
                 }
             }
@@ -248,14 +278,21 @@ impl TouchController {
         loop {
             let input_tick = self.inputs.front().map(|e| e.tick);
             // Apply all contacts at an edge before sampling that edge.
+            let long_press = self.long_press_tick;
             if let Some(tick) = input_tick
                 && tick <= now
                 && self.sample_tick.is_none_or(|s| tick <= s)
+                && long_press.is_none_or(|l| tick <= l)
             {
                 let e = self.inputs.pop_front().expect("front input");
                 self.input(e)?;
-            } else if self.sample_tick.is_some_and(|s| s <= now) {
+            } else if let Some(s) = self.sample_tick
+                && s <= now
+                && long_press.is_none_or(|l| s <= l)
+            {
                 self.sample()?;
+            } else if long_press.is_some_and(|l| l <= now) {
+                self.long_press()?;
             } else {
                 break;
             }
