@@ -55,10 +55,12 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "nand" => serde_json::from_str::<Value>("{\"kind\":\"nand\",\"options\":{\"erase_ticks\":64},\"medium\":\"nand\"}").map_err(|e| e.to_string())?,
         "lz" => serde_json::from_str::<Value>("{\"kind\":\"lz\",\"options\":{\"resize\":\"declared_packed_pyramid\",\"resize_ticks\":400000},\"base\":4294193152,\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
         "memory_dma" => serde_json::from_str::<Value>("{\"kind\":\"memory-dma\",\"options\":{},\"base\":4293926912,\"routes\":\"imaging_routes\"}").map_err(|e| e.to_string())?,
-        "audio_dma" => serde_json::from_str::<Value>("{\"kind\":\"serial-dma\",\"options\":{\"ram_bytes\":536870912,\"max_transfer_bytes\":16777216}}").map_err(|e| e.to_string())?,
         "usb" => serde_json::from_str::<Value>("{\"kind\":\"usb\",\"options\":{\"endpoints\":null},\"cable\":\"usb_cable\",\"endpoints\":null}").map_err(|e| e.to_string())?,
         "power_peripherals" => serde_json::from_str::<Value>("{\"kind\":\"power\",\"options\":{\"transfer_ticks\":4,\"max_program_bytes\":536870912,\"spi0\":{\"required\":[192,48,0],\"selection\":{\"pin\":{\"port\":11,\"pin\":2},\"high\":false},\"presence\":{\"pin\":{\"port\":11,\"pin\":2},\"high\":false}}},\"gpio\":\"serial_gpio\"}").map_err(|e| e.to_string())?,
-        "audio_registers" => serde_json::from_str::<Value>("{\"kind\":\"serial-audio\",\"options\":{},\"sinks\":[{},{}]}").map_err(|e| e.to_string())?,
+        // Channel 1 transmit DMA with both serial-audio banks: a beep's
+        // samples are consumed and IRQ 5C reports its completion, which the
+        // stock POWOFF sequence waits for before saving the user profile.
+        "audio_registers" => serde_json::from_str::<Value>("{\"kind\":\"serial-audio-transmitter\",\"options\":{\"ram_bytes\":536870912,\"max_transfer_bytes\":1048576,\"ticks_per_byte\":64,\"minimum_ticks\":1000},\"sinks\":[{\"connected\":true},{\"connected\":true}],\"routes\":\"imaging_routes\"}").map_err(|e| e.to_string())?,
         "pulse" => serde_json::from_str::<Value>("{\"kind\":\"exr2-pulse\",\"options\":{\"counter_channels\":[0,4],\"timer_channels\":[0,2,4,6,8,9,10,11],\"quadrature\":false,\"initial_phase\":0,\"capture_channel\":null},\"irqs\":[{\"Core\":{\"core\":0,\"line\":20}},{\"Core\":{\"core\":0,\"line\":21}},{\"Core\":{\"core\":0,\"line\":22}},{\"Core\":{\"core\":0,\"line\":23}},{\"Core\":{\"core\":0,\"line\":24}},{\"Core\":{\"core\":0,\"line\":25}},{\"Core\":{\"core\":0,\"line\":26}},{\"Core\":{\"core\":0,\"line\":27}},{\"Core\":{\"core\":0,\"line\":28}},{\"Core\":{\"core\":0,\"line\":29}},{\"Core\":{\"core\":0,\"line\":30}},{\"Core\":{\"core\":0,\"line\":31}}]}").map_err(|e| e.to_string())?,
         "lens_serial" => serde_json::from_str::<Value>("{\"kind\":\"spi-controller\",\"routes\":[{\"options\":{\"base\":4294459520,\"transports\":[{\"control\":224,\"configuration\":4,\"bits\":16,\"receive\":false}],\"selection\":[{\"pin\":{\"port\":13,\"pin\":9},\"high\":false}],\"transfer_ticks\":4,\"queue\":\"single\"},\"gpio\":\"serial_gpio\",\"endpoint\":{\"kind\":\"lens-unit\",\"options\":{\"protocol\":{\"kind\":\"banked\",\"positive_direction_high\":false,\"stop_response\":\"settled\",\"clock\":[{\"kind\":\"microstep_stages\",\"ticks_per_quantum\":3},{\"kind\":\"encoder_stages\",\"ticks_per_quantum\":3}]},\"motors\":[{\"initial_position\":0,\"travel_limits\":[-32767,32767],\"ticks_per_step\":1000,\"settle_ticks\":4000,\"home\":{\"pin\":{\"port\":0,\"pin\":0},\"threshold\":8,\"side\":\"above\"},\"counters\":[{\"channel\":4,\"divider\":1},{\"channel\":0,\"divider\":4}]},{\"initial_position\":0,\"travel_limits\":[-32767,32767],\"ticks_per_step\":1000,\"settle_ticks\":4000,\"home\":null,\"counters\":[]}],\"encoder\":null,\"zoom\":null},\"pulses\":\"pulse\",\"gpio\":\"serial_gpio\",\"completion\":[{\"Core\":{\"core\":0,\"line\":14}},{\"Core\":{\"core\":0,\"line\":12}}],\"optics\":{\"output\":\"lens_aperture\",\"positions\":[[6,16.000000000000004],[10,14.25437949024543],[14,12.699208415745595],[18,11.313708498984761],[22,10.079368399158986],[26,8.979696386474986],[30,8.000000000000002],[34,7.127189745122715],[38,6.349604207872798],[42,5.656854249492381],[46,5.039684199579493],[50,4.489848193237492],[54,4.000000000000001],[58,3.5635948725613575],[62,3.174802103936399],[78,2.8284271247461903]]},\"focus\":{\"output\":\"lens_focus\",\"infinity_position\":-111,\"steps_per_mm\":267.0}}}]}").map_err(|e| e.to_string())?,
         "control_bus0" => serde_json::from_str::<Value>("{\"kind\":\"i2c\",\"options\":{\"base\":4294463488,\"irq\":101,\"modes\":[9],\"transfer_ticks\":4,\"profile\":\"endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured\",\"parts\":{\"kind\":\"primary\",\"touch\":{\"register\":0,\"core\":0,\"irq\":15,\"ticks_per_second\":12000000},\"sensor_address\":28,\"prefix_address\":85,\"sensor_fields\":[14,15,17,21,23,24,29,31,32,33,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49],\"prefix_high\":28,\"heartbeat_register\":7174,\"topology\":[24,68,57,25,12,28,85],\"stationary\":false,\"status\":[],\"commands\":[]}},\"controllers\":[\"irq0\",\"irq1\"],\"cable\":null,\"bridge\":null}").map_err(|e| e.to_string())?,
@@ -257,11 +259,6 @@ const NODE_RULES: &[NodeRule] = &[
         dependencies: &["irq0", "irq1"],
     },
     NodeRule {
-        name: "audio_dma",
-        blocks: &["audio-dma"],
-        dependencies: &[],
-    },
-    NodeRule {
         name: "usb",
         blocks: &["usb-core", "usb-phy"],
         dependencies: &[],
@@ -278,8 +275,8 @@ const NODE_RULES: &[NodeRule] = &[
     },
     NodeRule {
         name: "audio_registers",
-        blocks: &["serial-audio", "serial-audio-aux"],
-        dependencies: &[],
+        blocks: &["audio-dma", "serial-audio", "serial-audio-aux"],
+        dependencies: &["irq0", "irq1"],
     },
     NodeRule {
         name: "pulse",
@@ -2017,20 +2014,7 @@ pub(super) fn assemble(
         .preset
         .as_ref()
         .is_some_and(|p| p.factory_options.audio_input_profile.is_some());
-    let receiver_rule = NodeRule {
-        name: "audio_registers",
-        blocks: &["audio-dma", "serial-audio", "serial-audio-aux"],
-        dependencies: &["irq0", "irq1"],
-    };
     for rule in rules {
-        if receive_audio && rule.name == "audio_dma" {
-            continue;
-        }
-        let rule = if receive_audio && rule.name == "audio_registers" {
-            &receiver_rule
-        } else {
-            rule
-        };
         let mut recipe = match (rule.name, browser) {
             ("sd", Some(browser)) => card_recipe(selection, browser)?,
             _ => model_recipe(rule.name)?,

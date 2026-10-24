@@ -779,11 +779,6 @@
               "refs": {}
             },
             {
-              "name": "audiodma",
-              "kind": "SerialAudioDMA",
-              "refs": {}
-            },
-            {
               "name": "usbcontrol",
               "kind": "USBControl",
               "refs": {
@@ -797,7 +792,7 @@
             },
             {
               "name": "audio",
-              "kind": "SerialAudioTransferControlRegisters",
+              "kind": "SerialAudioTransmitSink",
               "refs": {},
               "model_choices": {
                 "option": "audio_input_profile",
@@ -805,10 +800,7 @@
                   "declared-silent-stereo-pcm48000": {
                     "kind": "SerialAudioReceiveSource",
                     "refs": {},
-                    "dependencies": [],
-                    "replaces": [
-                      "audiodma"
-                    ]
+                    "dependencies": []
                   }
                 }
               }
@@ -1033,7 +1025,6 @@
             "imagescaler",
             "rawconversion",
             "loadermemorydma",
-            "audiodma",
             "powerdevices",
             "usbcontrol",
             "audio",
@@ -1076,7 +1067,6 @@
             "imagescaler",
             "rawconversion",
             "loadermemorydma",
-            "audiodma",
             "usbcontrol",
             "powerdevices",
             "audio",
@@ -1701,11 +1691,6 @@
               "refs": {}
             },
             {
-              "name": "audiodma",
-              "kind": "SerialAudioDMA",
-              "refs": {}
-            },
-            {
               "name": "usbcontrol",
               "kind": "USBControl",
               "refs": {
@@ -1719,7 +1704,7 @@
             },
             {
               "name": "audio",
-              "kind": "SerialAudioTransferControlRegisters",
+              "kind": "SerialAudioTransmitSink",
               "refs": {},
               "model_choices": {
                 "option": "audio_input_profile",
@@ -1727,10 +1712,7 @@
                   "declared-silent-stereo-pcm48000": {
                     "kind": "SerialAudioReceiveSource",
                     "refs": {},
-                    "dependencies": [],
-                    "replaces": [
-                      "audiodma"
-                    ]
+                    "dependencies": []
                   }
                 }
               }
@@ -1955,7 +1937,6 @@
             "imagescaler",
             "rawconversion",
             "loadermemorydma",
-            "audiodma",
             "powerdevices",
             "usbcontrol",
             "audio",
@@ -1998,7 +1979,6 @@
             "imagescaler",
             "rawconversion",
             "loadermemorydma",
-            "audiodma",
             "usbcontrol",
             "powerdevices",
             "audio",
@@ -4517,11 +4497,6 @@
               "refs": {}
             },
             {
-              "name": "audiodma",
-              "kind": "SerialAudioDMA",
-              "refs": {}
-            },
-            {
               "name": "usbcontrol",
               "kind": "USBControl",
               "refs": {
@@ -4535,7 +4510,7 @@
             },
             {
               "name": "audio",
-              "kind": "SerialAudioTransferControlRegisters",
+              "kind": "SerialAudioTransmitSink",
               "refs": {},
               "model_choices": {
                 "option": "audio_input_profile",
@@ -4543,10 +4518,7 @@
                   "declared-silent-stereo-pcm48000": {
                     "kind": "SerialAudioReceiveSource",
                     "refs": {},
-                    "dependencies": [],
-                    "replaces": [
-                      "audiodma"
-                    ]
+                    "dependencies": []
                   }
                 }
               }
@@ -4771,7 +4743,6 @@
             "imagescaler",
             "rawconversion",
             "loadermemorydma",
-            "audiodma",
             "powerdevices",
             "usbcontrol",
             "audio",
@@ -4814,7 +4785,6 @@
             "imagescaler",
             "rawconversion",
             "loadermemorydma",
-            "audiodma",
             "usbcontrol",
             "powerdevices",
             "audio",
