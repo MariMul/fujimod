@@ -45,6 +45,7 @@ pub struct Recorder {
     encoders: Option<Encoders>,
     size: Option<(u32, u32)>,
     fitted: Option<Frame>,
+    touched: Vec<u8>,
     annotated: Vec<u8>,
     labels: Vec<(String, u8)>,
     marks: Vec<Mark>,
@@ -86,6 +87,7 @@ impl Recorder {
             encoders: None,
             size: None,
             fitted: None,
+            touched: Vec::new(),
             annotated: Vec::new(),
             labels: Vec::new(),
             marks: Vec::new(),
@@ -205,7 +207,7 @@ impl Recorder {
         Ok(())
     }
     /// One finger's touch at `x`, `y` in the coordinates of the frames being
-    /// recorded. Drawn only on the annotated video.
+    /// recorded. Drawn on both videos; screenshots stay unmarked.
     pub fn touch(&mut self, phase: TouchPhase, x: f64, y: f64, time: f64) -> Result<()> {
         if !(x.is_finite() && y.is_finite() && x >= 0. && y >= 0.) {
             return Err("Touch position must be finite and nonnegative".into());
@@ -312,7 +314,9 @@ impl Recorder {
                 width: fitted.width() as i32,
                 height: fitted.height() as i32,
             };
+            // Both videos show touches; only the annotated one shows badges.
             touches::draw_on(&mut canvas, &marks);
+            self.touched = canvas.pixels.clone();
             badges::draw_on(&mut canvas, &labels);
             self.annotated = canvas.pixels;
             self.metrics.annotation_seconds += start.elapsed().as_secs_f64();
@@ -327,7 +331,7 @@ impl Recorder {
             .encoders
             .as_mut()
             .unwrap()
-            .write(&self.annotated, fitted.pixels())?;
+            .write(&self.annotated, &self.touched)?;
         for (total, part) in self.metrics.encoder_write_seconds.iter_mut().zip(elapsed) {
             *total += part;
         }

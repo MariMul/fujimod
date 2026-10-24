@@ -286,7 +286,7 @@ fn touches_follow_the_finger_and_fade_after_lift() {
 }
 
 #[test]
-fn touches_mark_only_the_annotated_video() {
+fn touches_mark_both_videos() {
     if Encoders::check().is_err() {
         return;
     }
@@ -313,10 +313,10 @@ fn touches_mark_only_the_annotated_video() {
     let annotated = decode("video.mp4");
     let clean = decode("video-clean.mp4");
     assert!(annotated[center] > 80, "the finger is drawn while down");
-    assert!(clean.chunks(size).all(|f| f.iter().all(|&v| v < 12)));
+    assert!(clean[center] > 80, "the clean video shows the finger too");
     let last = annotated.chunks(size).last().unwrap();
     assert!(
-        last.iter().all(|&v| v < 12),
+        last.iter().all(|&v| v < 12) && clean.chunks(size).last().unwrap().iter().all(|&v| v < 12),
         "the circle is gone after its fade"
     );
 }

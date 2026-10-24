@@ -68,9 +68,9 @@ interactions. Frame sampling never drives device state. Only non-fixture press
 inputs or touch starts can anchor coverage. Report inputs carry `kind`
 (`control` or `touch`); a touch also records its `phase`, `x` and `y`, with
 `pressed` true at the start, false at the lift and null while moving. The
-annotated video draws a translucent circle at a finger while it is down,
-following its moves and fading after the lift; clean video and screenshots
-stay unmarked. Input badges push onto a bottom-right stack, newest
+videos draw a translucent circle at a finger while it is down, following its
+moves and fading after the lift: the clean video too, so a tap is always
+visible. Screenshots stay unmarked. Input badges push onto a bottom-right stack, newest
 at the bottom, retaining up to five presses. Repeated presses have separate
 entries; each remains visible for five presentation seconds after release,
 fading only during the final 0.4 seconds. New presses push the oldest entries
