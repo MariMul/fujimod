@@ -93,6 +93,11 @@ pub struct Synthetic {
     stuck: bool,
     reorder_on_down: bool,
     remembered_submenu: bool,
+    /// The command dial's motion is two contacts; the scanner accepts each
+    /// contact edge after one continuation.
+    contact_dial: bool,
+    contacts: Vec<(String, bool)>,
+    contact_seen: Option<(String, bool)>,
 }
 impl Synthetic {
     pub fn new() -> Self {
@@ -106,6 +111,9 @@ impl Synthetic {
             stuck: false,
             reorder_on_down: false,
             remembered_submenu: false,
+            contact_dial: false,
+            contacts: vec![],
+            contact_seen: None,
         };
         for (address, value) in [(256, 4096), (260, 4352), (768, 3), (824, 1), (832, 32768)] {
             s.word(address, value);
@@ -242,6 +250,7 @@ impl Backend for Synthetic {
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()> {
         Box::pin(async move {
             self.waits.push(reads.clone());
+            self.contact_seen = self.contacts.last().cloned();
             self.now = (self.now + 1).min(deadline);
             if !self.stuck {
                 self.sequence += 1;
@@ -253,6 +262,69 @@ impl Backend for Synthetic {
     fn control_position(&mut self, _: &str) -> Result<Option<String>> {
         Ok(None)
     }
+    fn turn_contact(&mut self, input: &Input) -> Result<Option<String>> {
+        let InputState::Turn(steps) = input.state else {
+            return Ok(None);
+        };
+        Ok(self.contact_dial.then(|| {
+            let direction = if steps < 0 { "decrease" } else { "increase" };
+            format!("{}.{direction}", input.control.id())
+        }))
+    }
+    fn contact(&mut self, actuator: &str, pressed: bool) -> Result<()> {
+        self.contacts.push((actuator.into(), pressed));
+        Ok(())
+    }
+    fn contact_accepted(
+        &mut self,
+        actuator: &str,
+        pressed: bool,
+        reads: &mut ReadSet,
+    ) -> Result<bool> {
+        reads.stores.push((900, 904));
+        Ok(self.contact_seen == Some((actuator.into(), pressed)))
+    }
+}
+#[test]
+fn a_two_contact_dial_turns_one_scanner_accepted_pulse_per_step() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        remote.backend.contact_dial = true;
+        let dial = control("command_control");
+        remote.turn(&dial, 2, 100).await.unwrap();
+        let increase = "command_control.increase".to_string();
+        assert_eq!(
+            remote.backend.contacts,
+            [
+                (increase.clone(), true),
+                (increase.clone(), false),
+                (increase.clone(), true),
+                (increase, false)
+            ]
+        );
+        assert!(
+            remote.backend.edges.is_empty(),
+            "the turn is never applied as one input"
+        );
+        remote.backend.contacts.clear();
+        remote.turn(&dial, -1, 200).await.unwrap();
+        let decrease = "command_control.decrease".to_string();
+        assert_eq!(
+            remote.backend.contacts,
+            [(decrease.clone(), true), (decrease, false)]
+        );
+        // A later step's press waits for input readiness like a button's.
+        remote.backend.contacts.clear();
+        remote.backend.word(800, 1 << 9);
+        assert!(
+            remote
+                .turn(&dial, 2, 300)
+                .await
+                .unwrap_err()
+                .contains("input readiness")
+        );
+        assert!(remote.backend.contacts.len() <= 2);
+    });
 }
 #[test]
 fn navigate_select_reopen_and_capture() {

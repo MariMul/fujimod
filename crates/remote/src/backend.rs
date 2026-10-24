@@ -20,4 +20,23 @@ pub trait Backend {
     /// One bounded continuation, returning at an observed change or the deadline.
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()>;
     fn control_position(&mut self, id: &str) -> Result<Option<String>>;
+    /// The contact a relative turn pulses when the control's motion is two
+    /// contacts (one per direction) rather than an encoder; None when the
+    /// backend applies the turn as one input.
+    fn turn_contact(&mut self, _input: &Input) -> Result<Option<String>> {
+        Ok(None)
+    }
+    /// Press or release a contact named by `turn_contact`.
+    fn contact(&mut self, actuator: &str, _pressed: bool) -> Result<()> {
+        Err(format!("This transport has no contact {actuator}"))
+    }
+    /// Whether the firmware's scanner has accepted that contact edge.
+    fn contact_accepted(
+        &mut self,
+        actuator: &str,
+        _pressed: bool,
+        _reads: &mut ReadSet,
+    ) -> Result<bool> {
+        Err(format!("This transport has no contact {actuator}"))
+    }
 }

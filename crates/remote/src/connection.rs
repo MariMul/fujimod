@@ -213,6 +213,45 @@ impl<B: Backend> Remote for Connection<B> {
                     return Err(format!("Control {} is unavailable", input.control.id()));
                 }
             }
+            if let InputState::Turn(steps) = input.state
+                && let Some(actuator) = self.backend.turn_contact(input)?
+            {
+                self.facts.physical_controls.action(
+                    &self.facts.control_ids,
+                    id,
+                    input.state.operation(),
+                )?;
+                if steps.unsigned_abs() > 4096 {
+                    return Err("Rotation exceeds 4096 steps".into());
+                }
+                // Each step is one press and release of the direction's
+                // contact, accepted by the scanner like a button's.
+                for step in 0..steps.unsigned_abs() {
+                    for pressed in [true, false] {
+                        if pressed && step > 0 {
+                            self.ready(deadline).await?;
+                        }
+                        self.backend.contact(&actuator, pressed)?;
+                        loop {
+                            let mut reads = ReadSet::default();
+                            if self
+                                .backend
+                                .contact_accepted(&actuator, pressed, &mut reads)?
+                            {
+                                break;
+                            }
+                            if self.now() >= deadline {
+                                return Err(format!(
+                                    "Timed out waiting for {actuator} {} in {input:?}",
+                                    if pressed { "press" } else { "release" }
+                                ));
+                            }
+                            self.wait(&reads, deadline).await?;
+                        }
+                    }
+                }
+                return Ok(());
+            }
             // Backends validate the complete physical action before applying it.
             // OFF must not depend on live state reads that can block its release.
             self.backend.input(input, &self.facts).await?;

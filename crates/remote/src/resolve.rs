@@ -1,10 +1,10 @@
 //! Resolve each reference anew against the live descriptor graph and cursor.
-use fujimod_catalog_controls::InputTarget;
 use crate::{
     ControlSnapshot, Menu, MenuSnapshot, Reference, RemoteReadResult, Result, Value,
     backend::Backend,
     memory::{Memory, word},
 };
+use fujimod_catalog_controls::InputTarget;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[derive(Clone, Debug)]
