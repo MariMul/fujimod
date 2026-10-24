@@ -4506,7 +4506,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-remote",
  "fujimod-emulator",
- "fujimod-python-emulator",
+ "fujimod-python-base",
  "fujimod-python-usb-lease",
  "fujimod-remote",
  "fujimod-usb",

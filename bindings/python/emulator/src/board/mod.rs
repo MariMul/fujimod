@@ -39,6 +39,15 @@ enum Backend {
     Xp4(Box<dyn xp4_backend::Xp4Backend>),
 }
 
+/// Lend the session of a Python `Board` to another binding crate.
+pub(crate) fn borrow_session(
+    board: &Bound<'_, PyAny>,
+    call: &mut dyn FnMut(&mut fujimod_emulator::session::Session) -> PyResult<()>,
+) -> PyResult<()> {
+    let mut board = board.cast::<Board>()?.try_borrow_mut()?;
+    call(board.session_mut()?)
+}
+
 #[pyclass(unsendable, module = "fujimod._native.emulator")]
 pub struct Board {
     driver: Option<Box<fujimod_emulator::board::harness::Session>>,

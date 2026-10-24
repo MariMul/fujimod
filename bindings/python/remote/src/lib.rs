@@ -50,7 +50,7 @@ impl Drop for Lease {
     }
 }
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
-struct PythonBoard(Py<fujimod_python_emulator::board::Board>);
+struct PythonBoard(Py<PyAny>);
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
 impl remote::board::SessionOwner for PythonBoard {
     fn with_session<T>(
@@ -58,12 +58,10 @@ impl remote::board::SessionOwner for PythonBoard {
         call: impl FnOnce(&mut fujimod_emulator::session::Session) -> Result<T>,
     ) -> Result<T> {
         Python::attach(|py| {
-            let mut board = self
-                .0
-                .bind(py)
-                .try_borrow_mut()
-                .map_err(|e| e.to_string())?;
-            call(board.session_mut().map_err(|e| e.to_string())?)
+            fujimod_python_base::board_session::with_session(self.0.bind(py), |session| {
+                Ok(call(session))
+            })
+            .map_err(|e| e.to_string())?
         })
     }
 }
@@ -104,7 +102,7 @@ impl Camera {
             facts.clone(),
             options,
         )
-            .map_err(error)?;
+        .map_err(error)?;
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
             facts: Rc::new(facts),
@@ -410,20 +408,20 @@ impl Camera {
     #[staticmethod]
     #[pyo3(signature = (board, facts, options, observer=None))]
     fn from_board(
-        board: Py<fujimod_python_emulator::board::Board>,
+        board: Py<PyAny>,
         facts: &str,
         options: &str,
         observer: Option<Py<PyAny>>,
     ) -> PyResult<Self> {
         let facts: Facts = decode(facts)?;
-        let device_ids = Python::attach(|py| -> PyResult<BTreeMap<String, usize>> {
-            let mut owner = board.bind(py).try_borrow_mut()?;
-            Ok(owner
-                .session_mut()?
-                .nodes
-                .iter()
-                .map(|(name, id)| (name.clone(), *id))
-                .collect())
+        let device_ids = Python::attach(|py| {
+            fujimod_python_base::board_session::with_session(board.bind(py), |session| {
+                Ok(session
+                    .nodes
+                    .iter()
+                    .map(|(name, id)| (name.clone(), *id))
+                    .collect::<BTreeMap<String, usize>>())
+            })
         })?;
         let mut remote =
             remote::BoardRemote::new(PythonBoard(board), facts.clone(), decode(options)?)
@@ -451,10 +449,7 @@ impl Camera {
 impl Camera {
     #[staticmethod]
     #[pyo3(signature = (session, poll_seconds=0.001))]
-    fn synthetic_ff80(
-        session: &Bound<'_, PyAny>,
-        poll_seconds: f64,
-    ) -> PyResult<Self> {
+    fn synthetic_ff80(session: &Bound<'_, PyAny>, poll_seconds: f64) -> PyResult<Self> {
         let facts =
             serde_json::to_string(&remote::testing::facts()).map_err(|e| error(e.to_string()))?;
         Self::from_ff80(session, &facts, 4, 4, 64, poll_seconds, "lcd".into())

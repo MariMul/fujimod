@@ -67,8 +67,9 @@ From the bottom of the graph to the top:
 7. Binding libraries (the Python binding crates, the JavaScript bindings)
    over the emulator and the interface. The Python bindings are one crate per
    area, each depending only on what it binds: `fujimod-python-base` (the
-   errors, values, discovery and call snapshots and the XP4 backend hook the
-   emulator bindings share), `-catalog` (the reference catalog and corpus),
+   errors, values, discovery and call snapshots, the XP4 backend hook the
+   emulator bindings share, and the board session hook the remote bindings
+   borrow a Python board's session through), `-catalog` (the reference catalog and corpus),
    `-service` (App80 service definitions, registered in the catalog module),
    `-usb` (USB, app80, tracing, workflows and firmware files), `-usb-lease`
    (the ff80 session lease the remote bindings borrow from a USB session

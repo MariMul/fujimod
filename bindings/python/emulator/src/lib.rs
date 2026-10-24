@@ -158,6 +158,7 @@ mod binding {
 /// Add `fujimod._native.emulator` to `parent`; the host image, graphics and XP4 binding crates
 /// add their functions to it.
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    fujimod_python_base::board_session::install(board::borrow_session);
     let module = binding::_PYO3_DEF.make_module(py)?;
     parent.add_submodule(module.bind(py))?;
     let modules = py
