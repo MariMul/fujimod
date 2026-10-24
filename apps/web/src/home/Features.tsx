@@ -147,8 +147,7 @@ const CARDS: Record<string, Card> = {
     path: ['SHOOTING MENU'],
     summary: null,
     choices: {
-      HIGHLIGHT:
-        'Exposure is reduced when bright areas dominate the scene. A small bright detail may still be overexposed.',
+      HIGHLIGHT: 'Exposure is reduced when bright areas dominate the scene.',
       'RAW HIGHLIGHT':
         'Expose To The Right (ETTR): Exposure is set so that the brightest areas of the frame are recorded as brightly as possible without loss of detail in RAW images.',
     },
@@ -371,7 +370,7 @@ const CARDS: Record<string, Card> = {
   },
 };
 /** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('c893fb389404ca5bab738e7b');
+const media = featureMedia('18e91160e275b2253842b0a5');
 
 function Icon(props: { name: string }) {
   return (
