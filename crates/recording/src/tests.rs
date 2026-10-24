@@ -131,7 +131,9 @@ fn sampling_holds_inputs_and_idle_compaction_preserve_timestamp_order() {
     assert_eq!(r.frames, 4);
     assert!((r.skipped_seconds - 2.6).abs() < 1e-8);
     assert!(r.frame(frame(2), 2.).is_err());
-    assert!(r.input("missing", true, 3.).is_err());
+    assert!(r.input("catalog-control", true, 3.).is_ok());
+    assert!(r.input("catalog-control", false, 3.).is_ok());
+    assert!(r.input("catalog-control", true, 2.).is_err());
     assert!(r.still(frame(2), f64::NAN).is_err());
     assert!(r.screenshot(&frame(1), "../escape.png").is_err());
     for _ in 0..50 {
@@ -148,6 +150,7 @@ fn optional_video_shares_rendering_and_annotates_only_changed_frames() {
     }
     let output = Output::new();
     let mut r = Recorder::new(output.0.clone(), 10, true).unwrap();
+    assert!(r.input("catalog-control", true, 0.).is_err());
     let image = frame(40);
     r.frame(image.clone(), 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();

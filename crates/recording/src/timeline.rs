@@ -174,9 +174,18 @@ impl Recorder {
         Ok(())
     }
     pub fn input(&mut self, name: &str, pressed: bool, time: f64) -> Result<()> {
-        badges::check(name)?;
+        // Screenshot reports retain catalog control identities without drawing
+        // badges. Only annotated video needs a registered presentation.
+        let presentation = badges::check(name);
+        let known = presentation.is_ok();
+        if self.video {
+            presentation?;
+        }
         self.advance(time)?;
         self.idle_kept = 0.;
+        if !known {
+            return Ok(());
+        }
         if pressed {
             self.badges.push(Badge {
                 name: name.into(),
