@@ -8,9 +8,9 @@ pub mod observation;
 use observation::Call;
 mod devices;
 mod timer;
-use crate::board::discovery::Discovery;
-use crate::board::harness::arm32 as driver_guard;
-use crate::board::observation::calls as observe;
+use fujimod_emulator::board::discovery::Discovery;
+use fujimod_emulator::board::harness::arm32 as driver_guard;
+use fujimod_emulator::board::observation::calls as observe;
 use fujimod_emulator_cpu::{
     self as cpu, Access, Cpu, ExecutionError, Exit, Fault, Hook as CpuHook, HookRange, Register,
     Run, arm, memory::Backing,
@@ -1789,13 +1789,13 @@ impl Session {
             }),
         }
     }
-    pub fn frontier(&self, by_count: bool) -> Vec<crate::board::discovery::FrontierEntry> {
+    pub fn frontier(&self, by_count: bool) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
         unsafe { (*self.inner.state.get()).discovery.frontier(by_count) }
     }
     pub fn discovery_shadow(&self) -> Vec<(u64, u8)> {
         unsafe { (*self.inner.state.get()).discovery.shadow_bytes() }
     }
-    pub fn interventions(&self) -> Vec<crate::board::discovery::Intervention> {
+    pub fn interventions(&self) -> Vec<fujimod_emulator::board::discovery::Intervention> {
         unsafe { (*self.inner.state.get()).discovery.interventions.clone() }
     }
 }

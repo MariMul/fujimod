@@ -12,18 +12,11 @@ crate-type = ["rlib"]
 
 [dependencies]
 fujimod-emulator-imaging = { path = "../../crates/emulator-imaging" }
-fujimod-emulator-sensor-input = { path = "../../crates/emulator-sensor-input" }
-fujimod-emulator-xp4-io = { path = "../../crates/emulator-xp4-io" }
-fujimod-emulator-xp4-display = { path = "../../crates/emulator-xp4-display" }
-fujimod-emulator-xp4-storage = { path = "../../crates/emulator-xp4-storage" }
 fujimod-emulator-xp5-board = { path = "../../crates/emulator-xp5-board" }
 fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls" }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
 fujimod-settings = { path = "../../crates/settings" }
-fujimod-emulator-ip = { path = "../../crates/emulator-ip" }
-fujimod-emulator-ip-dmp = { path = "../../crates/emulator-ip-dmp" }
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
-fujimod-emulator-xppro = { path = "../../crates/emulator-xppro" }
 fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }

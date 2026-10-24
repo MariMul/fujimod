@@ -45,6 +45,7 @@
     ],
     "board": [
       "fujimod-emulator-exr2-board",
+      "fujimod-emulator-xp4-board",
       "fujimod-emulator-xp5-board"
     ],
     "engine": [
@@ -85,15 +86,8 @@
   "remaining": {
     "model_dependencies": {
       "fujimod-emulator": [
-        "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",
-        "fujimod-emulator-ip-dmp",
-        "fujimod-emulator-parts-controls",
-        "fujimod-emulator-sensor-input",
-        "fujimod-emulator-xp4-display",
-        "fujimod-emulator-xp4-io",
-        "fujimod-emulator-xp4-storage",
-        "fujimod-emulator-xppro"
+        "fujimod-emulator-parts-controls"
       ],
       "fujimod-emulator-exr2-board": [
         "fujimod-emulator-exr2-audio",
@@ -126,6 +120,16 @@
         "fujimod-emulator-xp5-imaging",
         "fujimod-emulator-xp5-io",
         "fujimod-emulator-xp5-storage"
+      ],
+      "fujimod-emulator-xp4-board": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-ip-dmp",
+        "fujimod-emulator-sensor-input",
+        "fujimod-emulator-xp4-display",
+        "fujimod-emulator-xp4-io",
+        "fujimod-emulator-xp4-storage",
+        "fujimod-emulator-xppro"
       ]
     },
     "oversize_models": [],

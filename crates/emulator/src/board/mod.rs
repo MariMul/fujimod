@@ -26,7 +26,6 @@ mod schedule_tests;
 mod tests;
 #[cfg(test)]
 mod workers_tests;
-pub mod xp4;
 use bus::Bus;
 use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
 use fujimod_emulator_cpu::{

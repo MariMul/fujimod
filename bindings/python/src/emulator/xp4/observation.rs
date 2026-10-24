@@ -1,5 +1,5 @@
 //! Python conversion of owned runtime observations.
-use fujimod_emulator::board::xp4::observation;
+use fujimod_emulator_xp4_board::observation;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyList},

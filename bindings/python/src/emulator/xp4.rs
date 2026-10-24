@@ -1,7 +1,7 @@
 //! Python callbacks and value conversion for the runtime's XP4 Session.
 mod driver_observation;
 mod observation;
-use fujimod_emulator::board::xp4::{Definition, Session};
+use fujimod_emulator_xp4_board::{Definition, Session};
 use fujimod_emulator_cpu::{Register, arm};
 use pyo3::{
     PyTraverseError, PyVisit,
@@ -131,7 +131,7 @@ impl Xp4Session {
     }
     pub(super) fn memory_watch_state(
         &self,
-    ) -> fujimod_emulator::board::xp4::observation::MemorySnapshot {
+    ) -> fujimod_emulator_xp4_board::observation::MemorySnapshot {
         self.inner.memory_watch_state()
     }
     pub(super) fn reg_read(&self, core: usize, register: i32) -> PyResult<u32> {

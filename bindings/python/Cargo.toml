@@ -17,7 +17,7 @@ emulator = [
     "dep:cc",
     "dep:fujimod-emulator",
     "dep:fujimod-emulator-cpu",
-    "dep:fujimod-emulator-devices", "dep:fujimod-emulator-imaging", "dep:fujimod-emulator-storage",
+    "dep:fujimod-emulator-devices", "dep:fujimod-emulator-xp4-board", "dep:fujimod-emulator-imaging", "dep:fujimod-emulator-storage",
     "dep:fujimod-emulator-exr2-plan",
     "dep:pkg-config",
     "dep:sha2",
@@ -26,6 +26,7 @@ emulator = [
 testing = ["fujimod-usb/testing", "fujimod-remote/testing"]
 
 [dependencies]
+fujimod-emulator-xp4-board = { path = "../../crates/emulator-xp4-board", optional = true }
 fujimod-emulator-imaging = { path = "../../crates/emulator-imaging", optional = true }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage", optional = true }
 fujimod-remote = { workspace = true, default-features = false, features = ["ff80"] }
