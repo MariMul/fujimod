@@ -189,7 +189,17 @@ pub fn color_spans(
         }
         let weights = frame.color_sample_weights.map(u64::from);
         let density: u64 = weights.iter().sum();
-        Ok(std::array::from_fn(|c| total[c] * weights[c] / density))
+        // The color statistics measure the readout before the sensor gain;
+        // the displayed image includes it. On an X70 in REC the preview is
+        // brighter than its own color statistics by exactly the sensor gain
+        // (research/hardware/ff80-lv-exposure-camera-20261024T154715Z-2bbf29
+        // and ...T155021Z-108f22: gain code 2665 = 2.86x, display/statistics
+        // 2.89x and 2.87x). Contrast statistics keep the gain; that tap point
+        // is unmeasured.
+        let gain = frame.exposure.analog_gain;
+        Ok(std::array::from_fn(|c| {
+            ((total[c] * weights[c] / density) as f64 / gain) as u64
+        }))
     };
     let (x, y, gaps) = (r[0x200 / 4], r[0x204 / 4], r[0x258 / 4]);
     let mut planes = vec![vec![0u8; 1024]; 3];
@@ -415,6 +425,54 @@ mod tests {
         assert!(!footprints.contains(&[4, 2, 2, 2]));
         assert!(!footprints.contains(&[1, 7, 2, 2]));
         assert_eq!(&spans[1].bytes[8..64], &[0; 56]);
+    }
+    #[test]
+    fn color_statistics_measure_the_readout_before_the_sensor_gain() {
+        // X70 camera runs ff80-lv-exposure-camera-20261024T154715Z-2bbf29 and
+        // ...T155021Z-108f22: the preview is brighter than the color
+        // statistics by the sensor gain, so the gain does not reach them.
+        let frame = |seconds: f64, analog_gain: f64| {
+            let pixels = (0..12 * 12)
+                .flat_map(|i| [40 + (i % 50) as u8; 3])
+                .collect();
+            ExposedFrame::from_frame(
+                Arc::new(Frame::new(12, 12, FramePixels::Rgb24(pixels)).unwrap()),
+                Exposure {
+                    seconds,
+                    analog_gain,
+                },
+                8.,
+                Calibration {
+                    full_scale: 16380,
+                    reference_white: [256; 3],
+                    saturation_lux_seconds: 1.,
+                    color_sample_weights: [2, 5, 2],
+                },
+            )
+            .unwrap()
+        };
+        let mut r = vec![0; 0x1000 / 4];
+        r[0x200 / 4] = 1 << 16 | 1 << 12 | 1;
+        r[0x204 / 4] = 3 << 16 | 1 << 12 | 1;
+        r[0x258 / 4] = 3 << 16 | 1;
+        let sums = |f: &ExposedFrame| {
+            let spans = color_spans(f, [12, 12], &r).unwrap();
+            spans[..3]
+                .iter()
+                .map(|span| u32::from_le_bytes(span.bytes[..4].try_into().unwrap()))
+                .collect::<Vec<_>>()
+        };
+        let base = sums(&frame(0.0001, 1.));
+        let gained = sums(&frame(0.0001, 2.));
+        let longer = sums(&frame(0.0002, 1.));
+        assert!(base.iter().all(|&v| v > 0));
+        for ((b, g), l) in base.iter().zip(&gained).zip(&longer) {
+            assert!(
+                b.abs_diff(*g) <= 1,
+                "gain reached the statistics: {b} vs {g}"
+            );
+            assert!(l.abs_diff(2 * b) <= 2, "exposure time did not: {b} vs {l}");
+        }
     }
     #[test]
     fn contrast_energies_follow_pixels_and_the_square_of_exposure() {

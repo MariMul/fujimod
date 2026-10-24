@@ -107,11 +107,19 @@ impl Renderer {
         };
         exposure.focus_shift_mm = self.projection.as_ref().map(|p| p.focus()).transpose()?;
         let p = self.parameters.lock().map_err(|_| "film bank poisoned")?;
+        // 0x12c is the live digital gain (Q10, 1024 = 1x) the firmware raises
+        // to preview exposure compensation; it multiplies the white-balance
+        // gains. An unprogrammed bank (0) leaves them unchanged.
+        let digital = match p.words[0x12c / 4] & 0x7fff {
+            0 => 1024,
+            g => g,
+        };
         let gain = [
             p.words[0x200 / 4] & 32767,
             p.words[0x200 / 4] >> 16 & 32767,
             p.words[0x204 / 4] & 32767,
-        ];
+        ]
+        .map(|wb| ((wb * digital + 512) >> 10).min(32767));
         if let Some(old) = &self.previous {
             if Arc::ptr_eq(&old.exposure.frame, &exposure.frame)
                 && old.exposure.exposure == exposure.exposure
@@ -555,6 +563,20 @@ mod tests {
             }
         }
         output
+    }
+    #[test]
+    fn live_digital_gain_multiplies_white_balance_and_unity_changes_nothing() {
+        // The firmware raises 0x12c (Q10) to preview exposure compensation:
+        // 1413 at +2 EV with the sensor exposure 1.5 stops longer.
+        let (mut renderer, parameters, _) = renderer();
+        let unity = renderer.capture().unwrap().unwrap().gain;
+        parameters.lock().unwrap().words[0x12c / 4] = 1024;
+        assert_eq!(renderer.capture().unwrap().unwrap().gain, unity);
+        parameters.lock().unwrap().words[0x12c / 4] = 2048;
+        let doubled = renderer.capture().unwrap().unwrap().gain;
+        for (u, d) in unity.iter().zip(doubled) {
+            assert_eq!((*u * 2).min(32767), d);
+        }
     }
     #[test]
     fn exposure_publication_is_lazy_and_reuses_only_consumed_parameters() {
