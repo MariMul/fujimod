@@ -321,12 +321,14 @@ crate (0.5–0.6 s), the boot crate (0.7–0.9 s), the boot and catalog bindings
 run-inputs crate (0.8 s) before the configuration crate. A reference catalog
 or hardware profile edit adds `fujimod-catalog` instead, and a document crate
 edit adds that crate (0.1–0.3 s) before it; the remote bindings build beside
-the configuration and boot crates. A content edit also rebuilds the run inputs
-and the emulator beside that path, and the workflows and the USB bindings
-(2.2–2.9 s), which end with it; a construction edit also rebuilds the plan,
-the EXR II models and the emulator. A service edit rebuilds `fujimod-usb`
-(0.5 s), the USB bindings (2.2–2.7 s) and the module only; since step 11 the
-binding generator's build scripts (0.2–0.3 s) finish before `fujimod-usb`. A
+the configuration and boot crates. Since step 12 an asset edit rebuilds only
+the boot crate, the emulator bindings and the CLI worker beside the module; a
+construction edit rebuilds the run inputs, the reference catalog, the image
+codecs and the ISP output, not the plan or the other EXR II models; and a
+service definition edit rebuilds the App80 crate (0.2 s), the service and
+App80 bindings (0.2 s and 1.5–1.8 s) and the module only. A camera definition
+edit adds the workflows and the USB bindings (0.7 s) beside the App80
+bindings. A
 plan edit rebuilds the EXR II models, the boot crate and the bindings that
 name the plan, but since step 11 not the emulator or the remote crates. An
 image interface edit still rebuilds the emulator (1.3–1.5 s), which names
