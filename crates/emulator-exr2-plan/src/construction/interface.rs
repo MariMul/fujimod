@@ -3,7 +3,6 @@ use super::{Builder, Built, Constructors, decode, line};
 use crate::Model;
 use fujimod_emulator_exr2_resources::CoreInterrupts;
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
-use fujimod_emulator_imaging::exr2_isp as isp;
 
 /// Add the constructors of the devices the interface crates hold.
 pub fn register_interface_models(constructors: &mut Constructors) {
@@ -54,7 +53,7 @@ fn interrupt_controller(builder: Builder<'_>, model: Model) -> Result<Built, Str
         let enables = routes
             .map(|name| {
                 let routes = fujimod_emulator_exr2_resources::wire!(resources, id, name, IrqRoutes);
-                Ok(Box::new(isp::dma::RouteOutput::new(routes, core)?)
+                Ok(Box::new(fujimod_emulator_devices::exr2::irq_routes::RouteOutput::new(routes, core)?)
                     as Box<dyn irq::EnableOutput>)
             })
             .transpose()?;

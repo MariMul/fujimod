@@ -3,7 +3,8 @@
 //! 2/4. No startup ledger, program signature, or instruction inspection.
 mod registers;
 use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
-use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{Raster, Transfer, physical}, due, parameters::ParameterHandle, word};
+use fujimod_emulator_imaging::exr2_isp::{dma::{Raster, Transfer, physical}, due, parameters::ParameterHandle, word};
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_imaging::film::Film;
 use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_parts_sensor::sensor::Sensor;

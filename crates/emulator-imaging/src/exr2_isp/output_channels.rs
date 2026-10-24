@@ -1,5 +1,6 @@
 //! DMA state the two EXR II output banks share through one board wire.
-use crate::exr2_isp::{Irq, dma::{self, Transfer}};
+use crate::exr2_isp::dma::{self, Transfer};
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use std::sync::{Arc, Mutex};
 
 /// Both banks share this physical output interface. Reservations are current

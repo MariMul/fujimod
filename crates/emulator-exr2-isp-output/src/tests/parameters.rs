@@ -1,3 +1,4 @@
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_exr2_isp_input::*;
 use fujimod_emulator_image_processing::parameters::ParameterBank;
 use fujimod_emulator_imaging::exr2_isp::*;

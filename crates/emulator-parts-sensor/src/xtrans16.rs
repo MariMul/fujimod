@@ -3,7 +3,8 @@
 //! and vertical timing. Gain is4095/(4095-code).
 //! Timing/ADC responsivity remain declared physical calibration, not firmware
 //! inspection or a caller signature. The sensor receives actual scan periods.
-use fujimod_emulator_imaging::exposure::{ApertureHandle, Exposure, ExposureHandle};
+use fujimod_emulator_imaging::exposure::{Exposure, ExposureHandle};
+use fujimod_emulator_devices::parts::optics::ApertureHandle;
 use crate::sensor::Controls;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

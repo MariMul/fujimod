@@ -99,12 +99,10 @@ fn runtime_catalog_builds_checked_graph_without_language_adapters() {
             asset.pattern.repeat(asset.size / asset.pattern.len()),
         );
     }
-    let inputs = serde_json::from_value::<preparation::Spec>(spec.scene.clone())
+    let resources = serde_json::from_value::<preparation::Spec>(spec.scene.clone())
         .unwrap()
         .build(&assets)
         .unwrap();
-    let mut resources = Resources::default();
-    resources.inputs = inputs;
     fujimod_emulator_exr2_board::register_board_builder();
     fujimod_emulator_models::register();
     plan.build(resources, 0, &mut RefuseAdapters).unwrap();
@@ -712,7 +710,7 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
         fujimod_emulator_models::register();
         let mut built = Plan::parse(&serde_json::to_vec(&document).unwrap())
             .unwrap()
-            .build(Resources::default(), 0, &mut RefuseAdapters)
+            .build(fujimod_emulator_exr2_resources::Resources::default(), 0, &mut RefuseAdapters)
             .unwrap();
         let (gpio, spi) = (built.node_ids["serial_gpio"], built.node_ids["serial_spi1"]);
         let mut host = Clock(0);

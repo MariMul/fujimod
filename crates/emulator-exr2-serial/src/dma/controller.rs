@@ -308,7 +308,7 @@ impl Device for Controller {
 mod tests {
     use super::*;
     use crate::dma::{audio, memory};
-    use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
+    use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
     use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
 
     fn controller() -> Controller {

@@ -3,7 +3,8 @@
 //! completes with IRQ74; the explicit JPEG stream has joint START ownership.
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
 use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
-use fujimod_emulator_imaging::exr2_isp::{Irq, due, word};
+use fujimod_emulator_imaging::exr2_isp::{due, word};
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
 use fujimod_emulator_imaging::exr2_isp::options::warp::Options;

@@ -1,7 +1,8 @@
 //! Radiometric sensor input. RGB encodes linearized relative scene radiance;
 //! its declared white luminance supplies absolute cd/m². Sensor signal is
 //! irradiance * integration time * analog gain, clipped at the ADC full well.
-use fujimod_emulator_imaging::exposure::{ApertureHandle, Calibration, Exposure, ExposureHandle};
+use fujimod_emulator_devices::parts::optics::ApertureHandle;
+use fujimod_emulator_imaging::exposure::{Calibration, Exposure, ExposureHandle};
 use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFramesHandle, frames::SensorExposure};
 use std::sync::Arc;
 

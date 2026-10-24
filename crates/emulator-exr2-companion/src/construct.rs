@@ -37,9 +37,7 @@ fn fe80_processing(builder: Builder<'_>, model: Model) -> Result<Built, String> 
             transport,
             options,
             crate::companion_processing::Wiring {
-                frames: resources
-                    .inputs
-                    .images
+                frames: fujimod_emulator_exr2_images::images(resources)?.images
                     .get(&frames)
                     .cloned()
                     .ok_or_else(|| format!("missing FE80 frame clock {frames}"))?,

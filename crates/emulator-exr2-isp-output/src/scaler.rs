@@ -1,7 +1,8 @@
 //! FFF47000 packed422 scaler. Register fields define address, pitch, dimensions
 //! and positive 16.16 steps; bilinear sampling is declared, not measured.
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
-use fujimod_emulator_imaging::exr2_isp::{Irq, word};
+use fujimod_emulator_imaging::exr2_isp::word;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::exr2_isp::options::scaler::Options;
 pub struct Scaler {

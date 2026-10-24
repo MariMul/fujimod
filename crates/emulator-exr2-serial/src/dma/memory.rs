@@ -10,7 +10,7 @@
 //! aliases; RAM changes before completion are visible. Operation selection
 //! depends only on guest registers, memory and wired request lines. Channel 1
 //! and peripheral audio handshakes belong to their separately wired DMA model.
-use fujimod_emulator_imaging::exr2_isp::{Irq, dma::IrqRoutes};
+use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -711,7 +711,7 @@ mod tests {
     #[test]
     fn ambiguous_enables_still_refuse_a_latched_memory_completion() {
         use fujimod_emulator_devices::exr2::irq::EnableOutput;
-        use fujimod_emulator_imaging::exr2_isp::dma::RouteOutput;
+        use fujimod_emulator_devices::exr2::irq_routes::RouteOutput;
         let mut d = model();
         let mut h = Memory::default();
         d.routes.set(IRQ, Some(0)).unwrap();

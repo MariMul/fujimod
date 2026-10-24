@@ -2,7 +2,8 @@
 //! Only the physical focus wire, iris, scene pixels, and optical dimensions enter
 //! this law. It supplies pixels to every sensor consumer, never an AF decision.
 use super::exposure::ExposedFrame;
-use fujimod_emulator_imaging::optics::{FocusHandle, Illumination, Spec};
+use fujimod_emulator_devices::parts::optics::FocusHandle;
+use fujimod_emulator_imaging::optics::{Illumination, Spec};
 use fujimod_emulator_imaging::scene::{Frame, FramePixels};
 use std::sync::{Arc, Mutex};
 mod horizontal;

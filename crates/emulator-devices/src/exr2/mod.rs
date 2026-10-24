@@ -2,6 +2,7 @@
 pub mod clock;
 pub mod gpio;
 pub mod irq;
+pub mod irq_routes;
 pub mod pulse;
 pub mod scanout_frame;
 pub mod sd_faults;

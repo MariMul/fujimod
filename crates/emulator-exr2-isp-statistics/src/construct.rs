@@ -1,5 +1,5 @@
 //! EXR II board constructors for this crate's models.
-use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors}};
+use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, decode}};
 use fujimod_emulator_exr2_resources::wire;
 
 /// Add this crate's EXR II constructors.
@@ -21,22 +21,19 @@ fn statistics(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(crate::producer::Block18000::new(
         options,
         crate::producer::Wiring {
             grid: grid
-                .map(|name| Ok(wire!(resources, id, name, ImageGrid)))
+                .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, ImageGrid)))
                 .transpose()?,
             routes: wire!(resources, id, routes, IrqRoutes),
-            images: resources
-                .inputs
-                .images
+            images: fujimod_emulator_exr2_images::images(resources)?.images
                 .get(&images)
                 .cloned()
                 .ok_or_else(|| format!("missing histogram image frames {images}"))?,
-            frames: resources
-                .inputs
-                .statistics
+            frames: fujimod_emulator_exr2_images::images(resources)?.statistics
                 .get(&frames)
                 .cloned()
                 .ok_or_else(|| format!("missing statistics frames {frames}"))?,
@@ -49,6 +46,7 @@ fn phase_detection(builder: Builder<'_>, model: Model) -> Result<Built, String> 
     let Model::PhaseDetection { options, routes } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(
         crate::phase_detection::PhaseDetection::new(
             options,
@@ -64,6 +62,7 @@ fn window_analysis(builder: Builder<'_>, model: Model) -> Result<Built, String> 
     let Model::WindowAnalysis { options, routes } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(
         crate::window_analysis::WindowAnalysis::new(
             options,

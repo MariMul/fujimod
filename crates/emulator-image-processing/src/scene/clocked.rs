@@ -37,7 +37,7 @@ pub struct Wiring {
     pub statistics: StatisticsFrames,
     pub activity: Option<(Box<dyn InputPins>, Selection)>,
     pub start_tick: u64,
-    pub position: Option<fujimod_emulator_imaging::scene::optics::Position>,
+    pub position: Option<fujimod_emulator_devices::parts::optics::Position>,
     pub phase_edges: Option<FramePhases>,
 }
 impl ClockedFrames {

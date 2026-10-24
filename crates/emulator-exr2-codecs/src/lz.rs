@@ -7,7 +7,7 @@
 //! descriptors are admitted. The
 //! default resize mode awaits a result and has no manufactured completion.
 use fujimod_emulator_devices::exr2::irq;
-use fujimod_emulator_imaging::exr2_isp::Irq;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device, compression::method4::Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

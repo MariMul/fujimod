@@ -4,7 +4,8 @@
 use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_imaging::exr2_isp::options::output::{GeometryPolicy, Options};
 use fujimod_emulator_imaging::exr2_isp::output_channels::{FrameTransfer, OutputChannels, Source};
-use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes, Raster, Transfer}, due};
+use fujimod_emulator_imaging::exr2_isp::{dma::{self, Raster, Transfer}, due};
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_image_processing::analysis::nearest_pairs;
 use fujimod_emulator_imaging::analysis::ImageLayout;
 use fujimod_emulator_imaging::scene::ImageFrames;

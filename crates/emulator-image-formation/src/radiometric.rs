@@ -2,9 +2,10 @@
 //! descriptor; armed consumers request their own readout, never a fixture-sized
 //! intermediate. Scene binning precedes PSF, sensor response and film.
 use super::exposure::ExposedFrame;
+use fujimod_emulator_devices::parts::optics::ApertureHandle;
 use fujimod_emulator_imaging::{
     analysis::ImageLayout,
-    exposure::{ApertureHandle, Calibration, ExposureHandle},
+    exposure::{Calibration, ExposureHandle},
     exr2_isp::parameters::ParameterHandle,
     film::{Film, FilmPixels},
     scene::{SensorFramesHandle, frames::SensorImage},

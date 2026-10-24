@@ -4,8 +4,8 @@
 //! offset 4 admits an aligned detector input bus address and one IRQ47 owner.
 //! The declared 400,000-tick latency is unmeasured. Completion retains that
 //! endpoint even if the interrupt controller masks it after admission.
-use fujimod_emulator_imaging::exr2_isp::Irq;
-use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

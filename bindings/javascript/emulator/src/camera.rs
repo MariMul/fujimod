@@ -6,7 +6,6 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
-use fujimod_emulator_exr2_resources::Resources;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
@@ -433,13 +432,12 @@ impl Session {
                 .collect::<Vec<_>>(),
         )?;
         let (scanout, nands) = device_roles(&g.devices)?;
-        let mut resources = Resources::default();
         let assets = g
             .assets
             .into_iter()
             .map(|(name, a)| Ok((name, a.build(dat)?)))
             .collect::<Result<_, String>>()?;
-        resources.inputs = g.scene.build(&assets)?;
+        let resources = g.scene.build(&assets)?;
         let storage = fujimod_emulator_session::durable::Spec {
             cards: g
                 .card
@@ -541,11 +539,12 @@ impl Session {
                         .into(),
                 );
             }
-            if !core.resources.inputs.images.contains_key(&scene.images)
+            let images = core.resources.images()?;
+            if !images.has_image(&scene.images)
                 || scene
                     .sensor
                     .as_ref()
-                    .is_some_and(|s| !core.resources.inputs.sensors.contains_key(s))
+                    .is_some_and(|s| !images.has_sensor(s))
             {
                 return Err("session scene input is not in the declared graph".into());
             }

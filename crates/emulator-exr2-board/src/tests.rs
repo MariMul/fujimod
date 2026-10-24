@@ -542,7 +542,7 @@ fn readback_and_jpeg_peers_share_real_constructor_handles() {
     ]);
     doc["wires"] = json!({"parameters":"parameters","readback":"memory-outputs","edges":"phase-edges","outputs":"output-channels","routes":"irq-routes","jpeg":"stream"});
     let mut resources = Resources::default();
-    resources.inputs.images.insert(
+    fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().images.insert(
         "image".into(),
         ImageFrames::new(ImageLayout {
             width: 2,
@@ -612,7 +612,7 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
     })]);
     let mut resources = Resources::default();
     for name in ["image", "unconnected"] {
-        resources.inputs.images.insert(
+        fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().images.insert(
             name.into(),
             ImageFrames::new(ImageLayout {
                 width: 2,
@@ -622,7 +622,7 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
             .unwrap(),
         );
     }
-    resources.inputs.statistics.insert(
+    fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().statistics.insert(
         "statistics".into(),
         StatisticsFrames::new(vec![StatisticsSpan {
             destination: 2,

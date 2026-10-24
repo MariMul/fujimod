@@ -2,7 +2,8 @@
 //! The external raster is sharp at target_position. Defocus applies a bounded
 //! horizontal box PSF; pulse/depth scale and the PSF are not calibrated optics.
 use fujimod_emulator_imaging::scene::frames::{ImageFrame, Pixels};
-use fujimod_emulator_imaging::scene::optics::{Options, Position};
+use fujimod_emulator_devices::parts::optics::Position;
+use fujimod_emulator_imaging::scene::optics::Options;
 use std::sync::Arc;
 
 pub struct Optics {

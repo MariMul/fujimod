@@ -29,4 +29,3 @@ pub struct Exposure {
     pub analog_gain: f64,
 }
 pub type ExposureHandle = Arc<Mutex<Exposure>>;
-pub type ApertureHandle = Arc<Mutex<f64>>;

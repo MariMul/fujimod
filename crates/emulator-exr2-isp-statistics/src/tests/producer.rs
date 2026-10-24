@@ -1,4 +1,4 @@
-use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use crate::*;
 use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_imaging::analysis::ImageLayout;

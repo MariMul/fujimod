@@ -1,6 +1,7 @@
 use super::*;
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_imaging::exr2_isp::{Irq, stream::{State, StreamHandle}};
+use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::test_host::{TestHost, advance, advance_from_checkpoint, read, write};
 fn encoder(stream: StreamHandle) -> Encoder {
     Encoder::new(

@@ -4,7 +4,7 @@ use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::touch_input::ContactInput;
 use fujimod_emulator_devices::capability::StatisticsCadence;
-use fujimod_emulator_imaging::scene::Frame;
+use fujimod_emulator_exr2_resources::SensorFrame;
 use std::{collections::VecDeque, sync::Arc};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -85,7 +85,7 @@ pub enum Input {
     },
     SensorRaf {
         source: String,
-        frame: Arc<Frame>,
+        frame: SensorFrame,
     },
     SensorRaw16 {
         source: String,
@@ -139,16 +139,7 @@ impl Input {
             Self::Rgb { source, bytes, .. }
             | Self::SensorRgb { source, bytes, .. }
             | Self::SensorRaw16 { source, bytes, .. } => source.capacity() + bytes.capacity(),
-            Self::SensorRaf { source, frame } => source
-                .capacity()
-                .saturating_add(size_of::<Frame>())
-                .saturating_add(match &frame.pixels {
-                    fujimod_emulator_imaging::scene::FramePixels::Rgb24(bytes) => bytes.len(),
-                    fujimod_emulator_imaging::scene::FramePixels::Raw16(words) => words.len() * 2,
-                    fujimod_emulator_imaging::scene::FramePixels::Mosaic { radiance, .. } => {
-                        radiance.bytes().len()
-                    }
-                }),
+            Self::SensorRaf { source, frame } => source.capacity().saturating_add(frame.bytes),
             Self::SensorImage { source } | Self::Analytic { source } => source.capacity(),
             Self::CardFormat {
                 node,
@@ -222,7 +213,7 @@ impl Input {
                 height,
                 bytes,
             } => session.sensor_raw16(source, *width, *height, bytes),
-            Self::SensorRaf { source, frame } => session.sensor_frame(source, frame.clone()),
+            Self::SensorRaf { source, frame } => session.sensor_frame(source, frame),
             Self::SensorImage { source } => session.sensor_image(source),
             Self::Analytic { source } => session.analytic(source),
             Self::CardFormat {

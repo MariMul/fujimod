@@ -3,7 +3,8 @@
 //! uses programmed black, WB/exposure, radial shading and the measured film
 //! law. Spatial filtering remains unmodeled.
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
-use fujimod_emulator_imaging::exr2_isp::{Irq, word};
+use fujimod_emulator_imaging::exr2_isp::word;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_imaging::film::{Film, still_offset};
 use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};

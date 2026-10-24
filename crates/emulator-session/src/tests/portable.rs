@@ -83,7 +83,7 @@ fn session() -> Session {
             interfaces: vec![],
         })
         .unwrap();
-    session.resources.inputs.sensors.insert(
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors.insert(
         "scene".into(),
         Arc::new(Mutex::new(SensorFrames::new(
             Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
@@ -109,7 +109,7 @@ fn durable_session_restores_media_sensor_inputs_contacts_and_queued_actions_then
         card.write_bytes(100000 * 512, b"captured card sector")
             .unwrap();
         source.retain_card("sd", card, false, true).unwrap();
-        source.resources.inputs.sensors["scene"]
+        fujimod_emulator_exr2_images::images_mut(&mut source.resources).unwrap().sensors["scene"]
             .lock()
             .unwrap()
             .latch(0)
@@ -129,14 +129,14 @@ fn durable_session_restores_media_sensor_inputs_contacts_and_queued_actions_then
         (bytes, before, source.fingerprint().unwrap())
     };
     let mut target = session();
-    let sensor = target.resources.inputs.sensors["scene"].clone();
+    let sensor = fujimod_emulator_exr2_images::images_mut(&mut target.resources).unwrap().sensors["scene"].clone();
     let initial = target.fingerprint().unwrap();
     let saved = target.import_snapshot(&bytes).unwrap();
     assert_eq!(target.fingerprint().unwrap(), initial);
     target.restore(&saved).unwrap();
     assert_eq!(target.fingerprint().unwrap(), before);
     assert!(Arc::ptr_eq(
-        &target.resources.inputs.sensors["scene"],
+        &fujimod_emulator_exr2_images::images_mut(&mut target.resources).unwrap().sensors["scene"],
         &sensor
     ));
     let mut sector = [0; 20];

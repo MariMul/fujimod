@@ -1,7 +1,5 @@
-//! The declared thin-lens optics a projection follows, and the focus wire it reads.
+//! The declared thin-lens optics a projection follows.
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex};
-pub type FocusHandle = Arc<Mutex<f64>>;
 /// Relative field illumination is explicit optical fixture data. Cosine-fourth
 /// is the ideal thin-lens approximation, not a measured camera lens profile.
 #[derive(Clone, Copy, PartialEq, Deserialize, Serialize)]

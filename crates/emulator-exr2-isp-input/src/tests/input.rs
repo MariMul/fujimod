@@ -1,3 +1,4 @@
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_exr2_isp_output::output::{self, OutputChannel};
 use crate::*;
 use fujimod_emulator_devices::Device;
@@ -996,7 +997,7 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     })
     .unwrap();
     let channels = fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels::default();
-    let routes = dma::IrqRoutes::default();
+    let routes = fujimod_emulator_devices::exr2::irq_routes::IrqRoutes::default();
     routes.set(44, Some(0)).unwrap();
     routes.set(45, Some(0)).unwrap();
     let make = |channel, base, irq| {
@@ -1141,7 +1142,7 @@ fn raw_readback_only_uses_armed_output_banks_and_their_irq_routes() {
         h.ram[0x9000..0xb000].fill(0xa5);
         let memory: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
         let channels = fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels::default();
-        let routes = dma::IrqRoutes::default();
+        let routes = fujimod_emulator_devices::exr2::irq_routes::IrqRoutes::default();
         let frames = ImageFrames::new(ImageLayout {
             width: 6,
             height: 6,

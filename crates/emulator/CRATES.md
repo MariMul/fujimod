@@ -18,8 +18,9 @@ From the bottom of the graph to the top:
      (`capability`);
    - handles that models share with each other and with sessions (pins and
      pads, pulse outputs, card contacts, encoder inputs, lens bridge registers,
-     HDMI sinks, XP5 pins and panel clocks, scanout frames, scene and frame
-     handles, exposure, focus and aperture handles);
+     the lens focus, aperture and focus-axis position, the EXR II interrupt
+     outputs and their routes, HDMI sinks, XP5 pins and panel clocks, scanout
+     frames);
    - the NAND and SD card media that plans, sessions and controllers exchange.
 
    It contains no device implementation. Two crates sit in the same layer:
@@ -38,12 +39,22 @@ From the bottom of the graph to the top:
    scene's optical blur, the clocked frame source and the ISP parameter
    bank). The EXR II ISP input crate registers the frame source and parameter
    bank constructors and the sensor decoders.
+   `fujimod-emulator-exr2-resources` holds the EXR II device wires, media and
+   inputs, and the image part behind its `ImageResources` trait;
+   `fujimod-emulator-exr2-images` implements the image part: the image wires
+   (frame period, image grid, exposure, ISP parameters, memory outputs,
+   streams, output channels, phase edges) and the image, statistics and
+   sensor inputs. Only the models that read images, the EXR II board,
+   preparation and the bindings that build or inspect image inputs name it,
+   so an image interface edit does not rebuild the resources, the plan, the
+   session or the models that name no image type.
 3. Plan crates: each family's checked board description and construction
    interface, such as `fujimod-emulator-exr2-plan`. A plan carries each model's
    options as JSON for the model crate to decode, so an option change in a
    model crate never rebuilds the plan. Its `construction` module holds the
    build context, the wiring helpers and the registry of constructors by plan
-   model kind. A plan depends on the interface only.
+   model kind. A plan depends on the device interface and the EXR II
+   resources, not on the image interface.
 4. Model crates, one per subsystem and about 4,000 lines or fewer, for
    example `fujimod-emulator-exr2-i2c`, `-exr2-display`, `-exr2-gpu`,
    `-parts-lens`. A model crate depends on the interface, its family's plan
@@ -61,10 +72,11 @@ From the bottom of the graph to the top:
 6. `fujimod-emulator`: execution and scheduling. It depends on the CPU and
    device interface crates only. `fujimod-emulator-session` sits above it: a
    session holds a board with its EXR II resources, inputs, media, history and
-   checkpoints, and reaches devices through capability traits, never through
-   concrete model types. `fujimod-emulator-boot` sits above both: it prepares
-   runs from the reference catalog and run configurations, assembles the CPU
-   graph and the X70 plan, and opens sessions.
+   checkpoints, and reaches devices through capability traits and image inputs
+   through `ImageResources`, never through concrete model or image types.
+   `fujimod-emulator-boot` sits above both: it prepares runs from the reference
+   catalog and run configurations, assembles the CPU graph and the X70 plan,
+   and opens sessions.
 7. Binding libraries (the Python binding crates, the JavaScript bindings)
    over the emulator and the interface. The Python bindings are one crate per
    area, each depending only on what it binds: `fujimod-python-base` (the
@@ -271,6 +283,23 @@ records the rebuild costs below before and after.
     The extension module installs the catalog boot itself, so
     `fujimod-python-boot` is gone and the module links right after the boot
     crate.
+15. Image handles behind the resources' image part: done. The image wires
+    (frame period, image grid, exposure, ISP parameters, memory outputs,
+    streams, output channels, phase edges) and the image, statistics and
+    sensor inputs are `fujimod-emulator-exr2-images`, which implements the
+    `ImageResources` trait of `fujimod-emulator-exr2-resources`. Sessions,
+    their history and checkpoints reach the image part only through the
+    trait, and input logs carry RAF frames in the image part's encoding. The
+    lens focus, aperture and focus-axis position, and the EXR II interrupt
+    outputs and routes, moved to the device interface, and the EXR II plan
+    carries every image model's options as JSON. The resources, the plan,
+    the session, the remote crates and the models that name no image type
+    no longer rebuild after an image interface edit. Portable checkpoints
+    keep their format: a checkpoint written before restores after and the
+    reverse, with identical fingerprints. The X70 boot to REC and two
+    seconds of live view gave identical screenshots, ticks and instruction
+    counts at every quarter second, and the boot to REC ran the same
+    48,023,300 guest instructions with the same host instructions retired.
 
 ## Rebuild costs
 

@@ -1,4 +1,4 @@
-use fujimod_emulator_imaging::exr2_isp::*;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;

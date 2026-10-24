@@ -15,7 +15,6 @@ fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-resources.workspace = true
-fujimod-emulator-imaging.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-recording.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -26,6 +25,8 @@ wasm-bindgen.workspace = true
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
+fujimod-emulator-imaging.workspace = true
+fujimod-emulator-exr2-images.workspace = true
 fujimod-emulator-exr2-io.workspace = true
 fujimod-emulator-exr2-storage.workspace = true
 

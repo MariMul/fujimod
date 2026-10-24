@@ -10,19 +10,6 @@ pub mod options;
 pub mod output_channels;
 pub mod parameters;
 
-/// Physical interrupt output. The board supplies the receiving core; the
-/// runtime routes the physical line through that core's interrupt controller.
-#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
-pub struct Irq {
-    pub core: usize,
-    pub line: u32,
-}
-impl Irq {
-    pub fn raise(self, cx: &mut fujimod_emulator_devices::Cx<'_>) -> Result<(), String> {
-        cx.raise_irq(self.core, self.line)
-    }
-}
-
 pub fn word(
     cx: &mut fujimod_emulator_devices::Cx<'_>,
     address: u64,

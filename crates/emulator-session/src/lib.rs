@@ -14,7 +14,7 @@ pub mod usb;
 
 use fujimod_emulator::board::Board;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
-use fujimod_emulator_exr2_resources::Resources;
+use fujimod_emulator_exr2_resources::{Resources, SensorFrame};
 use std::collections::BTreeMap;
 use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
 
@@ -169,29 +169,16 @@ impl Session {
         bytes: &[u8],
     ) -> Result<(), String> {
         self.resources
-            .inputs
-            .images
-            .get(name)
-            .ok_or("no such image input")?
-            .prepare_rgb(width, height, bytes)?;
+            .images()?
+            .prepare_rgb(name, width, height, bytes)?;
         self.image_inputs_changed(name)
     }
     pub fn analytic(&mut self, name: &str) -> Result<(), String> {
-        self.resources
-            .inputs
-            .images
-            .get(name)
-            .ok_or("no such image input")?
-            .use_analytic();
+        self.resources.images()?.use_analytic(name)?;
         self.image_inputs_changed(name)
     }
     pub fn sensor_image(&mut self, name: &str) -> Result<(), String> {
-        self.resources
-            .inputs
-            .images
-            .get(name)
-            .ok_or("no such image input")?
-            .use_sensor();
+        self.resources.images()?.use_sensor(name)?;
         self.image_inputs_changed(name)
     }
     pub fn sensor_rgb(
@@ -202,26 +189,9 @@ impl Session {
         bytes: &[u8],
         white_luminance: f64,
     ) -> Result<(), String> {
-        use fujimod_emulator_imaging::scene::{Frame, FramePixels};
-        if !white_luminance.is_finite() || white_luminance <= 0. {
-            return Err("scene white luminance must be positive finite cd/m²".into());
-        }
-        let input = self
-            .resources
-            .inputs
-            .sensors
-            .get(name)
-            .ok_or("no such sensor input")?;
-        if bytes.len() > 64 << 20 {
-            return Err("sensor RGB input exceeds 64 MiB".into());
-        }
-        let mut frame = Frame::new(width, height, FramePixels::Rgb24(bytes.to_vec().into()))?;
-        frame.white_luminance = white_luminance;
-        input
-            .lock()
-            .map_err(|_| "sensor input is poisoned")?
-            .set_frame(frame);
-        Ok(())
+        self.resources
+            .images()?
+            .sensor_rgb(name, width, height, bytes, white_luminance)
     }
     /// Replace a sensor input with an external little-endian U16 RAW raster.
     /// The sensor's programmed window and transfer format still control DMA.
@@ -232,53 +202,22 @@ impl Session {
         height: usize,
         bytes: &[u8],
     ) -> Result<(), String> {
-        use fujimod_emulator_imaging::scene::{Frame, FramePixels};
-        let input = self
-            .resources
-            .inputs
-            .sensors
-            .get(name)
-            .ok_or("no such sensor input")?;
-        let expected = width
-            .checked_mul(height)
-            .and_then(|samples| samples.checked_mul(2))
-            .ok_or("sensor RAW input size overflow")?;
-        if bytes.len() > 64 << 20 || bytes.len() != expected {
-            return Err("sensor RAW input must contain exactly width * height U16 samples".into());
-        }
-        let samples = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
-        let frame = Frame::new(width, height, FramePixels::Raw16(samples))?;
-        input
-            .lock()
-            .map_err(|_| "sensor input is poisoned")?
-            .set_frame(frame);
-        Ok(())
+        self.resources
+            .images()?
+            .sensor_raw16(name, width, height, bytes)
     }
-    /// Install a RAF's visible crop as mosaic radiance. Its recorded exposure
+    /// Decode a RAF's visible crop as mosaic radiance. Its recorded exposure
     /// is the normalization, so a later exposure scales the sensor counts.
+    pub fn decode_raf(&self, bytes: &[u8]) -> Result<SensorFrame, String> {
+        self.resources.images()?.decode_raf(bytes)
+    }
+    /// Install a RAF's visible crop as mosaic radiance.
     pub fn sensor_raf(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
-        let read = fujimod_emulator_imaging::scene::frames::sensor_decoders()
-            .ok_or("RAF sensor input needs the image decoders")?
-            .raf;
-        self.sensor_frame(name, std::sync::Arc::new(read(bytes)?))
+        let frame = self.decode_raf(bytes)?;
+        self.sensor_frame(name, &frame)
     }
     /// Install shared immutable sensor pixels without retaining source file bytes.
-    pub fn sensor_frame(
-        &self,
-        name: &str,
-        frame: std::sync::Arc<fujimod_emulator_imaging::scene::Frame>,
-    ) -> Result<(), String> {
-        self.resources
-            .inputs
-            .sensors
-            .get(name)
-            .ok_or("no such sensor input")?
-            .lock()
-            .map_err(|_| "sensor input is poisoned")?
-            .current = frame;
-        Ok(())
+    pub fn sensor_frame(&self, name: &str, frame: &SensorFrame) -> Result<(), String> {
+        self.resources.images()?.sensor_frame(name, frame)
     }
 }

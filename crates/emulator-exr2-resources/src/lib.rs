@@ -1,22 +1,28 @@
 //! Explicit peer wires and external scene/media inputs, never CPU state.
-use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
-use fujimod_emulator_imaging::exr2_isp as isp;
+//!
+//! The image wires and inputs are the resources' image part: only the
+//! imaging models name their types, so this crate holds the part behind
+//! [`ImageResources`].
+use fujimod_emulator_devices::exr2::{clock, gpio, irq, irq_routes, pulse};
 use fujimod_emulator_devices::parts::hdmi_sink::HdmiSink;
 use fujimod_emulator_devices::parts::lens_bridge;
+use fujimod_emulator_devices::parts::optics;
 use fujimod_emulator_devices::parts::sd_card::Card;
-use fujimod_emulator_imaging::scene::{ImageFrames, SensorFramesHandle, StatisticsFrames};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
 };
 
-/// Prepared external inputs. Firmware/file verification belongs to the
-/// frontend; these values contain bytes or physical input handles only.
+mod images;
+pub use images::{
+    Edge, ImageResources, ImageSnapshot, SensorFrame, SensorFrameCodec, SensorRecord,
+    SensorSnapshot, SensorState, install_sensor_frame_codec,
+};
+
+/// Prepared external media inputs. Firmware/file verification belongs to the
+/// frontend; these values contain bytes only.
 #[derive(Default)]
 pub struct Inputs {
-    pub images: BTreeMap<String, ImageFrames>,
-    pub statistics: BTreeMap<String, StatisticsFrames>,
-    pub sensors: BTreeMap<String, SensorFramesHandle>,
     pub cards: BTreeMap<String, Card>,
     pub nands: BTreeMap<String, fujimod_emulator_devices::parts::nand::Nand>,
     pub files: BTreeMap<String, Vec<(String, Vec<u8>)>>,
@@ -24,44 +30,26 @@ pub struct Inputs {
 
 /// A shared wire is declared once and has one concrete type. Every consumer
 /// is recorded during construction so source accesses wake its connected peers.
+/// Image wires belong to the image part.
 pub enum Wire {
-    FramePeriod(fujimod_emulator_imaging::timing::FramePeriod),
-    ImageGrid(fujimod_emulator_imaging::analysis::GridHandle),
-    Focus(fujimod_emulator_imaging::optics::FocusHandle),
-    Exposure(fujimod_emulator_imaging::exposure::ExposureHandle),
-    Aperture(fujimod_emulator_imaging::exposure::ApertureHandle),
+    Focus(optics::FocusHandle),
+    Aperture(optics::ApertureHandle),
     SoftwarePulse(irq::SoftwarePulse),
-    Parameters(isp::parameters::ParameterHandle),
-    MemoryOutputs(fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle),
-    Stream(isp::stream::StreamHandle),
-    OutputChannels(fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels),
-    IrqRoutes(isp::dma::IrqRoutes),
-    PhaseEdges(fujimod_emulator_imaging::scene::FramePhases),
+    IrqRoutes(irq_routes::IrqRoutes),
     BridgeRegisters(lens_bridge::Registers),
     LogicLevel(fujimod_emulator_devices::signals::Level),
-    OpticalPosition(fujimod_emulator_imaging::scene::optics::Position),
+    OpticalPosition(optics::Position),
 }
 impl Wire {
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
         use serde_json::json;
         Ok(match self {
-            Self::FramePeriod(v) => json!(*v.lock().map_err(|_| "frame clock poisoned")?),
-            Self::ImageGrid(v) => json!(*v.lock().map_err(|_| "image grid poisoned")?),
             Self::Focus(v) => json!(*v.lock().map_err(|_| "focus poisoned")?),
-            Self::Exposure(v) => json!(*v.lock().map_err(|_| "exposure poisoned")?),
             Self::Aperture(v) => json!(*v.lock().map_err(|_| "aperture poisoned")?),
             Self::SoftwarePulse(v) => json!(v.asserted()),
             Self::LogicLevel(v) => json!(v.high()),
             Self::OpticalPosition(v) => json!(v.value()),
-            Self::Parameters(v) => json!(*v.lock().map_err(|_| "parameters poisoned")?),
-            Self::MemoryOutputs(v) => v
-                .lock()
-                .map_err(|_| "memory outputs poisoned")?
-                .fingerprint(),
-            Self::Stream(v) => json!(*v.lock().map_err(|_| "stream poisoned")?),
-            Self::OutputChannels(v) => v.fingerprint(),
             Self::IrqRoutes(v) => v.fingerprint(),
-            Self::PhaseEdges(v) => json!(*v.lock().map_err(|_| "phase edges poisoned")?),
             Self::BridgeRegisters(v) => json!(
                 (0..4)
                     .map(|i| v.read_register(i))
@@ -79,38 +67,14 @@ impl Wire {
     pub fn software_pulse() -> Self {
         Self::SoftwarePulse(Default::default())
     }
-    pub fn exposure() -> Self {
-        Self::Exposure(Default::default())
-    }
     pub fn focus() -> Self {
         Self::Focus(Default::default())
-    }
-    pub fn frame_period() -> Self {
-        Self::FramePeriod(Default::default())
-    }
-    pub fn image_grid() -> Self {
-        Self::ImageGrid(Arc::new(Mutex::new([1, 1])))
     }
     pub fn aperture() -> Self {
         Self::Aperture(Arc::new(Mutex::new(1.)))
     }
-    pub fn parameters() -> Self {
-        Self::Parameters(Arc::new(Mutex::new(Default::default())))
-    }
-    pub fn memory_outputs() -> Self {
-        Self::MemoryOutputs(Arc::new(Mutex::new(Default::default())))
-    }
-    pub fn stream() -> Self {
-        Self::Stream(Arc::new(Mutex::new(Default::default())))
-    }
-    pub fn output_channels() -> Self {
-        Self::OutputChannels(Default::default())
-    }
     pub fn irq_routes() -> Self {
         Self::IrqRoutes(Default::default())
-    }
-    pub fn phase_edges() -> Self {
-        Self::PhaseEdges(Arc::new(Mutex::new([None; 2])))
     }
     pub fn bridge_registers() -> Self {
         Self::BridgeRegisters(Default::default())
@@ -128,6 +92,8 @@ pub struct CardPins {
 #[derive(Default)]
 pub struct Resources {
     pub inputs: Inputs,
+    /// The image wires and inputs, when the board has any.
+    pub images: Option<Box<dyn ImageResources>>,
     pub card_pins: BTreeMap<String, CardPins>,
     pub wires: BTreeMap<String, Wire>,
     pub users: BTreeMap<String, BTreeSet<usize>>,
@@ -141,10 +107,7 @@ pub struct Resources {
     pub software_sources: BTreeSet<String>,
 }
 impl Resources {
-    pub fn optical_position(
-        &self,
-        name: &str,
-    ) -> Result<fujimod_emulator_imaging::scene::optics::Position, String> {
+    pub fn optical_position(&self, name: &str) -> Result<optics::Position, String> {
         match self.wires.get(name) {
             Some(Wire::OpticalPosition(v)) => Ok(v.clone()),
             _ => Err(format!("{name} is not an optical position wire")),
@@ -152,31 +115,38 @@ impl Resources {
     }
     pub fn fingerprint(&self) -> Result<serde_json::Value, String> {
         use serde_json::json;
-        let wires = self
+        let mut wires = self
             .wires
             .iter()
             .map(|(name, v)| Ok((name.clone(), v.fingerprint()?)))
             .collect::<Result<BTreeMap<_, _>, String>>()?;
-        let sensors = self
-            .inputs
-            .sensors
-            .iter()
-            .map(|(name, v)| {
-                Ok((
-                    name.clone(),
-                    v.lock().map_err(|_| "sensor input poisoned")?.fingerprint(),
-                ))
-            })
-            .collect::<Result<BTreeMap<_, _>, String>>()?;
+        let (images, statistics, sensors) = match &self.images {
+            Some(part) => {
+                wires.extend(part.wire_fingerprints()?);
+                (
+                    part.image_fingerprints()?,
+                    part.statistics_fingerprints()?,
+                    part.sensor_fingerprints()?,
+                )
+            }
+            None => Default::default(),
+        };
         Ok(
             json!({"wires":wires,"users":self.users,"image_users":self.image_users,"software_sources":self.software_sources,
-                "images":self.inputs.images.iter().map(|(k,v)|(k,v.fingerprint())).collect::<BTreeMap<_,_>>(),
-                "statistics":self.inputs.statistics.iter().map(|(k,v)|(k,v.fingerprint())).collect::<BTreeMap<_,_>>(),
+                "images":images,
+                "statistics":statistics,
                 "sensors":sensors,"cards":self.inputs.cards.iter().map(|(k,v)|(k,v.fingerprint())).collect::<BTreeMap<_,_>>(),
                 "nands":self.inputs.nands.iter().map(|(k,v)|(k,v.fingerprint())).collect::<BTreeMap<_,_>>(),
                 "files":self.inputs.files.iter().map(|(k,v)|(k,v.iter().map(|(path,data)|json!({"path":path,"contents":fujimod_emulator_devices::fingerprint::bytes(data)})).collect::<Vec<_>>())).collect::<BTreeMap<_,_>>()
             }),
         )
+    }
+
+    /// The image part.
+    pub fn images(&self) -> Result<&dyn ImageResources, String> {
+        self.images
+            .as_deref()
+            .ok_or_else(|| "board has no image inputs".into())
     }
 
     pub fn logic_level(
@@ -195,7 +165,7 @@ impl Resources {
             .ok_or_else(|| format!("{name} has no connected models"))
     }
     pub fn image_users(&self, name: &str) -> Result<Vec<usize>, String> {
-        if !self.inputs.images.contains_key(name) {
+        if !self.images.as_ref().is_some_and(|part| part.has_image(name)) {
             return Err(format!("no such image input {name}"));
         }
         Ok(self
@@ -203,19 +173,6 @@ impl Resources {
             .get(name)
             .map(|users| users.iter().copied().collect())
             .unwrap_or_default())
-    }
-    pub fn image_input(&mut self, name: &str, node: usize) -> Result<ImageFrames, String> {
-        let image = self
-            .inputs
-            .images
-            .get(name)
-            .cloned()
-            .ok_or_else(|| format!("missing external image input {name}"))?;
-        self.image_users
-            .entry(name.to_owned())
-            .or_default()
-            .insert(node);
-        Ok(image)
     }
     pub fn encoder(
         &self,
@@ -238,13 +195,20 @@ impl Resources {
             .cloned()
             .ok_or_else(|| format!("{name} is not a constructed HDMI sink input"))
     }
-    pub fn wire(&mut self, name: &str, node: usize) -> Result<&Wire, String> {
-        let wire = self
-            .wires
-            .get(name)
-            .ok_or_else(|| format!("unknown peer wire {name}"))?;
+    /// Record node `node` as a user of the named device or image wire.
+    pub fn connect(&mut self, name: &str, node: usize) -> Result<(), String> {
+        if !self.wires.contains_key(name)
+            && !self.images.as_ref().is_some_and(|part| part.has_wire(name))
+        {
+            return Err(format!("unknown peer wire {name}"));
+        }
         self.users.entry(name.to_owned()).or_default().insert(node);
-        Ok(wire)
+        Ok(())
+    }
+    /// The named device wire, or `None` for an image wire, recorded as used by node `node`.
+    pub fn wire(&mut self, name: &str, node: usize) -> Result<Option<&Wire>, String> {
+        self.connect(name, node)?;
+        Ok(self.wires.get(name))
     }
     pub fn pads(&self, name: &str) -> Result<gpio::Pads, String> {
         self.gpio
@@ -285,7 +249,7 @@ pub use checkpoint::ResourceSnapshot;
 macro_rules! wire {
     ($resources:expr, $id:expr, $name:expr, $kind:ident) => {
         match $resources.wire(&$name, $id)? {
-            $crate::Wire::$kind(value) => value.clone(),
+            Some($crate::Wire::$kind(value)) => value.clone(),
             _ => return Err(format!("{} requires a {} wire", $name, stringify!($kind))),
         }
     };

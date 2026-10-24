@@ -1,7 +1,8 @@
 //! FFF18000 statistics DMA and FFF28000 parameter/LUT bank. External banks or
 //! selected gradient arithmetic consume the connected packed-luma raster; DMA
 //! uses an explicit transfer clock. No configuration hashes or finite lifetimes.
-use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes}, due, Irq};
+use fujimod_emulator_imaging::exr2_isp::{dma, due};
+use fujimod_emulator_devices::exr2::irq_routes::{IrqRoutes, Irq};
 use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
 use fujimod_emulator_image_formation::radiometric::FrozenReadout;
 use fujimod_emulator_imaging::analysis::ImageLayout;

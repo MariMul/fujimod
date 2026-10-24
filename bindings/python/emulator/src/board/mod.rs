@@ -19,7 +19,6 @@ use fujimod_emulator::board::{
 };
 use fujimod_emulator_cpu::{Register, arm};
 use fujimod_emulator_exr2_plan::Plan;
-use fujimod_emulator_exr2_resources::Resources;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -487,8 +486,7 @@ impl Board {
             failures: Failures::default(),
             start_tick: 0,
         };
-        let mut resources = Resources::default();
-        resources.inputs = json::<preparation::Spec>(scene)?
+        let resources = json::<preparation::Spec>(scene)?
             .build(&bytes)
             .map_err(error)?;
         let built = plan

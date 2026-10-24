@@ -174,34 +174,12 @@ impl Session {
         }
         // External RAF input is a physical scene, independent of a cold reset.
         // Preserve its immutable frame instead of retaining and reparsing the file.
-        let mosaic = self
-            .core
-            .resources
-            .inputs
-            .sensors
-            .iter()
-            .map(|(name, input)| {
-                let frame = input
-                    .lock()
-                    .map_err(|_| "sensor input is poisoned")?
-                    .current
-                    .clone();
-                Ok((name.clone(), frame))
-            })
-            .collect::<Result<Vec<_>, String>>()?
-            .into_iter()
-            .filter(|(_, frame)| {
-                matches!(
-                    frame.pixels,
-                    fujimod_emulator_imaging::scene::FramePixels::Mosaic { .. }
-                )
-            })
-            .collect::<Vec<_>>();
+        let mosaic = self.core.resources.images()?.mosaic_frames()?;
         // This image was captured before the first instruction or caller holds.
         // Reuse the same execution owner and RAM reservation across cold resets.
         self.core.restore(&reset)?;
         for (name, frame) in &mosaic {
-            self.core.sensor_frame(name, frame.clone())?;
+            self.core.sensor_frame(name, frame)?;
         }
         if !mosaic.is_empty()
             && let Some(scene) = &metadata.scene

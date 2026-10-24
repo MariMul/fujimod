@@ -62,7 +62,7 @@ impl Session {
         if !encoded.blobs().is_empty() || encoded.children().len() != 2 {
             return Err("snapshot session child/blob count differs".into());
         }
-        let resources = ResourceSnapshot::from_checkpoint(&encoded.children()[1])?;
+        let resources = self.resources.import_checkpoint(&encoded.children()[1])?;
         let board = self.board.import_keyframe(&encoded.children()[0])?;
         let saved = Snapshot {
             definition: header.definition,

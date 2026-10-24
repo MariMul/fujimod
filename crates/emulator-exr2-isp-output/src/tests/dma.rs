@@ -1,3 +1,4 @@
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_imaging::exr2_isp::*;
 #[test]
 fn dma_bounds_clock_and_options_are_strict() {

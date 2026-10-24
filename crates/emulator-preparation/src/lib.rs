@@ -3,7 +3,8 @@
 pub mod media;
 pub mod persistent_inputs;
 
-use fujimod_emulator_exr2_resources::Inputs;
+use fujimod_emulator_exr2_images::Images;
+use fujimod_emulator_exr2_resources::Resources;
 use fujimod_emulator_imaging::{analysis::ImageLayout, scene::{Frame, FramePixels, ImageFrames, SensorFrames, StatisticsFrames, StatisticsSpan}};
 use serde::Deserialize;
 use std::{
@@ -65,13 +66,16 @@ pub struct Spec {
     files: BTreeMap<String, BTreeMap<String, String>>,
 }
 impl Spec {
-    pub fn build(self, assets: &BTreeMap<String, Vec<u8>>) -> Result<Inputs, String> {
+    /// Fresh resources holding the run's prepared media and image inputs.
+    pub fn build(self, assets: &BTreeMap<String, Vec<u8>>) -> Result<Resources, String> {
         let asset = |name: &str| {
             assets
                 .get(name)
                 .ok_or_else(|| format!("missing scene asset {name}"))
         };
-        let mut inputs = Inputs::default();
+        let mut resources = Resources::default();
+        let inputs = &mut resources.inputs;
+        let mut images = Images::default();
         for (name, card) in self.cards {
             inputs.cards.insert(name, card.build(assets)?);
         }
@@ -92,7 +96,7 @@ impl Spec {
             if let Some(source) = image.rgb_source {
                 frames.prepare_rgb(source.width, source.height, asset(&source.asset)?)?;
             }
-            inputs.images.insert(name, frames);
+            images.images.insert(name, frames);
         }
         for (name, spans) in self.statistics {
             if spans.len() > 256 {
@@ -114,7 +118,7 @@ impl Spec {
                     })
                 })
                 .collect::<Result<Vec<_>, String>>()?;
-            inputs
+            images
                 .statistics
                 .insert(name, StatisticsFrames::new(spans)?);
         }
@@ -154,7 +158,7 @@ impl Spec {
                     )
                 }
             };
-            inputs.sensors.insert(
+            images.sensors.insert(
                 name,
                 Arc::new(Mutex::new(SensorFrames::new(Frame::new(
                     sensor.width,
@@ -163,7 +167,8 @@ impl Spec {
                 )?))),
             );
         }
-        Ok(inputs)
+        resources.images = Some(Box::new(images));
+        Ok(resources)
     }
 }
 
@@ -178,11 +183,11 @@ mod tests {
         ]);
         let spec = serde_json::json!({"images":{"live":{"width":2,"height":1,"stride":4,
             "asset":"packed","rgb_source":{"width":1,"height":1,"asset":"rgb"}}}});
-        let inputs = serde_json::from_value::<Spec>(spec.clone())
+        let resources = serde_json::from_value::<Spec>(spec.clone())
             .unwrap()
             .build(&assets)
             .unwrap();
-        let image = &inputs.images["live"];
+        let image = &fujimod_emulator_exr2_images::images(&resources).unwrap().images["live"];
         let baseline = ImageFrames::from_pixels(
             ImageLayout {
                 width: 2,

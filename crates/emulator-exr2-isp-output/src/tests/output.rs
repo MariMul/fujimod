@@ -1,4 +1,4 @@
-use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use crate::*;
 use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_exr2_isp_statistics::{Block18000, producer};
@@ -673,7 +673,7 @@ fn wired_exposures_latch_physical_focus_until_the_next_input_edge() {
         .collect();
     images.prepare_rgb(8, 1, &rgb).unwrap();
     let edges: fujimod_emulator_imaging::scene::FramePhases = Default::default();
-    let position = optics::Position::default();
+    let position = fujimod_emulator_devices::parts::optics::Position::default();
     let statistics = StatisticsFrames::new(vec![]).unwrap();
     let mut source = ClockedFrames::new(
         clocked::Options {

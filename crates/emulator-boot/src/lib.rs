@@ -24,7 +24,6 @@ use fujimod_catalog_controls::{
 };
 use fujimod_emulator_cpu::arm::Coprocessor;
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
-use fujimod_emulator_exr2_resources::Resources;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
@@ -1008,8 +1007,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
             })
             .collect::<Vec<_>>(),
     )?;
-    let mut resources = Resources::default();
-    resources.inputs = serde_json::from_value::<preparation::Spec>(scene.clone())
+    let resources = serde_json::from_value::<preparation::Spec>(scene.clone())
         .map_err(|e| e.to_string())?
         .build(&assets)?;
     // Unit tests have no final crate to register the board builder.

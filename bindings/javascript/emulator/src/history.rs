@@ -370,14 +370,12 @@ mod tests {
         let sensor = Arc::new(Mutex::new(SensorFrames::new(
             SensorFrame::new(1, 1, FramePixels::Rgb24(vec![0; 3].into())).unwrap(),
         )));
-        session
-            .core
-            .resources
-            .inputs
+        fujimod_emulator_exr2_images::images_mut(&mut session.core.resources)
+            .unwrap()
             .sensors
             .insert("sensor".into(), sensor.clone());
         session.reset_image = Some(Arc::new(session.core.checkpoint(None).unwrap()));
-        let frame = Arc::new(
+        let frame: Arc<SensorFrame> = Arc::new(
             SensorFrame::new(
                 7,
                 3,
@@ -391,7 +389,10 @@ mod tests {
         session
             .apply_marked_input(Input::SensorRaf {
                 source: "sensor".into(),
-                frame: frame.clone(),
+                frame: fujimod_emulator_exr2_resources::SensorFrame {
+                    frame: frame.clone(),
+                    bytes: 0,
+                },
             })
             .unwrap();
         let fingerprint = frame.fingerprint();

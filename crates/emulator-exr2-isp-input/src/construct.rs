@@ -15,6 +15,7 @@ pub fn register(constructors: &mut Constructors) {
     fujimod_emulator_imaging::scene::frames::install_sensor_decoders(
         fujimod_emulator_image_processing::sensor_decoders(),
     );
+    fujimod_emulator_exr2_images::install_sensor_frame_codec();
 }
 
 fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
@@ -40,14 +41,13 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device({
         let sensor = sensor
             .map(|s| {
                 let mut sensor = Sensor::new(
                     decode(s.options)?,
-                    resources
-                        .inputs
-                        .sensors
+                    fujimod_emulator_exr2_images::images(resources)?.sensors
                         .get(&s.frames)
                         .cloned()
                         .ok_or_else(|| format!("missing sensor frames {}", s.frames))?,
@@ -61,7 +61,7 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                     frame_clock,
                 }) = s.controls
                 {
-                    let exposure = wire!(resources, id, exposure, Exposure);
+                    let exposure = fujimod_emulator_exr2_images::image_wire!(resources, id, exposure, Exposure);
                     let aperture = wire!(resources, id, aperture, Aperture);
                     let mut controls = fujimod_emulator_parts_sensor::xtrans16::Sensor::new(
                         decode(options)?,
@@ -69,13 +69,15 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                         aperture.clone(),
                     )?;
                     if let Some(clock) = frame_clock {
+                        let clock: fujimod_emulator_imaging::timing::ClockOutput = decode(clock)?;
                         controls.attach_frame_clock(
-                            wire!(resources, id, clock.output, FramePeriod),
+                            fujimod_emulator_exr2_images::image_wire!(resources, id, clock.output, FramePeriod),
                             clock.ticks_per_second,
                         )?;
                     }
-                    sensor.attach_controls(Box::new(controls), calibration, exposure, aperture)?;
+                    sensor.attach_controls(Box::new(controls), decode(calibration)?, exposure, aperture)?;
                     if let Some(p) = projection {
+                        let p: fujimod_emulator_imaging::optics::Spec = decode(p)?;
                         let focus = wire!(resources, id, p.focus.clone(), Focus);
                         sensor.attach_projection(
                             fujimod_emulator_image_formation::optics::Projection::new(p, focus)?,
@@ -86,19 +88,19 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
             })
             .transpose()?;
         let parameters = parameters
-            .map(|name| Ok(wire!(resources, id, name, Parameters)))
+            .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, Parameters)))
             .transpose()?;
         let memory_outputs = memory_outputs
-            .map(|name| Ok(wire!(resources, id, name, MemoryOutputs)))
+            .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, MemoryOutputs)))
             .transpose()?;
         Box::new(crate::input::ImageInput::new(
             options,
             crate::input::Wiring {
                 frame_period: frame_period
-                    .map(|name| Ok(wire!(resources, id, name, FramePeriod)))
+                    .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, FramePeriod)))
                     .transpose()?,
                 statistics_grid: statistics_grid
-                    .map(|name| Ok(wire!(resources, id, name, ImageGrid)))
+                    .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, ImageGrid)))
                     .transpose()?,
                 phase_irqs: [route(phase_irqs[0])?, route(phase_irqs[1])?],
                 raw_irq: route(raw_irq)?,
@@ -107,7 +109,7 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                 sensor,
                 parameters,
                 memory_outputs,
-                edges: wire!(resources, id, edges, PhaseEdges),
+                edges: fujimod_emulator_exr2_images::image_wire!(resources, id, edges, PhaseEdges),
                 start_tick,
             },
         )?)
@@ -118,6 +120,7 @@ fn raw_conversion(_builder: Builder<'_>, model: Model) -> Result<Built, String> 
     let Model::RawConversion { options } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(crate::raw::RawConversion::new(
         options,
         (),
@@ -128,6 +131,7 @@ fn prefilter(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     let Model::Prefilter { options, irq } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device({
         Box::new(crate::raw::Prefilter::new(options, route(irq)?)?)
     }))
@@ -137,6 +141,7 @@ fn raw_statistics(_builder: Builder<'_>, model: Model) -> Result<Built, String> 
     let Model::RawStatistics { options, irq } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device({
         Box::new(crate::raw::RawStatistics::new(options, route(irq)?)?)
     }))
@@ -146,6 +151,7 @@ fn block11000(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     let Model::Block11000 { options } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(crate::block11000::Block11000::new(
         options,
     )?)))
@@ -172,42 +178,40 @@ fn external_frames(builder: Builder<'_>, model: Model) -> Result<Built, String> 
     else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(
         fujimod_emulator_image_processing::scene::clocked::ClockedFrames::new(
             options,
             fujimod_emulator_image_processing::scene::clocked::Wiring {
                 sensor_clock: sensor_clock
                     .map(|name| {
-                        resources
-                            .inputs
-                            .sensors
+                        fujimod_emulator_exr2_images::images(resources)?.sensors
                             .get(&name)
                             .cloned()
                             .ok_or_else(|| format!("missing physical sensor clock {name}"))
                     })
                     .transpose()?,
                 frame_period: frame_period
-                    .map(|name| Ok::<_, String>(wire!(resources, id, name, FramePeriod)))
+                    .map(|name| Ok::<_, String>(fujimod_emulator_exr2_images::image_wire!(resources, id, name, FramePeriod)))
                     .transpose()?,
                 phase_edges: phase_edges
-                    .map(|name| Ok::<_, String>(wire!(resources, id, name, PhaseEdges)))
+                    .map(|name| Ok::<_, String>(fujimod_emulator_exr2_images::image_wire!(resources, id, name, PhaseEdges)))
                     .transpose()?,
                 position: position
                     .map(|n| resources.optical_position(&n))
                     .transpose()?,
                 renderer: radiometric
                     .map(|r| {
+                        let r: fujimod_emulator_imaging::radiometric::Spec = decode(r)?;
                         fujimod_emulator_image_formation::radiometric::Renderer::new(
                             r.calibration,
-                            resources
-                                .inputs
-                                .sensors
+                            fujimod_emulator_exr2_images::images(resources)?.sensors
                                 .get(&r.frames)
                                 .cloned()
                                 .ok_or("missing radiometric scene")?,
-                            wire!(resources, id, r.exposure, Exposure),
+                            fujimod_emulator_exr2_images::image_wire!(resources, id, r.exposure, Exposure),
                             wire!(resources, id, r.aperture, Aperture),
-                            wire!(resources, id, r.parameters, Parameters),
+                            fujimod_emulator_exr2_images::image_wire!(resources, id, r.parameters, Parameters),
                             r.projection
                                 .map(|p| {
                                     let focus = wire!(resources, id, p.focus.clone(), Focus);
@@ -217,10 +221,8 @@ fn external_frames(builder: Builder<'_>, model: Model) -> Result<Built, String> 
                         )
                     })
                     .transpose()?,
-                images: resources.image_input(&images, id)?,
-                statistics: resources
-                    .inputs
-                    .statistics
+                images: fujimod_emulator_exr2_images::image_input(resources, &images, id)?,
+                statistics: fujimod_emulator_exr2_images::images(resources)?.statistics
                     .get(&statistics)
                     .cloned()
                     .ok_or("missing external statistics input")?,
@@ -244,8 +246,9 @@ fn parameters(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     let Model::Parameters { options, bank } = model else {
         return Err("constructor called for another model kind".into());
     };
+    let options = decode(options)?;
     Ok(Built::Device(Box::new(fujimod_emulator_image_processing::parameters::ParameterBank::new(
         options,
-        wire!(resources, id, bank, Parameters),
+        fujimod_emulator_exr2_images::image_wire!(resources, id, bank, Parameters),
     )?)))
 }

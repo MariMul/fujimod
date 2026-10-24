@@ -13,7 +13,6 @@ doctest = false
 [dependencies]
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
-fujimod-emulator-imaging.workspace = true
 fujimod-emulator-parts-io.workspace = true
 fujimod-emulator-parts-lens.workspace = true
 fujimod-emulator-devices.workspace = true

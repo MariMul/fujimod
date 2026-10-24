@@ -3,7 +3,8 @@
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
 use fujimod_emulator_image_formation::exposure::ExposedFrame;
-use fujimod_emulator_imaging::exposure::{ApertureHandle, Calibration, ExposureHandle};
+use fujimod_emulator_imaging::exposure::{Calibration, ExposureHandle};
+use fujimod_emulator_devices::parts::optics::ApertureHandle;
 use fujimod_emulator_image_processing::raw::{Cfa, Packing};
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};

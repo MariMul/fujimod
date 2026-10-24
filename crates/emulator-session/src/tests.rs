@@ -186,10 +186,7 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
     let input = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
     )));
-    session
-        .resources
-        .inputs
-        .sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
         .insert("sensor".into(), input.clone());
     let saved = session.checkpoint(None).unwrap();
     let mut history = super::history::History::new(2, 128 << 20).unwrap();
@@ -579,10 +576,7 @@ fn sensor_raw16_replaces_the_current_frame_without_changing_the_latched_frame() 
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(2, 1, FramePixels::Raw16(vec![1, 2])).unwrap(),
     )));
-    session
-        .resources
-        .inputs
-        .sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
         .insert("sensor".into(), sensor.clone());
     session
         .sensor_raw16("sensor", 3, 1, &[3, 0, 4, 0, 5, 0])
@@ -601,10 +595,7 @@ fn sensor_radiance_is_retained_by_serialized_input_history_and_undo() {
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
     )));
-    session
-        .resources
-        .inputs
-        .sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
         .insert("sensor".into(), sensor.clone());
     let initial = sensor.lock().unwrap().fingerprint();
     let mut history = History::new(2, 128 << 20).unwrap();
@@ -800,10 +791,7 @@ fn automatic_history_admits_one_oversized_input_and_expires_its_old_prefix() {
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
     )));
-    session
-        .resources
-        .inputs
-        .sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
         .insert("sensor".into(), sensor.clone());
     // A tiny retention budget cannot reject a supported external input. As
     // with keyframes, retain one oversized item and expire it on the next mark.
@@ -833,17 +821,15 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     use super::history::{History, Input};
     use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames, mosaic::Radiance};
     use std::sync::{Arc, Mutex};
+    fujimod_emulator_exr2_images::install_sensor_frame_codec();
     let mut session = card_session();
     let input = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![0; 3].into())).unwrap(),
     )));
-    session
-        .resources
-        .inputs
-        .sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
         .insert("sensor".into(), input.clone());
     let saved = session.checkpoint(None).unwrap();
-    let frame = Arc::new(
+    let frame: Arc<Frame> = Arc::new(
         Frame::new(
             7,
             3,
@@ -860,7 +846,10 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
             &mut session,
             Input::SensorRaf {
                 source: "sensor".into(),
-                frame: frame.clone(),
+                frame: fujimod_emulator_exr2_resources::SensorFrame {
+                    frame: frame.clone(),
+                    bytes: 0,
+                },
             },
         )
         .unwrap();
@@ -871,7 +860,7 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     else {
         panic!("RAF input");
     };
-    assert!(Arc::ptr_eq(retained, &frame));
+    assert!(Arc::ptr_eq(&retained.frame.clone().downcast::<Frame>().unwrap(), &frame));
     let straight = session.fingerprint().unwrap();
     let encoded =
         fujimod_emulator_devices::checkpoint::Checkpoint::encode("raf-history", &history.entries())
@@ -885,10 +874,11 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     else {
         panic!("RAF input");
     };
-    assert!(Arc::ptr_eq(&input.lock().unwrap().current, replayed));
+    let replayed = replayed.frame.clone().downcast::<Frame>().unwrap();
+    assert!(Arc::ptr_eq(&input.lock().unwrap().current, &replayed));
     assert_eq!(session.fingerprint().unwrap(), straight);
     let current = session.checkpoint(None).unwrap();
     session.restore(&saved).unwrap();
     session.restore(&current).unwrap();
-    assert!(input.lock().unwrap().current.same_pixels(replayed));
+    assert!(input.lock().unwrap().current.same_pixels(&replayed));
 }
