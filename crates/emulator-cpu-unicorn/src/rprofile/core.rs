@@ -28,6 +28,8 @@ mod tcm;
 use mapping::Mapping;
 
 #[cfg(test)]
+mod access_exit_tests;
+#[cfg(test)]
 mod tcm_tests;
 #[cfg(test)]
 mod tests;
