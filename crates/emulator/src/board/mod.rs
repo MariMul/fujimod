@@ -138,8 +138,13 @@ pub struct Board {
     watches: Vec<Box<observe::Watch>>,
     entries: Rc<RefCell<observe::Entries>>,
     discovery_stub_contexts: Vec<Box<discovery::CalleeStubContext>>,
+    translation_cache_size_bytes: u32,
 }
 impl Board {
+    /// Per processor translation cache size selected when the board was built.
+    pub fn translation_cache_size_bytes(&self) -> u32 {
+        self.translation_cache_size_bytes
+    }
     /// Host parallelism used for Interactive device computations. Defaults to
     /// zero on every target; Exact stays inline for any preference.
     pub fn device_worker_preference(&self) -> usize {
@@ -337,6 +342,7 @@ impl Board {
             watches: vec![],
             entries: Default::default(),
             discovery_stub_contexts: vec![],
+            translation_cache_size_bytes: 0,
             cpus: Rc::new(cpus.into_iter().map(Rc::from).collect()),
             state,
             bindings: vec![],

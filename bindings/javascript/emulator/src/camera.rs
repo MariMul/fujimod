@@ -59,7 +59,6 @@ struct Graph {
     assets: BTreeMap<String, Asset>,
     firmware: Firmware,
     quantum: usize,
-    translation_cache_bytes: u32,
     #[serde(default)]
     coprocessors: Vec<Coprocessor>,
     #[serde(default)]
@@ -452,10 +451,7 @@ impl Session {
         let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, built.graph)?;
         let mut board = g.execution.build(
-            factory::Options {
-                engine: factory::Engine::Unicorn,
-                translation_cache_bytes: g.translation_cache_bytes,
-            },
+            factory::Options::new(factory::Engine::Unicorn),
             bus,
             None,
         )?;

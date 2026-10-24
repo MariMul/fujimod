@@ -37,10 +37,7 @@ fn board() -> Result<Board, String> {
         instructions_per_tick: Ratio::new(7, 3)?,
     }
     .build(
-        Options {
-            engine: Engine::Hypervisor,
-            translation_cache_bytes: 1 << 20,
-        },
+        Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1 << 20),
         Bus::new(Mode::Strict),
         Some(InterruptMap {
             cores: 1,

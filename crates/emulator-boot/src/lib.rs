@@ -1025,10 +1025,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     };
     let bus = Bus::from_graph(bus_mode, built.graph)?;
     let mut board = graph.build(
-        factory::Options {
-            engine,
-            translation_cache_bytes: factory::TRANSLATION_CACHE_BYTES,
-        },
+        factory::Options::new(engine),
         bus,
         None,
     )?;
@@ -1073,6 +1070,8 @@ pub struct RecReport {
     pub pending_mode: u32,
     pub pending: bool,
     pub setup_presses: usize,
+    /// Per processor translated-code cache allocated to each Unicorn engine.
+    pub translation_cache_size_bytes: u32,
     /// First active scanout output presenting configured graphics, when present.
     pub scanout_instance: Option<usize>,
     pub failure: Option<String>,
@@ -1116,6 +1115,7 @@ fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<RecRepo
         pending_mode: word(session, o.pending_mode)?,
         pending,
         setup_presses: presses,
+        translation_cache_size_bytes: session.board.translation_cache_size_bytes(),
         scanout_instance: presented_instances(&session.scanout_state(&o.scanout)?)
             .into_iter()
             .next(),

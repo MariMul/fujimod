@@ -610,10 +610,7 @@ pub fn open(
         options.mode,
     )?;
     let mut board = options.processors.build(
-        factory::Options {
-            engine: options.engine,
-            translation_cache_bytes: 16 << 20,
-        },
+        factory::Options::new(options.engine),
         assembly.bus,
         options.interrupts,
     )?;

@@ -198,10 +198,7 @@ fn board_with_event(
     .unwrap();
     let board = graph(private_peer)
         .build(
-            Options {
-                engine: Engine::Unicorn,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )

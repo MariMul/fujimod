@@ -76,7 +76,7 @@ fn board(policy: ExecutionPolicy, due: Option<u64>) -> (Board, usize) {
     let cpus = (0..2)
         .map(|core| {
             let cpu = worker::spawn(worker::Config {
-                translation_cache_bytes: 1024 * 1024,
+                translation_cache_size_bytes: 1024 * 1024,
                 options: Default::default(),
                 memory: shared_memory.clone(),
             })

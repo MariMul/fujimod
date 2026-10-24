@@ -72,10 +72,8 @@ fn card_session() -> Session {
     })).unwrap();
     let board = graph
         .build(
-            factory::Options {
-                engine: factory::Engine::Unicorn,
-                translation_cache_bytes: 1 << 20,
-            },
+            factory::Options::new(factory::Engine::Unicorn)
+                .with_translation_cache_size_bytes(1 << 20),
             bus,
             None,
         )

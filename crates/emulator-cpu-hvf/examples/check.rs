@@ -68,9 +68,8 @@ fn main() -> Result<(), String> {
             peripherals: vec![],
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
         };
-        let options = || Options {
-            engine: Engine::Hypervisor,
-            translation_cache_bytes: 1024 * 1024,
+        let options = || {
+            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024)
         };
         // Both architectural compare channels must assert their declared PPI at
         // guest tick100, including when the host pauses while WFI is waiting.
@@ -807,10 +806,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1)?,
         };
         let mut built = graph.build(
-            Options {
-                engine: Engine::Hypervisor,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             Some(InterruptMap {
                 gic: Box::new(gic),
@@ -995,10 +991,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1)?,
         };
         let mut board = graph.build(
-            Options {
-                engine: Engine::Hypervisor,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             Some(InterruptMap {
                 gic: Box::new(gic),
@@ -1151,10 +1144,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1)?,
         };
         let mut board = graph.build(
-            Options {
-                engine: Engine::Hypervisor,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
             Bus::new(Mode::Strict),
             None,
         )?;

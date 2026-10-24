@@ -396,7 +396,7 @@ impl Board {
     }
 
     #[new]
-    #[pyo3(signature = (execution, devices, scene, assets, models, *, execution_mode="strict", continue_refusals=false, engine="unicorn", translation_cache_bytes=factory::TRANSLATION_CACHE_BYTES))]
+    #[pyo3(signature = (execution, devices, scene, assets, models, *, execution_mode="strict", continue_refusals=false, engine="unicorn"))]
     fn new(
         execution: &str,
         devices: &str,
@@ -406,7 +406,6 @@ impl Board {
         execution_mode: &str,
         continue_refusals: bool,
         engine: &str,
-        translation_cache_bytes: u32,
     ) -> PyResult<Self> {
         let engine = match engine {
             "unicorn" => factory::Engine::Unicorn,
@@ -501,10 +500,7 @@ impl Board {
         bus.continue_refusals(continue_refusals).map_err(error)?;
         let mut board = graph
             .build(
-                factory::Options {
-                    engine,
-                    translation_cache_bytes,
-                },
+                factory::Options::new(engine),
                 bus,
                 None,
             )

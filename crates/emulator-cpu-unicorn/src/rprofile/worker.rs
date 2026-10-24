@@ -23,7 +23,7 @@ mod durable;
 /// Inputs needed to construct one native R-profile processor on its owner
 /// thread.
 pub struct Config {
-    pub translation_cache_bytes: u32,
+    pub translation_cache_size_bytes: u32,
     pub options: core::Options,
     pub memory: SharedMemory,
 }
@@ -842,7 +842,7 @@ fn serve(
             return;
         }
     };
-    let engine = match library.open(Model::CortexR5F, config.translation_cache_bytes) {
+    let engine = match library.open(Model::CortexR5F, config.translation_cache_size_bytes) {
         Ok(engine) => engine,
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -2003,7 +2003,7 @@ mod tests {
 
     fn worker(memory: SharedMemory) -> CpuWorker {
         spawn(Config {
-            translation_cache_bytes: 1024 * 1024,
+            translation_cache_size_bytes: 1024 * 1024,
             options: core::Options::default(),
             memory,
         })

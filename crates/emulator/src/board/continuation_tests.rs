@@ -75,10 +75,7 @@ fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     };
     let board = graph
         .build(
-            Options {
-                engine: Engine::Unicorn,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus::Bus::new(bus::Mode::Strict),
             None,
         )

@@ -216,10 +216,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
         };
         let mut b = graph
             .build(
-                Options {
-                    engine: Engine::Unicorn,
-                    translation_cache_bytes: 1024 * 1024,
-                },
+                Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
                 Bus::from_graph(bus::Mode::Strict, built.graph).unwrap(),
                 None,
             )

@@ -189,10 +189,7 @@ fn strict_unknown_refuses_and_discovery_retains_evidence() {
 #[test]
 fn factory_owns_alias_backing_and_maps_peripherals_to_physical_bus_addresses() {
     use factory::*;
-    let options = || Options {
-        engine: Engine::Unicorn,
-        translation_cache_bytes: 1024 * 1024,
-    };
+    let options = || Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024);
     let graph = || Graph {
         decoders: vec![],
         processors: vec![Processor {
@@ -401,10 +398,7 @@ fn pausing_inside_a_quantum_preserves_multicore_interleaving() {
         };
         let mut built = graph
             .build(
-                Options {
-                    engine: Engine::Unicorn,
-                    translation_cache_bytes: 1024 * 1024,
-                },
+                Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
                 Bus::new(bus::Mode::Strict),
                 None,
             )
@@ -476,10 +470,7 @@ fn mprofile_systick_wakes_wfi_and_executes_a_real_exception_handler() {
         };
         let mut board = graph
             .build(
-                Options {
-                    engine: Engine::Unicorn,
-                    translation_cache_bytes: 1024 * 1024,
-                },
+                Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
                 Bus::new(bus::Mode::Strict),
                 None,
             )
@@ -704,10 +695,8 @@ fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>
     } else {
         graph
             .build(
-                factory::Options {
-                    engine: factory::Engine::Unicorn,
-                    translation_cache_bytes: 1024 * 1024,
-                },
+                factory::Options::new(factory::Engine::Unicorn)
+                    .with_translation_cache_size_bytes(1024 * 1024),
                 bus,
                 None,
             )

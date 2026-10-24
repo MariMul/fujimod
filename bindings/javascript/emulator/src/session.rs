@@ -107,7 +107,6 @@ struct Display {
 #[serde(deny_unknown_fields)]
 struct Scenario {
     quantum: usize,
-    translation_cache_bytes: u32,
     firmware: Firmware,
 }
 #[derive(Deserialize)]
@@ -305,10 +304,7 @@ impl Session {
             )?,
         };
         let mut board = graph.build(
-            factory::Options {
-                engine: factory::Engine::Unicorn,
-                translation_cache_bytes: config.scenario.translation_cache_bytes,
-            },
+            factory::Options::new(factory::Engine::Unicorn),
             Bus::from_graph(Mode::Strict, devices)?,
             interrupts,
         )?;

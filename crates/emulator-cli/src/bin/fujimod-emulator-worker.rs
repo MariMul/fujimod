@@ -278,7 +278,6 @@ struct Config {
     schema: u32,
     engine: Engine,
     mode: Mode,
-    translation_cache_bytes: u32,
     instructions_per_tick: [u64; 2],
     quantum: usize,
     ram: Vec<Ram>,
@@ -583,13 +582,10 @@ impl Worker {
             )?,
         };
         let mut board = graph.build(
-            factory::Options {
-                engine: match config.engine {
-                    Engine::Unicorn => factory::Engine::Unicorn,
-                    Engine::Hypervisor => factory::Engine::Hypervisor,
-                },
-                translation_cache_bytes: config.translation_cache_bytes,
-            },
+            factory::Options::new(match config.engine {
+                Engine::Unicorn => factory::Engine::Unicorn,
+                Engine::Hypervisor => factory::Engine::Hypervisor,
+            }),
             bus,
             config.interrupts.map(Gic::runtime).transpose()?,
         )?;

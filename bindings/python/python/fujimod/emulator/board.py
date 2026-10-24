@@ -32,6 +32,7 @@ class BootReport(TypedDict):
     menu_node: int
     pending: bool
     setup_presses: int
+    translation_cache_size_bytes: int
     failure: str | None
 
 
@@ -75,6 +76,9 @@ def _boot_report(value: object) -> BootReport:
         "menu_node": _report_integer(report, "menu_node"),
         "pending": _report_boolean(report, "pending"),
         "setup_presses": _report_integer(report, "setup_presses"),
+        "translation_cache_size_bytes": _report_integer(
+            report, "translation_cache_size_bytes"
+        ),
         "failure": failure,
     }
     return result
@@ -131,11 +135,6 @@ class Board:
                 raise ValueError("engine must be 'unicorn' or 'hypervisor'")
             if definition.mode not in ("strict", "discovery"):
                 raise ValueError("mode must be 'strict' or 'discovery'")
-            if (
-                type(definition.translation_cache_bytes) is not int
-                or definition.translation_cache_bytes < 1
-            ):
-                raise ValueError("translation cache size must be a positive integer")
         if isinstance(definition, Xp4Definition):
             if any(image.core is not None for image, _ in images):
                 raise ValueError("XP4 input images require physical addresses")
@@ -159,7 +158,6 @@ class Board:
                 execution_mode=definition.mode,
                 continue_refusals=definition.continue_refusals,
                 engine=definition.engine,
-                translation_cache_bytes=definition.translation_cache_bytes,
             )
         try:
             for image, data in images:

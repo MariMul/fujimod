@@ -26,7 +26,6 @@ use std::{
 };
 
 const FPEXC: Register = Register::Arm32(arm::Register::Fpexc);
-const TRANSLATION_CACHE_BYTES: u32 = 32 * 1024 * 1024;
 
 enum ExceptionEntry {
     Undefined,
@@ -988,11 +987,14 @@ impl Session {
         {
             return Err("Invalid ARMv7-A peripheral reset inputs".to_owned());
         }
+        let ram = Backing::zeros(ram_size);
+        let translation_cache_size_bytes =
+            fujimod_emulator::board::factory::translation_cache_size_bytes(cores)?;
         let library = Library::linked()?;
         let cpus = (0..cores)
             .map(|_| {
                 library
-                    .open(cpu::Model::CortexA7, TRANSLATION_CACHE_BYTES)
+                    .open(cpu::Model::CortexA7, translation_cache_size_bytes)
                     .map(|cpu| Box::new(cpu) as Box<dyn Cpu>)
             })
             .collect::<Result<Vec<_>, _>>()?;

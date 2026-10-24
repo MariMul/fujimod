@@ -54,13 +54,79 @@ pub struct Graph {
     pub instructions_per_tick: Ratio,
 }
 /// Host code cache per processor. An X70 walkthrough keeps about 63 MiB of
-/// translated code in use; a smaller cache fills, flushes and translates the
-/// same code again (ev_dial: 440K translations at 16 MiB, 85K at 256 MiB).
-/// Pages are committed only as code is generated.
-pub const TRANSLATION_CACHE_BYTES: u32 = 256 << 20;
+/// translated code in use. At 64 MiB the cache still filled and flushed, while
+/// 128 MiB holds that working set about twice over. On native hosts this buffer
+/// is a reservation whose pages are committed only as code is generated.
+pub const TRANSLATION_CACHE_BYTES: u32 = 128 << 20;
+
 pub struct Options {
     pub engine: Engine,
-    pub translation_cache_bytes: u32,
+    translation_cache_size_bytes: Option<u32>,
+}
+
+impl Options {
+    pub fn new(engine: Engine) -> Self {
+        Self {
+            engine,
+            translation_cache_size_bytes: None,
+        }
+    }
+
+    /// Set a smaller cache for focused tests.
+    pub fn with_translation_cache_size_bytes(mut self, bytes: u32) -> Self {
+        self.translation_cache_size_bytes = Some(bytes);
+        self
+    }
+}
+
+const BROWSER_TRANSLATION_CACHE_MIN_BYTES: u64 = 32 << 20;
+const BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES: u64 = 64 << 20;
+const MEBIBYTE: u64 = 1 << 20;
+
+/// Choose the browser cache size from remaining Emscripten heap capacity.
+pub fn browser_translation_cache_size_bytes(
+    remaining_heap_bytes: u64,
+    processors: usize,
+) -> Result<u32, String> {
+    if processors == 0 {
+        return Err("browser translation cache sizing requires a processor".into());
+    }
+    let cache_total = u64::from(TRANSLATION_CACHE_BYTES)
+        .checked_mul(processors as u64)
+        .ok_or("browser translation cache size overflows")?;
+    let full_heap = cache_total
+        .checked_add(BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES)
+        .ok_or("browser translation cache size overflows")?;
+    if remaining_heap_bytes >= full_heap {
+        return Ok(TRANSLATION_CACHE_BYTES);
+    }
+    let usable_heap = remaining_heap_bytes.saturating_sub(BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES);
+    let per_processor = usable_heap / processors as u64;
+    let rounded = per_processor / MEBIBYTE * MEBIBYTE;
+    if rounded < BROWSER_TRANSLATION_CACHE_MIN_BYTES {
+        return Err(format!(
+            "browser heap cannot fit the minimum 32 MiB translation cache for each of {processors} processors plus 64 MiB of headroom"
+        ));
+    }
+    Ok(rounded.min(u64::from(TRANSLATION_CACHE_BYTES)) as u32)
+}
+
+pub fn translation_cache_size_bytes(processors: usize) -> Result<u32, String> {
+    if processors == 0 {
+        return Ok(TRANSLATION_CACHE_BYTES);
+    }
+    #[cfg(target_os = "emscripten")]
+    {
+        browser_translation_cache_size_bytes(
+            fujimod_emulator_cpu_unicorn::remaining_heap_bytes()?,
+            processors,
+        )
+    }
+    #[cfg(not(target_os = "emscripten"))]
+    {
+        let _ = processors;
+        Ok(TRANSLATION_CACHE_BYTES)
+    }
 }
 pub(super) struct Engines {
     unicorn: Option<Library>,
@@ -112,6 +178,7 @@ impl Engines {
         &self,
         processor: &Processor,
         options: &Options,
+        translation_cache_size_bytes: u32,
         memory: &fujimod_emulator_cpu_unicorn::rprofile::memory::Memory,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
@@ -130,7 +197,7 @@ impl Engines {
             .unicorn
             .as_ref()
             .ok_or("Unicorn engine was not constructed")?
-            .open(model, options.translation_cache_bytes)?;
+            .open(model, translation_cache_size_bytes)?;
         if let Some(config) = processor.rprofile {
             Ok(Box::new(
                 fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
@@ -281,12 +348,23 @@ impl Graph {
                 .collect::<Result<Vec<_>, String>>()?,
             self.dma_mappings.clone(),
         )?;
+        let unicorn_processors = self
+            .processors
+            .iter()
+            .filter(|processor| {
+                matches!(options.engine, Engine::Unicorn) || processor.model != Model::ArmV8A
+            })
+            .count();
+        let translation_cache_size_bytes = match options.translation_cache_size_bytes {
+            Some(bytes) => bytes,
+            None => translation_cache_size_bytes(unicorn_processors)?,
+        };
         let engines = Engines::new(&self, &options)?;
         let memory = fujimod_emulator_cpu_unicorn::rprofile::memory::Memory::default();
         let cpus = self
             .processors
             .iter()
-            .map(|p| engines.cpu(p, &options, &memory))
+            .map(|p| engines.cpu(p, &options, translation_cache_size_bytes, &memory))
             .collect::<Result<Vec<_>, _>>()?;
         for (core, cpu) in cpus.iter().enumerate() {
             for a in self.mappings.iter().filter(|a| a.core == core) {
@@ -321,6 +399,7 @@ impl Graph {
             released,
             ram,
         )?;
+        board.translation_cache_size_bytes = translation_cache_size_bytes;
         board.state.borrow_mut().decoders = super::decoder::Decoders::new(self.decoders);
         board.mappings = self.mappings.clone();
         for (core, p) in self.processors.iter().enumerate() {
@@ -343,5 +422,27 @@ impl Graph {
         }
         board.retained_engines = Some(engines);
         Ok(board)
+    }
+}
+
+#[cfg(test)]
+mod translation_cache_tests {
+    use super::browser_translation_cache_size_bytes;
+
+    #[test]
+    fn browser_cache_fits_heap_headroom_and_processor_count() {
+        let mib: u64 = 1 << 20;
+        assert_eq!(
+            browser_translation_cache_size_bytes((64 + 128 + 128) * mib, 2).unwrap(),
+            128 << 20
+        );
+        assert_eq!(
+            browser_translation_cache_size_bytes((64 + 95) * mib, 1).unwrap(),
+            95 << 20
+        );
+        assert!(browser_translation_cache_size_bytes((64 + 31) * mib, 1)
+            .unwrap_err()
+            .contains("minimum 32 MiB"));
+        assert!(browser_translation_cache_size_bytes((64 + 64) * mib, 0).is_err());
     }
 }

@@ -314,6 +314,7 @@ def test_boot_report_decodes_the_stopped_guest_observation() -> None:
         "menu_node": 7,
         "pending": False,
         "setup_presses": 2,
+        "translation_cache_size_bytes": 128 << 20,
         "failure": None,
     })
     assert report["status"] == "rec"

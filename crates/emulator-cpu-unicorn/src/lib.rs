@@ -2,6 +2,8 @@
 //! calls are confined here; observers receive architectural execution events.
 // Links the static Unicorn archive that `ffi` binds.
 use fujimod_unicorn_sys as _;
+#[cfg(target_os = "emscripten")]
+mod available_memory;
 pub mod rprofile;
 #[cfg(test)]
 mod test_support;
@@ -19,6 +21,9 @@ use std::collections::BTreeMap;
 use std::ffi::CStr;
 use std::rc::Rc;
 
+#[cfg(target_os = "emscripten")]
+pub use available_memory::remaining_heap_bytes;
+
 pub struct Library {
     api: Rc<ffi::Api>,
 }
@@ -35,7 +40,7 @@ impl Library {
         }
         Ok(Self { api })
     }
-    pub fn open(&self, model: Model, translation_cache_bytes: u32) -> Result<Core, String> {
+    pub fn open(&self, model: Model, translation_cache_size_bytes: u32) -> Result<Core, String> {
         if model == Model::CortexM4 && self.api.extensions.features & 4 == 0 {
             return Err(
                 "M-profile requires stoppable Thumb IT hooks from pinned Unicorn; see the crate README"
@@ -84,7 +89,7 @@ impl Library {
             })?;
         }
         check(&core.api, unsafe {
-            (core.api.uc_ctl)(raw, ffi::ctl(13, 1, 1), translation_cache_bytes)
+            (core.api.uc_ctl)(raw, ffi::ctl(13, 1, 1), translation_cache_size_bytes)
         })?;
         if let Some(enable) = core.api.extensions.page_hooks {
             check(&core.api, unsafe { enable(raw, true) })?;

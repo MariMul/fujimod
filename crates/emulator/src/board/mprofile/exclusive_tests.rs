@@ -78,10 +78,7 @@ pub(super) fn board_with_bus(code: &[u16], peer: &[u16], bus: Bus) -> Board {
     };
     let b = graph
         .build(
-            Options {
-                engine: Engine::Unicorn,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )

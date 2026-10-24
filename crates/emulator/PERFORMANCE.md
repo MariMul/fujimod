@@ -106,9 +106,14 @@ Translation churn came from the translation cache. At 16 MiB it filled every
 22.7K blocks (about 740 host bytes each) and was flushed, and the walkthrough
 translated its working set again: 21 flushes and 440K translations in the
 first 60K runs. Its translated code in use is about 63 MiB, so 64 MiB still
-cycled. Processors now get 256 MiB (`factory::TRANSLATION_CACHE_BYTES`);
-pages are committed only as code is generated. ev_dial then translates 85K
-blocks with no capacity flush. The translation counters ("translations",
+cycled. Each processor gets a fixed 128 MiB translation cache. This holds the
+63 MiB working set about twice over. On native hosts the cache is a reservation;
+pages are committed only as code is generated, so concurrent emulators pay for
+their translated code working sets. In browsers the cache uses the 128 MiB cap
+when remaining Emscripten heap can fit every processor's cache plus 64 MiB of
+headroom. Otherwise, it uses the largest whole-MiB size that fits, down to a
+32 MiB minimum; board construction fails with an error below that size.
+ev_dial then translates 85K blocks with no capacity flush. The translation counters ("translations",
 "limited_translations", "translation_flushes", "translation_invalidations")
 are in the CPU exit counters.
 

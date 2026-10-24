@@ -193,6 +193,10 @@ export interface RecReport {
     pending: boolean;
     setup_presses: number;
     /**
+     * Per processor translated-code cache allocated to each Unicorn engine.
+     */
+    translation_cache_size_bytes: number;
+    /**
      * First active scanout output presenting configured graphics, when present.
      */
     scanout_instance: number | null;
