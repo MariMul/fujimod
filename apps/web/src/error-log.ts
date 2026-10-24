@@ -19,9 +19,117 @@ export interface ErrorLogRecord {
   page: string;
   build: string;
   userAgent: string;
+  device: DeviceInfo | { unavailable: string };
   createdAt: string;
   /** Milliseconds since the page started loading. */
   uptime: number;
+}
+
+/** The visitor's browser and hardware, read when the error happens. */
+export interface DeviceInfo {
+  browser: string;
+  os: string;
+  mobile: boolean;
+  screen: { width: number; height: number; pixelRatio: number; orientation?: string };
+  viewport: { width: number; height: number };
+  touchPoints: number;
+  cores?: number;
+  /** Approximate GiB; Chromium only. */
+  memory?: number;
+  language: string;
+  timeZone: string;
+  colorScheme: 'dark' | 'light';
+  /** Installed to the home screen. */
+  standalone: boolean;
+  connection?: string;
+  crossOriginIsolated: boolean;
+  webUsb: boolean;
+  webGpu: boolean;
+}
+
+interface NavigatorExtras {
+  userAgentData?: { brands: { brand: string; version: string }[]; mobile: boolean; platform: string };
+  deviceMemory?: number;
+  connection?: { effectiveType?: string; saveData?: boolean };
+}
+
+/** Browser name and version from the user agent. Safari on iOS freezes the OS
+ * version in its user agent, so the Safari version is the useful number there. */
+export function browserFromUserAgent(ua: string) {
+  const match = (pattern: RegExp) => ua.match(pattern)?.[1];
+  const version = match(/Version\/([\d.]+)/);
+  const browser = / Brave\b/.test(ua)
+    ? `Brave (WebKit ${version ?? '?'})`
+    : match(/Edg(?:A|iOS)?\/([\d.]+)/)
+      ? `Edge ${match(/Edg(?:A|iOS)?\/(\d+)/)}`
+      : match(/(?:Firefox|FxiOS)\/([\d.]+)/)
+        ? `Firefox ${match(/(?:Firefox|FxiOS)\/(\d+)/)}`
+        : match(/CriOS\/(\d+)/)
+          ? `Chrome iOS ${match(/CriOS\/(\d+)/)}`
+          : match(/Chrome\/(\d+)/)
+            ? `Chrome ${match(/Chrome\/(\d+)/)}`
+            : version && /Safari\//.test(ua)
+              ? `Safari ${version}`
+              : 'unknown';
+  const os = /iPhone/.test(ua)
+    ? 'iOS'
+    : /iPad/.test(ua)
+      ? 'iPadOS'
+      : /Android/.test(ua)
+        ? `Android ${match(/Android ([\d.]+)/) ?? ''}`.trim()
+        : /Mac OS X/.test(ua)
+          ? 'macOS'
+          : /Windows/.test(ua)
+            ? 'Windows'
+            : /CrOS/.test(ua)
+              ? 'ChromeOS'
+              : /Linux/.test(ua)
+                ? 'Linux'
+                : 'unknown';
+  return { browser, os };
+}
+
+const media = (query: string) => typeof matchMedia === 'function' && matchMedia(query).matches;
+
+export function deviceInfo(): DeviceInfo {
+  const extras = navigator as Navigator & NavigatorExtras;
+  const parsed = browserFromUserAgent(navigator.userAgent);
+  // Chromium names the actual product (Brave, Edge, Opera) only in its brand list.
+  const brand = extras.userAgentData?.brands.find(({ brand }) => !/Not|Chromium/.test(brand));
+  if (brand) parsed.browser = `${brand.brand} ${brand.version}`;
+  // iPadOS Safari reports itself as a Mac; touch support tells them apart.
+  const os = parsed.os === 'macOS' && navigator.maxTouchPoints > 1 ? 'iPadOS' : parsed.os;
+  return {
+    ...parsed,
+    os,
+    mobile: extras.userAgentData?.mobile ?? /Mobile|Android/.test(navigator.userAgent),
+    screen: {
+      width: screen.width,
+      height: screen.height,
+      pixelRatio: devicePixelRatio,
+      orientation: screen.orientation?.type,
+    },
+    viewport: { width: innerWidth, height: innerHeight },
+    touchPoints: navigator.maxTouchPoints,
+    cores: navigator.hardwareConcurrency || undefined,
+    memory: extras.deviceMemory,
+    language: navigator.language,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    colorScheme: media('(prefers-color-scheme: dark)') ? 'dark' : 'light',
+    standalone: media('(display-mode: standalone)'),
+    connection: extras.connection?.effectiveType,
+    crossOriginIsolated: globalThis.crossOriginIsolated === true,
+    webUsb: 'usb' in navigator,
+    webGpu: 'gpu' in navigator,
+  };
+}
+
+function safeDeviceInfo(): DeviceInfo | { unavailable: string } {
+  try {
+    return deviceInfo();
+  } catch (error) {
+    return { unavailable: String(error) };
+  }
 }
 
 const clip = (text: string) => (text.length > TEXT ? `${text.slice(0, TEXT)}…` : text);
@@ -43,6 +151,14 @@ export function installErrorLog(send: (record: ErrorLogRecord) => void = post) {
   const session = crypto.randomUUID();
   let sent = 0;
   function log(kind: ErrorLogKind, value: unknown, fault?: EngineFault) {
+    // Logging must never become a page error of its own.
+    try {
+      record(kind, value, fault);
+    } catch {
+      /* Drop this record. */
+    }
+  }
+  function record(kind: ErrorLogKind, value: unknown, fault?: EngineFault) {
     const { message, stack } = describe(value);
     const key = `${kind}\n${message}`;
     if (sent >= LIMIT || seen.has(key)) return;
@@ -61,6 +177,7 @@ export function installErrorLog(send: (record: ErrorLogRecord) => void = post) {
       page: location.origin + location.pathname,
       build: __FUJIMOD_SIMULATOR_BUILD__,
       userAgent: navigator.userAgent,
+      device: safeDeviceInfo(),
       createdAt: new Date().toISOString(),
       uptime: Math.round(performance.now()),
     });
