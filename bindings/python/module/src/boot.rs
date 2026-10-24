@@ -1,7 +1,7 @@
 //! Catalog run preparation and boot for the Python emulator bindings, installed through
-//! `fujimod_python_base::boot`.
-use fujimod_emulator_session::Session;
+//! `fujimod_python_base::boot` when the module initializes.
 use fujimod_emulator_boot as boot;
+use fujimod_emulator_session::Session;
 use fujimod_python_base::boot::{Boot, Inputs};
 
 struct CatalogBoot;
@@ -35,6 +35,6 @@ impl Boot for CatalogBoot {
 
 /// Install catalog boots for `Board.from_inputs`, `Board.boot_to_rec`, `Board.screenshot` and
 /// `prepare_configuration`.
-pub fn register() {
+pub(crate) fn register() {
     fujimod_python_base::boot::install(&CatalogBoot);
 }

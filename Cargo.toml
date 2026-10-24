@@ -81,7 +81,6 @@ members = [
   "crates/workflows",
   "bindings/python/app80",
   "bindings/python/base",
-  "bindings/python/boot",
   "bindings/python/catalog",
   "bindings/python/emulator",
   "bindings/python/host-image",

@@ -2240,18 +2240,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-python-boot"
-version = "0.1.0"
-dependencies = [
- "fujimod-emulator",
- "fujimod-emulator-boot",
- "fujimod-emulator-session",
- "fujimod-python-base",
- "fujimod-workspace-hack",
- "serde_json",
-]
-
-[[package]]
 name = "fujimod-python-catalog"
 version = "0.1.0"
 dependencies = [
@@ -2321,10 +2309,12 @@ dependencies = [
 name = "fujimod-python-module"
 version = "0.1.0"
 dependencies = [
+ "fujimod-emulator-boot",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
+ "fujimod-emulator-session",
  "fujimod-python-app80",
- "fujimod-python-boot",
+ "fujimod-python-base",
  "fujimod-python-catalog",
  "fujimod-python-emulator",
  "fujimod-python-graphics",
@@ -2335,6 +2325,7 @@ dependencies = [
  "fujimod-python-xp4",
  "fujimod-workspace-hack",
  "pyo3",
+ "serde_json",
 ]
 
 [[package]]

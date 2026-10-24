@@ -1,4 +1,4 @@
-//! What the emulator bindings call to prepare and boot catalog runs. `fujimod-python-boot`
+//! What the emulator bindings call to prepare and boot catalog runs. The extension module
 //! implements it and installs it, so the emulator bindings depend on no catalog crate and do not
 //! wait for the boot assembly to rebuild.
 use fujimod_emulator_session::Session;
@@ -39,5 +39,5 @@ pub fn install(boot: &'static dyn Boot) {
 pub fn boot() -> PyResult<&'static dyn Boot> {
     BOOT.get()
         .copied()
-        .ok_or_else(|| PyRuntimeError::new_err("catalog boots need the fujimod-python-boot bindings"))
+        .ok_or_else(|| PyRuntimeError::new_err("catalog boots are not installed"))
 }
