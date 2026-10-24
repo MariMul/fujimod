@@ -227,5 +227,8 @@ codegen-units = 16
 strip = "debuginfo"
 
 # Build executables stay unstripped; distribution profiles apply to libraries.
+# The binding generator's build scripts parse the App80 and service sources on
+# every USB or service edit, so they are optimized.
 [profile.release.build-override]
 strip = "none"
+opt-level = 3
