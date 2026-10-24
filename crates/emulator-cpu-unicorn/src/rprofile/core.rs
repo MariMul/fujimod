@@ -91,6 +91,12 @@ pub(super) struct Execution {
     synchronization_requested: Cell<u64>,
     synchronization_elided: Cell<u64>,
     synchronization_barriers: Cell<u64>,
+    code_watch_block_hooks_elided: Cell<u64>,
+    block_hook_executions: Cell<u64>,
+    block_hook_block_observer: Cell<u64>,
+    block_hook_thumb: Cell<u64>,
+    block_hook_budget_fallback: Cell<u64>,
+    block_hook_other: Cell<u64>,
     user_stop: Cell<bool>,
     irq: Cell<bool>,
     hint: Cell<Option<Hint>>,
@@ -193,6 +199,12 @@ impl Core {
             synchronization_requested: Cell::new(0),
             synchronization_elided: Cell::new(0),
             synchronization_barriers: Cell::new(0),
+            code_watch_block_hooks_elided: Cell::new(0),
+            block_hook_executions: Cell::new(0),
+            block_hook_block_observer: Cell::new(0),
+            block_hook_thumb: Cell::new(0),
+            block_hook_budget_fallback: Cell::new(0),
+            block_hook_other: Cell::new(0),
             user_stop: Cell::new(false),
             irq: Cell::new(false),
             hint: Cell::new(None),
@@ -462,6 +474,14 @@ impl Execution {
     }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;
+        // Coherence is provided by watched stores. Install the watch while the
+        // new translation is being prepared, before any instruction can run;
+        // a per-entry block callback is unnecessary after that point.
+        if watch {
+            self.memory.apply_watches()?;
+            self.code_watch_block_hooks_elided
+                .set(self.code_watch_block_hooks_elided.get().saturating_add(1));
+        }
         Ok(Translation {
             instruction: if replaced(word) {
                 InstructionDisposition::Replace
@@ -478,10 +498,33 @@ impl Execution {
             } else {
                 InstructionDisposition::Execute
             },
-            observe_block: watch || !self.observer_index.borrow().blocks.at(address).is_empty(),
+            observe_block: !self.observer_index.borrow().blocks.at(address).is_empty(),
         })
     }
     fn block(&self, block: Block) -> Result<(), String> {
+        self.block_hook_executions
+            .set(self.block_hook_executions.get().saturating_add(1));
+        if !self
+            .observer_index
+            .borrow()
+            .blocks
+            .at(block.address)
+            .is_empty()
+        {
+            self.block_hook_block_observer
+                .set(self.block_hook_block_observer.get().saturating_add(1));
+        } else if block.thumb == Some(true) {
+            self.block_hook_thumb
+                .set(self.block_hook_thumb.get().saturating_add(1));
+        } else if self.policy.get() == ExecutionPolicy::Exact {
+            // ARM blocks with no block observer reach this callback when the
+            // native block budget could not admit the whole translated span.
+            self.block_hook_budget_fallback
+                .set(self.block_hook_budget_fallback.get().saturating_add(1));
+        } else {
+            self.block_hook_other
+                .set(self.block_hook_other.get().saturating_add(1));
+        }
         self.settle(0, true)?;
         let tick = self
             .clock

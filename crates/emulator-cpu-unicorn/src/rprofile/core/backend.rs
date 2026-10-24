@@ -344,6 +344,7 @@ impl Cpu for Core {
         Ok(())
     }
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String> {
+        self.execution.invalidate_loop_failures();
         self.execution.cpu.invalidate_code(range)
     }
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
@@ -584,6 +585,37 @@ impl Cpu for Core {
             "loop_accelerated_instructions",
             l.accelerated_instructions.get(),
         );
+        counters.insert("loop_candidate_entries", l.candidate_entries.get());
+        counters.insert("loop_proofs_attempted", l.proofs_attempted.get());
+        counters.insert(
+            "loop_proofs_failed_structural",
+            l.proofs_failed_structural.get(),
+        );
+        counters.insert("loop_proofs_failed_runtime", l.proofs_failed_runtime.get());
+        counters.insert(
+            "code_watch_block_hooks_elided",
+            self.execution.code_watch_block_hooks_elided.get(),
+        );
+        counters.insert(
+            "block_hook_executions",
+            self.execution.block_hook_executions.get(),
+        );
+        counters.insert(
+            "block_hook_reason_block_observer",
+            self.execution.block_hook_block_observer.get(),
+        );
+        counters.insert(
+            "block_hook_reason_thumb",
+            self.execution.block_hook_thumb.get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback",
+            self.execution.block_hook_budget_fallback.get(),
+        );
+        counters.insert(
+            "block_hook_reason_other",
+            self.execution.block_hook_other.get(),
+        );
         counters.insert(
             "synchronization_requested",
             self.execution.synchronization_requested.get(),
@@ -610,6 +642,7 @@ impl Core {
     /// whole cache for it re-translates all firmware on every watch.
     fn retranslate(&self, range: HookRange) -> Result<(), String> {
         let e = &self.execution;
+        e.invalidate_loop_failures();
         let pages = match range {
             HookRange::Inclusive { begin, end } => {
                 e.memory

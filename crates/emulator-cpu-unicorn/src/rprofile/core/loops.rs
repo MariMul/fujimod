@@ -3,6 +3,7 @@
 //! The execution owner bounds the stable window at every event/peer boundary.
 use super::*;
 use fujimod_emulator_cpu::loops::LoopMode;
+use std::collections::BTreeMap;
 
 #[derive(Default)]
 pub(super) struct Loops {
@@ -13,6 +14,11 @@ pub(super) struct Loops {
     pub poll_instructions: Cell<u64>,
     pub counted_instructions: Cell<u64>,
     pub accelerated_instructions: Cell<u64>,
+    pub candidate_entries: Cell<u64>,
+    pub proofs_attempted: Cell<u64>,
+    pub proofs_failed_structural: Cell<u64>,
+    pub proofs_failed_runtime: Cell<u64>,
+    structural_failures: RefCell<BTreeMap<u64, Vec<u8>>>,
 }
 pub(super) struct Window<'a>(pub &'a Cell<bool>);
 impl Drop for Window<'_> {
@@ -319,22 +325,59 @@ impl Proof {
     }
 }
 
+fn bytes_to_words(bytes: &[u8]) -> Vec<u32> {
+    bytes
+        .chunks_exact(4)
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+        .collect()
+}
+
 impl Execution {
     pub(super) fn loop_candidate(&self, address: u64, word: u32) -> bool {
-        self.policy.get() == ExecutionPolicy::Exact
-            && self.loops.mode.get() != LoopMode::Disabled
-            && self.loop_proof(address, word).is_some()
+        if self.policy.get() != ExecutionPolicy::Exact
+            || self.loops.mode.get() == LoopMode::Disabled
+        {
+            return false;
+        }
+        let Some((start, bytes)) = self.loop_bytes(address, word) else {
+            return false;
+        };
+        if self
+            .loops
+            .structural_failures
+            .borrow()
+            .get(&address)
+            .is_some_and(|cached| *cached == bytes)
+        {
+            return false;
+        }
+        self.loops.structural_failures.borrow_mut().remove(&address);
+        self.loops
+            .proofs_attempted
+            .set(self.loops.proofs_attempted.get().saturating_add(1));
+        if Proof::decode(start, address, &bytes_to_words(&bytes)).is_some() {
+            true
+        } else {
+            self.loops
+                .proofs_failed_structural
+                .set(self.loops.proofs_failed_structural.get().saturating_add(1));
+            self.loops
+                .structural_failures
+                .borrow_mut()
+                .insert(address, bytes);
+            false
+        }
     }
-    fn loop_proof(&self, address: u64, word: u32) -> Option<Proof> {
+    fn loop_bytes(&self, address: u64, word: u32) -> Option<(u64, Vec<u8>)> {
         let start = target(address, word)?;
-        let mut bytes = [0; 64];
-        let bytes = &mut bytes[..(address - start + 4) as usize];
-        self.cpu.read_virtual(start, Access::Fetch, bytes).ok()?;
-        let words: Vec<_> = bytes
-            .chunks_exact(4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-            .collect();
-        Proof::decode(start, address, &words)
+        let mut bytes = vec![0; (address - start + 4) as usize];
+        self.cpu
+            .read_virtual(start, Access::Fetch, &mut bytes)
+            .ok()?;
+        Some((start, bytes))
+    }
+    pub(super) fn invalidate_loop_failures(&self) {
+        self.loops.structural_failures.borrow_mut().clear();
     }
     fn loop_read(&self, address: u32, width: usize) -> Option<u32> {
         if !(address as usize).is_multiple_of(width) {
@@ -365,9 +408,16 @@ impl Execution {
             || target(address, word).is_none()
             || self.thumb.get()
             || self.policy.get() != ExecutionPolicy::Exact
-            || !self.loops.window.get()
-            || self.memory.flush_pending()
         {
+            return Ok(false);
+        }
+        self.loops
+            .candidate_entries
+            .set(self.loops.candidate_entries.get().saturating_add(1));
+        if !self.loops.window.get() || self.memory.flush_pending() {
+            self.loops
+                .proofs_failed_runtime
+                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
             return Ok(false);
         }
         if self.loops.bypass.take() == Some(address) {
@@ -382,10 +432,29 @@ impl Execution {
             || index.blocks.any_in(start, address)
             || !index.reads.is_empty()
         {
+            self.loops
+                .proofs_failed_runtime
+                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
             return Ok(false);
         }
         drop(index);
-        let Some(proof) = self.loop_proof(address, word) else {
+        self.loops
+            .proofs_attempted
+            .set(self.loops.proofs_attempted.get().saturating_add(1));
+        let Some((start, bytes)) = self.loop_bytes(address, word) else {
+            self.loops
+                .proofs_failed_runtime
+                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
+            return Ok(false);
+        };
+        let Some(proof) = Proof::decode(start, address, &bytes_to_words(&bytes)) else {
+            self.loops
+                .proofs_failed_structural
+                .set(self.loops.proofs_failed_structural.get().saturating_add(1));
+            self.loops
+                .structural_failures
+                .borrow_mut()
+                .insert(address, bytes);
             return Ok(false);
         };
         let mut state = State {
@@ -393,6 +462,9 @@ impl Execution {
             cpsr: self.scalar(arm::CPSR)?,
         };
         if state.cpsr & ((1 << 9) | (1 << 24)) != 0 {
+            self.loops
+                .proofs_failed_runtime
+                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
             return Ok(false);
         }
         for (r, value) in state.registers.iter_mut().enumerate() {
@@ -404,6 +476,9 @@ impl Execution {
                 self.loop_read(p, n)
             })
         else {
+            self.loops
+                .proofs_failed_runtime
+                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
             return Ok(false);
         };
         let counter = if counted {
@@ -413,6 +488,9 @@ impl Execution {
         };
         counter.set(counter.get().saturating_add(proof.length()));
         if self.loops.mode.get() != LoopMode::Accelerate || cycles * proof.length() > room {
+            self.loops
+                .proofs_failed_runtime
+                .set(self.loops.proofs_failed_runtime.get().saturating_add(1));
             return Ok(false);
         }
         let skipped = cycles * proof.length();
