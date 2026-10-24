@@ -130,6 +130,8 @@ pub struct Board {
     retained_engines: Option<factory::Engines>,
     physical_memory: Rc<memory::Memory>,
     host_pause: Rc<Cell<bool>>,
+    // Passive host reporting; excluded from modeled state and checkpoints.
+    progress_observer: Option<Box<dyn FnMut(u64)>>,
     isolated_core: Cell<Option<usize>>,
     continuation: Option<Box<continuation::StoreWatch>>,
     /// Processor address views of RAM, from the checked graph.
@@ -335,6 +337,7 @@ impl Board {
         let mut board = Self {
             run_wakeup: Default::default(),
             host_pause: Default::default(),
+            progress_observer: None,
             isolated_core: Cell::new(None),
             continuation: None,
             mappings: vec![],
@@ -613,6 +616,11 @@ impl Board {
         self.mmio.push((core, address, bytes));
         Ok(())
     }
+    /// Observe executed instructions at existing scheduler boundaries. The listener
+    /// receives no board access and does not change guest scheduling or stop criteria.
+    pub fn set_progress_observer(&mut self, observer: Option<Box<dyn FnMut(u64)>>) {
+        self.progress_observer = observer;
+    }
     /// Execute to a guest tick. Exact uses deterministic round-robin slices;
     /// Interactive workers finish blocks and join at device/owner barriers.
     pub fn run_until(&mut self, until: u64, quantum: usize) -> Result<(), String> {
@@ -698,7 +706,15 @@ impl Board {
         self.state.borrow_mut().code_run = None;
         self.state.borrow_mut().clock_limit = until;
         let mut completed_slice = None;
+        let mut next_progress = 0;
         loop {
+            if let Some(observer) = &mut self.progress_observer {
+                let instructions = self.state.borrow().total_instructions()?;
+                if instructions >= next_progress {
+                    observer(instructions);
+                    next_progress = instructions.saturating_add(100_000);
+                }
+            }
             let mut s = self.state.borrow_mut();
             s.apply_memory(&self.cpus)?;
             s.refresh_processors()?;

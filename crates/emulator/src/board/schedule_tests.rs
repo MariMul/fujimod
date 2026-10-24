@@ -408,3 +408,45 @@ fn quiescent_observes_released_processors_without_advancing_time() {
     assert!(board.quiescent());
     assert_eq!(board.state(), before);
 }
+
+#[test]
+fn progress_reporting_preserves_guest_scheduling_and_state() {
+    for counted in [false, true] {
+        let (mut observed, observed_writes) = board(counted);
+        let (mut plain, plain_writes) = board(counted);
+        let progress = Rc::new(RefCell::new(Vec::new()));
+        let received = progress.clone();
+        observed.set_progress_observer(Some(Box::new(move |count| {
+            received.borrow_mut().push(count)
+        })));
+        observed.run_until(250_000, 50).unwrap();
+        plain.run_until(250_000, 50).unwrap();
+        assert_eq!(observed.state(), plain.state());
+        assert_eq!(
+            *observed_writes.lock().unwrap(),
+            *plain_writes.lock().unwrap()
+        );
+        for core in 0..2 {
+            for register in [
+                Register::Pc,
+                Register::Pstate,
+                fujimod_emulator_cpu::arm::CORE[3],
+                fujimod_emulator_cpu::arm::CORE[4],
+            ] {
+                assert_eq!(
+                    observed.read_register(core, register).unwrap(),
+                    plain.read_register(core, register).unwrap()
+                );
+            }
+        }
+        let counts = progress.borrow();
+        assert!(counts.len() >= 3);
+        assert_eq!(counts[0], 0);
+        assert!(counts.windows(2).all(|pair| pair[0] < pair[1]));
+        drop(counts);
+        observed.set_progress_observer(None);
+        let count = progress.borrow().len();
+        observed.run_until(300_000, 50).unwrap();
+        assert_eq!(progress.borrow().len(), count);
+    }
+}

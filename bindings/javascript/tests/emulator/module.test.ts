@@ -57,6 +57,13 @@ test('manifest parsing validates the versioned runtime and observation shape', (
     output: 1,
     observations: [{ name: 'frame_count', address: '1234', size: 4 }],
   });
+  assert.equal(parseEmulatorManifest({ ...manifest, bootInstructions: 42 }).bootInstructions, 42);
+  assert.equal(manifest.bootInstructions, undefined);
+  for (const bootInstructions of [0, -1, 1.5, NaN, Infinity, '42', Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(
+      () => parseEmulatorManifest({ ...manifest, bootInstructions }),
+      /Unsupported emulator manifest/,
+    );
   assert.equal(manifest.output, 1);
   assert.equal(manifest.executionPolicy, 'exact');
   assert.equal(

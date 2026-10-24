@@ -1,5 +1,6 @@
 import {
   DownloadProgress,
+  bootProgress,
   loadingStep,
   type LoadingProgress,
 } from '@fujimod/emulator-ui/engine/download-progress';
@@ -536,7 +537,7 @@ export class WasmWorkerRuntime {
     this.send({
       type: 'progress',
       message: 'Booting camera…',
-      assets: [loadingStep('build', 'complete'), loadingStep('boot', 'loading')],
+      assets: [loadingStep('build', 'complete'), bootProgress(0, manifest.bootInstructions)],
     });
     if (scene && 'raf' in scene) {
       showScene(session, scene);
@@ -579,9 +580,21 @@ export class WasmWorkerRuntime {
     this.nextCheckpoint = 0n;
     if (this.scene) showScene(s, this.scene);
     if (this.state?.poweredOn !== false) {
-      if (this.manifest!.bootTicks) s.runUntil(s.status().ticks + BigInt(this.manifest!.bootTicks));
+      let lastProgress = -Infinity;
+      const reportProgress = (instructions: number) => {
+        const now = performance.now();
+        if (now - lastProgress < 100) return;
+        lastProgress = now;
+        this.send({
+          type: 'progress',
+          message: 'Booting camera…',
+          assets: [bootProgress(instructions, this.manifest!.bootInstructions)],
+        });
+      };
+      if (this.manifest!.bootTicks)
+        s.runUntil(s.status().ticks + BigInt(this.manifest!.bootTicks), reportProgress);
       if (this.manifest!.construction === 'prepared') {
-        const report = s.bootToRec(2_000_000_000n);
+        const report = s.bootToRec(2_000_000_000n, reportProgress);
         if (report.status !== 'rec')
           throw Error(report.failure ?? `Camera boot stopped: ${report.status}`);
       }

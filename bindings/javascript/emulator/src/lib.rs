@@ -11,9 +11,9 @@ pub mod lifecycle;
 pub mod results;
 mod session;
 mod snapshot;
-use fujimod_emulator_session::card::{CardState, CardTree};
 use fujimod_emulator_boot::RecReport;
 use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_session::card::{CardState, CardTree};
 use jit::{JitSelection, JitStatistics};
 use lifecycle::BootInput;
 use results::{
@@ -191,6 +191,24 @@ impl Camera {
             guest: self.session.failed,
         })
     }
+    fn with_progress<T>(
+        &mut self,
+        progress: Option<js_sys::Function>,
+        run: impl FnOnce(&mut Session) -> Result<T, String>,
+    ) -> Result<T, Failure> {
+        self.session
+            .core
+            .board
+            .set_progress_observer(progress.map(|progress| {
+                Box::new(move |instructions: u64| {
+                    // Advisory host display only; a detached listener cannot change guest execution.
+                    let _ = progress.call1(&JsValue::NULL, &JsValue::from_f64(instructions as f64));
+                }) as Box<dyn FnMut(u64)>
+            }));
+        let result = self.with(run);
+        self.session.core.board.set_progress_observer(None);
+        result
+    }
     fn typed<T: Tsify + Serialize>(
         &mut self,
         f: impl FnOnce(&mut Session) -> Result<T, String>,
@@ -248,12 +266,18 @@ impl Camera {
         self.with(|s| s.core.board.finish())
     }
     #[wasm_bindgen(js_name = runUntil)]
-    pub fn run_until(&mut self, tick: u64) -> Result<(), Failure> {
-        let result = self.session.run(tick);
+    pub fn run_until(
+        &mut self,
+        tick: u64,
+        #[wasm_bindgen(unchecked_optional_param_type = "(instructions: number) => void")] progress: Option<
+            js_sys::Function,
+        >,
+    ) -> Result<(), Failure> {
+        let result = self.with_progress(progress, |s| s.run(tick));
         #[cfg(target_os = "emscripten")]
         fujimod_emulator_cpu_unicorn::jit::emscripten::flush();
-        result.map_err(|message| Failure {
-            message,
+        result.map_err(|error| Failure {
+            message: error.message,
             guest: true,
         })
     }
@@ -457,7 +481,15 @@ impl Camera {
     }
     /// Native first-start and REC observation, bounded by an instruction budget.
     #[wasm_bindgen(js_name = bootToRec)]
-    pub fn boot_to_rec(&mut self, limit: u64) -> Result<Ts<RecReport>, Failure> {
-        self.typed(|s| s.boot_to_rec(limit))
+    pub fn boot_to_rec(
+        &mut self,
+        limit: u64,
+        #[wasm_bindgen(unchecked_optional_param_type = "(instructions: number) => void")] progress: Option<
+            js_sys::Function,
+        >,
+    ) -> Result<Ts<RecReport>, Failure> {
+        self.with_progress(progress, |s| s.boot_to_rec(limit))?
+            .into_ts()
+            .map_err(Failure::host)
     }
 }

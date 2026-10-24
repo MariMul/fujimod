@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { AssetProgress } from './engine/download-progress';
+const instructions = (count: number) => count.toLocaleString('en-US');
 const mib = (bytes: number) => (bytes / 1048576).toFixed(1);
 const size = (bytes: number) =>
   bytes < 1048576 ? `${Math.ceil(bytes / 1024)} KiB` : `${mib(bytes)} MiB`;
@@ -16,9 +17,11 @@ export function LoadingAssets(props: { assets: readonly AssetProgress[] }) {
                 {asset().status === 'failed'
                   ? 'Failed'
                   : asset().status === 'complete'
-                    ? `✓${asset().loaded ? ` ${size(asset().loaded)}` : ''}`
+                    ? `✓${asset().loaded && asset().unit !== 'instructions' ? ` ${size(asset().loaded)}` : ''}`
                     : asset().status === 'loading' && asset().total
-                      ? `${mib(asset().loaded)} / ${mib(asset().total!)} MiB`
+                      ? asset().unit === 'instructions'
+                        ? `${instructions(asset().loaded)} / ${instructions(asset().total!)} instructions`
+                        : `${mib(asset().loaded)} / ${mib(asset().total!)} MiB`
                       : ''}
               </span>
               <progress
@@ -28,7 +31,10 @@ export function LoadingAssets(props: { assets: readonly AssetProgress[] }) {
                     ? 100
                     : asset().status === 'loading'
                       ? asset().total
-                        ? Math.min(100, (100 * asset().loaded) / asset().total!)
+                        ? Math.min(
+                            asset().unit === 'instructions' ? 99 : 100,
+                            (100 * asset().loaded) / asset().total!,
+                          )
                         : undefined
                       : 0
                 }
