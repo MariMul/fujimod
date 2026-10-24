@@ -21,7 +21,9 @@ FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal npm run deploy -- \
   --media /path/to/feature-media
 ```
 
-Sign in with Wrangler or supply a deployment API token. Install the USB sharing
+Deploys authenticate with the Cloudflare CLI's sign-in (`cf auth login`) through
+[`scripts/cloudflare/wrangler.ts`](../../scripts/cloudflare/wrangler.ts); a
+`CLOUDFLARE_API_TOKEN` in the environment takes precedence. No Wrangler login is needed. Install the USB sharing
 Worker's dependencies for its pinned Wrangler CLI. The runtime directory contains
 `catalog.json` and one qualified bundle per advertised emulator, including
 the standalone Wasm module, its loader, cold inputs, and license notices. The patch

@@ -30,5 +30,5 @@ if (!values['prepare-only']) {
   run('npm', ['run', 'check']);
   run('npm', ['test']);
   run('npm', ['run', 'build']);
-  run('../usb-sharing/node_modules/.bin/wrangler', ['deploy']);
+  run(process.execPath, ['../../scripts/cloudflare/wrangler.ts', 'deploy']);
 }

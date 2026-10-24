@@ -19,11 +19,16 @@ From this directory:
 
 ```sh
 npm ci
-npx wrangler login
+cf auth login
 npm test
 npm run check
 npm run deploy
 ```
+
+`npm run deploy` uses the Cloudflare CLI's sign-in (see
+[`scripts/cloudflare/wrangler.ts`](../../scripts/cloudflare/wrangler.ts)). It fails
+until R2 is enabled for the account, because `wrangler.jsonc` binds the private
+[issue-report](ISSUE_REPORTS.md) bucket.
 
 The production endpoint is `wss://share.fujimod.com/usb-proxy/signal`.
 The Cloudflare release workflow passes this public URL to the static build.
