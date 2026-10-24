@@ -30,6 +30,71 @@ pub struct Facts {
     pub input_tasks: Option<InputTasks>,
 }
 
+impl Facts {
+    /// Build validated remote inputs from documents in a checked catalog selection.
+    pub fn from_selection(
+        selection: &Selection<'_>,
+        menu_manifest: Option<BuildMenuManifest>,
+    ) -> Result<Self, String> {
+        let firmware: FirmwareFacts = decode_document(
+            selection
+                .remote_facts
+                .ok_or("selected firmware has no remote facts")?,
+            "firmware remote facts",
+        )?;
+        let physical_controls = PhysicalControls::decode_document(
+            selection
+                .physical_controls
+                .ok_or("selected body has no physical controls")?,
+            "physical controls",
+        )?;
+        let control_ids = FirmwareControlIds::decode_document(
+            selection
+                .control_ids
+                .ok_or("selected firmware has no control IDs")?,
+            "firmware control IDs",
+        )?;
+        if firmware.firmware_id != selection.firmware_id
+            || firmware.body_id != selection.body_id
+            || selection.firmware_sha256 != Some(firmware.firmware_sha256.as_str())
+        {
+            return Err("remote facts differ from selected firmware/body".into());
+        }
+        let facts = Self {
+            physical_controls,
+            control_ids,
+            firmware,
+            menu_manifest,
+            input_tasks: None,
+        };
+        facts.physical_controls.validate()?;
+        facts
+            .control_ids
+            .validate(&facts.physical_controls, &selection.connections)
+            .map_err(|error| format!("control IDs {}: {error}", facts.control_ids.id))?;
+        facts.validate()?;
+        Ok(facts)
+    }
+}
+
+/// The document and identity fields needed to build remote facts from a resolved selection.
+pub struct Selection<'a> {
+    pub firmware_id: &'a str,
+    pub body_id: &'a str,
+    pub firmware_sha256: Option<&'a str>,
+    pub remote_facts: Option<&'a serde_json::Value>,
+    pub physical_controls: Option<&'a serde_json::Value>,
+    pub control_ids: Option<&'a serde_json::Value>,
+    pub connections: BTreeSet<&'a str>,
+}
+
+fn decode_document<T: serde::de::DeserializeOwned>(
+    value: &serde_json::Value,
+    label: &str,
+) -> Result<T, String> {
+    serde_json::from_value(value.clone()).map_err(|error| format!("{label}: {error}"))
+}
+
 /// Task-table layout used to observe input consumers without caching live pointers.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

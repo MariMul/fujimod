@@ -1237,6 +1237,7 @@ dependencies = [
 name = "fujimod-catalog-remote"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog",
  "fujimod-catalog-controls",
  "fujimod-catalog-identity",
  "fujimod-workspace-hack",
@@ -1382,6 +1383,7 @@ dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
+ "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-catalog-run-inputs",
  "fujimod-emulator",

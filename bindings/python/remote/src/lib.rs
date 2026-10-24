@@ -389,7 +389,26 @@ fn read_set(json: &str, device_ids: &BTreeMap<String, usize>) -> Result<ReadSet>
 fn facts_from_selection(selection: &str, manifest: &str) -> PyResult<String> {
     let selection: fujimod_catalog::ResolvedSelection = decode(selection)?;
     let manifest = decode(manifest)?;
-    let facts = selection.remote_facts(manifest).map_err(error)?;
+    let generated = selection.firmware.generated_facts.as_ref();
+    let input = fujimod_catalog_remote::Selection {
+        firmware_id: &selection.firmware.id,
+        body_id: &selection.body.id,
+        firmware_sha256: selection
+            .firmware
+            .update
+            .as_ref()
+            .map(|content| content.sha256.as_str()),
+        remote_facts: generated.and_then(|facts| facts.remote.as_ref()),
+        physical_controls: selection.physical_controls.as_ref(),
+        control_ids: selection.control_ids.as_ref(),
+        connections: selection
+            .body
+            .connections
+            .iter()
+            .map(|connection| connection.id.as_str())
+            .collect(),
+    };
+    let facts = fujimod_catalog_remote::Facts::from_selection(&input, manifest).map_err(error)?;
     serde_json::to_string(&facts).map_err(|e| error(e.to_string()))
 }
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {

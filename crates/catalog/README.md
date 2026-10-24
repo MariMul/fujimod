@@ -17,13 +17,14 @@ crate, so a consumer rebuilds only when the documents it reads change:
 - `fujimod-catalog-controls`: physical controls, firmware control IDs and, in
   `facts`, the generated firmware input and observation facts they use.
 - `fujimod-catalog-remote`: the firmware layouts and build declarations remote
-  control consumes.
+  control consumes, decoded from the reference catalog's stored JSON documents.
 - `fujimod-catalog-settings`: firmware settings layouts and, in
   `persistent_inputs`, the persistent inputs a run supplies.
 - `fujimod-catalog-bulk`: stock diagnostic bulk-read facts.
 - `fujimod-catalog` (this crate): the bundled reference catalog of SoCs,
-  parts, bodies and firmware and their hardware profiles. It depends on every
-  document crate above.
+  parts, bodies and firmware and their hardware profiles. It keeps the control
+  and remote documents as JSON values so edits to their typed decoders do not
+  rebuild the reference catalog.
 - `fujimod-catalog-configuration`: the bundled emulator run configurations,
   overlays and their hardware, firmware and native inputs. It does not depend
   on the reference catalog.
@@ -79,9 +80,10 @@ and SDK generation.
 
 Remote control consumes `fujimod_catalog_remote::Facts`: `PhysicalControls`,
 `FirmwareControlIds`, `FirmwareFacts`, and an optional `BuildMenuManifest` for
-the installed build. `ResolvedSelection::remote_facts` assembles and validates
-these against the selection. Firmware records expose remote inputs through
-`generated_facts.remote`; stock operation requires no build manifest.
+the installed build. `Facts::from_selection` decodes and validates the stored
+documents against the resolved selection. Firmware records expose remote
+inputs through `generated_facts.remote`; stock operation requires no build
+manifest.
 
 Control documents own debug key names, physical bindings, scanner witnesses,
 and electrical predicates. ADC intervals explicitly distinguish literal sample

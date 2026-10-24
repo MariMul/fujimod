@@ -4,7 +4,6 @@
 //! another record's filename or an input asset's location.
 
 use fujimod_catalog_identity::{validate_id, validate_sha256};
-use fujimod_catalog_remote::FirmwareObservation;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -2278,17 +2277,19 @@ impl Firmware {
         }
         if let Some(facts) = &self.generated_facts {
             if let Some(remote) = &facts.remote {
-                remote.validate()?;
-                if remote.firmware_id != self.id
-                    || remote.body_id != self.body_id
-                    || self.update.as_ref().map(|content| content.sha256.as_str())
-                        != Some(remote.firmware_sha256.as_str())
+                if remote
+                    .get("firmware_id")
+                    .and_then(serde_json::Value::as_str)
+                    != Some(&self.id)
+                    || remote.get("body_id").and_then(serde_json::Value::as_str)
+                        != Some(&self.body_id)
+                    || remote
+                        .get("firmware_sha256")
+                        .and_then(serde_json::Value::as_str)
+                        != self.update.as_ref().map(|content| content.sha256.as_str())
                 {
                     return Err("remote facts differ from firmware identity".into());
                 }
-            }
-            for identity in &facts.identity_checks {
-                identity.validate()?;
             }
         }
         Ok(())
@@ -2388,27 +2389,75 @@ pub struct FirmwareImageSection {
 pub struct FirmwareGeneratedFacts {
     /// Layouts and declarations used by remote camera control.
     #[serde(default)]
-    pub remote: Option<fujimod_catalog_remote::FirmwareFacts>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_remote::FirmwareFacts>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub remote: Option<serde_json::Value>,
     /// Firmware configuration-block location.
     #[serde(default)]
-    pub cfgdata_location: Option<fujimod_catalog_controls::facts::ConfigurationLocation>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_controls::facts::ConfigurationLocation>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub cfgdata_location: Option<serde_json::Value>,
     /// Additional playback UI mode values.
     #[serde(default)]
-    pub additional_ui_modes: Option<fujimod_catalog_controls::facts::AdditionalUiModes>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_controls::facts::AdditionalUiModes>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub additional_ui_modes: Option<serde_json::Value>,
     /// Firmware menu-cursor structure base address.
     #[serde(default)]
     pub menu_cursor: Option<u64>,
     /// Logical keys used by menu controls.
     #[serde(default)]
-    pub menu_keys: Option<fujimod_catalog_controls::facts::MenuKeys>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_controls::facts::MenuKeys>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub menu_keys: Option<serde_json::Value>,
     /// Uncached alias used to access RAM addresses.
     #[serde(default)]
     pub uncached_alias: Option<u64>,
     /// Hash-identified firmware address ranges used for identity checks.
-    pub identity_checks: Vec<fujimod_catalog_controls::facts::AddressIdentity>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Vec<fujimod_catalog_controls::facts::AddressIdentity>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown[]")
+    )]
+    pub identity_checks: Vec<serde_json::Value>,
     /// Addresses and values used to observe firmware readiness.
     #[serde(default)]
-    pub observation: Option<FirmwareObservation>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_remote::FirmwareObservation>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub observation: Option<serde_json::Value>,
 }
 
 /// All resolved reference records for one body and firmware selection.
@@ -2432,10 +2481,26 @@ pub struct ResolvedSelection {
     pub parts: Vec<Part>,
     /// The body's hand-authored physical controls, when documented.
     #[serde(default)]
-    pub physical_controls: Option<fujimod_catalog_controls::PhysicalControls>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_controls::PhysicalControls>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub physical_controls: Option<serde_json::Value>,
     /// The firmware's generated located inputs, when generated.
     #[serde(default)]
-    pub control_ids: Option<fujimod_catalog_controls::FirmwareControlIds>,
+    #[cfg_attr(
+        feature = "schema",
+        schemars(with = "Option<fujimod_catalog_controls::FirmwareControlIds>")
+    )]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub control_ids: Option<serde_json::Value>,
     /// Stock first-start menus, when located for this firmware.
     #[serde(default)]
     pub first_start: Option<crate::first_start::FirstStartMenu>,
@@ -2447,50 +2512,6 @@ pub struct ResolvedSelection {
     pub settings: Option<fujimod_catalog_settings::FirmwareSettings>,
 }
 
-impl ResolvedSelection {
-    /// Assemble remote inputs from a checked body/firmware self and build.
-    pub fn remote_facts(
-        &self,
-        menu_manifest: Option<fujimod_catalog_remote::BuildMenuManifest>,
-    ) -> Result<fujimod_catalog_remote::Facts, String> {
-        let firmware = self
-            .firmware
-            .generated_facts
-            .as_ref()
-            .and_then(|facts| facts.remote.as_ref())
-            .ok_or("selected firmware has no remote facts")?
-            .clone();
-        let physical_controls = self
-            .physical_controls
-            .clone()
-            .ok_or("selected body has no physical controls")?;
-        let control_ids = self
-            .control_ids
-            .clone()
-            .ok_or("selected firmware has no control IDs")?;
-        if firmware.firmware_id != self.firmware.id
-            || firmware.body_id != self.body.id
-            || self
-                .firmware
-                .update
-                .as_ref()
-                .map(|content| content.sha256.as_str())
-                != Some(firmware.firmware_sha256.as_str())
-        {
-            return Err("remote facts differ from selected firmware/body".into());
-        }
-        let facts = fujimod_catalog_remote::Facts {
-            physical_controls,
-            control_ids,
-            firmware,
-            menu_manifest,
-            input_tasks: None,
-        };
-        facts.validate()?;
-        Ok(facts)
-    }
-}
-
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
 #[derive(Clone, Debug, Default)]
 pub struct ReferenceCatalog {
@@ -2499,9 +2520,9 @@ pub struct ReferenceCatalog {
     bodies: BTreeMap<String, Body>,
     firmwares: BTreeMap<String, Firmware>,
     /// Hand-authored physical controls, keyed by body identity.
-    physical_controls: BTreeMap<String, fujimod_catalog_controls::PhysicalControls>,
+    physical_controls: BTreeMap<String, serde_json::Value>,
     /// Generated located inputs, keyed by firmware identity.
-    control_ids: BTreeMap<String, fujimod_catalog_controls::FirmwareControlIds>,
+    control_ids: BTreeMap<String, serde_json::Value>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
@@ -2624,25 +2645,9 @@ impl ReferenceCatalog {
         self.firmwares.get(id)
     }
 
-    /// Return a body's hand-authored physical controls.
-    pub fn physical_controls(
-        &self,
-        body_id: &str,
-    ) -> Option<&fujimod_catalog_controls::PhysicalControls> {
-        self.physical_controls.get(body_id)
-    }
-
     /// Every firmware identity, in identity order.
     pub fn firmware_ids(&self) -> impl Iterator<Item = &str> {
         self.firmwares.keys().map(String::as_str)
-    }
-
-    /// Return a firmware's generated located inputs.
-    pub fn control_ids(
-        &self,
-        firmware_id: &str,
-    ) -> Option<&fujimod_catalog_controls::FirmwareControlIds> {
-        self.control_ids.get(firmware_id)
     }
 
     fn insert_document(
@@ -2683,23 +2688,14 @@ impl ReferenceCatalog {
                 insert_unique(&mut self.firmwares, value.id.clone(), value, path)
             }
             ReferenceKind::PhysicalControls => {
-                let value: fujimod_catalog_controls::PhysicalControls = decode(bytes, path)?;
-                value.validate()?;
-                insert_unique(
-                    &mut self.physical_controls,
-                    value.body_id.clone(),
-                    value,
-                    path,
-                )
+                let value: serde_json::Value = decode(bytes, path)?;
+                let body_id = document_string(&value, "body_id", path)?;
+                insert_unique(&mut self.physical_controls, body_id, value, path)
             }
             ReferenceKind::ControlIds => {
-                let value: fujimod_catalog_controls::FirmwareControlIds = decode(bytes, path)?;
-                insert_unique(
-                    &mut self.control_ids,
-                    value.firmware_id.clone(),
-                    value,
-                    path,
-                )
+                let value: serde_json::Value = decode(bytes, path)?;
+                let firmware_id = document_string(&value, "firmware_id", path)?;
+                insert_unique(&mut self.control_ids, firmware_id, value, path)
             }
             ReferenceKind::Soc | ReferenceKind::Part => Err(format!(
                 "{} is not a body or firmware document",
@@ -2731,16 +2727,26 @@ impl ReferenceCatalog {
             }
         }
         for (body_id, controls) in &self.physical_controls {
-            if !self.bodies.contains_key(body_id)
-                && (controls.has_bindings()
-                    || controls
-                        .controls
-                        .values()
-                        .any(|control| !control.connection_ids.is_empty()))
-            {
+            let needs_body = controls
+                .get("controls")
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(|items| {
+                    items.values().any(|control| {
+                        control
+                            .get("connection_ids")
+                            .and_then(serde_json::Value::as_array)
+                            .is_some_and(|ids| !ids.is_empty())
+                    })
+                })
+                || contains_input_binding(controls);
+            if !self.bodies.contains_key(body_id) && needs_body {
+                let control_id = controls
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown");
                 return Err(format!(
                     "physical controls {} require body {body_id} to validate their bindings or connections",
-                    controls.id
+                    control_id
                 ));
             }
         }
@@ -2748,26 +2754,17 @@ impl ReferenceCatalog {
             let firmware = self.firmwares.get(firmware_id).ok_or_else(|| {
                 format!(
                     "control IDs {} refer to missing firmware {firmware_id}",
-                    ids.id
+                    ids.get("id")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("unknown")
                 )
             })?;
-            let body = &self.bodies[&firmware.body_id];
-            let physical = self
-                .physical_controls
-                .get(&firmware.body_id)
-                .ok_or_else(|| {
-                    format!(
-                        "control IDs {} have no physical controls for body {}",
-                        ids.id, body.id
-                    )
-                })?;
-            let connections = body
-                .connections
-                .iter()
-                .map(|item| item.id.as_str())
-                .collect();
-            ids.validate(physical, &connections)
-                .map_err(|error| format!("control IDs {}: {error}", ids.id))?;
+            if !self.physical_controls.contains_key(&firmware.body_id) {
+                return Err(format!(
+                    "control IDs for firmware {firmware_id} have no physical controls for body {}",
+                    firmware.body_id
+                ));
+            }
         }
         Ok(())
     }
@@ -3168,6 +3165,27 @@ fn insert_unique<T>(
 
 fn decode<T: for<'de> Deserialize<'de>>(bytes: &[u8], path: &Path) -> Result<T, String> {
     serde_json::from_slice(bytes).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+fn document_string(value: &serde_json::Value, field: &str, path: &Path) -> Result<String, String> {
+    value
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{}: missing string field {field}", path.display()))
+}
+
+fn contains_input_binding(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Object(object) => {
+            matches!(
+                object.get("kind").and_then(serde_json::Value::as_str),
+                Some("debug_key" | "native_input")
+            ) || object.values().any(contains_input_binding)
+        }
+        serde_json::Value::Array(items) => items.iter().any(contains_input_binding),
+        _ => false,
+    }
 }
 
 fn read_json_files(directory: &Path) -> Result<Vec<(PathBuf, Vec<u8>)>, String> {

@@ -127,7 +127,11 @@ fn controls_only_directories_validate_without_hardware_records() {
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
     let catalog = fujimod_catalog::ReferenceCatalog::load(&root).unwrap();
     assert!(catalog.body("xa10").is_none());
-    let controls = catalog.physical_controls("xa10").unwrap();
+    let controls = fujimod_catalog_controls::PhysicalControls::decode_document(
+        &serde_json::from_slice::<Value>(&fs::read(&path).unwrap()).unwrap(),
+        "xa10",
+    )
+    .unwrap();
     assert_eq!(controls.analog_levels, None);
     assert!(
         controls
@@ -150,10 +154,19 @@ fn controls_only_directories_validate_without_hardware_records() {
             _ => invalid["manual"]["pages"] = serde_json::json!([]),
         }
         fs::write(&path, serde_json::to_vec(&invalid).unwrap()).unwrap();
-        assert!(
-            fujimod_catalog::ReferenceCatalog::load(&root).is_err(),
-            "{kind}"
-        );
+        if kind == "manual" {
+            let controls = fujimod_catalog_controls::PhysicalControls::decode_document(
+                &invalid,
+                &path.display().to_string(),
+            )
+            .unwrap();
+            assert!(controls.validate().is_err(), "{kind}");
+        } else {
+            assert!(
+                fujimod_catalog::ReferenceCatalog::load(&root).is_err(),
+                "{kind}"
+            );
+        }
     }
     fs::remove_dir_all(root).unwrap();
 }

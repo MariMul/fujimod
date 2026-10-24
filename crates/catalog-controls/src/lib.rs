@@ -725,6 +725,12 @@ pub struct ResolvedControlAction {
 }
 
 impl PhysicalControls {
+    /// Decode a stored physical-controls document with its source in errors.
+    pub fn decode_document(document: &serde_json::Value, source: &str) -> Result<Self, String> {
+        serde_json::from_value(document.clone())
+            .map_err(|error| format!("{source}: {error}"))
+    }
+
     /// Whether any control declares an input binding.
     pub fn has_bindings(&self) -> bool {
         !self.bindings().is_empty()
@@ -1158,6 +1164,11 @@ impl ControlBehavior {
 }
 
 impl FirmwareControlIds {
+    /// Decode stored firmware control IDs with their source in errors.
+    pub fn decode_document(document: &serde_json::Value, source: &str) -> Result<Self, String> {
+        serde_json::from_value(document.clone()).map_err(|error| format!("{source}: {error}"))
+    }
+
     /// Validate every scanner row, vocabulary reference, and physical input claim.
     pub fn validate(
         &self,

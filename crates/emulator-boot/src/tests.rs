@@ -167,7 +167,10 @@ fn rec_configuration_starts_with_manual_lever_and_tilted_lcd() {
     for (port, pin) in [(2, 11), (1, 1)] {
         assert_eq!(levels[port].as_u64().unwrap() & (1 << pin), 0);
     }
-    let controls = spec.resolved.reference.control_ids.as_ref().unwrap();
+    let controls: fujimod_catalog_controls::FirmwareControlIds = serde_json::from_value(
+        spec.resolved.reference.control_ids.clone().unwrap(),
+    )
+    .unwrap();
     for (control, key, connection) in [
         (
             "auto_mode_selector_lever",

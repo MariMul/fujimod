@@ -319,6 +319,13 @@ records the rebuild costs below before and after.
     operations. JavaScript and Python callers use the types crate directly.
     The generated Python and TypeScript value declarations retain their public
     names, and the Python namespace remains `fujimod.usb.app80`.
+18. Reference catalog documents: `fujimod-catalog` stores physical controls,
+    firmware control IDs, generated input facts and remote layouts as JSON
+    values. The controls and remote crates decode and validate those documents
+    at their use boundaries; remote facts are assembled from a resolved
+    selection in the remote crate. The reference catalog no longer depends on
+    either decoder crate, so edits there skip the catalog and resolution. Boot
+    names the controls and remote fact types it decodes directly.
 
 ## Rebuild costs
 

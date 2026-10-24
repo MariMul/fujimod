@@ -167,11 +167,14 @@ fn first_start_key(
         .generated_facts
         .as_ref()
         .ok_or("first-start input requires generated firmware control facts")?;
-    let controls = resolved
+    let controls: fujimod_catalog_controls::FirmwareControlIds = serde_json::from_value(
+        resolved
         .reference
         .control_ids
-        .as_ref()
-        .ok_or("first-start input requires firmware control IDs")?;
+        .clone()
+        .ok_or("first-start input requires firmware control IDs")?,
+    )
+    .map_err(|error| format!("firmware control IDs: {error}"))?;
     let mut matches = controls.inputs.iter().filter(|input| {
         input.debug_key.as_deref() == Some(key_id)
             && matches!(input.target, InputTarget::Control { .. })
@@ -224,9 +227,13 @@ fn first_start_key(
     if channel.len() != 1 || inputs.adc.block_id != "adc" {
         return Err("first-start ADC target is ambiguous or unsupported".into());
     }
-    let cfgdata = facts
-        .cfgdata_location
-        .ok_or("first-start calibration has no firmware configuration-block location")?;
+    let cfgdata: ConfigurationLocation = serde_json::from_value(
+        facts
+            .cfgdata_location
+            .clone()
+            .ok_or("first-start calibration has no firmware configuration-block location")?,
+    )
+    .map_err(|error| format!("firmware configuration-block location: {error}"))?;
     let (calibration_pointer, calibration_is_pointer) = match cfgdata {
         ConfigurationLocation::Pointer { address } => (address, true),
         ConfigurationLocation::Direct { address } => (address, false),
@@ -309,11 +316,15 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         .installation
         .as_ref()
         .ok_or("selected firmware has no installation layout")?;
-    let observation = firmware
+    let observation: fujimod_catalog_remote::FirmwareObservation = serde_json::from_value(
+        firmware
         .generated_facts
         .as_ref()
         .and_then(|facts| facts.observation.as_ref())
-        .ok_or("selected firmware has no observation facts")?;
+        .cloned()
+        .ok_or("selected firmware has no observation facts")?,
+    )
+    .map_err(|error| format!("firmware observation facts: {error}"))?;
     let quantum = execution_policy.quantum;
     let board_ticks_per_second = configuration
         .inputs

@@ -1,5 +1,27 @@
 use fujimod_catalog::ReferenceCatalog;
-use fujimod_catalog_remote::{BuildMenuManifest, Facts, MENU_MANIFEST_SCHEMA_URI};
+use fujimod_catalog_remote::{BuildMenuManifest, Facts, MENU_MANIFEST_SCHEMA_URI, Selection};
+
+fn remote_selection<'a>(selection: &'a fujimod_catalog::ResolvedSelection) -> Selection<'a> {
+    let generated = selection.firmware.generated_facts.as_ref();
+    Selection {
+        firmware_id: &selection.firmware.id,
+        body_id: &selection.body.id,
+        firmware_sha256: selection
+            .firmware
+            .update
+            .as_ref()
+            .map(|content| content.sha256.as_str()),
+        remote_facts: generated.and_then(|facts| facts.remote.as_ref()),
+        physical_controls: selection.physical_controls.as_ref(),
+        control_ids: selection.control_ids.as_ref(),
+        connections: selection
+            .body
+            .connections
+            .iter()
+            .map(|connection| connection.id.as_str())
+            .collect(),
+    }
+}
 
 #[test]
 fn selected_firmware_supplies_complete_stock_remote_inputs() {
@@ -7,7 +29,8 @@ fn selected_firmware_supplies_complete_stock_remote_inputs() {
         .unwrap()
         .resolve_firmware("x70-110")
         .unwrap();
-    let facts = selected.remote_facts(None).unwrap();
+    let input = remote_selection(&selected);
+    let facts = Facts::from_selection(&input, None).unwrap();
     assert_eq!(facts.firmware.menus.root_count, 188);
     assert_eq!(facts.firmware.menus.cursor.fields.cursor, 8);
     assert!(
@@ -29,7 +52,8 @@ fn mismatched_build_and_invalid_scanout_fail_before_use() {
         .unwrap()
         .resolve_firmware("x70-110")
         .unwrap();
-    let mut facts = selected.remote_facts(None).unwrap();
+    let input = remote_selection(&selected);
+    let mut facts = Facts::from_selection(&input, None).unwrap();
     let mut value = serde_json::to_value(&facts).unwrap();
     value["firmware"]["scanout"]["stride_bytes"] = 1.into();
     assert!(
