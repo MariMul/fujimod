@@ -8,6 +8,8 @@ use pyo3::prelude::*;
 fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "emulator")]
     fujimod_emulator_exr2_board::register_board_builder();
+    #[cfg(feature = "emulator")]
+    fujimod_emulator_models::register();
     fujimod_python::register(py, module)?;
     #[cfg(feature = "emulator")]
     fujimod_python_xp4::register();

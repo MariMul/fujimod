@@ -15,6 +15,8 @@ members = [
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
   "crates/emulator-devices",
+  "crates/emulator-models",
+  "crates/emulator-exr2-boot-serial",
   "crates/emulator-xp4-board",
   "crates/emulator-imaging",
   "crates/emulator-sensor-input",
@@ -84,6 +86,8 @@ fujimod-simulation = { path = "crates/simulation", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
+fujimod-emulator-models = { path = "crates/emulator-models", version = "0.1.0" }
+fujimod-emulator-exr2-boot-serial = { path = "crates/emulator-exr2-boot-serial", version = "0.1.0" }
 fujimod-emulator-xp4-board = { path = "crates/emulator-xp4-board", version = "0.1.0" }
 fujimod-emulator-imaging = { path = "crates/emulator-imaging", version = "0.1.0" }
 fujimod-emulator-sensor-input = { path = "crates/emulator-sensor-input", version = "0.1.0" }

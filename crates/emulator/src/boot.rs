@@ -962,6 +962,8 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     // Unit tests have no final crate to register the board builder.
     #[cfg(test)]
     fujimod_emulator_exr2_board::register_board_builder();
+    #[cfg(test)]
+    fujimod_emulator_models::register();
     let built = plan.build(resources, 0, &mut RefuseAdapters)?;
     let bus_mode = match prepared.execution_policy.mode {
         RunExecutionMode::Strict => Mode::Strict,

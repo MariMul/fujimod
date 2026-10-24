@@ -169,6 +169,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
         })).unwrap()).unwrap();
         plan.validate_reset_outputs(&[true, false]).unwrap();
         fujimod_emulator_exr2_board::register_board_builder();
+        fujimod_emulator_models::register();
         let built = plan
             .build(Resources::default(), 0, &mut RefuseAdapters)
             .unwrap();

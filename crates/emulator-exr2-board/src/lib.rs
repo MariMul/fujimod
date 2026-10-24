@@ -2,21 +2,12 @@
 //! real Rust constructor. A remaining language implementation is an explicit
 //! adapter node supplied by the native frontend; absent adapters refuse. Final
 //! crates call [`register_board_builder`] so `Plan::build` reaches this crate.
-mod construct;
-pub mod serial;
 #[cfg(test)]
 mod tests;
-use fujimod_emulator_exr2_serial::dma;
 use fujimod_emulator_devices::graph::{DeviceGraph, Node as GraphNode, validate_mappings};
+use fujimod_emulator_exr2_plan::construction::{Builder, Built, Constructors, constructors};
 use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan, Resources, Wire};
 use std::collections::{BTreeMap, BTreeSet};
-
-/// Decode a model's options, which plans carry as JSON for the model crate to read.
-pub(crate) fn decode<T: serde::de::DeserializeOwned>(
-    value: impl std::borrow::Borrow<serde_json::Value>,
-) -> Result<T, String> {
-    serde_json::from_value(value.borrow().clone()).map_err(|e| format!("EXR II model options: {e}"))
-}
 
 /// Make `Plan::build` construct boards with this crate. Final crates call
 /// this before building any EXR II board.
@@ -29,6 +20,7 @@ struct DmaMerge {
 }
 
 fn consolidate_dma(
+    constructors: &Constructors,
     graph: &mut DeviceGraph,
     node_ids: &mut BTreeMap<String, usize>,
     resources: &mut Resources,
@@ -66,15 +58,12 @@ fn consolidate_dma(
     controller_mappings.sort_by_key(|mapping| mapping.base);
     validate_mappings(&controller_mappings, std::iter::empty())?;
     let mut old_nodes: Vec<Option<GraphNode>> = old_nodes.into_iter().map(Some).collect();
-    let mut modes = Vec::with_capacity(selected.len());
+    let mut channels = Vec::with_capacity(selected.len());
     for id in selected.iter().copied() {
         let node = old_nodes[id].take().unwrap();
-        modes.push(dma::controller::ChannelMode {
-            mappings: node.mappings,
-            device: node.device,
-        });
+        channels.push((node.mappings, node.device));
     }
-    let mut controller = Some(dma::controller::Controller::new(modes)?);
+    let mut controller = Some(constructors.dma_controller(channels)?);
     let mut remap = vec![usize::MAX; old_nodes.len()];
     let mut rebuilt = Vec::with_capacity(old_nodes.len() - selected.len() + 1);
     for old_id in 0..old_nodes.len() {
@@ -83,7 +72,7 @@ fn consolidate_dma(
             remap[first] = index;
             rebuilt.push(GraphNode {
                 mappings: controller_mappings.clone(),
-                device: Box::new(controller.take().unwrap()),
+                device: controller.take().unwrap(),
                 native_dependencies: vec![],
             });
         } else if selected.contains(&old_id) {
@@ -115,6 +104,7 @@ fn build(
     adapter: &mut dyn AdapterFactory,
 ) -> Result<BuiltBoard, String> {
     plan.validate()?;
+    let constructors = constructors()?;
     if !resources.wires.is_empty()
         || !resources.users.is_empty()
         || !resources.image_users.is_empty()
@@ -173,69 +163,75 @@ fn build(
             .into_iter()
             .map(str::to_owned)
             .collect::<Vec<_>>();
-        if matches!(&node.model, Model::Power { .. }) {
-            let Model::Power { options, gpio } = node.model else {
-                unreachable!()
-            };
-            let devices = construct::Builder {
-                name: &node.name,
-                id,
-                windows: &node.windows,
-                resources: &mut resources,
-                built: &mut built,
-                start_tick,
-                adapter,
+        let non_mmio = matches!(
+            node.model,
+            Model::Encoder { .. }
+                | Model::ContactActuator { .. }
+                | Model::GpioContactResponse { .. }
+                | Model::I2cMotorBridge { .. }
+                | Model::CoreRelease { .. }
+                | Model::ExternalFrames { .. }
+                | Model::HdmiSink { .. }
+        );
+        let single = !matches!(
+            node.model,
+            Model::Adapter { .. } | Model::Power { .. } | Model::SerialDmaLink { .. }
+        );
+        if single && non_mmio != node.windows.is_empty() {
+            return Err(format!(
+                "{} has incorrect MMIO/non-MMIO ownership",
+                node.name
+            ));
+        }
+        let made = if let Model::Adapter { adapter: spec } = &node.model {
+            for name in &spec.wires {
+                resources.wire(name, id)?;
             }
-            .serial_devices(options, gpio)?;
-            for (mapping, device) in devices {
-                if let Some(mapping) = mapping {
-                    built.graph.register_windows(vec![mapping], device)?;
-                } else {
-                    built.graph.attach(device);
-                }
-            }
-            assert_eq!(built.graph.nodes.len(), id + 5);
-            // Every physical register block can start or cancel a serial
-            // deadline. Wake the shared coordinator when any is accessed.
-            // DMA consolidation remaps these edges below.
-            direct_dependencies.extend((0..4).map(|offset| (id + 4, id + offset)));
-        } else if let Model::SerialDmaLink { options, input } = node.model { let options: fujimod_emulator_exr2_serial::serial_dma::Options = crate::decode(options)?; let input: fujimod_emulator_exr2_serial::serial_dma::Input = crate::decode(input)?; 
-            let devices = fujimod_emulator_exr2_serial::serial_dma::Nodes::new(options, input)?;
-            let expected: BTreeSet<_> = devices
-                .windows()
-                .iter()
-                .map(|&(begin, end)| (begin, end - begin))
-                .collect();
-            let declared = node
-                .windows
-                .iter()
-                .map(|window| (window.base, window.size))
-                .collect();
-            if expected != declared {
-                return Err("serial/DMA nodes require exactly their wired register windows".into());
-            }
-            let mut ids = Vec::new();
-            for (mappings, device) in devices.devices() {
-                ids.push(built.graph.register_windows(mappings, device)?);
-            }
-            assert_eq!(ids.len(), 3);
-            assert_eq!(built.graph.nodes.len(), id + 3);
-            public_id = ids[0];
-            let (serial, selector, dma) = (ids[0], ids[1], ids[2]);
-            direct_dependencies.extend([(dma, serial), (serial, dma), (dma, selector)]);
+            Built::Device(adapter.construct(
+                &node.name,
+                spec,
+                &node.windows,
+                &mut resources,
+                &built.node_ids,
+            )?)
         } else {
-            let device = construct::Builder {
-                name: &node.name,
-                id,
-                windows: &node.windows,
-                resources: &mut resources,
-                built: &mut built,
-                start_tick,
-                adapter,
+            constructors.build(
+                Builder {
+                    name: &node.name,
+                    id,
+                    windows: &node.windows,
+                    resources: &mut resources,
+                    built: &mut built,
+                    start_tick,
+                },
+                node.model,
+            )?
+        };
+        match made {
+            Built::Device(device) => {
+                let actual = built.graph.register_windows(node.windows, device)?;
+                assert_eq!(actual, id);
             }
-            .device(node.model)?;
-            let actual = built.graph.register_windows(node.windows, device)?;
-            assert_eq!(actual, id);
+            Built::Nodes {
+                devices,
+                public,
+                edges,
+            } => {
+                let mut ids = Vec::with_capacity(devices.len());
+                for (mappings, device) in devices {
+                    ids.push(match mappings {
+                        Some(mappings) => built.graph.register_windows(mappings, device)?,
+                        None => built.graph.attach(device),
+                    });
+                }
+                assert_eq!(ids, (id..id + ids.len()).collect::<Vec<_>>());
+                public_id = ids[public];
+                direct_dependencies.extend(
+                    edges
+                        .into_iter()
+                        .map(|(target, source)| (ids[target], ids[source])),
+                );
+            }
         }
         dependencies.push((
             public_id,
@@ -246,7 +242,12 @@ fn build(
         ));
         built.node_ids.insert(node.name, public_id);
     }
-    let merged = consolidate_dma(&mut built.graph, &mut built.node_ids, &mut resources)?;
+    let merged = consolidate_dma(
+        constructors,
+        &mut built.graph,
+        &mut built.node_ids,
+        &mut resources,
+    )?;
     let mut edges = vec![BTreeSet::new(); built.graph.nodes.len()];
     for (old_id, names) in dependencies {
         let id = merged.remap[old_id];

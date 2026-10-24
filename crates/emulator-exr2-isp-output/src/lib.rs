@@ -1,4 +1,5 @@
 //! EXR II combination, output channels, still processor, scaler, warp and video encoder.
+pub mod construct;
 pub mod combination;
 pub mod output;
 pub mod scaler;

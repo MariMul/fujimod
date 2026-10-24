@@ -1,4 +1,5 @@
 //! EXR II statistics producer, metering, phase detection and window analysis.
+pub mod construct;
 pub mod metering;
 pub mod phase_detection;
 mod pixel_statistics;

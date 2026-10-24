@@ -1,8 +1,11 @@
 //! Checked, CPU-independent EXR II board plans: nodes, wires, resources and
 //! their checkpoints. `fujimod-emulator-exr2-board` constructs the device
-//! models of a plan; final crates call its `register_board_builder` so
-//! `Plan::build` reaches it. This crate never names a device model, so a model
-//! edit does not rebuild the crates that plan boards.
+//! models of a plan through the constructors model crates register in
+//! [`construction`]; final crates call its `register_board_builder` and
+//! `fujimod_emulator_models::register` so `Plan::build` reaches it. This crate
+//! depends on no model crate, so a model edit rebuilds neither the plan nor the
+//! board.
+pub mod construction;
 mod resources;
 pub mod serial;
 mod spec;

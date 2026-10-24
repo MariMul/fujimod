@@ -4,6 +4,7 @@
 //! snapshot and throughput laws
 //! remain declared software assumptions, not measured hardware semantics.
 //! Command validation, records, render memo and completion tokens live here.
+pub mod construct;
 use fujimod_emulator_graphics::{batch, cache, clear, init, regs::Registers, render, stream};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

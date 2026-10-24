@@ -710,6 +710,7 @@ impl Worker {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     fujimod_emulator_exr2_board::register_board_builder();
+    fujimod_emulator_models::register();
     let mut worker = None;
     let mut finished = false;
     let mut output = io::BufWriter::new(io::stdout().lock());

@@ -177,7 +177,7 @@ fn core_release_has_checked_reset_state_one_signal_writer_and_a_causal_dependenc
     );
 }
 fn build(value: Value) -> Result<BuiltBoard, String> {
-    crate::build(parse(value)?, Resources::default(), 0, &mut RefuseAdapters)
+    build_with_models(parse(value)?, Resources::default(), 0, &mut RefuseAdapters)
 }
 
 #[test]
@@ -550,7 +550,8 @@ fn readback_and_jpeg_peers_share_real_constructor_handles() {
         })
         .unwrap(),
     );
-    let built = crate::build(parse(doc).unwrap(), resources, 123, &mut RefuseAdapters).unwrap();
+    let built =
+        build_with_models(parse(doc).unwrap(), resources, 123, &mut RefuseAdapters).unwrap();
     assert_eq!(
         built.graph.nodes[built.node_ids["input"]].native_dependencies,
         vec![0, 2, 3]
@@ -629,7 +630,7 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
         }])
         .unwrap(),
     );
-    let built = crate::build(
+    let built = build_with_models(
         parse(plan.clone()).unwrap(),
         resources,
         0,
@@ -649,7 +650,7 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
     );
     assert!(built.resources.image_users("absent").is_err());
     assert!(
-        crate::build(
+        build_with_models(
             parse(plan).unwrap(),
             built.resources,
             0,
@@ -754,7 +755,7 @@ fn board_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
     )
     .unwrap();
     let mut adapters = RefuseAdapters;
-    let board = crate::build(plan, Resources::default(), 0, &mut adapters).unwrap();
+    let board = build_with_models(plan, Resources::default(), 0, &mut adapters).unwrap();
     assert_eq!(board.graph.nodes.len(), 3);
     let serial = board.graph.at(0xfff84080).unwrap();
     let selector = board.graph.at(0xfff98500).unwrap();
@@ -775,4 +776,101 @@ fn board_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
     );
     assert_eq!(board.graph.nodes[serial].native_dependencies, [controller]);
     assert_eq!(board.node_ids["link"], serial);
+}
+
+#[test]
+fn checked_board_graph_expands_boot_serial_into_disjoint_register_owners() {
+    use fujimod_emulator_devices::graph::Mapping;
+    const SPI: u64 = 0xfff84000;
+    const UART: u64 = 0xfff46080;
+    const DMA: u64 = 0xfff02080;
+    let input = serde_json::json!({
+        "schema": 1,
+        "boot_entry": "loader",
+        "wires": {},
+        "nodes": [
+            {
+                "name": "gpio",
+                "boot_entries": ["rom", "loader"],
+                "windows": [{"base": 0xfff89000u64, "size": 0x480}],
+                "dependencies": [],
+                "model": {
+                    "kind": "gpio",
+                    "options": {"input_levels": vec![0u32; 16], "output_levels": []},
+                    "irqs": []
+                }
+            },
+            {
+                "name": "boot_serial",
+                "boot_entries": ["rom", "loader"],
+                "windows": [
+                    {"base": SPI, "size": 0x20},
+                    {"base": UART, "size": 0x10},
+                    {"base": DMA, "size": 0x40},
+                    {"base": 0xfff98500u64, "size": 8}
+                ],
+                "dependencies": [],
+                "model": {
+                    "kind": "power",
+                    "options": {"transfer_ticks": 4, "max_program_bytes": 65536, "spi0": null},
+                    "gpio": "gpio"
+                }
+            }
+        ]
+    });
+    let plan = Plan::parse(&serde_json::to_vec(&input).unwrap()).unwrap();
+    let mut adapters = fujimod_emulator_exr2_plan::RefuseAdapters;
+    let built = build_with_models(plan, Resources::default(), 0, &mut adapters).unwrap();
+    let nodes = &built.graph.nodes;
+    let names = nodes
+        .iter()
+        .map(|node| node.device.name())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        [
+            "gpio",
+            "spi0-byte-shifter",
+            "boot-uart",
+            "exr2-dma-controller",
+            "boot-dma-request-selector",
+            "serial-event-coordinator",
+        ]
+    );
+    assert_eq!(built.node_ids["boot_serial"], 1);
+    assert_eq!(
+        nodes[1..5]
+            .iter()
+            .map(|node| node.mappings.as_slice())
+            .collect::<Vec<_>>(),
+        [
+            &[Mapping {
+                base: SPI,
+                size: 0x20
+            }][..],
+            &[Mapping {
+                base: UART,
+                size: 0x10
+            }][..],
+            &[Mapping {
+                base: DMA,
+                size: 0x40
+            }][..],
+            &[Mapping {
+                base: 0xfff98500,
+                size: 8
+            }][..],
+        ]
+    );
+    assert!(nodes[5].mappings.is_empty());
+}
+
+fn build_with_models(
+    plan: Plan,
+    resources: Resources,
+    start_tick: u64,
+    adapter: &mut dyn AdapterFactory,
+) -> Result<BuiltBoard, String> {
+    fujimod_emulator_models::register();
+    crate::build(plan, resources, start_tick, adapter)
 }

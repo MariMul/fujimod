@@ -3466,6 +3466,7 @@ dependencies = [
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-imaging",
  "fujimod-emulator-ip-arm",
+ "fujimod-emulator-models",
  "fujimod-emulator-storage",
  "fujimod-recording",
  "fujimod-settings",
@@ -3492,6 +3493,7 @@ dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-graphics",
  "fujimod-emulator-ip-arm",
+ "fujimod-emulator-models",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xp5-display",
@@ -3572,6 +3574,7 @@ name = "fujimod-emulator-exr2-audio"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-serial",
  "fujimod-emulator-imaging",
  "fujimod-emulator-parts-io",
@@ -3585,28 +3588,27 @@ name = "fujimod-emulator-exr2-board"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
- "fujimod-emulator-exr2-audio",
- "fujimod-emulator-exr2-codecs",
- "fujimod-emulator-exr2-companion",
  "fujimod-emulator-exr2-display",
- "fujimod-emulator-exr2-gpu",
  "fujimod-emulator-exr2-i2c",
- "fujimod-emulator-exr2-io",
- "fujimod-emulator-exr2-isp-face",
- "fujimod-emulator-exr2-isp-input",
- "fujimod-emulator-exr2-isp-output",
- "fujimod-emulator-exr2-isp-statistics",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-serial",
- "fujimod-emulator-exr2-storage",
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-imaging",
  "fujimod-emulator-ip",
- "fujimod-emulator-parts-controls",
+ "fujimod-emulator-models",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-exr2-boot-serial"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-serial",
  "fujimod-emulator-parts-io",
- "fujimod-emulator-parts-lens",
- "fujimod-emulator-parts-sensor",
- "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3617,6 +3619,7 @@ name = "fujimod-emulator-exr2-codecs"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
@@ -3632,6 +3635,7 @@ version = "0.1.0"
 dependencies = [
  "ciborium",
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -3643,6 +3647,7 @@ name = "fujimod-emulator-exr2-display"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -3655,6 +3660,7 @@ name = "fujimod-emulator-exr2-gpu"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-graphics",
  "fujimod-workspace-hack",
  "serde",
@@ -3666,6 +3672,7 @@ name = "fujimod-emulator-exr2-i2c"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-parts-controls",
  "fujimod-workspace-hack",
  "serde",
@@ -3677,6 +3684,8 @@ name = "fujimod-emulator-exr2-io"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
  "serde",
@@ -3688,6 +3697,7 @@ name = "fujimod-emulator-exr2-isp-face"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -3700,6 +3710,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-isp-output",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-emulator-parts-sensor",
  "fujimod-workspace-hack",
@@ -3717,6 +3728,7 @@ dependencies = [
  "fujimod-emulator-exr2-isp-input",
  "fujimod-emulator-exr2-isp-statistics",
  "fujimod-emulator-exr2-isp-testing",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-image-codecs",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
@@ -3731,6 +3743,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-isp-testing",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
@@ -3763,6 +3776,7 @@ name = "fujimod-emulator-exr2-serial"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-imaging",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-parts-lens",
@@ -3776,8 +3790,10 @@ name = "fujimod-emulator-exr2-storage"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-emulator-ip",
  "fujimod-emulator-parts-io",
+ "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3788,6 +3804,7 @@ name = "fujimod-emulator-exr2-system"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -3878,6 +3895,7 @@ dependencies = [
  "fujimod-emulator-graphics",
  "fujimod-emulator-imaging",
  "fujimod-emulator-ip-arm",
+ "fujimod-emulator-models",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
  "fujimod-emulator-storage",
@@ -3893,6 +3911,29 @@ dependencies = [
  "sha2",
  "tsify",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "fujimod-emulator-models"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-exr2-audio",
+ "fujimod-emulator-exr2-boot-serial",
+ "fujimod-emulator-exr2-codecs",
+ "fujimod-emulator-exr2-companion",
+ "fujimod-emulator-exr2-display",
+ "fujimod-emulator-exr2-gpu",
+ "fujimod-emulator-exr2-i2c",
+ "fujimod-emulator-exr2-io",
+ "fujimod-emulator-exr2-isp-face",
+ "fujimod-emulator-exr2-isp-input",
+ "fujimod-emulator-exr2-isp-output",
+ "fujimod-emulator-exr2-isp-statistics",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-exr2-serial",
+ "fujimod-emulator-exr2-storage",
+ "fujimod-emulator-exr2-system",
+ "fujimod-workspace-hack",
 ]
 
 [[package]]
@@ -4192,6 +4233,7 @@ name = "fujimod-python-module"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-exr2-board",
+ "fujimod-emulator-models",
  "fujimod-python",
  "fujimod-python-graphics",
  "fujimod-python-xp4",

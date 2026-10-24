@@ -155,6 +155,7 @@ fn run() -> Result<bool, String> {
 }
 fn main() -> ExitCode {
     fujimod_emulator_exr2_board::register_board_builder();
+    fujimod_emulator_models::register();
     match run() {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::from(2),

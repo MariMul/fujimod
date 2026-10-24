@@ -1,5 +1,7 @@
-//! SPI0 byte shifter and UART/DMA with physical GPIO selection.
+//! The EXR II boot serial register blocks: the SPI0 byte shifter and UART/DMA
+//! with physical GPIO selection.
 //! Uploaded UART bytes are opaque transport; no recipient effect is inferred.
+pub mod construct;
 use fujimod_emulator_exr2_serial::{dma::uart::PeripheralDma, uart};
 use fujimod_emulator_devices::{Cx, Device, Record, Value, WordMap, exr2::gpio::Pads, graph::Mapping, parts::pins::Pins};
 use fujimod_emulator_parts_io::spi::{Endpoint, FixedInput, FixedOptions, Shift};
@@ -34,7 +36,7 @@ struct Program {
     generation: u64,
     bytes: Vec<u8>,
 }
-pub(super) struct SerialState {
+pub(crate) struct SerialState {
     options: Options,
     gpio: Pads,
     input: Option<FixedInput>,
@@ -447,7 +449,7 @@ impl SerialState {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum Block {
+pub(crate) enum Block {
     Spi0,
     Uart,
     Dma,

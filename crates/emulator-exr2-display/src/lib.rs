@@ -3,6 +3,7 @@
 //! phase cadence, reset values and completion latency include declared
 //! assumptions. Pipes share a wrapper for two-bank serialized state and event
 //! ordering.
+pub mod construct;
 pub mod device;
 pub mod formatter;
 #[cfg(test)]

@@ -447,6 +447,7 @@ impl Session {
         };
         let identity = camera_identity(&g.firmware_id, &g.firmware.sha256, &storage)?;
         fujimod_emulator_exr2_board::register_board_builder();
+        fujimod_emulator_models::register();
         let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, built.graph)?;
         let mut board = g.execution.build(

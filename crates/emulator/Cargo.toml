@@ -35,6 +35,7 @@ fujimod-emulator-exr2-io = { path = "../../crates/emulator-exr2-io" }
 fujimod-emulator-exr2-storage = { path = "../../crates/emulator-exr2-storage" }
 fujimod-emulator-exr2-system = { path = "../../crates/emulator-exr2-system" }
 fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }
+fujimod-emulator-models = { path = "../emulator-models" }
 
 [features]
 # TypeScript declarations for host session reports in wasm-bindgen builds.

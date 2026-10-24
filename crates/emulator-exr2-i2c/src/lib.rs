@@ -11,6 +11,7 @@
 //! lens-bridge register wiring. Parts commit their responses at transfer
 //! completion. The frontend declares external replies; no firmware/task state
 //! is an input. Strict and discovery execution policy belongs to the runtime.
+pub mod construct;
 
 use fujimod_emulator_devices::{Unsupported, WordMap};
 use fujimod_emulator_parts_controls::i2c::BusParts;
