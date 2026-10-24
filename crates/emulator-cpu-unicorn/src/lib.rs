@@ -918,6 +918,10 @@ impl Cpu for Core {
             "stop_requests",
             "normal_check_exit",
             "normal_retry",
+            "translations",
+            "limited_translations",
+            "translation_flushes",
+            "translation_invalidations",
         ];
         let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len()) };
         Ok(names.into_iter().zip(values.iter().copied()).collect())

@@ -97,14 +97,37 @@ when a stop was requested while it ran. A successful software STREX also
 publishes to completed-store observers, as a native store does. Thumb has no
 translation filter and keeps the PC write.
 
-| Change | ev_dial CPU seconds | Boot exits, core 0 |
-|---|---|---|
-| Before | 21.6 | 112,725 |
-| Replaced exclusives and identity reads | 15.0 | 1,951 |
+Boot exits ("check exit, no sync" on core 0 over the first 65M instructions
+in exact policy) fell from 112,725 to 1,951, but host instructions barely
+moved: about 1% for ev_dial, inside run-to-run noise. Leaving `cpu_exec` is
+cheap next to the rest.
 
-Boot exits count "check exit, no sync" over the first 65M instructions in
-exact policy. Guest instruction counts, board fingerprints and live-view
-frames are identical before and after. Boot host instructions did not change
-measurably (19.1–19.2G for process start, construction and 65M
-instructions), because boot leaves translated code rarely; the walkthrough's
-waits run firmware that polls exclusives and the identity register.
+Translation churn came from the translation cache. At 16 MiB it filled every
+22.7K blocks (about 740 host bytes each) and was flushed, and the walkthrough
+translated its working set again: 21 flushes and 440K translations in the
+first 60K runs. Its translated code in use is about 63 MiB, so 64 MiB still
+cycled. Processors now get 256 MiB (`factory::TRANSLATION_CACHE_BYTES`);
+pages are committed only as code is generated. ev_dial then translates 85K
+blocks with no capacity flush. The translation counters ("translations",
+"limited_translations", "translation_flushes", "translation_invalidations")
+are in the CPU exit counters.
+
+| Change | ev_dial host instructions | Boot host instructions |
+|---|---|---|
+| Before | 213.1–213.7G | 19.1–19.2G |
+| Replaced exclusives and identity reads | 207–213G | 19.1–19.2G |
+| 256 MiB translation cache | 196.1–197.6G | 18.4G |
+
+ev_dial host instructions are the runner's per-guide records
+(`host_instructions`); boot counts the whole process for construction and 65M
+instructions. CPU seconds follow machine load too closely to compare (the
+same build took 16.3 and 21.6 CPU seconds); with the 256 MiB cache ev_dial
+takes 14.7–15.2. Guest instruction counts (888,235,092 for ev_dial), board
+fingerprints and live-view frames are identical in every row.
+
+`highlight-meter/compensation/raw_highlight_compensation` used to stop at the
+60 CPU second limit in step 12 (695–793G host instructions). With the cache it
+runs all steps in 53.8 CPU seconds (818G, 1.82G guest instructions) and then
+fails its own light-ratio assertion: −1 to 0 EV measures 2.94 times the light,
+outside 1.6–2.5. Its `photometry/ready` prerequisite fell from 308–313G to
+258G host instructions.

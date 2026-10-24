@@ -1027,7 +1027,7 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     let mut board = graph.build(
         factory::Options {
             engine,
-            translation_cache_bytes: 16 << 20,
+            translation_cache_bytes: factory::TRANSLATION_CACHE_BYTES,
         },
         bus,
         None,

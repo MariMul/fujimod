@@ -396,7 +396,7 @@ impl Board {
     }
 
     #[new]
-    #[pyo3(signature = (execution, devices, scene, assets, models, *, execution_mode="strict", continue_refusals=false, engine="unicorn", translation_cache_bytes=16<<20))]
+    #[pyo3(signature = (execution, devices, scene, assets, models, *, execution_mode="strict", continue_refusals=false, engine="unicorn", translation_cache_bytes=factory::TRANSLATION_CACHE_BYTES))]
     fn new(
         execution: &str,
         devices: &str,

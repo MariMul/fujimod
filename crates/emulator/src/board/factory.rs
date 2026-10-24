@@ -53,6 +53,11 @@ pub struct Graph {
     pub peripherals: Vec<Peripheral>,
     pub instructions_per_tick: Ratio,
 }
+/// Host code cache per processor. An X70 walkthrough keeps about 63 MiB of
+/// translated code in use; a smaller cache fills, flushes and translates the
+/// same code again (ev_dial: 440K translations at 16 MiB, 85K at 256 MiB).
+/// Pages are committed only as code is generated.
+pub const TRANSLATION_CACHE_BYTES: u32 = 256 << 20;
 pub struct Options {
     pub engine: Engine,
     pub translation_cache_bytes: u32,
