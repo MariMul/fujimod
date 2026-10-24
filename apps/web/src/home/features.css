@@ -156,6 +156,21 @@
   color: var(--faint);
   letter-spacing: 0.02em;
 }
+.catalog-tile p.catalog-thanks {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.catalog-thanks a {
+  color: var(--dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.catalog-thanks a:hover,
+.catalog-thanks a:focus-visible {
+  color: var(--blue);
+  border-color: currentColor;
+}
 .catalog-card {
   position: fixed;
   z-index: 20;
