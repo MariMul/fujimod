@@ -273,6 +273,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
   const cmakeConfigure = [
     'emcmake',
     'cmake',
+    '--fresh',
     '-S',
     join(root, '../../crates/emulator-cpu-unicorn/vendor/unicorn'),
     '-B',

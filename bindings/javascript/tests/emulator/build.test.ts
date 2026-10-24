@@ -48,6 +48,7 @@ test('build plan targets the public static library and preserves encoded Rust fl
     'target-feature=+simd128',
   ]);
   assert(plan.cFlags.includes('-pthread'));
+  assert(plan.cmakeConfigure.includes('--fresh'));
   assert(plan.link.includes('-pthread'));
   assert(plan.link.includes('-sPTHREAD_POOL_SIZE=2'));
   assert(plan.rust.includes('-Zbuild-std=std,panic_abort'));
