@@ -14,9 +14,10 @@ use fujimod_emulator_session::Session;
 use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
-    RunPurpose, RunScene, RunStart,
+    Exr2RunInputs, RunEngine, RunExecution, RunExecutionMode, RunInputs, RunPurpose, RunScene,
+    RunStart,
 };
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog_assets::Content;
 use fujimod_catalog_controls::{
     AdcInterval, ElectricalInput, InputTarget, facts::ConfigurationLocation,
@@ -248,7 +249,7 @@ fn first_start_key(
 fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
     let configuration = &resolved.configuration;
     configuration.validate(&configuration.id)?;
-    configuration.validate_selection(&resolved.reference)?;
+    fujimod_catalog_resolution::validate_selection(configuration, &resolved.reference)?;
     match configuration.purpose {
         RunPurpose::RomBoot => (),
         RunPurpose::ServiceSession => {

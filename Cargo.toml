@@ -9,6 +9,7 @@ members = [
   "crates/catalog-bulk",
   "crates/catalog-camera",
   "crates/catalog-configuration",
+  "crates/catalog-resolution",
   "crates/catalog-construction",
   "crates/catalog-assets",
   "crates/catalog-identity",
@@ -117,6 +118,7 @@ fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-catalog-bulk = { path = "crates/catalog-bulk", version = "0.1.0" }
 fujimod-catalog-camera = { path = "crates/catalog-camera", version = "0.1.0" }
 fujimod-catalog-configuration = { path = "crates/catalog-configuration", version = "0.1.0" }
+fujimod-catalog-resolution = { path = "crates/catalog-resolution", version = "0.1.0" }
 fujimod-catalog-construction = { path = "crates/catalog-construction", version = "0.1.0" }
 fujimod-catalog-assets = { path = "crates/catalog-assets", version = "0.1.0" }
 fujimod-catalog-identity = { path = "crates/catalog-identity", version = "0.1.0" }

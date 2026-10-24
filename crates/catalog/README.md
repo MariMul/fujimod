@@ -23,13 +23,17 @@ crate, so a consumer rebuilds only when the documents it reads change:
   parts, bodies and firmware and their hardware profiles. It depends on every
   document crate above.
 - `fujimod-catalog-configuration`: the bundled emulator run configurations,
-  overlays and their hardware, firmware and native inputs, resolved against
-  the reference catalog.
+  overlays and their hardware, firmware and native inputs. It does not depend
+  on the reference catalog.
+- `fujimod-catalog-resolution`: run configurations resolved against the
+  reference catalog, with their overlays applied and every block, connection,
+  part and profile identity they use checked against the selected hardware.
 - `fujimod-catalog-schemas`: the JSON Schema generator for every catalog
   document.
 
-The facade exposes `fujimod-catalog` as `fujimod::catalog` and
-`fujimod-catalog-configuration` as `fujimod::catalog_configuration`; enabling
+The facade exposes `fujimod-catalog` as `fujimod::catalog`,
+`fujimod-catalog-configuration` as `fujimod::catalog_configuration` and
+`fujimod-catalog-resolution` as `fujimod::catalog_resolution`; enabling
 `app80` exposes `fujimod-catalog-service` as `fujimod::catalog_service` and
 `workflows` exposes `fujimod-catalog-camera` as `fujimod::catalog_camera`. Definitions stay in
 JSON rather than becoming another set of Rust constants. Callers supply the
@@ -100,7 +104,7 @@ schema attributes as `#[cfg_attr(feature = "schema", schemars(...))]`.
 
 Hardware profiles preserve qualified device graphs and controller settings while
 reference records continue to own identity, memory, and physical attachments.
-`reference::HardwareSelection` selects one entry from `Soc.hardware.profiles`
+`fujimod_catalog_construction::HardwareSelection` selects one entry from `Soc.hardware.profiles`
 and one from `Body.hardware.profiles`. Profile IDs distinguish REC, service,
 and discovery hardware configurations. Resolution refuses unknown profiles.
 Profiles contain no input file locations. A device graph records closed device

@@ -14,6 +14,9 @@ pub use fujimod_catalog as catalog;
 #[cfg(feature = "catalog-configuration")]
 pub use fujimod_catalog_configuration as catalog_configuration;
 
+#[cfg(feature = "catalog-resolution")]
+pub use fujimod_catalog_resolution as catalog_resolution;
+
 #[cfg(feature = "catalog-camera")]
 pub use fujimod_catalog_camera as catalog_camera;
 

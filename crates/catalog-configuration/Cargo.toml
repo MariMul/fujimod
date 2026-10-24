@@ -11,7 +11,6 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-fujimod-catalog.workspace = true
 fujimod-catalog-construction.workspace = true
 fujimod-catalog-run-inputs.workspace = true
 fujimod-catalog-identity.workspace = true
@@ -26,4 +25,4 @@ fujimod-workspace-hack.workspace = true
 
 [features]
 # JSON Schema derives, used only to generate and check the committed schemas.
-schema = ["fujimod-catalog/schema", "fujimod-catalog-construction/schema", "fujimod-catalog-run-inputs/schema"]
+schema = ["fujimod-catalog-construction/schema", "fujimod-catalog-run-inputs/schema"]

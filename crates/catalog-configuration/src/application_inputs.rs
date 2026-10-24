@@ -144,68 +144,6 @@ impl ApplicationRunInputs {
         }
         Ok(())
     }
-
-    /// Check every block and installed-part identity against the selected hardware.
-    pub fn validate_selection(
-        &self,
-        selection: &fujimod_catalog::reference::ResolvedSelection,
-    ) -> Result<(), String> {
-        use fujimod_catalog::reference::SocBlockKind;
-        self.validate()?;
-        let block = |id: &str| {
-            selection
-                .soc
-                .blocks
-                .iter()
-                .find(|block| block.id == id)
-                .ok_or_else(|| format!("application input refers to missing SoC block {id}"))
-        };
-        let part = |id: &str| {
-            if !selection.body.parts.iter().any(|part| part == id) {
-                return Err(format!("application input refers to uninstalled part {id}"));
-            }
-            Ok(())
-        };
-        for input in &self.blocks {
-            let selected = block(input.block_id())?;
-            let valid = match input {
-                ApplicationBlockInput::Adc { .. } => selected.kind == SocBlockKind::Adc,
-                ApplicationBlockInput::Gpio { .. } => selected.kind == SocBlockKind::Gpio,
-                ApplicationBlockInput::SerialLine { .. } => {
-                    selected.kind == SocBlockKind::SerialController
-                }
-                ApplicationBlockInput::Flash { part_id, .. } => {
-                    part(part_id)?;
-                    true
-                }
-                ApplicationBlockInput::Temperature { .. } => true,
-            };
-            if !valid {
-                return Err(format!(
-                    "application input uses block {} with the wrong hardware category",
-                    selected.id
-                ));
-            }
-        }
-        for input in &self.parts {
-            part(input.part_id())?;
-        }
-        for timing in &self.timings {
-            match timing {
-                ApplicationTiming::Delay { block_ids, .. }
-                | ApplicationTiming::ParentClock { block_ids, .. } => {
-                    for id in block_ids {
-                        block(id)?;
-                    }
-                }
-                ApplicationTiming::Throughput { block_id, .. } => {
-                    block(block_id)?;
-                }
-                ApplicationTiming::StorageProgramming { part_id, .. } => part(part_id)?,
-            }
-        }
-        Ok(())
-    }
 }
 
 /// External values supplied to one application-profile SoC block.
@@ -476,32 +414,6 @@ impl ApplicationRunScene {
             .any(|input| input.samples_per_cell == 0 || input.signal_shift >= 16)
         {
             return Err("application statistics input has invalid sample or signal bounds".into());
-        }
-        Ok(())
-    }
-
-    /// Validate all scene consumers against the selected SoC's block identities.
-    pub fn validate_selection(
-        &self,
-        selection: &fujimod_catalog::reference::ResolvedSelection,
-    ) -> Result<(), String> {
-        self.validate()?;
-        for id in self
-            .frames
-            .iter()
-            .flat_map(|frame| frame.block_ids.iter().map(String::as_str))
-            .chain(self.statistics.iter().map(|input| input.block_id.as_str()))
-            .chain(
-                self.command_images
-                    .iter()
-                    .flat_map(|input| input.block_ids.iter().map(String::as_str)),
-            )
-        {
-            if !selection.soc.blocks.iter().any(|block| block.id == id) {
-                return Err(format!(
-                    "application scene refers to missing SoC block {id}"
-                ));
-            }
         }
         Ok(())
     }

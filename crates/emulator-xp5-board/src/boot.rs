@@ -9,7 +9,8 @@ use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_catalog_configuration::{ResolvedConfiguration, application_inputs::ApplicationRunScene};
+use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog::{
     firmware::FirmwareProfile,
     profiles::RegisterWindow,

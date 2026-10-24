@@ -15,7 +15,8 @@ default = []
 catalog = ["dep:fujimod-catalog"]
 catalog-camera = ["dep:fujimod-catalog-camera"]
 catalog-service = ["catalog-camera", "dep:fujimod-catalog-service"]
-catalog-configuration = ["catalog", "dep:fujimod-catalog-configuration"]
+catalog-configuration = ["dep:fujimod-catalog-configuration"]
+catalog-resolution = ["catalog", "catalog-configuration", "dep:fujimod-catalog-resolution"]
 usb = ["dep:fujimod-usb"]
 app80 = ["usb", "catalog-service", "dep:fujimod-usb-app80"]
 workflows = ["usb", "catalog-camera", "dep:fujimod-workflows"]
@@ -37,6 +38,7 @@ fujimod-catalog = { workspace = true, optional = true }
 fujimod-catalog-camera = { workspace = true, optional = true }
 fujimod-catalog-service = { workspace = true, optional = true }
 fujimod-catalog-configuration = { workspace = true, optional = true }
+fujimod-catalog-resolution = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
 fujimod-usb-app80 = { workspace = true, optional = true }
 fujimod-workflows = { workspace = true, optional = true }

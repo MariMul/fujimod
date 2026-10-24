@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 fujimod-catalog.workspace = true
-fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
 fujimod-python-service = { path = "../service" }
 fujimod-corpus = { path = "../../../crates/corpus" }
 pyo3.workspace = true

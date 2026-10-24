@@ -1091,6 +1091,7 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-camera",
  "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
  "fujimod-catalog-service",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
@@ -1175,7 +1176,6 @@ dependencies = [
 name = "fujimod-catalog-configuration"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog",
  "fujimod-catalog-construction",
  "fujimod-catalog-identity",
  "fujimod-catalog-run-inputs",
@@ -1241,6 +1241,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-resolution"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-construction",
+ "fujimod-catalog-identity",
+ "fujimod-catalog-run-inputs",
+ "fujimod-workspace-hack",
+ "schemars",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tsify",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "fujimod-catalog-run-inputs"
 version = "0.1.0"
 dependencies = [
@@ -1266,6 +1284,7 @@ dependencies = [
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
+ "fujimod-catalog-resolution",
  "fujimod-catalog-run-inputs",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
@@ -1354,6 +1373,7 @@ dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
  "fujimod-catalog-controls",
+ "fujimod-catalog-resolution",
  "fujimod-catalog-run-inputs",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
@@ -2063,6 +2083,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
  "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
  "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
@@ -2235,7 +2256,7 @@ name = "fujimod-python-catalog"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
- "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
  "fujimod-corpus",
  "fujimod-python-service",
  "fujimod-workspace-hack",

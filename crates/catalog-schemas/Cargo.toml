@@ -13,6 +13,7 @@ doctest = false
 [dependencies]
 fujimod-catalog.workspace = true
 fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
 fujimod-catalog-bulk.workspace = true
 fujimod-catalog-construction.workspace = true
 fujimod-catalog-controls.workspace = true
@@ -28,6 +29,7 @@ fujimod-workspace-hack.workspace = true
 schema = [
   "fujimod-catalog/schema",
   "fujimod-catalog-configuration/schema",
+  "fujimod-catalog-resolution/schema",
   "fujimod-catalog-bulk/schema",
   "fujimod-catalog-construction/schema",
   "fujimod-catalog-controls/schema",

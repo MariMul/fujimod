@@ -86,7 +86,7 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     );
     documents.insert(
         "resolved-configuration.schema.json",
-        schema::<fujimod_catalog_configuration::ResolvedConfiguration>(
+        schema::<fujimod_catalog_resolution::ResolvedConfiguration>(
             "https://fujimod.com/schemas/resolved-configuration.schema.json",
         ),
     );
