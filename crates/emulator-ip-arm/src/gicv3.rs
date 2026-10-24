@@ -757,3 +757,39 @@ mod tests {
         assert_eq!(g.distributor(0x880, 4, Some(u32::MAX.into())).unwrap(), 0);
     }
 }
+
+impl fujimod_emulator_devices::gic::InterruptController for Gic {
+    fn pins(&self, core: usize) -> Result<(bool, bool), String> {
+        Gic::pins(self, core)
+    }
+    fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
+        Gic::set_spi(self, id, high)
+    }
+    fn set_ppi(&mut self, core: usize, id: usize, high: bool) -> Result<(), String> {
+        Gic::set_ppi(self, core, id, high)
+    }
+    fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String> {
+        Gic::system(self, core, register, value)
+    }
+    fn distributor(&mut self, offset: u64, size: u8, value: Option<u64>) -> Result<u64, String> {
+        Gic::distributor(self, offset, size, value)
+    }
+    fn redistributor(
+        &mut self,
+        core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        Gic::redistributor(self, core, offset, size, value)
+    }
+    fn save(&self) -> Value {
+        Gic::save(self)
+    }
+    fn restore(&mut self, state: &Value) -> Result<(), String> {
+        Gic::restore(self, state)
+    }
+    fn boxed_clone(&self) -> Box<dyn fujimod_emulator_devices::gic::InterruptController> {
+        Box::new(self.clone())
+    }
+}

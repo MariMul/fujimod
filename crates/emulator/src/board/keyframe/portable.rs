@@ -129,7 +129,7 @@ impl Board {
             }
         }
         match (&state.interrupts, &saved.gic) {
-            (Some(current), Some(saved)) => current.gic.clone().restore(&saved.save())?,
+            (Some(current), Some(saved)) => current.gic.boxed_clone().restore(saved)?,
             (None, None) => (),
             _ => return Err("snapshot GIC wiring differs".into()),
         }

@@ -3465,7 +3465,6 @@ dependencies = [
  "fujimod-emulator-exr2-storage",
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-imaging",
- "fujimod-emulator-ip-arm",
  "fujimod-emulator-models",
  "fujimod-emulator-storage",
  "fujimod-recording",

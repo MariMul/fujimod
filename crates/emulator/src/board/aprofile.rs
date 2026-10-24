@@ -1,5 +1,7 @@
 //! A-profile architectural counters and timers, driven by the board timeline.
-use fujimod_emulator_ip_arm::{cortex_a53, generic_timer::{Clock, Register, Timer}};
+pub mod cortex_a53;
+pub mod generic_timer;
+use generic_timer::{Clock, Register, Timer};
 use serde_json::{Value, json};
 
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

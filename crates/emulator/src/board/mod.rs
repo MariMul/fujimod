@@ -31,7 +31,7 @@ use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
 use fujimod_emulator_cpu::{
     Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run,
 };
-use fujimod_emulator_ip_arm::gicv3::Gic;
+use fujimod_emulator_devices::gic::InterruptController;
 use fujimod_emulator_devices::{Host, Record};
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
@@ -39,7 +39,7 @@ use std::ffi::c_void;
 use std::rc::{Rc, Weak};
 
 pub struct InterruptMap {
-    pub gic: Gic,
+    pub gic: Box<dyn InterruptController>,
     pub distributor: u64,
     pub redistributor: u64,
     pub stride: u64,
@@ -94,7 +94,7 @@ struct State {
     outputs: std::collections::BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Profile>>,
     aprofile: Vec<Option<aprofile::Profile>>,
-    implementation_cluster: fujimod_emulator_ip_arm::cortex_a53::Registers,
+    implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: std::collections::BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
     processor_generations: Vec<u64>,

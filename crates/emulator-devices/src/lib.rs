@@ -12,6 +12,7 @@ pub mod compression;
 pub mod dma;
 pub mod exr2;
 pub mod fingerprint;
+pub mod gic;
 pub mod graph;
 pub mod graphics;
 pub mod keyed_io;

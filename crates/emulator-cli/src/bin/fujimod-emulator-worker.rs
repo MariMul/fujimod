@@ -71,7 +71,7 @@ struct CortexA53 {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Aprofile {
-    clock: fujimod_emulator_ip_arm::generic_timer::Clock,
+    clock: fujimod_emulator::board::aprofile::generic_timer::Clock,
     physical_irq: u32,
     virtual_irq: u32,
     pmu_hz: u64,
@@ -191,7 +191,7 @@ impl Gic {
             }
         }
         Ok(InterruptMap {
-            gic,
+            gic: Box::new(gic),
             distributor: self.distributor,
             redistributor: self.redistributor,
             stride: self.stride,

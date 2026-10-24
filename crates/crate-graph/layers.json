@@ -88,9 +88,6 @@
   },
   "remaining": {
     "model_dependencies": {
-      "fujimod-emulator": [
-        "fujimod-emulator-ip-arm"
-      ],
       "fujimod-emulator-xp5-board": [
         "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",

@@ -237,7 +237,7 @@ impl Session {
             .map(|g| {
                 Ok::<_, String>(InterruptMap {
                     cores: g.affinities.len(),
-                    gic: fujimod_emulator_ip_arm::gicv3::Gic::new(g.affinities, g.lines)?,
+                    gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(g.affinities, g.lines)?),
                     distributor: g.distributor,
                     redistributor: g.redistributor,
                     stride: g.stride,

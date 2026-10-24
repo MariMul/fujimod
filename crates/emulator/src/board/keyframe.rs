@@ -32,12 +32,13 @@ struct Saved {
     outputs: BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Checkpoint>>,
     aprofile: Vec<Option<aprofile::Profile>>,
-    implementation_cluster: fujimod_emulator_ip_arm::cortex_a53::Registers,
+    implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
     processor_generations: Vec<u64>,
     code_run: Option<usize>,
-    gic: Option<fujimod_emulator_ip_arm::gicv3::Gic>,
+    /// The GIC's saved state.
+    gic: Option<Value>,
 }
 pub struct Keyframe {
     owner: Weak<RefCell<State>>,
@@ -160,10 +161,10 @@ impl State {
             processor_deadlines: processor_deadlines.clone(),
             processor_generations: processor_generations.clone(),
             code_run: *code_run,
-            gic: interrupts.as_ref().map(|g| g.gic.clone()),
+            gic: interrupts.as_ref().map(|g| g.gic.save()),
         }
     }
-    fn restore_state(&mut self, saved: &Saved) {
+    fn restore_state(&mut self, saved: &Saved) -> Result<(), String> {
         self.execution_policy = saved.execution_policy;
         self.clock_limit = None;
         self.timeline.clone_from(&saved.timeline);
@@ -200,8 +201,9 @@ impl State {
             .clone_from(&saved.processor_generations);
         self.code_run = saved.code_run;
         if let (Some(interrupts), Some(gic)) = (&mut self.interrupts, &saved.gic) {
-            interrupts.gic.clone_from(gic);
+            interrupts.gic.restore(gic)?;
         }
+        Ok(())
     }
 }
 impl Board {
@@ -338,7 +340,7 @@ impl Board {
                 .lock()
                 .map_err(|_| "exclusive monitors poisoned")?
                 .restore_checkpoint(&saved.exclusive)?;
-            state.restore_state(&saved.saved);
+            state.restore_state(&saved.saved)?;
             state.memory.rearm(&self.cpus)?;
             Ok::<_, String>(())
         })();

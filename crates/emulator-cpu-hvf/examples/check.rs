@@ -46,7 +46,8 @@ fn main() -> Result<(), String> {
             bus::{Bus, Mode},
             factory::*,
         };
-        use fujimod_emulator_ip_arm::{generic_timer::Clock, gicv3::Gic};
+        use fujimod_emulator::board::aprofile::generic_timer::Clock;
+        use fujimod_emulator_ip_arm::gicv3::Gic;
         let graph = |processors: Vec<Processor>| Graph {
             decoders: vec![],
             mappings: (0..processors.len())
@@ -102,7 +103,7 @@ fn main() -> Result<(), String> {
                         options(),
                         Bus::new(Mode::Strict),
                         Some(InterruptMap {
-                            gic,
+                            gic: Box::new(gic),
                             distributor: 0xfa000000,
                             redistributor: 0xfa080000,
                             stride: 0x20000,
@@ -812,7 +813,7 @@ fn main() -> Result<(), String> {
             },
             bus,
             Some(InterruptMap {
-                gic,
+                gic: Box::new(gic),
                 distributor: 0xfa000000,
                 redistributor: 0xfa080000,
                 stride: 0x20000,
@@ -1000,7 +1001,7 @@ fn main() -> Result<(), String> {
             },
             bus,
             Some(InterruptMap {
-                gic,
+                gic: Box::new(gic),
                 distributor: 0xfa000000,
                 redistributor: 0xfa080000,
                 stride: 0x20000,

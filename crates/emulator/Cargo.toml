@@ -14,7 +14,6 @@ crate-type = ["rlib"]
 fujimod-emulator-imaging = { path = "../../crates/emulator-imaging" }
 fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
 fujimod-settings = { path = "../../crates/settings" }
-fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
 fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }

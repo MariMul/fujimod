@@ -20,7 +20,8 @@ use fujimod_catalog::{
 use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
 use fujimod_emulator_parts_controls::resistor_keys::{Options as ResistorKeysOptions, ResistorKeys};
-use fujimod_emulator_ip_arm::{generic_timer, gicv3::Gic};
+use fujimod_emulator::board::aprofile::generic_timer;
+use fujimod_emulator_ip_arm::gicv3::Gic;
 use crate::board as xp5_board;
 use serde_json::Value;
 use std::time::Duration;
@@ -204,7 +205,7 @@ pub fn startup_from_profile(
                 }
             }
             Some(InterruptMap {
-                gic,
+                gic: Box::new(gic),
                 distributor: block_base(distributor_block_id)?,
                 redistributor: block_base(redistributor_block_id)?,
                 stride: *redistributor_stride,

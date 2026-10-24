@@ -44,7 +44,7 @@ fn board() -> Result<Board, String> {
         Bus::new(Mode::Strict),
         Some(InterruptMap {
             cores: 1,
-            gic: Gic::new(vec![0], 128)?,
+            gic: Box::new(Gic::new(vec![0], 128)?),
             distributor: 0x8000000,
             redistributor: 0x80a0000,
             stride: 0x20000,
