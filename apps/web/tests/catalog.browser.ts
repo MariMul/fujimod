@@ -121,13 +121,17 @@ try {
       await settled();
       await waitTicks(6_000_000);
       const pixels = () =>
-        page.locator('#lcd-source').evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+        page.locator('#lcd-source').evaluate(async (canvas: HTMLCanvasElement) => {
+          const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+          const digest = await crypto.subtle.digest('SHA-256', pixels.data);
+          return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+        });
       const shooting = await pixels();
       await press('menu_ok_button');
       const menu = await pixels();
       assert.notEqual(menu, shooting, 'MENU did not change the guest LCD');
       await page.screenshot({ path: `${output}/${firmware.id}-menu.png`, fullPage: true });
-      await press('selector_function_buttons.down');
+      await press('selector.down');
       const selection = await pixels();
       assert.notEqual(menu, selection, 'Selector did not change the guest LCD');
       await press('disp_back_button');

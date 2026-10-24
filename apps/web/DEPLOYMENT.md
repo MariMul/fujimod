@@ -24,8 +24,8 @@ FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal npm run deploy -- \
 Sign in with Wrangler or supply a deployment API token. Install the USB sharing
 Worker's dependencies for its pinned Wrangler CLI. The runtime directory contains
 `catalog.json` and one qualified bundle per advertised emulator, including
-Pyodide, its package dependencies, and license notices. The patch directory
-contains a verified mod release. The media directory contains `media.json` and the
+the standalone Wasm module, its loader, cold inputs, and license notices. The patch
+directory contains a verified mod release. The media directory contains `media.json` and the
 content-addressed MP4 and WebP files it names. `media.json` records the digest of the
 feature catalog text it was rendered for; staging refuses media for any other catalog,
 and the site shows no media whose digest differs from its catalog. Locally, set
