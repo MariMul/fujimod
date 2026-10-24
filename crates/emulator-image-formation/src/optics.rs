@@ -158,8 +158,10 @@ impl Projection {
             libm::rint((radius[i] - libm::floor(radius[i])) * 65536.).clamp(0., 65535.) as u32
         });
         let distance = match self.spec.relative_illumination {
-            Illumination::Uniform => None,
-            Illumination::CosineFourth => Some(self.spec.focal_length_mm + shift),
+            Illumination::CosineFourth if lens_illuminates(&frame.frame) => {
+                Some(self.spec.focal_length_mm + shift)
+            }
+            _ => None,
         };
         if distance.is_some_and(|d| !d.is_finite() || d <= 0.) {
             return Err("invalid readout image distance".into());
@@ -300,14 +302,14 @@ impl Projection {
             return Ok(());
         }
         let image_distance = match self.spec.relative_illumination {
-            Illumination::Uniform => None,
-            Illumination::CosineFourth => {
+            Illumination::CosineFourth if lens_illuminates(&frame.frame) => {
                 let d = self.spec.focal_length_mm + shift;
                 if !d.is_finite() || d <= 0. {
                     return Err("thin-lens image distance must be finite and positive".into());
                 }
                 Some(d)
             }
+            _ => None,
         };
         frame.focus_shift_mm = Some(shift);
         frame.filtered = None;
@@ -554,6 +556,12 @@ fn projects(frame: &Frame) -> bool {
     !matches!(frame.pixels, FramePixels::Raw16(_))
 }
 
+/// A RAW mosaic scene is sensor-referred: the lens that recorded it already
+/// shaded it, so only scene radiance receives this lens's relative illumination.
+fn lens_illuminates(frame: &Frame) -> bool {
+    !matches!(frame.pixels, FramePixels::Mosaic { .. })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -776,6 +784,34 @@ mod tests {
             p.prepare(&mut base.clone(), -p.spec.focal_length_mm)
                 .is_err()
         );
+    }
+    #[test]
+    fn raw_mosaic_scenes_keep_their_recorded_lens_shading() {
+        use fujimod_emulator_imaging::scene::mosaic::Radiance;
+        let mut spec = projection().spec.clone();
+        spec.sensor_width_mm = 23.6;
+        spec.relative_illumination = Illumination::CosineFourth;
+        let p = Projection::new(spec, Default::default()).unwrap();
+        let cfa = std::array::from_fn(|y| std::array::from_fn(|x| ((x + 2 * y) % 3) as u8));
+        let mosaic = Arc::new(
+            Frame::new(
+                64,
+                8,
+                FramePixels::Mosaic {
+                    cfa,
+                    radiance: Radiance::from_counts(std::iter::repeat_n(30000, 64 * 8), 1.),
+                },
+            )
+            .unwrap(),
+        );
+        let mut raw = frame(vec![128; 64 * 8 * 3], 0.0003);
+        raw.frame = mosaic;
+        p.prepare(&mut raw, p.subject_shift).unwrap();
+        // The RAF's own lens already shaded it: a flat mosaic stays flat.
+        assert_eq!(raw.sample(0, 3, [64, 8]), raw.sample(31, 3, [64, 8]));
+        let mut rgb = frame(vec![128; 64 * 8 * 3], 0.0003);
+        p.prepare(&mut rgb, p.subject_shift).unwrap();
+        assert!(rgb.sample(0, 3, [64, 8])[1] < rgb.sample(31, 3, [64, 8])[1]);
     }
     #[test]
     fn repeated_exposures_reuse_optics_and_keep_uncached_pixel_results() {
