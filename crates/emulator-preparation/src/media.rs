@@ -1,6 +1,6 @@
 //! Declarative external NAND inputs shared by native and browser frontends.
 //! Preparation verifies declared asset windows before constructing a medium.
-use super::inputs::{PreparePersistentInputs, tag_managed_blocks};
+use crate::persistent_inputs::{PreparePersistentInputs, tag_managed_blocks};
 use fujimod_emulator_devices::parts::nand::{Nand, Options, Overlay};
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::Arc};

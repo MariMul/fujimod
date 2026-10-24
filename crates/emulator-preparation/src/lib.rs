@@ -1,4 +1,8 @@
-//! Bounded host input preparation, outside device execution.
+//! Bounded host input preparation, outside device execution: the declared
+//! NAND and card media, images, statistics, sensors and card files of a run.
+pub mod media;
+pub mod persistent_inputs;
+
 use fujimod_emulator_exr2_plan::Inputs;
 use fujimod_emulator_imaging::{analysis::ImageLayout, scene::{Frame, FramePixels, ImageFrames, SensorFrames, StatisticsFrames, StatisticsSpan}};
 use serde::Deserialize;
@@ -48,9 +52,9 @@ struct Sensor {
 #[serde(deny_unknown_fields)]
 pub struct Spec {
     #[serde(default)]
-    nands: BTreeMap<String, fujimod_emulator_storage::media::NandInput>,
+    nands: BTreeMap<String, crate::media::NandInput>,
     #[serde(default)]
-    cards: BTreeMap<String, fujimod_emulator_storage::media::CardInput>,
+    cards: BTreeMap<String, crate::media::CardInput>,
     #[serde(default)]
     images: BTreeMap<String, Image>,
     #[serde(default)]

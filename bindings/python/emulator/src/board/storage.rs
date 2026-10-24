@@ -1,7 +1,8 @@
 //! Host preparation bindings. Media algorithms and the session stay in Rust.
 use super::{CardMedium, NandMedium, error, json};
 use fujimod_emulator_devices::parts::sd_card;
-use fujimod_emulator_storage::{fat, inputs::PreparePersistentInputs};
+use fujimod_emulator_preparation::persistent_inputs::PreparePersistentInputs;
+use fujimod_emulator_storage::fat;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},

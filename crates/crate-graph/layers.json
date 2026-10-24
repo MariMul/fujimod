@@ -48,6 +48,7 @@
     ],
     "board": [
       "fujimod-emulator-exr2-board",
+      "fujimod-emulator-preparation",
       "fujimod-emulator-xp4-board",
       "fujimod-emulator-xp5-board"
     ],

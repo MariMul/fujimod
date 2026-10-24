@@ -1,4 +1,2 @@
-//! Host-side storage services over the same media that guest controllers own.
+//! Host-side FAT services over the same media that guest controllers own.
 pub mod fat;
-pub mod inputs;
-pub mod media;

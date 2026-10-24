@@ -54,7 +54,7 @@ struct Graph {
     execution: factory::Graph,
     devices: Plan,
     #[serde(default)]
-    scene: fujimod_emulator::session::preparation::Spec,
+    scene: fujimod_emulator_preparation::Spec,
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
     firmware: Firmware,

@@ -23,8 +23,8 @@ From the bottom of the graph to the top:
    - the NAND and SD card media that plans, sessions and controllers exchange.
 
    It contains no device implementation. Two crates sit in the same layer:
-   `fujimod-emulator-storage` (FAT and media inputs, host-side services over
-   those media) and the image interface `fujimod-emulator-imaging`: scene,
+   `fujimod-emulator-storage` (host-side FAT services over card media) and the
+   image interface `fujimod-emulator-imaging`: scene,
    sensor and image frames and their pixels, the handles and option and spec
    types plans name, image layout, statistics frames, exposure and optics
    declarations, film and packed color, and the EXR II ISP interface. Its
@@ -51,7 +51,11 @@ From the bottom of the graph to the top:
    crate's `construct::register(&mut Constructors)` adds the constructors of
    its models; a shared part is wired by the family crate that attaches it
    (the EXR II serial crate wires the lens unit, for example).
-5. Board crates: validation, wiring, resources and DMA consolidation. They
+5. Board crates: validation, wiring, resources and DMA consolidation.
+   `fujimod-emulator-preparation` sits with them: it builds a run's declared
+   inputs (NAND media from persistent inputs and settings layouts, cards,
+   images, statistics and sensors) into the plan's inputs, so a settings edit
+   rebuilds neither the storage interface nor the emulator. They
    construct nodes through the constructor registry and depend on the interface
    and plan crates only.
 6. `fujimod-emulator`: execution, scheduling and sessions. It depends on the

@@ -3595,6 +3595,7 @@ dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-models",
+ "fujimod-emulator-preparation",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
@@ -4056,6 +4057,7 @@ dependencies = [
  "fujimod-emulator-models",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
+ "fujimod-emulator-preparation",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xp5-display",
@@ -4146,6 +4148,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-preparation"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog-settings",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-imaging",
+ "fujimod-settings",
+ "fujimod-workspace-hack",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "fujimod-emulator-sensor-input"
 version = "0.1.0"
 dependencies = [
@@ -4159,15 +4177,11 @@ dependencies = [
 name = "fujimod-emulator-storage"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-settings",
  "fujimod-emulator-devices",
- "fujimod-settings",
  "fujimod-workspace-hack",
- "ruzstd",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
  "tsify",
  "wasm-bindgen",
 ]
@@ -4380,6 +4394,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
+ "fujimod-emulator-preparation",
  "fujimod-emulator-storage",
  "fujimod-python-base",
  "fujimod-settings",

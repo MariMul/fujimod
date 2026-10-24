@@ -8,7 +8,7 @@ mod xp4;
 pub use checkpoint::Checkpoint;
 use fujimod_python_base::xp4_backend;
 mod device;
-use fujimod_emulator::session::preparation;
+use fujimod_emulator_preparation as preparation;
 mod run;
 mod storage;
 use device::{Adapters, Failures, Object};

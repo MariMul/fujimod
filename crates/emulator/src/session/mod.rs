@@ -7,7 +7,6 @@ pub mod durable;
 pub mod history;
 pub mod inputs;
 pub mod nand;
-pub mod preparation;
 pub mod scanout;
 #[cfg(test)]
 mod tests;

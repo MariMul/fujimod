@@ -11,8 +11,9 @@ use fujimod_emulator::{
         bus::{Bus, Mode},
         factory,
     },
-    session::{Session, preparation},
+    session::Session,
 };
+use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::{
     configuration::{
         Exr2RunInputs, ResolvedConfiguration, RunEngine, RunExecution, RunExecutionMode, RunInputs,
