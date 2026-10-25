@@ -224,23 +224,21 @@ export function GettingStarted(props: {
         </Item>
         <Item number={3} state={debugStep()}>
           <div class="gs-stack">
+            <button
+              class="wb-btn"
+              disabled={!available() || !unlocked() || !props.debug || debugStep() === 'done'}
+              onClick={() => void enableDebugMode()}
+            >
+              Enable debug mode
+            </button>
             <p class="gs-note">
               In debug mode your camera works normally, but its USB connection can also inspect and
-              control the camera’s software. Ordinary file transfer needs USB plugged in twice. The
-              setting stays on after restarts until you disable it.
+              control the camera’s software. Ordinary file transfer needs USB plugged in twice.{' '}
+              <span class="gs-writes">
+                It changes a camera setting that stays on, even after restarts, until you turn it
+                off.
+              </span>
             </p>
-            <div class="gs-row">
-              <button
-                class="wb-btn"
-                disabled={!available() || !unlocked() || !props.debug || debugStep() === 'done'}
-                onClick={() => void enableDebugMode()}
-              >
-                Enable debug mode
-              </button>
-              <Show when={debugStep() !== 'done'}>
-                <span class="wb-writes">Changes a camera setting</span>
-              </Show>
-            </div>
           </div>
         </Item>
         <Item number={4} state={restarted() ? 'done' : 'todo'}>

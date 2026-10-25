@@ -17,13 +17,15 @@
   display: grid;
   grid-template-columns: 22px 1fr;
   gap: 8px;
-  align-items: center;
+  align-items: start;
   padding: 8px 10px;
 }
 .gs-step + .gs-step {
   border-top: 1px solid var(--wb-line);
 }
 .gs-number {
+  /* Centered on the first line: a 28 px button or a line of text. */
+  margin-top: 4px;
   display: grid;
   place-items: center;
   width: 20px;
@@ -47,6 +49,7 @@
   color: var(--wb-faint);
 }
 .gs-row {
+  min-height: 28px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -61,6 +64,9 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+.gs-writes {
+  color: var(--wb-amber);
 }
 .gs-note {
   margin: 0;
