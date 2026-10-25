@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-unicorn-sys"
-description = "Builds and links the pinned Unicorn ARM static archive"
+description = "Builds and links the pinned Unicorn ARM and AArch64 static archive"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -20,12 +20,12 @@ fn main() {
     let mut config = cmake::Config::new(source);
     config
         // A compiler-path change makes CMake discard its cache and rerun
-        // configuration without our -D options. Start fresh so ARM-only
-        // selection survives toolchain changes in a reused Cargo directory.
+        // configuration without our -D options. Start fresh so the selected
+        // architectures survive toolchain changes in a reused Cargo directory.
         .configure_arg("--fresh")
         .define("BUILD_SHARED_LIBS", "OFF")
         .define("UNICORN_LEGACY_STATIC_ARCHIVE", "ON")
-        .define("UNICORN_ARCH", "arm")
+        .define("UNICORN_ARCH", "arm;aarch64")
         .define("UNICORN_TCG_INTERPRETER", "OFF")
         .define("UNICORN_BUILD_TESTS", "OFF")
         .define("UNICORN_INSTALL", "OFF")
@@ -39,9 +39,9 @@ fn main() {
             line.starts_with("UNICORN_ARCH:")
                 && line
                     .split_once('=')
-                    .is_some_and(|(_, value)| value == "arm")
+                    .is_some_and(|(_, value)| value == "arm;aarch64")
         }),
-        "Unicorn must be configured for ARM only; refusing a mixed-architecture archive"
+        "Unicorn must be configured for ARM and AArch64"
     );
 
     println!(

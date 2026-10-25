@@ -1,7 +1,7 @@
 # Unicorn CPU backend
 
 Its `sys/` crate, `fujimod-unicorn-sys`, builds the pinned Unicorn source as a
-static ARM archive during Cargo builds and links the archive into each
+static ARM/AArch64 archive during Cargo builds and links the archive into each
 executable or extension. It has no features, so the archive is compiled once
 per profile. There is no runtime Unicorn library selection. Initialize the
 source submodule once in a fresh checkout:
@@ -12,8 +12,14 @@ git submodule update --init -- crates/emulator-cpu-unicorn/vendor/unicorn
 
 The sys crate's build script configures CMake and builds the archive automatically.
 The build requires CMake 3.24 or newer and a native C compiler. Configuration
-starts with a fresh CMake cache so compiler changes cannot discard the ARM-only
-selection. The build refuses a cache that selects other guest architectures.
+starts with a fresh CMake cache so compiler changes cannot discard the ARM and
+AArch64 selection. The build refuses a cache that selects other architectures.
+
+`Model::ArmV8A` opens the Cortex-A53 target with native EL3/EL2/EL1 execution,
+system-register access, native page-table translation, and instruction hooks.
+ARM32 translation filters and block accounting are not advertised for that
+target. Opaque in-process snapshots work; durable AArch64 snapshot export and
+architectural interrupt delivery are still unsupported by this raw backend.
 
 ## Exact loop execution
 

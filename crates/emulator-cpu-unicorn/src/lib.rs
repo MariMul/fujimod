@@ -11,6 +11,7 @@ mod test_support;
 use fujimod_emulator_cpu::*;
 use std::{any::Any, ffi::c_void, ptr::NonNull};
 mod architecture;
+mod aarch64;
 mod durable;
 mod ffi;
 #[cfg(test)]
@@ -47,14 +48,14 @@ impl Library {
                     .into(),
             );
         }
-        let (mode, id) = match model {
-            Model::CortexR5F => (0, 13i32),
-            Model::CortexA7 => (0, 14),
-            Model::CortexM4 => ((1 << 4) | (1 << 5), 9),
-            Model::ArmV8A => return Err("ARMv8-A Unicorn execution is not implemented".into()),
+        let (architecture, mode, id) = match model {
+            Model::CortexR5F => (1, 0, 13i32),
+            Model::CortexA7 => (1, 0, 14),
+            Model::CortexM4 => (1, (1 << 4) | (1 << 5), 9),
+            Model::ArmV8A => (2, 0, 1),
         };
         let mut raw = std::ptr::null_mut();
-        check(&self.api, unsafe { (self.api.uc_open)(1, mode, &mut raw) })?;
+        check(&self.api, unsafe { (self.api.uc_open)(architecture, mode, &mut raw) })?;
         let core = Core {
             api: self.api.clone(),
             raw,
@@ -81,7 +82,7 @@ impl Library {
         check(&core.api, unsafe {
             (core.api.uc_ctl)(raw, ffi::ctl(4, 1, 1), 1i32)
         })?;
-        if matches!(model, Model::CortexA7 | Model::CortexM4) {
+        if matches!(model, Model::CortexA7 | Model::CortexM4 | Model::ArmV8A) {
             // UC_CTL_TLB_TYPE = 12, UC_TLB_CPU = 0 (pinned unicorn.h).
             // System emulation must apply the processor's MMU/MPU view.
             check(&core.api, unsafe {
@@ -472,12 +473,12 @@ impl Cpu for Core {
             instruction_limit: true,
             shared_physical_maps: false,
             instruction_progress: false,
-            translation_filter: e.insn_filter.is_some()
+            translation_filter: self.model != Model::ArmV8A && e.insn_filter.is_some()
                 && e.retry_block.is_some()
                 && e.request_restart.is_some(),
             // The R-profile backend writes the appended pause pointer. Require
             // its ABI bit before exposing the accounting record to that backend.
-            block_accounting: e.features & 2 != 0
+            block_accounting: self.model != Model::ArmV8A && e.features & 2 != 0
                 && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
                 && e.features & ffi::FEATURE_PARALLEL_TCG != 0
                 && e.set_parallel_cpus.is_some()
@@ -489,6 +490,9 @@ impl Cpu for Core {
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
         let mut size = out.len();
+        if self.model == Model::ArmV8A {
+            return self.read_aarch64(register, out);
+        }
         let id = register_id(register)?;
         self.check(unsafe {
             (self.api.uc_reg_read2)(self.raw, id, out.as_mut_ptr().cast(), &mut size)
@@ -499,6 +503,9 @@ impl Cpu for Core {
         Ok(size)
     }
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String> {
+        if self.model == Model::ArmV8A {
+            return self.write_aarch64(register, bytes);
+        }
         let mut size = bytes.len();
         let id = register_id(register)?;
         if matches!(register, arm::PC | Register::Pc) {
@@ -516,6 +523,9 @@ impl Cpu for Core {
         })
     }
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
+        if self.model == Model::ArmV8A {
+            return Err("ARM32 coprocessor selector on an AArch64 processor".into());
+        }
         let mut raw = ffi::CpReg {
             cp: register.cp,
             is64: u32::from(register.wide),
