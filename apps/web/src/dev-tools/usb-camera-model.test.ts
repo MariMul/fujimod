@@ -1074,11 +1074,14 @@ test('service preparation, flash chunks and state regions use the owned workflow
     debugBefore: 1,
     progress: ['prepared'],
   }));
-  const backup = vi.fn<ModelSession['backupFlash']>(async (_id, _metadata, _image, sink) => {
-    sink({ offset: 4, data: Uint8Array.of(5, 6) });
-    return { device: { kind: 'serial-nand', part: 'Fixture' }, size: 2, sha256: 'b'.repeat(64) };
-  });
-  const dump = vi.fn<ModelSession['dumpState']>(async (_id, sink) => {
+  const backup = vi.fn<ModelSession['backupFlash']>(
+    async (_id, _metadata, _image, sink, progress) => {
+      sink({ offset: 4, data: Uint8Array.of(5, 6) });
+      progress?.(2, 2);
+      return { device: { kind: 'serial-nand', part: 'Fixture' }, size: 2, sha256: 'b'.repeat(64) };
+    },
+  );
+  const dump = vi.fn<ModelSession['dumpState']>(async (_id, sink, progress) => {
     sink({
       name: 'dram',
       address: 4096,
@@ -1087,6 +1090,7 @@ test('service preparation, flash chunks and state regions use the owned workflow
       sha256: 'c'.repeat(64),
       data: Uint8Array.of(7, 8),
     });
+    progress?.(2, 2);
   });
   vi.spyOn(device, 'acquireSession').mockImplementation(async (...args) => ({
     ...(await acquire(...args)),
@@ -1121,19 +1125,31 @@ test('service preparation, flash chunks and state regions use the owned workflow
   try {
     await idle(f.model);
     const chunk = vi.fn(),
-      region = vi.fn();
+      region = vi.fn(),
+      byteProgress = vi.fn();
     await f.model.withSession(device.id, 'workflows', async (session) => {
       expect(await session.prepareServiceSession('sample-1')).toEqual({
         guardBefore: 0,
         debugBefore: 1,
         progress: ['prepared'],
       });
-      expect((await session.backupFlash('sample-1', chunk)).sha256).toBe('b'.repeat(64));
-      await session.dumpState('sample-1', region);
+      expect((await session.backupFlash('sample-1', chunk, byteProgress)).sha256).toBe(
+        'b'.repeat(64),
+      );
+      await session.dumpState('sample-1', region, byteProgress);
     });
     expect(f.model.cameras()[0]).toMatchObject({ serviceMode: true, debugMode: 'on' });
     expect(prepare).toHaveBeenCalledExactlyOnceWith('{}', 'sample-1', 'a'.repeat(64));
-    expect(backup).toHaveBeenCalledWith('sample-1', '{"schema":1}', Uint8Array.of(1, 2, 3), chunk);
+    expect(backup).toHaveBeenCalledWith(
+      'sample-1',
+      '{"schema":1}',
+      Uint8Array.of(1, 2, 3),
+      chunk,
+      byteProgress,
+    );
+    expect(dump).toHaveBeenCalledExactlyOnceWith('sample-1', region, byteProgress);
+    expect(byteProgress).toHaveBeenCalledTimes(2);
+    expect(byteProgress).toHaveBeenCalledWith(2, 2);
     expect(chunk).toHaveBeenCalledExactlyOnceWith({ offset: 4, data: Uint8Array.of(5, 6) });
     expect(region).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'dram', data: Uint8Array.of(7, 8) }),

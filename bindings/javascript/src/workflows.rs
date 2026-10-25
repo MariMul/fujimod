@@ -241,6 +241,7 @@ pub(crate) struct StateDump {
     state: fujimod_catalog::capture::FirmwareState,
     limits: Limits,
     sink: js_sys::Function,
+    progress: Option<js_sys::Function>,
 }
 pub(crate) struct FlashBackup {
     bulk: fujimod_catalog_bulk::FirmwareBulk,
@@ -249,6 +250,23 @@ pub(crate) struct FlashBackup {
     image: Vec<u8>,
     limits: Limits,
     sink: js_sys::Function,
+    progress: Option<js_sys::Function>,
+}
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(typescript_type = "ByteProgress")]
+    pub type ByteProgressCallback;
+}
+fn progress_callback(
+    value: Option<ByteProgressCallback>,
+) -> Result<Option<js_sys::Function>, JsValue> {
+    value
+        .map(|callback| {
+            callback
+                .dyn_into()
+                .map_err(|_| workflow_error("Progress callback must be a function"))
+        })
+        .transpose()
 }
 #[wasm_bindgen]
 impl Session {
@@ -258,6 +276,7 @@ impl Session {
         firmware_id: &str,
         #[wasm_bindgen(unchecked_param_type = "(region: CapturedStateRegion) => void")]
         sink: js_sys::Function,
+        progress: Option<ByteProgressCallback>,
     ) -> Result<js_sys::Promise, JsValue> {
         let selection = crate::reference::resolve(firmware_id)?;
         let bulk = selection
@@ -270,6 +289,7 @@ impl Session {
             bulk,
             state,
             sink,
+            progress: progress_callback(progress)?,
             limits: Limits {
                 memory: self.limits.memory,
                 configuration: self.limits.configuration,
@@ -286,6 +306,7 @@ impl Session {
             unchecked_param_type = "(piece: { offset: number; data: Uint8Array }) => void"
         )]
         sink: js_sys::Function,
+        progress: Option<ByteProgressCallback>,
     ) -> Result<js_sys::Promise, JsValue> {
         let selection = crate::reference::resolve(firmware_id)?;
         let bulk = selection
@@ -307,23 +328,36 @@ impl Session {
         payload
             .validate(&flash, &bulk, &image)
             .map_err(workflow_error)?;
-        self.call(Operation::FlashBackup(FlashBackup {
+        self.call(Operation::FlashBackup(Box::new(FlashBackup {
             bulk,
             flash,
             payload,
             image,
             sink,
+            progress: progress_callback(progress)?,
             limits: Limits {
                 memory: self.limits.memory,
                 configuration: self.limits.configuration,
             },
-        }))
+        })))
     }
 }
 fn sink_error(error: JsValue) -> String {
     error
         .as_string()
         .unwrap_or_else(|| format!("Download callback failed: {error:?}"))
+}
+fn byte_progress(callback: Option<&js_sys::Function>, done: u64, total: u64) -> Result<(), String> {
+    if let Some(callback) = callback {
+        callback
+            .call2(
+                &JsValue::UNDEFINED,
+                &JsValue::from_f64(done as f64),
+                &JsValue::from_f64(total as f64),
+            )
+            .map_err(sink_error)?;
+    }
+    Ok(())
 }
 impl StateDump {
     pub(crate) async fn run(self, session: &mut usb::ff80::Session) -> Result<JsValue, JsValue> {
@@ -345,6 +379,7 @@ impl StateDump {
                     .map(|_| ())
                     .map_err(sink_error)
             },
+            &mut |done, total| byte_progress(self.progress.as_ref(), done, total),
         )
         .await
         .map_err(capture_error)?;
@@ -360,14 +395,17 @@ impl FlashBackup {
             &self.payload,
             &self.image,
             self.limits,
-            &mut |offset, data| {
-                let piece = js_sys::Object::new();
-                property(&piece, "offset", offset as f64);
-                property(&piece, "data", crate::error::bytes(data));
-                self.sink
-                    .call1(&JsValue::UNDEFINED, &piece)
-                    .map(|_| ())
-                    .map_err(sink_error)
+            &mut fujimod_workflows::flash::Callbacks {
+                chunk: &mut |offset, data| {
+                    let piece = js_sys::Object::new();
+                    property(&piece, "offset", offset as f64);
+                    property(&piece, "data", crate::error::bytes(data));
+                    self.sink
+                        .call1(&JsValue::UNDEFINED, &piece)
+                        .map(|_| ())
+                        .map_err(sink_error)
+                },
+                progress: &mut |done, total| byte_progress(self.progress.as_ref(), done, total),
             },
         )
         .await
@@ -390,6 +428,7 @@ fn capture_error(source: bulk::BulkError) -> JsValue {
 }
 #[wasm_bindgen(typescript_custom_section)]
 const CAPTURE_TYPES: &str = r#"
+export type ByteProgress = (done: number, total: number) => void;
 export interface CapturedStateRegion {
     name: string;
     address: number;

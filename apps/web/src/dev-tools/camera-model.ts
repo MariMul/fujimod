@@ -110,18 +110,22 @@ export interface ToolSession {
   /**
    * Copy the whole internal flash through the firmware's own reader, calling
    * `chunk` with each piece in read order. Restores everything it borrowed.
+   * Progress counts delivered flash bytes, excluding the control read.
    */
   backupFlash(
     firmwareId: string,
     chunk: (piece: { offset: number; data: Uint8Array }) => void,
+    progress?: (done: number, total: number) => void,
   ): Promise<FlashBackup>;
   /**
    * Read every region of the firmware's camera state (DRAM, boot ROM, other
    * readable device state), calling `region` as each completes.
+   * Progress counts read bytes, including both reads of constant regions.
    */
   dumpState(
     firmwareId: string,
     region: (piece: StateRegion & { data: Uint8Array }) => void,
+    progress?: (done: number, total: number) => void,
   ): Promise<void>;
 }
 

@@ -250,9 +250,10 @@ pub async fn backup(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
-    sink: &mut dyn FnMut(u64, Vec<u8>) -> std::result::Result<(), String>,
+    callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     payload.validate(flash, bulk, image)?;
+    (callbacks.progress)(0, flash.window.size).map_err(BulkError::Check)?;
     // The built callback profile explicitly authorizes its empty arena and
     // registered diagnostic scratch, even when the bulk catalog only has a
     // bounded scouting window. No other addresses are inferred from capacity.
@@ -361,7 +362,7 @@ pub async fn backup(
                 .await?,
         );
         let mut reader = Qualified::prepare(access.session, bulk, limits).await?;
-        let outcome = execute(&mut reader, flash, payload, image, limits, sink).await;
+        let outcome = execute(&mut reader, flash, payload, image, limits, callbacks).await;
         let restored = reader.restore().await;
         bulk::finish(outcome, restored)
     }
@@ -440,7 +441,7 @@ async fn execute(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
-    sink: &mut dyn FnMut(u64, Vec<u8>) -> std::result::Result<(), String>,
+    callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     callback::check_code(reader, &payload.transport.checks).await?;
     callback::check_code(reader, &payload.checks).await?;
@@ -492,6 +493,7 @@ async fn execute(
             "Control chunk differs from update; no backup read",
         )?;
         let mut digest = OrderedDigest::default();
+        let mut done = 0;
         for (offset, size) in pieces(
             flash.window.size,
             u64::from(payload.buffer_capacity),
@@ -499,7 +501,9 @@ async fn execute(
         ) {
             let bytes = read(reader, flash, payload, offset, size, &mut calls).await?;
             digest.push(offset, &bytes);
-            sink(offset, bytes).map_err(BulkError::Check)?;
+            (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
+            done += size;
+            (callbacks.progress)(done, flash.window.size).map_err(BulkError::Check)?;
         }
         require(
             digest.next == flash.window.size && digest.pending.is_empty(),

@@ -243,9 +243,10 @@ pub async fn backup(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
-    sink: &mut dyn FnMut(u64, Vec<u8>) -> std::result::Result<(), String>,
+    callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     payload.validate(flash, bulk, image)?;
+    (callbacks.progress)(0, flash.window.size).map_err(BulkError::Check)?;
     require(
         configuration::read_byte(session, ConfigurationView::Ram, 0xa3, limits.configuration)
             .await?
@@ -285,7 +286,7 @@ pub async fn backup(
         stock: stock_callback as u32,
         outputs: source_state & !bulk.code_alias,
     };
-    let outcome = execute(&mut reader, &query, bulk, flash, payload, image, sink).await;
+    let outcome = execute(&mut reader, &query, bulk, flash, payload, image, callbacks).await;
     let cleanup = async {
         reader.restore().await?;
         require(
@@ -332,7 +333,7 @@ async fn execute(
     flash: &FirmwareFlash,
     p: &Payload,
     image: &[u8],
-    sink: &mut dyn FnMut(u64, Vec<u8>) -> std::result::Result<(), String>,
+    callbacks: &mut super::Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     // Stock code is read through its uncached view before publishing any callback.
     let checks: Vec<_> = p
@@ -466,6 +467,7 @@ async fn execute(
             "Control chunk differs from update; no backup read",
         )?;
         let mut digest = super::xp5::OrderedDigest::default();
+        let mut done = 0;
         for (offset, size) in super::xp5::pieces(flash.window.size, CAPACITY, p.update_size) {
             let bytes = read(
                 reader,
@@ -481,7 +483,9 @@ async fn execute(
             )
             .await?;
             digest.push(offset, &bytes);
-            sink(offset, bytes).map_err(BulkError::Check)?;
+            (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
+            done += size;
+            (callbacks.progress)(done, flash.window.size).map_err(BulkError::Check)?;
         }
         Ok(Backup {
             device: flash.device.clone(),

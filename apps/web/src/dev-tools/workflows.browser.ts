@@ -103,12 +103,29 @@ try {
   }, firmwareId);
   console.log('Check flash backup');
   const backup = await page.evaluate(
-    async ({ firmwareId, savedId }) => {
+    async ({ firmwareId, savedId, abortProgress }) => {
       const model = window.__fujimodCameraModel!;
       const catalog = (await (await fetch('/runtime/catalog.json')).json()) as Catalog;
       const available = Boolean(catalog.firmwares.find((f) => f.id === firmwareId)?.flash_reader);
       const pieces: { offset: number; data: Uint8Array }[] = [];
       let delivered = 0;
+      const progress = { events: 0, done: 0, total: 0 };
+      const onProgress = (done: number, total: number) => {
+        if (
+          !Number.isSafeInteger(done) ||
+          !Number.isSafeInteger(total) ||
+          done < progress.done ||
+          done > total ||
+          (progress.events > 0 && total !== progress.total)
+        )
+          throw Error('Invalid flash byte progress');
+        if (progress.events === 0 && done !== 0)
+          throw Error('Flash progress did not start at zero');
+        progress.events++;
+        progress.done = done;
+        progress.total = total;
+        if (abortProgress && done > 0) throw Error('Stop at first flash byte progress');
+      };
       const digest = async (bytes: ArrayBuffer | Uint8Array<ArrayBuffer>) =>
         Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>
           byte.toString(16).padStart(2, '0'),
@@ -140,17 +157,33 @@ try {
         return digest(save.durable);
       };
       const durableBefore = await durable();
+      const verifyCleanup = async () => {
+        if (model.cameras()[0].uncertain) throw Error('Backup completion is unknown');
+        await model.withSession(model.cameras()[0].id, 'cleanup verification', async (session) => {
+          const prepared = await session.prepareServiceSession(firmwareId);
+          if (prepared.guardBefore !== 1 || prepared.debugBefore !== 1)
+            throw Error('Service flags changed during flash backup');
+        });
+        const durableAfter = await durable();
+        if (durableAfter !== durableBefore)
+          throw Error('Persistent storage changed during flash backup');
+        return durableAfter;
+      };
       try {
         const result = await model.withSession(
           model.cameras()[0].id,
           'flash verification',
           (session) =>
-            session.backupFlash(firmwareId, (piece) => {
-              pieces.push({ offset: piece.offset, data: piece.data.slice() });
-              delivered += piece.data.length;
-              if (delivered % (16 * 1024 * 1024) === 0)
-                console.log(`Flash backup: ${delivered / 1048576} MiB delivered`);
-            }),
+            session.backupFlash(
+              firmwareId,
+              (piece) => {
+                pieces.push({ offset: piece.offset, data: piece.data.slice() });
+                delivered += piece.data.length;
+                if (delivered % (16 * 1024 * 1024) === 0)
+                  console.log(`Flash backup: ${delivered / 1048576} MiB delivered`);
+              },
+              onProgress,
+            ),
         );
         let end = 0;
         const image = new Uint8Array(result.size);
@@ -160,36 +193,51 @@ try {
           end += piece.data.length;
         }
         if (end !== result.size) throw Error('Flash chunks do not cover the whole device');
+        if (progress.events < 2 || progress.done !== result.size || progress.total !== result.size)
+          throw Error('Flash progress did not cover the whole device');
         const independentSha256 = await digest(image);
         if (independentSha256 !== result.sha256) throw Error('Independent flash digest differs');
-        await model.withSession(model.cameras()[0].id, 'cleanup verification', async (session) => {
-          const prepared = await session.prepareServiceSession(firmwareId);
-          if (prepared.guardBefore !== 1 || prepared.debugBefore !== 1)
-            throw Error('Service flags changed during flash backup');
-        });
-        const durableAfter = await durable();
-        if (durableAfter !== durableBefore)
-          throw Error('Persistent storage changed during flash backup');
+        const durableAfter = await verifyCleanup();
         return {
           status: 'complete',
           independentSha256,
           durableBefore,
           durableAfter,
           chunks: pieces.length,
+          progress,
           ...result,
         };
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
+        if (abortProgress && reason.includes('Stop at first flash byte progress')) {
+          if (
+            progress.events < 2 ||
+            progress.done <= 0 ||
+            progress.done >= progress.total ||
+            pieces.length !== 1
+          )
+            throw Error('Flash progress did not stop after the first chunk');
+          return {
+            status: 'progress-interrupted',
+            progress,
+            chunks: pieces.length,
+            durableBefore,
+            durableAfter: await verifyCleanup(),
+          };
+        }
         if (available || pieces.length || !reason.includes('no built flash reader')) throw error;
         return { status: 'unavailable', reason };
       }
     },
-    { firmwareId, savedId },
+    { firmwareId, savedId, abortProgress: process.env.FUJIMOD_TEST_ABORT_FLASH_PROGRESS === '1' },
   );
   console.log(`Flash backup: ${backup.status}`);
   if (process.env.FUJIMOD_TEST_STATE === '0') {
     await writeFile(
-      new URL(`${firmwareId}-service.json`, output),
+      new URL(
+        `${firmwareId}-${process.env.FUJIMOD_TEST_ABORT_FLASH_PROGRESS === '1' ? 'progress-' : ''}service.json`,
+        output,
+      ),
       JSON.stringify({ preparation, backup }, null, 2),
     );
     assert.deepEqual(errors, []);
@@ -199,7 +247,7 @@ try {
     );
   } else {
     console.log('Dump catalog state');
-    const regions = await page.evaluate(async (firmwareId) => {
+    const state = await page.evaluate(async (firmwareId) => {
       const model = window.__fujimodCameraModel!;
       const regions: {
         name: string;
@@ -208,26 +256,49 @@ try {
         constant: boolean;
         sha256: string;
       }[] = [];
+      const progress = { events: 0, done: 0, total: 0, beforeFirstRegion: false };
       await model.withSession(model.cameras()[0].id, 'state verification', (session) =>
-        session.dumpState(firmwareId, (piece) => {
-          if (piece.data.length !== piece.size) throw Error('Region length differs');
-          regions.push({
-            name: piece.name,
-            address: piece.address,
-            size: piece.size,
-            constant: piece.constant,
-            sha256: piece.sha256,
-          });
-        }),
+        session.dumpState(
+          firmwareId,
+          (piece) => {
+            if (piece.data.length !== piece.size) throw Error('Region length differs');
+            regions.push({
+              name: piece.name,
+              address: piece.address,
+              size: piece.size,
+              constant: piece.constant,
+              sha256: piece.sha256,
+            });
+          },
+          (done, total) => {
+            if (
+              !Number.isSafeInteger(done) ||
+              !Number.isSafeInteger(total) ||
+              done < progress.done ||
+              done > total ||
+              (progress.events > 0 && total !== progress.total)
+            )
+              throw Error('Invalid state byte progress');
+            if (progress.events === 0 && done !== 0)
+              throw Error('State progress did not start at zero');
+            progress.events++;
+            progress.done = done;
+            progress.total = total;
+            if (regions.length === 0 && done > 0 && done < total) progress.beforeFirstRegion = true;
+          },
+        ),
       );
-      return regions;
+      if (!progress.beforeFirstRegion || progress.done !== progress.total || progress.events < 3)
+        throw Error('State byte progress did not cover the catalog');
+      return { regions, progress };
     }, firmwareId);
+    const { regions } = state;
     assert.ok(regions.some((r) => !r.constant && r.size > 0));
     assert.ok(regions.every((r) => /^[a-f0-9]{64}$/.test(r.sha256)));
     assert.deepEqual(errors, []);
     await writeFile(
       new URL(`${firmwareId}.json`, output),
-      JSON.stringify({ preparation, backup, regions }, null, 2),
+      JSON.stringify({ preparation, backup, ...state }, null, 2),
     );
     await page.evaluate(() =>
       window.__fujimodCameraModel!.remove(window.__fujimodCameraModel!.cameras()[0].id),

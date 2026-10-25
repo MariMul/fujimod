@@ -14,12 +14,14 @@ pub struct CapturedRegion {
 /// Capture each region in catalog order. Constant regions are compared before
 /// delivery. All-zero or all-FF constants are masked and omitted. A sink error
 /// stops the capture and still restores the borrowed bulk mapping.
+/// Byte progress includes both reads of constant regions, excluding qualification.
 pub async fn dump(
     session: &mut Session,
     bulk: &FirmwareBulk,
     state: &FirmwareState,
     limits: Limits,
     sink: &mut dyn FnMut(CapturedRegion) -> std::result::Result<(), String>,
+    progress: &mut dyn FnMut(u64, u64) -> std::result::Result<(), String>,
 ) -> bulk::Result<()> {
     state.validate().map_err(bulk::BulkError::Check)?;
     if state.firmware_id != bulk.firmware_id {
@@ -27,6 +29,22 @@ pub async fn dump(
             "State and bulk firmware differ".into(),
         ));
     }
+    let total = state
+        .regions
+        .iter()
+        .try_fold(0u64, |total, region| {
+            region
+                .size
+                .checked_mul(if region.constant { 2 } else { 1 })
+                .and_then(|size| total.checked_add(size))
+        })
+        .ok_or(bulk::BulkError::Check("State byte total overflows".into()))?;
+    progress(0, total).map_err(bulk::BulkError::Check)?;
+    let mut done = 0;
+    let mut advance = |bytes| {
+        done += bytes;
+        progress(done, total)
+    };
     // The state catalog explicitly authorizes additional apertures, including
     // boot ROM outside DRAM. Do not infer readability from a bulk capacity.
     let mut facts = bulk.clone();
@@ -53,9 +71,9 @@ pub async fn dump(
                 address: region.address,
                 size: region.size,
             };
-            let data = reader.read(range).await?;
+            let data = reader.read_progress(range, &mut advance).await?;
             if region.constant {
-                if reader.read(range).await? != data {
+                if reader.read_progress(range, &mut advance).await? != data {
                     return Err(bulk::BulkError::Check(format!(
                         "Constant state region {} changed between reads",
                         region.name

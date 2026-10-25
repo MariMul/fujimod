@@ -9,6 +9,13 @@ use fujimod_usb::ff80::Session;
 use serde::{Deserialize, Serialize};
 pub use xp5::Backup;
 
+/// Data delivery and logical flash-byte progress. Progress starts at zero and
+/// advances after each successfully delivered chunk, excluding the control read.
+pub struct Callbacks<'a> {
+    pub chunk: &'a mut dyn FnMut(u64, Vec<u8>) -> Result<(), String>,
+    pub progress: &'a mut dyn FnMut(u64, u64) -> Result<(), String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum Payload {
@@ -53,11 +60,15 @@ pub async fn backup(
     payload: &Payload,
     image: &[u8],
     limits: Limits,
-    sink: &mut dyn FnMut(u64, Vec<u8>) -> std::result::Result<(), String>,
+    callbacks: &mut Callbacks<'_>,
 ) -> bulk::Result<Backup> {
     match payload {
-        Payload::Xp5Command(p) => xp5::backup(session, bulk, flash, p, image, limits, sink).await,
-        Payload::Exr2Query(p) => exr2::backup(session, bulk, flash, p, image, limits, sink).await,
+        Payload::Xp5Command(p) => {
+            xp5::backup(session, bulk, flash, p, image, limits, callbacks).await
+        }
+        Payload::Exr2Query(p) => {
+            exr2::backup(session, bulk, flash, p, image, limits, callbacks).await
+        }
     }
 }
 #[cfg(feature = "artifact-build")]

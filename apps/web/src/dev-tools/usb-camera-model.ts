@@ -233,11 +233,11 @@ function toolSession(
       servicePrepared();
       return result;
     },
-    backupFlash: async (firmwareId, chunk) => {
+    backupFlash: async (firmwareId, chunk, progress) => {
       const [metadata, image] = await flashReader(firmwareId);
-      return session.backupFlash(firmwareId, metadata, image, chunk);
+      return session.backupFlash(firmwareId, metadata, image, chunk, progress);
     },
-    dumpState: (firmwareId, region) => session.dumpState(firmwareId, region),
+    dumpState: (firmwareId, region, progress) => session.dumpState(firmwareId, region, progress),
   };
 }
 

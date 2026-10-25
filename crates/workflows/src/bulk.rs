@@ -130,6 +130,15 @@ impl<'a> Qualified<'a> {
     pub(crate) async fn read(&mut self, target: BulkRange) -> Result<Vec<u8>> {
         self.source.bulk(&mut self.access, target).await
     }
+    pub(crate) async fn read_progress(
+        &mut self,
+        target: BulkRange,
+        progress: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+    ) -> Result<Vec<u8>> {
+        self.source
+            .bulk_progress(&mut self.access, target, progress)
+            .await
+    }
     pub(crate) async fn restore(&mut self) -> Result<()> {
         let result = self.source.restore(&mut self.access).await;
         if result.is_err() {
@@ -387,9 +396,18 @@ impl Source {
     }
 
     async fn bulk(&self, access: &mut Access<'_>, target: BulkRange) -> Result<Vec<u8>> {
+        self.bulk_progress(access, target, &mut |_| Ok(())).await
+    }
+    async fn bulk_progress(
+        &self,
+        access: &mut Access<'_>,
+        target: BulkRange,
+        progress: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+    ) -> Result<Vec<u8>> {
         let mut reader = DataReader::new(&mut *access.session, self.window, memory_range(target)?)?;
         let mut bytes = Vec::with_capacity(target.size as usize);
         while let Some(chunk) = reader.next_chunk().await? {
+            progress(chunk.len() as u64).map_err(BulkError::Check)?;
             bytes.extend(chunk);
         }
         Ok(bytes)

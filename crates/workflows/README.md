@@ -112,6 +112,8 @@ behavior of leaving debug access disabled after success.
 `state::dump` reads the selected catalog state regions through the qualified
 bulk reader. Constant regions must agree across two reads; all-zero and all-FF
 constants are omitted as masked. Each delivered region carries a SHA-256.
+Its byte-progress callback advances during each bulk transfer, including both
+reads of constant regions and excluding path qualification.
 
 `flash::backup` uses the catalog flash contract and a separately built
 flash-reader payload. `xp5-cmd-callback` uses a temporary command callback and
@@ -124,6 +126,11 @@ covers flash-offset order. Cleanup verifies ownership and restores the callback,
 executable reservation, source, scratch and original debug gate. Unknown
 completion sends no further commands. A sink error stops capture and runs the
 same cleanup.
+`flash::Callbacks` supplies chunk delivery and byte progress separately.
+Progress starts at zero, advances after each delivered chunk and excludes the
+control read. Progress callback errors follow the same cleanup path as sink
+errors. JavaScript's final `ByteProgress` argument is optional for both capture
+methods.
 
 The EXR II payload reads corrected physical NAND main-area pages, one stock
 page-reader call at a time, under the located driver lock. It supports 512-byte

@@ -223,7 +223,7 @@ fn invoke(entry: u64, status: u8) -> Vec<fujimod_usb::testing::Exchange> {
 }
 #[test]
 fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
-    for bad_control in [false, true] {
+    for (bad_control, stop_progress) in [(false, false), (true, false), (false, true)] {
         let (bulk, flash, payload, image) = fixture();
         payload.validate(&flash, &bulk, &image).unwrap();
         let original = [7; 12];
@@ -261,6 +261,8 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(memory_read(0x4028, &[0; 8]));
         let order = if bad_control {
             vec![(0, 64)]
+        } else if stop_progress {
+            vec![(0, 64), (4096, 4096)]
         } else {
             vec![(0, 64), (4096, 4096), (0, 4096)]
         };
@@ -304,6 +306,7 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
         s.extend(cfg(247, 0, false));
         let (mut session, script) = opened(s);
         let mut chunks = Vec::new();
+        let mut progress = Vec::new();
         let result = block_on(backup(
             &mut session,
             &bulk,
@@ -311,14 +314,34 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
             &payload,
             &image,
             limits(),
-            &mut |o, d| {
-                chunks.push((o, d));
-                Ok(())
+            &mut crate::flash::Callbacks {
+                chunk: &mut |o, d| {
+                    chunks.push((o, d));
+                    Ok(())
+                },
+                progress: &mut |done, total| {
+                    progress.push((done, total));
+                    if stop_progress && done > 0 {
+                        Err("progress callback failed".into())
+                    } else {
+                        Ok(())
+                    }
+                },
             },
         ));
         if bad_control {
             assert!(result.unwrap_err().to_string().contains("Control chunk"));
             assert!(chunks.is_empty());
+            assert_eq!(progress, [(0, 8192)]);
+        } else if stop_progress {
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("progress callback failed")
+            );
+            assert_eq!(chunks.len(), 1);
+            assert_eq!(progress, [(0, 8192), (4096, 8192)]);
         } else {
             let result = result.unwrap();
             assert_eq!(
@@ -326,6 +349,7 @@ fn full_backup_restores_every_borrowed_byte_and_hashes_in_offset_order() {
                 vec![4096, 0]
             );
             assert_eq!(result.sha256, bulk::hex(&sha256_bytes(&vec![5; 8192])));
+            assert_eq!(progress, [(0, 8192), (4096, 8192), (8192, 8192)]);
         }
         assert_eq!(script.remaining(), 0);
         assert_eq!(session.state(), SessionState::Ready);

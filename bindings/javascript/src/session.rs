@@ -508,7 +508,7 @@ pub(crate) enum Operation {
     Workflow(crate::workflows::Workflow),
     Bulk(crate::workflows::BulkRead),
     StateDump(crate::workflows::StateDump),
-    FlashBackup(crate::workflows::FlashBackup),
+    FlashBackup(Box<crate::workflows::FlashBackup>),
     UploadOwned(
         fujimod_workflows::install::OwnedUpload,
         fujimod_workflows::install::UploadDestination,
