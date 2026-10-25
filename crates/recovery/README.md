@@ -84,6 +84,10 @@ no filesystem, USB, camera, or network access.
 The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
 `startup FIRMWARE DAT NEW_DIRECTORY`, and `stage-one FIRMWARE DAT NEW_DIRECTORY`.
 
+`rescue-baseline FIRMWARE DAT NEW_DIRECTORY` reconstructs the original XP4 cold
+pair before firmware-reader redirection. `Recipe::build_rescue_baseline` exposes
+the same construction for regression comparisons.
+
 `startup` and `stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units

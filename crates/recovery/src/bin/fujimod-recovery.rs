@@ -52,9 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect::<Result<Vec<_>, _>>()?;
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
-        Some(command @ ("build" | "startup" | "stage-one")) => {
+        Some(command @ ("build" | "startup" | "stage-one" | "rescue-baseline")) => {
             let (firmware, dat, output, success_hold_seconds) =
-                construction_args(&args[1..], command != "build")?;
+                construction_args(&args[1..], matches!(command, "startup" | "stage-one"))?;
             let options = StartupOptions {
                 success_hold_seconds,
             };
@@ -62,6 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let source = fs::read(dat)?;
             let files = if command == "build" {
                 recipe.build(&source)?
+            } else if command == "rescue-baseline" {
+                recipe.build_rescue_baseline(&source)?
             } else if command == "stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
             } else {
@@ -78,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-recovery list | build|startup|stage-one FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N]"
+                "Usage: fujimod-recovery list | build|startup|stage-one|rescue-baseline FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N]"
                     .into(),
             );
         }

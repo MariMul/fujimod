@@ -62,6 +62,23 @@ pub fn package(
     ])
 }
 
+/// Reconstruct the original cold card pair without the firmware-reader extension.
+pub(super) fn rescue_baseline(
+    inverted: &[u8],
+    plan: &Plan,
+    cold: &ColdStart,
+    setup: &Setup,
+    api: &FileApi,
+) -> Result<Vec<image::File>> {
+    let plan = cold_plan(inverted, plan, cold)?;
+    let ram = image::transform(inverted, &plan)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    Ok(vec![
+        image::File::new("ffinit.bin", init)?,
+        image::File::new("ffboot.bin", ram)?,
+    ])
+}
+
 fn mov_half(word: u32, register: u32, top: bool) -> Result<u32> {
     require(
         word & 0xfff0f000 == (if top { 0xe3400000 } else { 0xe3000000 }) | register << 12,

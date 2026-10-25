@@ -263,6 +263,28 @@ impl Recipe {
         )?;
         self.build_startup(source)
     }
+    /// Reproduce the original XP4 cold card pair for regression comparisons.
+    pub fn build_rescue_baseline(&self, source: &[u8]) -> Result<Vec<File>> {
+        require(
+            matches!(self.generation, Generation::Xp4),
+            "Rescue baseline requires XP4",
+        )?;
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let missing = || image::Error::Invalid("Missing XP4 rescue baseline facts".into());
+        let mut files = xp4::rescue_baseline(
+            &fujimod_firmware::invert(source),
+            self.plan.as_ref().ok_or_else(missing)?,
+            self.cold_start.as_ref().ok_or_else(missing)?,
+            self.setup.as_ref().ok_or_else(missing)?,
+            self.file_api.as_ref().ok_or_else(missing)?,
+        )?;
+        files.push(File::new(&self.update_filename, source.to_vec())?);
+        Ok(files)
+    }
     /// Construct established startup files independently of updater readiness.
     pub fn build_startup(&self, source: &[u8]) -> Result<Vec<File>> {
         self.build_startup_with_options(source, StartupOptions::default())
