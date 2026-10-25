@@ -383,7 +383,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "MAIN"
+      "short_name": "MAIN DIAL"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -555,7 +555,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "SUB"
+      "short_name": "SUB DIAL"
     },
     "raw_button": {
       "name": "RAW button",

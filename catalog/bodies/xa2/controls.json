@@ -183,7 +183,7 @@
       },
       "pushable": false,
       "positions": [],
-      "short_name": "MAIN"
+      "short_name": "MAIN DIAL"
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -620,7 +620,7 @@
       },
       "pushable": true,
       "positions": [],
-      "short_name": "SUB"
+      "short_name": "SUB DIAL"
     }
   }
 }

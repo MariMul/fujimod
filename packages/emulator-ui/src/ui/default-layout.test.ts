@@ -86,7 +86,7 @@ test('step groups become command controls', () => {
     right: 'command_control.increase',
     center: 'command_control.press',
   });
-  expect(x70!.caption).toBe('CMD');
+  expect(x70!.caption).toBe('COMMAND');
   const xq1 = nodes(defaultLayout(bodies['xq1-121']!, physical('xq1')).layout);
   expect(
     xq1.some((node) => node.kind === 'command' && node.bindings?.left === 'zoom_control.wide'),

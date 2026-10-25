@@ -486,7 +486,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "CMD"
+      "short_name": "COMMAND"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",

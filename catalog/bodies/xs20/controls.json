@@ -115,7 +115,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -349,7 +349,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "on_off_switch": {
       "name": "ON/OFF switch",

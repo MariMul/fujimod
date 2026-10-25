@@ -461,7 +461,7 @@
       },
       "pushable": true,
       "positions": [],
-      "short_name": "CMD"
+      "short_name": "COMMAND"
     },
     "control_ring": {
       "name": "Control ring",

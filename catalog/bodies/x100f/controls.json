@@ -728,7 +728,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "power_switch": {
       "name": "ON/OFF switch",
@@ -854,7 +854,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "q_button": {
       "name": "Q (quick menu) button",

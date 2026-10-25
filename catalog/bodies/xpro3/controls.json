@@ -701,7 +701,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "on_off_switch": {
       "name": "ON/OFF switch",
@@ -852,7 +852,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "fn3_button": {
       "name": "Fn3 button",

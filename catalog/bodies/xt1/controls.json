@@ -476,7 +476,7 @@
       "behavior": null,
       "pushable": false,
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -700,7 +700,7 @@
       },
       "pushable": false,
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "selector": {
       "name": "Selector/function buttons",

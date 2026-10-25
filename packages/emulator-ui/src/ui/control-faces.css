@@ -493,6 +493,32 @@
 .key-wrapper.glow .key {
   outline: 2px solid #fff;
 }
+.dial-press svg {
+  display: block;
+  width: 66px;
+  height: 60px;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dial-press .push {
+  stroke: #fff;
+  stroke-width: 2.6;
+}
+.dial-press .wheel {
+  fill: #3a3a3c;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.dial-press .ridges {
+  stroke: #8e8e93;
+  stroke-width: 2;
+}
+/* The wheel's white outline is its highlight; no ring around the icon. */
+.dial-press.glow {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 35%));
+}
 .dial-wrapper,
 .shutter-wrapper {
   width: 100%;

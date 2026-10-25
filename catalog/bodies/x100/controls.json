@@ -678,7 +678,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "CMD"
+      "short_name": "COMMAND"
     },
     "raw_button": {
       "name": "RAW button",
@@ -739,7 +739,7 @@
         "press": null
       },
       "positions": [],
-      "short_name": "CMD"
+      "short_name": "COMMAND"
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",

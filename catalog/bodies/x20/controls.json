@@ -298,7 +298,7 @@
       "behavior": null,
       "pushable": false,
       "positions": [],
-      "short_name": "MAIN"
+      "short_name": "MAIN DIAL"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -605,7 +605,7 @@
       "behavior": null,
       "pushable": false,
       "positions": [],
-      "short_name": "SUB"
+      "short_name": "SUB DIAL"
     },
     "white_balance_button": {
       "name": "WB (white balance) button",

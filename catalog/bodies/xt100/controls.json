@@ -312,7 +312,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "MAIN"
+      "short_name": "MAIN DIAL"
     },
     "function_button": {
       "name": "Fn (function) button",
@@ -469,7 +469,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "SUB"
+      "short_name": "SUB DIAL"
     },
     "selector": {
       "name": "Selector",

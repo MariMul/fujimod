@@ -371,8 +371,8 @@ test('the live panel uses catalog markings and runs combos through the session',
   );
   expect(host.querySelector('button[data-id="playback_button"] .key svg')).not.toBeNull();
   expect(host.textContent).not.toContain('OTHER');
-  expect(host.querySelector('.combo .knurl .tab.glow')).not.toBeNull();
-  expect(host.querySelector('.combo .control-short-name')?.textContent).toBe('CMD');
+  expect(host.querySelector('.combo .dial-press.glow')).not.toBeNull();
+  expect(host.querySelector('.combo .control-short-name')?.textContent).toBe('COMMAND');
   const button = host.querySelector<HTMLButtonElement>('.combo')!;
   button.dispatchEvent(new Event('pointerenter'));
   expect(session.active).toEqual(item.inputs.map((input) => input.id));

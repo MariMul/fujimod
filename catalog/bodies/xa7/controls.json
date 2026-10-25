@@ -60,7 +60,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "fn1_button": {
       "name": "Fn1 button",
@@ -304,7 +304,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "shutter_button": {
       "name": "Shutter button",

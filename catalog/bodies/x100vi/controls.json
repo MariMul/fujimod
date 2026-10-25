@@ -690,7 +690,7 @@
       },
       "pushable": true,
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "front_ring": {
       "name": "Front ring (detachable)",
@@ -848,7 +848,7 @@
       },
       "pushable": true,
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "shutter_button": {
       "name": "Shutter button",

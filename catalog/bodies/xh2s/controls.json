@@ -436,7 +436,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "rear_command_dial": {
       "name": "Rear command dial",
@@ -461,7 +461,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "power_switch": {
       "name": "ON/OFF switch",

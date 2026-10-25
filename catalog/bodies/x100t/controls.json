@@ -272,7 +272,7 @@
       },
       "pushable": true,
       "positions": [],
-      "short_name": "CMD"
+      "short_name": "COMMAND"
     },
     "delete_button": {
       "name": "Delete button (playback mode)",

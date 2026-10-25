@@ -308,7 +308,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "MAIN"
+      "short_name": "MAIN DIAL"
     },
     "sub_command_dial": {
       "name": "Sub-command dial",
@@ -333,7 +333,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "SUB"
+      "short_name": "SUB DIAL"
     },
     "flash_pop_up_switch": {
       "name": "Flash pop-up switch",

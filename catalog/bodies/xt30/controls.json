@@ -673,7 +673,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "on_off_switch": {
       "name": "ON/OFF switch",
@@ -853,7 +853,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",

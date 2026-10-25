@@ -85,7 +85,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "MAIN"
+      "short_name": "MAIN DIAL"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -442,7 +442,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "SUB"
+      "short_name": "SUB DIAL"
     },
     "lcd_monitor": {
       "name": "LCD monitor",

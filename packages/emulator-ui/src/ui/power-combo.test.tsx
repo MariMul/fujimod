@@ -16,10 +16,11 @@ test('X70 recovery draws the panel faces with command center, record, DISP/BACK 
   expect([...host.querySelectorAll('[data-part]')].map((e) => e.getAttribute('data-part'))).toEqual(
     ['command', 'key', 'key', 'positions'],
   );
-  expect(host.querySelector('.knurl .tab.glow')).toBeTruthy();
-  expect(host.querySelector('.control-short-name')?.textContent).toBe('CMD');
+  expect(host.querySelector('.dial-press.glow')).toBeTruthy();
+  expect(host.querySelector('.knurl')).toBeNull();
+  expect(host.querySelector('.control-short-name')?.textContent).toBe('COMMAND');
   expect(host.querySelector('.key.rec i')).toBeTruthy();
-  expect(host.querySelectorAll('.key.glow')).toHaveLength(3);
+  expect(host.querySelectorAll('.key.glow')).toHaveLength(2);
   expect(host.textContent).toContain('DISP\nBACK');
   expect(host.querySelector('.seg .on')?.textContent).toBe('ON');
   expect(host.querySelectorAll('button')).toHaveLength(0);
@@ -44,7 +45,7 @@ for (const held of ['decrease', 'press', 'increase'] as const) {
     const host = document.createElement('div');
     const dispose = render(
       () => (
-        <CommandFace part={{ kind: 'command', marking: { shortName: 'CMD' }, held }} size="mini" />
+        <CommandFace part={{ kind: 'command', marking: { shortName: 'COMMAND' }, held }} size="mini" />
       ),
       host,
     );

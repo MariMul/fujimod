@@ -574,7 +574,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -766,7 +766,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",

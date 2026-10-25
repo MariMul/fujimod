@@ -30,7 +30,7 @@ test('each mechanism maps to its drawing and held part', () => {
   });
   expect(controlPart(control('command_control'), 'press')).toEqual({
     kind: 'command',
-    marking: { shortName: 'CMD' },
+    marking: { shortName: 'COMMAND' },
     held: 'press',
   });
   for (const action of ['decrease', 'increase'])

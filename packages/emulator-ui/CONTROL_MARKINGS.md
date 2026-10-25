@@ -17,8 +17,9 @@ control's appearance by matching its manual name.
   enum, serialized in snake case: `playback`, `delete`, `record` (the red
   movie-record dot), `flash`. A new symbol is a new enum variant.
 - `short_name: Option<String>`: the name used beside a control that carries no
-  printed marking, at most 10 uppercase characters (`CMD`, `FRONT`, `REAR`,
-  `MAIN`, `SUB`, `EV`, `SPEED`, `APERTURE`, `FOCUS`, `MODE`, `DRIVE`, `ZOOM`).
+  printed marking, at most 10 uppercase characters, spelled out where it fits
+  (`COMMAND`, `FRONT DIAL`, `REAR DIAL`, `MAIN DIAL`, `SUB DIAL`, `EV`, `SPEED`,
+  `APERTURE`, `FOCUS`, `MODE`, `DRIVE`, `ZOOM`).
 
 The catalog check fails when a non-mechanical, non-touch control has none of
 `face`, `icon` or `short_name`, and when any field breaks the limits above.
@@ -74,7 +75,9 @@ interactive wrapper. The drawing parts move to `src/ui/control-faces.tsx`:
 takes a `ControlPart` and a `size: 'panel' | 'mini'`, and draws the held part
 with the panel's `glow` highlight, the one that marks a combo's controls when
 the combo is hovered. A key glows as a whole; a command control glows only at
-its center or the held side, a D-pad only at the held direction. The panel's `Key`, `Shutter`, `Dial` and
+its held side, a D-pad only at the held direction. A mini command control
+whose press is held is drawn as its own icon instead: the knurled wheel seen
+edge-on with an arrow pushing into it, without the turn arrows. The panel's `Key`, `Shutter`, `Dial` and
 D-pad/command nodes wrap these with `ControlSession` handlers, so a change to
 how a control looks reaches every place it appears.
 
@@ -139,7 +142,7 @@ layouts" section of `apps/web/EMULATOR_UI.md` is rewritten to point here.
 - Unit tests map every boot hold of every body through `controlPart` without
   error and cover each row of the mapping table.
 - Component tests draw the X70's `sd` and `firmware_update` sequence: the
-  command control with its center held and `CMD` beside it, the record key,
+  pressed command dial with `COMMAND` beside it, the record key,
   the DISP/BACK key, and the power switch at ON.
 - A development-only page at `/review/power-combos/` draws every body's SD
   sequence at phone width for visual review, titled with each body's model

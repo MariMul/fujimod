@@ -78,7 +78,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "REAR"
+      "short_name": "REAR DIAL"
     },
     "on_off_button": {
       "name": "ON/OFF button",
@@ -300,7 +300,7 @@
         "endless": null
       },
       "positions": [],
-      "short_name": "FRONT"
+      "short_name": "FRONT DIAL"
     },
     "shutter_button": {
       "name": "Shutter button",
