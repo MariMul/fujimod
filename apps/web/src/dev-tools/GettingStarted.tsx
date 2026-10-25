@@ -182,6 +182,7 @@ export function GettingStarted(props: {
         : props.results.backup
           ? 'done'
           : 'todo';
+  const debugDisabled = () => !available() || !unlocked() || !props.debug || debugStep() === 'done';
   const debugStep = (): Step =>
     running() === 'debug'
       ? 'running'
@@ -226,12 +227,12 @@ export function GettingStarted(props: {
           <div class="gs-stack">
             <button
               class="wb-btn"
-              disabled={!available() || !unlocked() || !props.debug || debugStep() === 'done'}
+              disabled={debugDisabled()}
               onClick={() => void enableDebugMode()}
             >
               Enable debug mode
             </button>
-            <p class="gs-note">
+            <p class={{ 'gs-note': true, 'gs-disabled': debugDisabled() }}>
               In debug mode your camera works normally, but its USB connection can also inspect and
               control the camera’s software. Ordinary file transfer needs USB plugged in twice.{' '}
               <span class="gs-writes">
