@@ -90,6 +90,7 @@ struct State {
     mprofile: Vec<Option<mprofile::Profile>>,
     aprofile: Vec<Option<aprofile::Profile>>,
     armv7a: Vec<Option<armv7a::Profile>>,
+    entry_points: Vec<Vec<Weak<observation::EntryPoints>>>,
     implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: std::collections::BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
@@ -302,6 +303,7 @@ impl Board {
             mprofile: (0..n).map(|_| None).collect(),
             aprofile: (0..n).map(|_| None).collect(),
             armv7a: (0..n).map(|_| None).collect(),
+            entry_points: (0..n).map(|_| Vec::new()).collect(),
             implementation_cluster: Default::default(),
             unmodeled_system: Default::default(),
             processor_deadlines: vec![None; n],
@@ -1694,6 +1696,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         }
         if let Some(p) = &s.armv7a[b.core]
             && s.pins[b.core].0 && p.enter_irq(cpu)? { return Ok(()); }
+        if s.observe_entry(b.core,pc,cpu)? {return Ok(());}
         let now = s.timeline.now();
         if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
         if let Some(p) = &mut s.armv7a[b.core] {

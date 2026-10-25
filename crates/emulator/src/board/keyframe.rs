@@ -120,6 +120,7 @@ impl State {
             mprofile,
             aprofile,
             armv7a,
+            entry_points: _,
             implementation_cluster,
             unmodeled_system,
             processor_deadlines,

@@ -256,4 +256,54 @@ mod tests {
                 .is_err()
         );
     }
+    #[test]
+    fn zero_address_observation_stops_before_emulation_and_counts_each_resumed_instruction_once() {
+        let graph: factory::Graph = serde_json::from_value(json!({
+            "processors":[{"model":"cortex-a7","released":true,"mprofile":null,"rprofile":null,
+                "registers":[["Pc",0],["Pstate",0xd3]]}],
+            "ram":[{"base":0,"size":0x1000}],
+            "mappings":[{"core":0,"address":0,"physical":0,"size":0x1000,"permissions":7}],
+            "dma_mappings":[{"address":0,"physical":0,"size":0x1000,"permissions":3}],
+            "peripherals":[],"decoders":[],"instructions_per_tick":[1,1]
+        }))
+        .unwrap();
+        let mut b = graph
+            .build(
+                factory::Options::new(factory::Engine::Unicorn)
+                    .with_translation_cache_size_bytes(1 << 20),
+                Bus::new(Mode::Strict),
+                None,
+            )
+            .unwrap();
+        b.configure_armv7a(
+            0,
+            Config {
+                mpidr: 0,
+                configuration_base: 0xffff0000,
+                cycles_per_tick: 1,
+            },
+        )
+        .unwrap();
+        b.write_physical(
+            0,
+            &[0xe3a00007u32, 0xe2800001, 0xeafffffc]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let mut points = b.instruction_points_begin(0, vec![0]).unwrap();
+        b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(points.event(), Some(0));
+        assert_eq!(b.instruction_counts(), [0]);
+        assert_eq!(b.read_register(0, arm::CORE[0]).unwrap(), 0);
+        assert_eq!(b.read_register(0, Register::Pc).unwrap(), 0);
+        b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(points.event(), Some(0));
+        assert_eq!(b.instruction_counts(), [3]);
+        assert_eq!(b.read_register(0, arm::CORE[0]).unwrap(), 8);
+        b.instruction_points_end(0, &mut points).unwrap();
+        b.run_for_instructions(3, 10).unwrap();
+        assert_eq!(b.instruction_counts(), [6]);
+    }
 }
