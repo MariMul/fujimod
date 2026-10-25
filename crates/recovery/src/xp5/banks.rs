@@ -125,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn copies_are_hashed_and_edits_cannot_modify_stack_guest_or_unloaded_padding() {
+    fn copies_are_hashed_and_edits_cannot_modify_stack_loader_or_unloaded_padding() {
         let (banks, prefix, mut raw) = fixture();
         assert_eq!(banks.end(0x1000, 0x38800).unwrap(), 0x3010);
         banks

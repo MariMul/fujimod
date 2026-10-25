@@ -1,5 +1,5 @@
 //! Checked firmware-reader overrides and immutable card backing.
-use super::guest;
+use super::sd_loader;
 use crate::{
     Proof,
     image::{self, Plan, Result, extent, hash, put, require, word},
@@ -32,9 +32,9 @@ fn branch(at: usize, target: usize, opcode: u32) -> Result<u32> {
 
 impl Transport {
     pub(super) fn install(&self, inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result<()> {
-        let layout = &guest::LAYOUT.card;
+        let layout = &sd_loader::LAYOUT.card;
         let program_base = layout.address;
-        let program_bytes = &guest::IMAGE[layout.offset..layout.offset + layout.size];
+        let program_bytes = &sd_loader::IMAGE[layout.offset..layout.offset + layout.size];
         let program_end = program_base + program_bytes.len();
         let source = extent(
             inverted,
@@ -165,7 +165,7 @@ mod tests {
     use super::*;
 
     fn fixture() -> (Transport, Vec<u8>, Plan) {
-        let mut ram = vec![0; guest::LAYOUT.card.address + 0x1000];
+        let mut ram = vec![0; sd_loader::LAYOUT.card.address + 0x1000];
         put(&mut ram, 0x150, 0xe3500000).unwrap();
         put(&mut ram, 0x154, 0x0b0003fe).unwrap();
         let proof = |address, size| Proof {
@@ -208,7 +208,7 @@ mod tests {
         assert_eq!(
             word(
                 &ram,
-                guest::LAYOUT.card.address + guest::LAYOUT.card.symbols["card_firmware_config"]
+                sd_loader::LAYOUT.card.address + sd_loader::LAYOUT.card.symbols["card_firmware_config"]
             )
             .unwrap(),
             tail as u32
@@ -221,12 +221,12 @@ mod tests {
         transport.backing_address = transport.address_limit - 4;
         assert!(transport.install(&[0; 128], &plan, &mut ram).is_err());
         let (transport, mut ram, plan) = fixture();
-        ram[guest::LAYOUT.card.address] = 1;
+        ram[sd_loader::LAYOUT.card.address] = 1;
         assert!(transport.install(&[0; 128], &plan, &mut ram).is_err());
         let (transport, mut ram, mut plan) = fixture();
         plan.bss.push(image::Bss {
             name: "occupied".into(),
-            address: guest::LAYOUT.card.address,
+            address: sd_loader::LAYOUT.card.address,
             size: 4096,
         });
         assert!(transport.install(&[0; 128], &plan, &mut ram).is_err());

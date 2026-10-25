@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 mod banks;
 pub use banks::Banks;
 mod template {
-    include!(concat!(env!("OUT_DIR"), "/xp5_guest.rs"));
+    include!(concat!(env!("OUT_DIR"), "/xp5_sd_loader.rs"));
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -212,7 +212,7 @@ pub fn package(
     let end = (end + 0x1ff) & !0x1ff;
     require(
         end <= address + capacity && end <= workspace,
-        "XP5 guest exceeds SRAM workspace",
+        "XP5 SD loader exceeds SRAM workspace",
     )?;
     require(
         template::PRELUDE_STACK_MAX + 512
@@ -319,7 +319,7 @@ pub fn package(
             "boot_setup_delay" => setup.delay.address as u64,
             _ => {
                 return Err(image::Error::Invalid(
-                    "Unexpected XP5 guest external".into(),
+                    "Unexpected XP5 SD loader external".into(),
                 ));
             }
         };

@@ -2,7 +2,7 @@
 use crate::image::{self, Edit, Plan, Result, extent, hash, put, require, word};
 use serde::{Deserialize, Serialize};
 const FLASH_APERTURE_BYTES: u64 = 0x08000000;
-mod guest;
+mod sd_loader;
 pub mod storage;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -201,7 +201,7 @@ pub fn ffinit(
     base: u32,
     workspace_override: Option<u32>,
 ) -> Result<Vec<u8>> {
-    let asset = &guest::LAYOUT.ffinit;
+    let asset = &sd_loader::LAYOUT.ffinit;
     let symbols = &asset.symbols;
     let text = asset.text.bytes();
     let suffix_bytes = asset.suffix.bytes();
@@ -454,7 +454,7 @@ pub fn ffinit(
 mod tests;
 
 pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
-    let asset = &guest::LAYOUT.ffinit;
+    let asset = &sd_loader::LAYOUT.ffinit;
     let symbols = &asset.symbols;
     let text = asset.text.bytes();
     let data_size = setup.continuation_offset - setup.code_offset - setup.code_size;

@@ -34,18 +34,18 @@ retaining cold reset mode. Both families use rooted section tables and checked
 source mappings; unrecognized table or update-device layouts refuse.
 
 XP5 emits raw `marble_init.bin` with the update's setup at byte zero. Its
-entry guest preserves registers and stack, initializes serial NOR access,
+entry loader preserves registers and stack, initializes serial NOR access,
 scans read timing, copies the complete source header into the boot-service
 area, applies header operations, and restores the setup entry. Device bases,
 flash pins, SD routing/power/clock operations, and status-lamp fields are
-catalog inputs with checked source spans. The guest makes no ROM calls.
+catalog inputs with checked source spans. The loader makes no ROM calls.
 
-Startup and recovery use this same entry guest, then load FAT32 `FFBOOT.BIN`
+Startup and recovery use this same entry loader, then load FAT32 `FFBOOT.BIN`
 after stock DDR setup and check its exact length and CRC32 before publishing
 the setup gate. The gate applies to cores executing that bootstrap. Stock
 setup and later startup retain internal-flash dependencies. Missing device or
 setup facts produce specific construction refusals. `Recipe::build_stage_one`
-uses the same guest and preserves the original internal-flash continuation;
+uses the same loader and preserves the original internal-flash continuation;
 it produces only `marble_init.bin`.
 
 `availability(firmware_id)` returns `can_build`, the exact missing facts, output
@@ -74,8 +74,8 @@ second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
 
-The XP4 compiled guest input is `assets/xp4-guest.generated.bin`; its companion
-`assets/xp4-guest.generated.json` describes segment offsets, symbols and ARM
+The XP4 compiled SD loader is `assets/xp4-sd-loader.generated.bin`; its companion
+`assets/xp4-sd-loader.generated.json` describes segment offsets, symbols and ARM
 relocations. The crate loads these inputs with `include_bytes!` and
 `include_str!`. They contain empty camera-data placeholders. Runtime relocation
 inserts the supplied update's setup tables and updates absolute references,
@@ -89,8 +89,8 @@ reader and primary-loader call identities, reserves its code and backing ranges,
 and preserves the conditional primary-core initialization call. Out-of-range
 reads return errors. Per-unit storage APIs retain their stock behavior.
 
-The XP5 compiled guest input is `assets/xp5-guest.generated.bin`; its companion
-`assets/xp5-guest.generated.json` gives the image size, symbol offsets, the
+The XP5 compiled SD loader is `assets/xp5-sd-loader.generated.bin`; its companion
+`assets/xp5-sd-loader.generated.json` gives the image size, symbol offsets, the
 pre-setup stack bound and the two relocations against stock setup routines. The
 build script turns that layout into constants and the crate loads the image with
 `include_bytes!`. The image contains empty camera-data placeholders; card

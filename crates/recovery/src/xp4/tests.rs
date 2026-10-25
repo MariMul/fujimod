@@ -47,11 +47,11 @@ fn setup_relocates_its_data_and_continuation_without_misreading_opcodes() {
     let region = api.load_address + 0x4000;
     assert_eq!(
         pair(&output, 0xb0, 3).unwrap(),
-        region + guest::LAYOUT.ffinit.symbols["ffinit_setup_data"] as u32,
+        region + sd_loader::LAYOUT.ffinit.symbols["ffinit_setup_data"] as u32,
     );
     assert_eq!(
         word(&output, 0xa0).unwrap(),
-        region + guest::LAYOUT.ffinit.symbols["ffinit_dram_ready"] as u32,
+        region + sd_loader::LAYOUT.ffinit.symbols["ffinit_dram_ready"] as u32,
     );
 }
 
