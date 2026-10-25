@@ -126,9 +126,12 @@ test('a flash backup with a gap is refused and unlocks nothing', async () => {
 });
 
 test('the state dump adds each region as its own file', async () => {
+  let status = '';
   const p = mount({
     prepareServiceSession: async () => prepared,
     async dumpState(_firmware, region) {
+      flush();
+      status = p.host.querySelector('[role="status"]')?.textContent ?? '';
       region({
         name: 'boot-rom',
         address: 0x80000000,
@@ -142,6 +145,7 @@ test('the state dump adds each region as its own file', async () => {
   button(p.host, 'Dump camera state')!.click();
   await vi.waitFor(() => expect(p.results().state).toBeTruthy());
   expect(p.results().state!.regions.map((region) => region.name)).toEqual(['boot-rom']);
+  expect(status).toBe('Dumping camera state');
   expect(p.files.map((file) => file.name)).toEqual(['state-boot-rom.bin']);
   expect(p.files[0]!.meta).toMatchObject({ address: 0x80000000, constant: true, sha256: 'cd' });
 });
