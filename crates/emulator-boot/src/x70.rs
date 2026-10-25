@@ -2024,15 +2024,17 @@ pub(super) fn assemble(
         }
         if rule.name == "video_encoder" {
             use fujimod_catalog_construction::VideoEncoderBackend;
-            let selected = configuration
-                .preset
-                .as_ref()
-                .and_then(|p| p.factory_options.video_encoder_backend)
-                .unwrap_or(if cfg!(target_os = "macos") {
-                    VideoEncoderBackend::Videotoolbox
-                } else {
-                    VideoEncoderBackend::Software
-                });
+            // A prepared browser graph is portable across hosts. Native runs
+            // may request hardware encoding explicitly.
+            let selected = if browser.is_some() {
+                VideoEncoderBackend::Software
+            } else {
+                configuration
+                    .preset
+                    .as_ref()
+                    .and_then(|p| p.factory_options.video_encoder_backend)
+                    .unwrap_or(VideoEncoderBackend::Software)
+            };
             recipe["options"]["backend"] = json!(selected);
         }
         apply_soc_blocks(&mut recipe, rule, selection)?;

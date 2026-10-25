@@ -677,6 +677,8 @@ mod tests {
             first_start: None,
             bulk: None,
             settings: None,
+            flash: None,
+            state: None,
         };
         let graph = assemble(
             &selection,

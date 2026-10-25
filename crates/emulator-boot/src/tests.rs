@@ -789,14 +789,9 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
 fn video_encoder_backend_is_selected_in_the_prepared_graph() {
     use fujimod_catalog_construction::VideoEncoderBackend;
     let base = prepare("x70-110-rec", &[]).unwrap();
-    let expected = if cfg!(target_os = "macos") {
-        "videotoolbox"
-    } else {
-        "software"
-    };
     assert_eq!(
         model(&base, "video_encoder")["options"]["backend"],
-        expected
+        "software"
     );
     for (backend, name) in [
         (VideoEncoderBackend::Software, "software"),
@@ -891,4 +886,27 @@ fn raw_readback_duration_is_an_explicit_prepared_input() {
             .unwrap()
             .contains("positive virtual transfer ticks")
     );
+}
+
+#[test]
+fn browser_graphs_select_portable_encoding_on_every_host() {
+    use fujimod_catalog_construction::VideoEncoderBackend;
+    for overlay in ["x70-110-browser-camera", "x70-110-browser-usb"] {
+        let mut resolved =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &[overlay.into()]).unwrap();
+        if resolved.configuration.browser_camera.is_some() {
+            resolved
+                .configuration
+                .preset
+                .as_mut()
+                .unwrap()
+                .factory_options
+                .video_encoder_backend = Some(VideoEncoderBackend::Videotoolbox);
+        }
+        let run = prepared(resolved).unwrap();
+        assert_eq!(
+            model(&run, "video_encoder")["options"]["backend"],
+            "software"
+        );
+    }
 }
