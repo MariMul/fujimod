@@ -22,6 +22,7 @@ pub mod parts;
 pub mod math;
 pub mod record;
 pub mod signals;
+pub mod storage_reads;
 #[doc(hidden)]
 pub mod test_host;
 pub mod work;
