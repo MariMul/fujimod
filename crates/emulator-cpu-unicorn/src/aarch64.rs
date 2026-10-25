@@ -118,6 +118,34 @@ mod tests {
         u64::from_le_bytes(bytes)
     }
     #[test]
+    fn physical_affinity_is_visible_to_el3_without_overwriting_x0() {
+        let cpu = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.write_register(Register::Pstate, &0x3cdu64.to_le_bytes())
+            .unwrap();
+        cpu.write_register(Register::X(0), &123u64.to_le_bytes())
+            .unwrap();
+        let mpidr = Register::Arm64System(arm::SystemRegister::from_encoding(0xc005));
+        cpu.write_register(mpidr, &0x80000103u64.to_le_bytes())
+            .unwrap();
+        assert_eq!(value(&cpu, mpidr), 0x80000103);
+        assert_eq!(value(&cpu, Register::X(0)), 123);
+        // MRS x1, MPIDR_EL1.
+        cpu.write_memory(0x1000, &0xd53800a1u32.to_le_bytes())
+            .unwrap();
+        cpu.run(Run {
+            begin: 0x1000,
+            until: Some(0x1004),
+            instructions: Some(1),
+            watchdog_us: 1_000_000,
+        })
+        .unwrap();
+        assert_eq!(value(&cpu, Register::X(1)), 0x80000103);
+        assert!(cpu.write_register(mpidr, &u64::MAX.to_le_bytes()).is_err());
+    }
+    #[test]
     fn a53_executes_el3_system_registers_and_eret_to_el1() {
         let cpu = crate::test_support::library()
             .open(Model::ArmV8A, 1 << 20)
