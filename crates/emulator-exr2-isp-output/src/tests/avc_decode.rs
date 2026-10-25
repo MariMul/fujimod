@@ -94,10 +94,10 @@ fn native_bank_padding_is_consumed_by_annex_b_boundaries_before_clocked_dma_and_
         &bytes[..first_extent]
     );
     assert_eq!(state["decode"]["last_output"]["width"], 64);
-    assert_eq!(state["decode"]["last_output"]["stride"], 128);
+    assert_eq!(state["decode"]["last_output"]["stride"], 64);
     assert_eq!(
         state["decode"]["last_output"]["sha256"],
-        fujimod_emulator_devices::fingerprint::bytes(&h.ram[OUTPUT..OUTPUT + 4096])["sha256"]
+        fujimod_emulator_devices::fingerprint::bytes(&h.ram[OUTPUT..OUTPUT + 3072])["sha256"]
     );
     assert_eq!(
         state["decode"]["last_output"]["input_sha256"],
@@ -176,4 +176,35 @@ fn unsupported_or_overlapping_decoder_dma_publishes_no_success() {
     codec.write(&mut cx, 0xfff60c00, 4, 0x4000);
     assert!(cx.refusal().is_some());
     assert!(h.effects.is_empty());
+}
+
+#[test]
+fn native_adjacent_i420_frame_and_compressed_bank_fit_but_true_overlap_refuses() {
+    let packet = packets().remove(0);
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h, &packet);
+    let destination = INPUT - 64 * 32 * 3 / 2;
+    for offset in [0x400, 0x404, 0x408] {
+        write(&mut d, &mut h, 0xfff60000 + offset, destination as u32);
+    }
+    let compressed = h.ram[INPUT..INPUT + packet.len()].to_vec();
+    complete(&mut d, &mut h);
+    assert_eq!(&h.ram[INPUT..INPUT + packet.len()], compressed.as_slice());
+    let output = d.save()["decode"]["last_output"].clone();
+    assert_eq!(output["packing"], "i420");
+    assert_eq!(output["stride"], 64);
+    assert_eq!(output["bytes"], 64 * 32 * 3 / 2);
+    assert_eq!(output["destination"], destination);
+
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h, &packet);
+    write(&mut d, &mut h, 0xfff60400, (destination + 8) as u32);
+    {
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff60c00, 4, 0x4000);
+        assert!(cx.refusal().unwrap().contains("overlaps"));
+    }
+    assert_eq!(d.next_deadline(0), None);
+    assert_eq!(d.save()["decode"]["frames"], 0);
+    assert!(h.irqs.is_empty());
 }

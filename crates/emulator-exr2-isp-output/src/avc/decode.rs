@@ -95,7 +95,7 @@ impl AvcCodec {
         let slot_count = self.r(0xf1c) as usize;
         let slot = self.state.decode.next_slot as usize % slot_count;
         let destination = self.r(0x400 + slot * 4) as u64;
-        let length = sequence.width * sequence.height * 2;
+        let length = sequence.width * sequence.height * 3 / 2;
         let address = physical(destination, length)?;
         if !destination.is_multiple_of(8)
             || bases.iter().zip(sizes).any(|(base, size)| {
@@ -150,15 +150,15 @@ impl AvcCodec {
             cx.now(),
             (sequence.width * sequence.height).div_ceil(64) as u64,
         )?;
-        let digest = fujimod_emulator_devices::fingerprint::bytes(&picture.packed);
+        let digest = fujimod_emulator_devices::fingerprint::bytes(&picture.i420);
         let input_digest = fujimod_emulator_devices::fingerprint::bytes(&packet);
         let output = DecodeOutput {
             destination,
             width: sequence.width,
             height: sequence.height,
-            stride: sequence.width * 2,
-            packing: "yycbcr".into(),
-            bytes: picture.packed.len(),
+            stride: sequence.width,
+            packing: "i420".into(),
+            bytes: picture.i420.len(),
             sha256: digest["sha256"].as_str().unwrap().into(),
             completed_tick: deadline,
             slot: slot as u32,
@@ -209,7 +209,7 @@ impl AvcCodec {
             decoded: Some(output),
             decode_input: Some(receipt),
         });
-        self.payload = picture.packed.into();
+        self.payload = picture.i420.into();
         self.state.payload_length = self.payload.len();
         Ok(())
     }

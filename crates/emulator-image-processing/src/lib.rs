@@ -7,6 +7,7 @@ pub mod raw;
 pub mod resample;
 pub mod scene;
 pub mod separable;
+pub mod yuv;
 
 use fujimod_emulator_image_formation::{exposure::ExposedFrame, radiometric::Image};
 use fujimod_emulator_imaging::scene::frames::SensorDecoders;

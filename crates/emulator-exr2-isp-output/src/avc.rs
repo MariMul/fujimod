@@ -1,5 +1,5 @@
 //! Register-driven FFF60000 AVC codec. Encoding consumes packed YYCbCr;
-//! alternate decoding consumes Annex B stream banks and publishes packed frames.
+//! alternate decoding consumes Annex B stream banks and publishes I420 frames.
 //! DMA precedes status/IRQ publication. The declared clock is 64 luma samples
 //! per tick (setup/stop: two ticks), independent of host codec speed.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
@@ -380,13 +380,13 @@ impl AvcCodec {
             }
             if let Some(output) = &pending.decoded
                 && (pending.mode != 2
-                    || output.packing != "yycbcr"
+                    || output.packing != "i420"
                     || output.width < 16
                     || output.width > 1920
                     || output.height < 16
                     || output.height > 1088
-                    || output.stride != output.width * 2
-                    || output.bytes != output.stride * output.height
+                    || output.stride != output.width
+                    || output.bytes != output.stride * output.height * 3 / 2
                     || output.completed_tick != pending.deadline
                     || output.slot >= 3
                     || pending.writes

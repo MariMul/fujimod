@@ -18,10 +18,11 @@ fn configured(h: &mut TestHost, destination: u32, pitch: u32) -> ImageTransfer {
     d
 }
 #[test]
-fn addressed_copy_latches_bytes_and_commits_receipt_dma_before_status_and_irq() {
+fn conversion_latches_i420_planes_and_commits_packed_receipt_dma_before_status_and_irq() {
     let mut h = TestHost::new();
     let mut d = configured(&mut h, 0x9000, 64);
-    let source = h.ram[0x8000..0x8200].to_vec();
+    let source = h.ram[0x8000..0x8180].to_vec();
+    let expected = fujimod_emulator_image_processing::yuv::i420_to_yycbcr(64, 4, &source).unwrap();
     write(&mut d, &mut h, 0xfff64000, 0x10121);
     assert!(d.save()["last_output"].is_null());
     assert_eq!(d.save()["transfers"], 0);
@@ -32,7 +33,7 @@ fn addressed_copy_latches_bytes_and_commits_receipt_dma_before_status_and_irq() 
     assert_eq!(h.ram[0x9000], 0xa5);
     assert!(h.irqs.is_empty());
     advance_from_checkpoint(&mut d, &mut h, deadline);
-    assert_eq!(&h.ram[0x9000..0x9200], source.as_slice());
+    assert_eq!(&h.ram[0x9000..0x9200], expected.as_slice());
     assert!(h.irqs.is_empty());
     assert_eq!(read(&mut d, &mut h, 0xfff64014), 1);
     let receipt = d.save()["last_output"].clone();
@@ -44,10 +45,17 @@ fn addressed_copy_latches_bytes_and_commits_receipt_dma_before_status_and_irq() 
     assert_eq!(receipt["bytes"], 512);
     assert_eq!(receipt["completed_tick"], 2);
     assert_eq!(receipt["packing"], "yycbcr");
-    assert_eq!(receipt["source_sha256"], receipt["output_sha256"]);
+    assert_ne!(receipt["source_sha256"], receipt["output_sha256"]);
+    assert_eq!(
+        receipt["source_sha256"],
+        fujimod_emulator_devices::fingerprint::bytes(&source)["sha256"]
+    );
+    assert_eq!(receipt["source_packing"], "i420");
+    assert_eq!(receipt["source_pitch"], 64);
+    assert_eq!(receipt["source_bytes"], 384);
     assert_eq!(
         receipt["output_sha256"],
-        fujimod_emulator_devices::fingerprint::bytes(&source)["sha256"]
+        fujimod_emulator_devices::fingerprint::bytes(&expected)["sha256"]
     );
     write(&mut d, &mut h, 0xfff6401c, 0x31);
     assert_eq!(h.irqs, [(0, 73)]);
@@ -94,11 +102,28 @@ fn copy_checkpoint_rejects_changed_payload_and_busy_reconfiguration() {
     let mut d = configured(&mut h, 0x9000, 64);
     write(&mut d, &mut h, 0xfff64000, 0x10121);
     let saved = d.checkpoint().unwrap();
-    let bad = saved.clone().with_blobs(vec![vec![0u8; 512].into()]);
+    let bad = saved
+        .clone()
+        .with_blobs(vec![vec![0u8; 512].into(), saved.blobs()[1].clone()]);
     assert!(
         d.validate_checkpoint(&bad)
             .unwrap_err()
             .contains("payload differs")
+    );
+    // A matching source digest alone cannot authorize unrelated output pixels.
+    let mut source = saved.blobs()[1].to_vec();
+    source[0] ^= 1;
+    let mut metadata: serde_json::Value = saved.decode(d.name()).unwrap();
+    metadata["pending"]["source_sha256"] =
+        fujimod_emulator_devices::fingerprint::bytes(&source)["sha256"].clone();
+    let inconsistent =
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(d.name(), &metadata)
+            .unwrap()
+            .with_blobs(vec![saved.blobs()[0].clone(), source.into()]);
+    assert!(
+        d.validate_checkpoint(&inconsistent)
+            .unwrap_err()
+            .contains("conversion differs")
     );
     let before = d.fingerprint().unwrap();
     {

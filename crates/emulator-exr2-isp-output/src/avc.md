@@ -96,7 +96,12 @@ targets, syntax, modes and malformed streams refuse before output DMA.
 `400..40C` select frame destinations, `F1C=3` selects three rotating slots,
 and `F14/F18=F7F9/D8FF` select the supported syntax fields. Input banks may
 alias for a preview; output slots may alias. Input/output overlap refuses.
-Decoded 4:2:0 chroma repeats on adjacent rows in packed Y0,Y1,Cb,Cr output.
+Decoded output uses tightly packed I420 transport: full-resolution Y followed
+by quarter-resolution Cb and Cr planes. The output footprint is exactly
+`width*height*3/2`, with luma stride `width`; source/output overlap checks use
+that footprint. The paired image-transfer device expands this to packed422
+before downstream sampling. I420 plane order is the model's declared transport,
+not a claim of measured silicon plane ordering or tiling.
 
 At the virtual deadline, frame DMA completes before `C20` publishes mode 2,
 `C24` publishes frame bit 11 and `FC0` selects the completed slot. Exhausting

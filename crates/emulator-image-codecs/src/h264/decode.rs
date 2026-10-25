@@ -11,8 +11,8 @@ pub struct Sequence {
 
 pub struct Picture {
     pub sequence: Sequence,
-    /// Row-major Y0, Y1, Cb, Cr. 4:2:0 chroma is repeated on adjacent rows.
-    pub packed: Vec<u8>,
+    /// Tightly packed I420 planes: Y, then Cb, then Cr.
+    pub i420: Vec<u8>,
 }
 
 struct Bits {
@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn actual_i_and_p_picture_samples_survive_packed_conversion_and_replay() {
+    fn actual_i_and_p_picture_planes_survive_stride_normalization_and_replay() {
         let mut encoder = Codec::new(Backend::Software, config(), &[]).unwrap();
         let mut decoder = Decoder::new(&[]).unwrap();
         let mut history = Vec::<Arc<[u8]>>::new();
@@ -292,12 +292,12 @@ mod tests {
             assert_eq!(idr, frame == 0);
             let picture = decoder.decode(&packet).unwrap();
             assert_eq!((picture.sequence.width, picture.sequence.height), (64, 32));
-            assert_eq!(picture.packed.len(), 4096);
-            assert!((picture.packed[0] as i16 - if frame % 2 == 0 { 40 } else { 200 }).abs() < 12);
-            assert!((picture.packed[2] as i16 - 96).abs() < 12);
-            assert!((picture.packed[3] as i16 - 160).abs() < 12);
+            assert_eq!(picture.i420.len(), 3072);
+            assert!((picture.i420[0] as i16 - if frame % 2 == 0 { 40 } else { 200 }).abs() < 12);
+            assert!((picture.i420[64 * 32] as i16 - 96).abs() < 12);
+            assert!((picture.i420[64 * 32 * 5 / 4] as i16 - 160).abs() < 12);
             let mut replay = Decoder::new(&history).unwrap();
-            assert_eq!(replay.decode(&packet).unwrap().packed, picture.packed);
+            assert_eq!(replay.decode(&packet).unwrap().i420, picture.i420);
             history.push(packet.into());
         }
     }
@@ -433,19 +433,21 @@ impl Decoder {
                 return Err("AVC decoded dimensions differ from bounded SPS".into());
             }
             let (ys, us, vs) = image.strides();
-            let mut packed = vec![0; sequence.width * sequence.height * 2];
+            let luma = sequence.width * sequence.height;
+            let mut i420 = vec![0; luma * 3 / 2];
             for row in 0..sequence.height {
-                for pair in 0..sequence.width / 2 {
-                    let dst = (row * sequence.width / 2 + pair) * 4;
-                    packed[dst..dst + 4].copy_from_slice(&[
-                        image.y()[row * ys + pair * 2],
-                        image.y()[row * ys + pair * 2 + 1],
-                        image.u()[row / 2 * us + pair],
-                        image.v()[row / 2 * vs + pair],
-                    ]);
-                }
+                i420[row * sequence.width..(row + 1) * sequence.width]
+                    .copy_from_slice(&image.y()[row * ys..row * ys + sequence.width]);
             }
-            Ok(Picture { sequence, packed })
+            let chroma_width = sequence.width / 2;
+            for row in 0..sequence.height / 2 {
+                let start = row * chroma_width;
+                i420[luma + start..luma + start + chroma_width]
+                    .copy_from_slice(&image.u()[row * us..row * us + chroma_width]);
+                i420[luma + luma / 4 + start..luma + luma / 4 + start + chroma_width]
+                    .copy_from_slice(&image.v()[row * vs..row * vs + chroma_width]);
+            }
+            Ok(Picture { sequence, i420 })
         }
     }
 }
