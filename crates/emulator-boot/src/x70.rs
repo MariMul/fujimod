@@ -414,6 +414,7 @@ fn card_recipe(selection: &ResolvedSelection, browser: &RunBrowserCamera) -> Res
     Ok(json!({
         "kind": "sd-host",
         "options": {
+            "base": 0xfff50000u32,
             "protocol": "sdhc",
             "transfer_ticks": 100,
             "clock_ticks": 2,

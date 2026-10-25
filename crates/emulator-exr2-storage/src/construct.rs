@@ -1,5 +1,6 @@
 //! EXR II board constructors for this crate's models.
-use crate::{nand, sdhc, sdio};
+use crate::{nand, sdio};
+use fujimod_emulator_ip::sdhci::host as sdhc;
 use fujimod_emulator_devices::parts::sd_card;
 use fujimod_emulator_exr2_plan::{
     Card, Model,
@@ -53,7 +54,7 @@ fn sd_host(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device({
-        let options: crate::sdhc::Options = decode(options)?;
+        let options: sdhc::Options = decode(options)?;
         let card = match card {
             Card::Blank { options } => {
                 let options: fujimod_emulator_devices::parts::sd_card::Options = decode(options)?;

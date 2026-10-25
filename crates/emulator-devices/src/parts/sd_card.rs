@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub mod faults;
+
 pub const SECTOR: usize = 512;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -373,7 +373,7 @@ fn both_sd_hosts_own_their_clock_words_and_reject_a_competing_owner() {
         "card",
         0xfff50000,
         0x1000,
-        json!({"kind":"sd-host","options":{"protocol":"application","transfer_ticks":2,"clock_ticks":3,"rca":1,"ram_bytes":0x100000},
+        json!({"kind":"sd-host","options":{"base":0xfff50000u32,"protocol":"application","transfer_ticks":2,"clock_ticks":3,"rca":1,"ram_bytes":0x100000},
         "card":{"kind":"blank","options":{"sectors":0x400000,"max_dirty_sectors":64}},"present":true,"protected":false,"irq":{"Core":{"core":0,"line":80}}}),
     );
     let sdio = node(

@@ -5,8 +5,8 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_devices::bus::InterruptLine;
+use fujimod_emulator_ip::sdhci::host::{self as sdhc, SdHost};
 use fujimod_emulator_storage::fat;
-use fujimod_emulator_exr2_storage::sdhc::{self, SdHost};
 
 fn card_session() -> Session {
     let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
@@ -17,6 +17,7 @@ fn card_session() -> Session {
     .unwrap();
     let host = SdHost::new(
         sdhc::Options {
+            base: 0xfff50000,
             protocol: sdhc::Protocol::Sdhc,
             transfer_ticks: 2,
             clock_ticks: 2,
@@ -31,7 +32,7 @@ fn card_session() -> Session {
     )
     .unwrap();
     let mut bus = Bus::new(Mode::Strict);
-    let id = bus.register(sdhc::BASE, 0x108, Box::new(host)).unwrap();
+    let id = bus.register(0xfff50000, 0x108, Box::new(host)).unwrap();
     let analog = fujimod_emulator_exr2_io::adc::controller::Converter::new(
         fujimod_emulator_exr2_io::adc::controller::Options {
             conversion_ticks: 7,

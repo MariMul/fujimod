@@ -1,6 +1,6 @@
 //! EXR II SDIO host1, FFF51000. Owns a one-function part; no memory outside
 //! the programmed SDMA extent is inspected. Timing is declared.
-use crate::sdhc::Registers;
+use fujimod_emulator_ip::sdhci::registers::Registers;
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use fujimod_emulator_ip::sdhci::Clocks;
 use fujimod_emulator_parts_io::wifi_module::{Operation, Protocol, WifiModule};

@@ -1,7 +1,7 @@
 //! Host FAT access to the very medium owned by the native SD controller.
 use super::Session;
 use fujimod_emulator_devices::capability::CardSlot;
-use fujimod_emulator_devices::exr2::sd_faults::{DataFault, DataFaultEvent};
+use fujimod_emulator_devices::parts::sd_card::faults::{DataFault, DataFaultEvent};
 use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_storage::fat;
 

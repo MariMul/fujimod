@@ -278,3 +278,6 @@ mod tests {
         assert_eq!(sequence(0), sequence(0xdeadbeef));
     }
 }
+
+pub mod host;
+pub mod registers;
