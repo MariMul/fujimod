@@ -398,6 +398,7 @@ impl BindingError {
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     asynchronous::install();
     firmware::register(py, m, "fujimod.firmware")?;
+    recovery::register(py, m)?;
     let usb = PyModule::new(py, "fujimod.usb")?;
     usb.add("__path__", PyList::empty(py))?;
     usb.add_class::<InfoSelector>()?;
@@ -457,6 +458,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 mod asynchronous;
 mod data;
 mod firmware;
+mod recovery;
 mod research;
 mod tracing;
 

@@ -18,6 +18,8 @@ fujimod-python-usb-base = { path = "../usb-base" }
 fujimod-catalog-camera.workspace = true
 fujimod-catalog-firmware-identity.workspace = true
 fujimod-firmware.workspace = true
+fujimod-recovery.workspace = true
+serde_json.workspace = true
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true
 pyo3.workspace = true

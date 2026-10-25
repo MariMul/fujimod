@@ -2431,6 +2431,7 @@ dependencies = [
  "fujimod-catalog-firmware-identity",
  "fujimod-firmware",
  "fujimod-python-usb-base",
+ "fujimod-recovery",
  "fujimod-usb",
  "fujimod-workflows",
  "fujimod-workspace-hack",
@@ -2438,6 +2439,7 @@ dependencies = [
  "futures-lite",
  "nusb",
  "pyo3",
+ "serde_json",
 ]
 
 [[package]]

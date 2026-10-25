@@ -141,13 +141,15 @@
     },
     "packaging": null,
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "XP5 SRAM continuation without a flash tail",
-      "XP5 post-setup SD loader and gated handoff",
+      "XP5 SD host routing and clock/power operations",
       "version-independent stock updater acceptance"
     ]
   },
@@ -346,10 +348,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -553,13 +557,52 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        17
+      ],
+      "version_getter": {
+        "address": 9730920,
+        "size": 68,
+        "sha256": "8a8e5e6e462347b17a0258d05c1df59483b9e3c87cf0bf5614a18984559859d2"
+      },
+      "configuration_reader": 9730768,
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 17019324,
+        "size": 256,
+        "sha256": "894a95babd56671cb40fb80a13809c18960a50991214939ade9d77d4aeac0e38"
+      },
+      "target_major": 13162528,
+      "target_minor": 13162532,
+      "current_major": 13162536,
+      "current_minor": 13162540,
+      "version_producer": {
+        "address": 18748640,
+        "size": 264,
+        "sha256": "8c289a87c685a7a1ffbbff60e53ea2fd8819e92cd0478ba769660d3d5d86c014"
+      },
+      "producer_stop": 18748676,
+      "version_context_pointer": 23286008,
+      "version_context": 13162000,
+      "current_major_setter": {
+        "address": 18750408,
+        "size": 52,
+        "sha256": "8a91e81234dbf261f67f8bd0f76ff9594c8c8690eec23b954cc30f19cf645606"
+      },
+      "current_minor_setter": {
+        "address": 18750460,
+        "size": 52,
+        "sha256": "c2831a643fa956cc3c4f7029f85e17f4983b015ab93634412a788fb5cafaa8b1"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "x100v-301",
@@ -567,16 +610,233 @@
     "source_sha256": "18351a9a552c06ec9c70483abca1b74ab2a29fa139f19aef244e178045323591",
     "update_filename": "FPUPDATE.DAT",
     "generation": "xp4",
-    "plan": null,
+    "plan": {
+      "size": 68288512,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "30962efa249d6ef3c2992e09954ce4cc998e467fecf99c3aaca68c35047a824f"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 13762560,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "2f6500397a2471eb402e8dc3be9e6b366a998914532ca6334b03cbc518e4f5b2"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 110816,
+            "compression": "raw",
+            "decoded_size": 110816,
+            "sha256": "d499061311e8519fb8fa5d3d6a41c8bc0f37aee05ef924e404699e60e35766cd"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 25297524,
+            "size": 5967972,
+            "compression": "raw",
+            "decoded_size": 5967972,
+            "sha256": "f735f6f86be8b2f166cdf4639a55c0d7a3074c136ceaee8fccc3476703706bdd"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 8257536,
+          "source": {
+            "dat_offset": 31326836,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 13763584,
+          "source": {
+            "dat_offset": 1573492,
+            "size": 175392,
+            "compression": "raw",
+            "decoded_size": 175392,
+            "sha256": "898409ea6179c319bfe42a69bac97e45faff85872ddd5a69505d2bbdcd4832d7"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 2097780,
+            "size": 175392,
+            "compression": "raw",
+            "decoded_size": 175392,
+            "sha256": "73bcf8fa95b49132f1218c2d3b2db1ee53ace1f84760e91e2bb1caa60568d248"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 15863808,
+          "source": {
+            "dat_offset": 2622068,
+            "size": 3014656,
+            "compression": "method4",
+            "decoded_size": 6304576,
+            "sha256": "3be0132c4bb17aa7504aaaf7e6d85d037368d21f49463ea0ce1ae37a764f6c87"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 28966912,
+          "source": {
+            "dat_offset": 5636724,
+            "size": 4849664,
+            "compression": "method4",
+            "decoded_size": 8568832,
+            "sha256": "b116e52462f245b7bfa341ebf75a644baa32590d3957518dbea436456169cb35"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 57802752,
+          "source": {
+            "dat_offset": 10486388,
+            "size": 10485760,
+            "compression": "raw",
+            "decoded_size": 10485760,
+            "sha256": "cb8770127a28edff2474ce8f05d7ccb39a33a39e02801a2449182fb5843855b3"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 372960,
+          "size": 164864
+        },
+        {
+          "name": "module3",
+          "address": 13938976,
+          "size": 256704
+        },
+        {
+          "name": "module4",
+          "address": 14987552,
+          "size": 256704
+        },
+        {
+          "name": "section5",
+          "address": 22171648,
+          "size": 6795264
+        },
+        {
+          "name": "section6",
+          "address": 37535744,
+          "size": 20267008
+        }
+      ],
+      "edits": [
+        {
+          "address": 41068,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 13762568,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
     "packaging": null,
-    "setup": null,
-    "cold_start": null,
-    "file_api": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 29312,
+      "active_sha256": "ca32125443267e38a3072c6eeba28f4e1b2f99a45da675bc0d1f162d21ca4f26",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6720,
+      "code_sha256": "dd49b4dd3295d2ff2e4ed76111fdbd8fc63f343b640f8011ff434cd64b95429a",
+      "continuation_offset": 29152,
+      "continuation_address": 4026560992,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 41068,
+      "mode_test": 1484
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
     "sd_boot": null,
     "firmware_update": null,
-    "missing": [
-      "located SD startup facts"
-    ]
+    "updater": {
+      "public_version": [
+        3,
+        1
+      ],
+      "version_getter": {
+        "address": 17989772,
+        "size": 72,
+        "sha256": "e2ce3f0e69996fb85179cea8fef3e78fe63898a420fe10c871a9a296052413fa"
+      },
+      "configuration_reader": 17987656,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 30489912,
+        "size": 608,
+        "sha256": "0e84d613bc13f1ebe987b39cc9b78696a47a5e70a46197224188bb19f759ed7e"
+      },
+      "target_major": 25456644,
+      "target_minor": 25456648,
+      "current_major": 25456652,
+      "current_minor": 25456656,
+      "version_producer": {
+        "address": 33100328,
+        "size": 248,
+        "sha256": "79df5638a1cf9d838ab925feca124aede9ae029a59aeb0748d38751cf2e0594b"
+      },
+      "producer_stop": 33100364,
+      "version_context_pointer": 46813468,
+      "version_context": 25456120,
+      "current_major_setter": {
+        "address": 33103608,
+        "size": 52,
+        "sha256": "f6d192fc46e4138e44b2f60e6cd38cda5733321692a5faa5cb619429335bece1"
+      },
+      "current_minor_setter": {
+        "address": 33103660,
+        "size": 52,
+        "sha256": "ff139605493ba863cf41d17be2043f87d9eadaf54d624898cada9d46f1785570"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "x100vi-131",
@@ -720,6 +980,7 @@
     },
     "packaging": null,
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": {
@@ -734,9 +995,10 @@
       ]
     },
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "XP5 SRAM continuation without a flash tail",
-      "XP5 post-setup SD loader and gated handoff",
+      "XP5 SD host routing and clock/power operations",
       "version-independent stock updater acceptance"
     ]
   },
@@ -935,10 +1197,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -1142,10 +1406,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -1349,6 +1615,7 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": {
@@ -1368,9 +1635,47 @@
         }
       ]
     },
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        16
+      ],
+      "version_getter": {
+        "address": 9720752,
+        "size": 68,
+        "sha256": "58272bb267f3c6d5369a5f81556df6a9d44cffd4377b416f26fa8289bc176869"
+      },
+      "configuration_reader": 9720600,
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 17018892,
+        "size": 256,
+        "sha256": "9c6b84ba2dc64a696d1198280e72a5bad0b8e72b311cb3e2f27a0a1b092f31ab"
+      },
+      "target_major": 13181020,
+      "target_minor": 13181024,
+      "current_major": 13181028,
+      "current_minor": 13181032,
+      "version_producer": {
+        "address": 18769356,
+        "size": 264,
+        "sha256": "80d71ac3f04aaa2227b49c66d3b49b68ab20c3877c02a9dd73524d7990fa4605"
+      },
+      "producer_stop": 18769392,
+      "version_context_pointer": 23255636,
+      "version_context": 13180492,
+      "current_major_setter": {
+        "address": 18771124,
+        "size": 52,
+        "sha256": "36698fb9ecc84a2f1405c33b496ead8666960918097f0e57941b35c6752e1221"
+      },
+      "current_minor_setter": {
+        "address": 18771176,
+        "size": 52,
+        "sha256": "21ff3335226089bb77fe10e1da975739c3799c6b0ae9f79ccd9c06bec8c550ea"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xa1-150",
@@ -1571,10 +1876,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -1778,10 +2085,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -1985,13 +2294,52 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        4,
+        17
+      ],
+      "version_getter": {
+        "address": 9717640,
+        "size": 68,
+        "sha256": "236ab02c38febb36a0f3399b3c1b4820b5be034d1aea4797963f6381bdff7d1e"
+      },
+      "configuration_reader": 9717420,
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 17106924,
+        "size": 384,
+        "sha256": "c485a0410a4b1600e774372a5aa65b5f1892b5e1d9e62bf8a7e88449cd98bbcb"
+      },
+      "target_major": 13271552,
+      "target_minor": 13271556,
+      "current_major": 13271560,
+      "current_minor": 13271564,
+      "version_producer": {
+        "address": 18882304,
+        "size": 264,
+        "sha256": "f1baca17da909cc28d6db4341c2fb4830653fa332666d670b2158ac74a4954cb"
+      },
+      "producer_stop": 18882340,
+      "version_context_pointer": 23385556,
+      "version_context": 13271024,
+      "current_major_setter": {
+        "address": 18885116,
+        "size": 52,
+        "sha256": "90c87c02cddf3712ba6e9ed9e7a8db63e7e8a2ffd1f546fc75640c0ec851e01d"
+      },
+      "current_minor_setter": {
+        "address": 18885168,
+        "size": 52,
+        "sha256": "213356ab7d09e2098225c074055ee1029bbe0667d8b20960eb8babe295058636"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xe2s-111",
@@ -2192,13 +2540,52 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        17
+      ],
+      "version_getter": {
+        "address": 9717900,
+        "size": 68,
+        "sha256": "f5a4a62b32269563cc040c7c3fddd361a5c3018772982484c3bfbf01a942adc9"
+      },
+      "configuration_reader": 9717680,
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 17167436,
+        "size": 384,
+        "sha256": "54ef205eecde20398c033f3da14a4baf72f48edbf4fe11222307306c174462d3"
+      },
+      "target_major": 13298336,
+      "target_minor": 13298340,
+      "current_major": 13298344,
+      "current_minor": 13298348,
+      "version_producer": {
+        "address": 18943196,
+        "size": 264,
+        "sha256": "ed1a59de62da15dd58b27cf7460672674ce9c621948475c11abd1a100cb57578"
+      },
+      "producer_stop": 18943232,
+      "version_context_pointer": 23465140,
+      "version_context": 13297808,
+      "current_major_setter": {
+        "address": 18946008,
+        "size": 52,
+        "sha256": "857424e72c78993c14c76eb6275c392a507599836129e7b1612d95577f5b9e23"
+      },
+      "current_minor_setter": {
+        "address": 18946060,
+        "size": 52,
+        "sha256": "753d02f5a7c85a98c9e3963275a33443314966fd305ac7b0bfbe632f8dde3726"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xe4-201",
@@ -2206,11 +2593,190 @@
     "source_sha256": "ce80e4a88f0fffff998d3144ef51411d8285d16c06e4791c89cd36823769f8c2",
     "update_filename": "FWUP0026.DAT",
     "generation": "xp4",
-    "plan": null,
+    "plan": {
+      "size": 70909952,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "36a1bd757f2e18f07acdc951b22b256e20dfb654fefff52c4cd5208e8424dfc3"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 14811136,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "a97a5ff5247e4b52667d2b45ddfa22a5aacaf4ef966dd75625da45c309ae3ad2"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 111328,
+            "compression": "raw",
+            "decoded_size": 111328,
+            "sha256": "73377e4a729e4de0329cc41db81417b2c5c8ac0faba7b3e158cb8437390487a4"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 27263604,
+            "size": 3276800,
+            "compression": "method4",
+            "decoded_size": 6404880,
+            "sha256": "1f8681ead9a37a178b8dfbf03676d83ae7a4f003caa697d6718632d8bd016576"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 9306112,
+          "source": {
+            "dat_offset": 31064692,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 147680,
+            "compression": "raw",
+            "decoded_size": 147680,
+            "sha256": "f124568609578906c681c5e4c6090c21530c4035f9d1e0d45d5b9e142c1759a4"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 15860736,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 147680,
+            "compression": "raw",
+            "decoded_size": 147680,
+            "sha256": "5c28f677e93c3e7a1a980a3ab4537be69af08594224c44991491814dd9c59cf4"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 16912384,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 3407872,
+            "compression": "method4",
+            "decoded_size": 6930896,
+            "sha256": "54fe07ac2df616b58606261cf521d1ec8ff9ac810f6b07e639a981cb107b5bcd"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 30953472,
+          "source": {
+            "dat_offset": 5898868,
+            "size": 5242880,
+            "compression": "method4",
+            "decoded_size": 9187328,
+            "sha256": "8092a07c96c29a8d04b31fedd1da08d2f08cc2d97201e013f2c3b48986a065ef"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 61153280,
+          "source": {
+            "dat_offset": 11141748,
+            "size": 4587520,
+            "compression": "method4",
+            "decoded_size": 9756672,
+            "sha256": "c7c2d9f69496a7ddd48a4b40500885875fdfebb8b29482c96cdf2ab96269a29e"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 373472,
+          "size": 164864
+        },
+        {
+          "name": "module3",
+          "address": 14959840,
+          "size": 256320
+        },
+        {
+          "name": "module4",
+          "address": 16008416,
+          "size": 256320
+        },
+        {
+          "name": "section5",
+          "address": 23846912,
+          "size": 7106560
+        },
+        {
+          "name": "section6",
+          "address": 40140800,
+          "size": 21012480
+        }
+      ],
+      "edits": [
+        {
+          "address": 44464,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 14811144,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
     "packaging": null,
-    "setup": null,
-    "cold_start": null,
-    "file_api": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 31648,
+      "active_sha256": "22cfb96e68f74e24c231675059b796f0586474d10de72c721cfac55039d3dbf9",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6752,
+      "code_sha256": "f5f2493e8fd19eeeb44e46eb573eab2aeefffe8f170fd0b2b504d5e48b0b9738",
+      "continuation_offset": 31488,
+      "continuation_address": 4026563328,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 44464,
+      "mode_test": 1484
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
     "sd_boot": {
       "usb": false,
       "hold": [
@@ -2223,9 +2789,47 @@
       ]
     },
     "firmware_update": null,
-    "missing": [
-      "located SD startup facts"
-    ]
+    "updater": {
+      "public_version": [
+        2,
+        1
+      ],
+      "version_getter": {
+        "address": 19345312,
+        "size": 72,
+        "sha256": "bef6925d1858ac51bdc5ef046539a11ff562a617f4dd14c55c318fe1a5cd1757"
+      },
+      "configuration_reader": 19343152,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 32540732,
+        "size": 608,
+        "sha256": "00b212a990641cec2eae2ce2f0ed527ae5925fdb1872b4176cab17ff81c09375"
+      },
+      "target_major": 27165456,
+      "target_minor": 27165460,
+      "current_major": 27165464,
+      "current_minor": 27165468,
+      "version_producer": {
+        "address": 35297936,
+        "size": 248,
+        "sha256": "582dd0068ccf299e1e7454636284ac04788e01df89b35102322483eacda568a0"
+      },
+      "producer_stop": 35297972,
+      "version_context_pointer": 50680956,
+      "version_context": 27164932,
+      "current_major_setter": {
+        "address": 35301868,
+        "size": 52,
+        "sha256": "ea008b6487eccbaa38bb86a4c5dcf49162763ace70d7eddc890eb8ef7ac2c3c0"
+      },
+      "current_minor_setter": {
+        "address": 35301920,
+        "size": 52,
+        "sha256": "d1da82ca6951258237400b2e80f0db248533433c7ad1fa326878b28b62a9af5d"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xm1-101",
@@ -2233,15 +2837,207 @@
     "source_sha256": "bfc5947eab8a1d9d92e464c16a2e480b8d52753d1d32aea6d5af7fdd8e17dd72",
     "update_filename": "FWUP0002.DAT",
     "generation": "exr2",
-    "plan": null,
-    "packaging": null,
+    "plan": {
+      "size": 23837728,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 262748,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "c1c0255e6ac971a26151a083cf38f45061a8c621904fcfdf5aef61a5f0567b6f"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 6406144,
+          "source": {
+            "dat_offset": 1311324,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "9f64132250aab2b2f8bfb3dc5d7577f241ce714b0ac27f16f9aac43b68c41a5a"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 524892,
+            "size": 56032,
+            "compression": "raw",
+            "decoded_size": 56032,
+            "sha256": "21366ffff7cebc6176b8a8125bf3a9974835a51070a58ea325f7eed8aabd8882"
+          }
+        },
+        {
+          "name": "kernel1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 655964,
+            "size": 55968,
+            "compression": "raw",
+            "decoded_size": 55968,
+            "sha256": "8fb0c322a22443a3783cdab9071db17212a5629f6375646218ac1e043dc672ec"
+          }
+        },
+        {
+          "name": "module2",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 13238876,
+            "size": 2408572,
+            "compression": "raw",
+            "decoded_size": 2408572,
+            "sha256": "d528ad473b513a77177a70a02bbe4fa479dac4edd3cd41d1bb85ae21f0c1f4da"
+          }
+        },
+        {
+          "name": "resources3",
+          "address": 3915776,
+          "source": {
+            "dat_offset": 17171036,
+            "size": 492408,
+            "compression": "raw",
+            "decoded_size": 492408,
+            "sha256": "64905a96b70be3ae68ce7d837a360a8dc9df920f253a97b19c64f7a479032176"
+          }
+        },
+        {
+          "name": "section4",
+          "address": 6407168,
+          "source": {
+            "dat_offset": 1442396,
+            "size": 1441792,
+            "compression": "method4",
+            "decoded_size": 2614880,
+            "sha256": "6460dcff75216fb508cc5bdf8e6ff77ae005ab618883f28967da954986a9b35f"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 12505536,
+          "source": {
+            "dat_offset": 2884188,
+            "size": 2883584,
+            "compression": "method4",
+            "decoded_size": 5118560,
+            "sha256": "a2ebf138be2ee69684670a0f974cc98a2ce704939eee127116b6d93a8ac66a62"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 17694720,
+          "source": {
+            "dat_offset": 5767772,
+            "size": 3407872,
+            "compression": "raw",
+            "decoded_size": 3407872,
+            "sha256": "2d179aa3b1096355dcc2582e741833c8c8bfe38669c485d52f9eaecc17378a5f"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section4",
+          "address": 9022048,
+          "size": 3483488
+        },
+        {
+          "name": "section5",
+          "address": 21102592,
+          "size": 2735136
+        }
+      ],
+      "edits": [
+        {
+          "address": 6406152,
+          "old": 0,
+          "new": 1,
+          "what": "section table preloaded flag"
+        },
+        {
+          "address": 8028,
+          "old": 3959422872,
+          "new": 3810586624,
+          "what": "section table read 0x1dc4"
+        },
+        {
+          "address": 7500,
+          "old": 3942646130,
+          "new": 3810586624,
+          "what": "kernel0 load 0x231c"
+        },
+        {
+          "address": 7512,
+          "old": 3942646127,
+          "new": 3810586624,
+          "what": "kernel1 load 0x231c"
+        },
+        {
+          "address": 7516,
+          "old": 3942646075,
+          "new": 3818913792,
+          "what": "section4 stream/decompress 0x2250 -> mov r0,#0 (success)"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        },
+        {
+          "dat_offset": 2652,
+          "size": 512
+        }
+      ],
+      "header_sha256": "79859bdd17234f2e09caa6f229008f6b32bb7238fc10dac499c5e4b4fa4e0f0b",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        },
+        {
+          "offset": 24,
+          "value": 2
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 768,
+          "new": 769,
+          "what": "hold power while the ROM loads ffboot.bin"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
-      "located SD startup facts"
+      "version-independent stock updater acceptance"
     ]
   },
   {
@@ -2250,15 +3046,207 @@
     "source_sha256": "ec296bfa2548d16b0d7b05246638b9c0788ad1b2849e5ceb496ef19378ccf0ac",
     "update_filename": "FWUP0002.DAT",
     "generation": "exr2",
-    "plan": null,
-    "packaging": null,
+    "plan": {
+      "size": 24099552,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 262748,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "c1c0255e6ac971a26151a083cf38f45061a8c621904fcfdf5aef61a5f0567b6f"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 6406144,
+          "source": {
+            "dat_offset": 1311324,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "64429fe1de0db3f2dc889b1be0f9445870e37ac77b2f07ed74b2b205ebc793a5"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 524892,
+            "size": 56032,
+            "compression": "raw",
+            "decoded_size": 56032,
+            "sha256": "21366ffff7cebc6176b8a8125bf3a9974835a51070a58ea325f7eed8aabd8882"
+          }
+        },
+        {
+          "name": "kernel1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 655964,
+            "size": 55968,
+            "compression": "raw",
+            "decoded_size": 55968,
+            "sha256": "8fb0c322a22443a3783cdab9071db17212a5629f6375646218ac1e043dc672ec"
+          }
+        },
+        {
+          "name": "module2",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 13238876,
+            "size": 2407092,
+            "compression": "raw",
+            "decoded_size": 2407092,
+            "sha256": "0d14748c5b35907fbac155c29eab3f73dd89b9aa01073d2bbd9d587c0f2d65d4"
+          }
+        },
+        {
+          "name": "resources3",
+          "address": 3915776,
+          "source": {
+            "dat_offset": 17171036,
+            "size": 511956,
+            "compression": "raw",
+            "decoded_size": 511956,
+            "sha256": "28cc50c8d3acb34b7c5c6b023414b24e124cc103062dadae3cd10b30a3d620d8"
+          }
+        },
+        {
+          "name": "section4",
+          "address": 6407168,
+          "source": {
+            "dat_offset": 1442396,
+            "size": 1441792,
+            "compression": "method4",
+            "decoded_size": 2623072,
+            "sha256": "9fd2deb94f5d40af35f38e378f6cdc1534f8b0e698d11cc2129433f9ab4280c6"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 12514272,
+          "source": {
+            "dat_offset": 2884188,
+            "size": 3014656,
+            "compression": "method4",
+            "decoded_size": 5176544,
+            "sha256": "a77f8c1c555606789e151eefbdb34753583bb954e749d712ff5028b8ed1b26ec"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 17694720,
+          "source": {
+            "dat_offset": 5898844,
+            "size": 3538944,
+            "compression": "raw",
+            "decoded_size": 3538944,
+            "sha256": "c526ceb6296547a6fcae3f9ba1093800b9dd42c18a443bba007b4986a05253b0"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section4",
+          "address": 9030240,
+          "size": 3484032
+        },
+        {
+          "name": "section5",
+          "address": 21233664,
+          "size": 2865888
+        }
+      ],
+      "edits": [
+        {
+          "address": 6406152,
+          "old": 0,
+          "new": 1,
+          "what": "section table preloaded flag"
+        },
+        {
+          "address": 8028,
+          "old": 3959422872,
+          "new": 3810586624,
+          "what": "section table read 0x1dc4"
+        },
+        {
+          "address": 7500,
+          "old": 3942646130,
+          "new": 3810586624,
+          "what": "kernel0 load 0x231c"
+        },
+        {
+          "address": 7512,
+          "old": 3942646127,
+          "new": 3810586624,
+          "what": "kernel1 load 0x231c"
+        },
+        {
+          "address": 7516,
+          "old": 3942646075,
+          "new": 3818913792,
+          "what": "section4 stream/decompress 0x2250 -> mov r0,#0 (success)"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        },
+        {
+          "dat_offset": 2652,
+          "size": 512
+        }
+      ],
+      "header_sha256": "79859bdd17234f2e09caa6f229008f6b32bb7238fc10dac499c5e4b4fa4e0f0b",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        },
+        {
+          "offset": 24,
+          "value": 2
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 768,
+          "new": 769,
+          "what": "hold power while the ROM loads ffboot.bin"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
-      "located SD startup facts"
+      "version-independent stock updater acceptance"
     ]
   },
   {
@@ -2460,10 +3448,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -2621,12 +3611,183 @@
     },
     "packaging": null,
     "setup": null,
+    "xp5": {
+      "prefix": {
+        "dat_offset": 700,
+        "size": 262144,
+        "compression": "raw",
+        "decoded_size": 262144,
+        "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+      },
+      "low_length": 180224,
+      "length_flags": 1073741824,
+      "base": 4286578688,
+      "stack": 4286778624,
+      "active_size": 181248,
+      "bootstrap_offset": 2048,
+      "initialize_offset": 2104,
+      "gate_offset": 181088,
+      "delay": {
+        "address": 4286583644,
+        "size": 160,
+        "sha256": "12c1bfd4a1e801daecb2228483f5a88ab3e970aff0c9d2dcf9d2971d5bb98be7"
+      },
+      "reset_dat": 262844,
+      "reset_copy_size": 102400,
+      "selector": 94784,
+      "board": {
+        "host": 4288348160,
+        "timeout_setting": 14,
+        "operations": [
+          {
+            "address": 4287656656,
+            "mask": 0,
+            "value": 12582976,
+            "kind": 0
+          },
+          {
+            "address": 4287656656,
+            "mask": 0,
+            "value": 50331904,
+            "kind": 0
+          },
+          {
+            "address": 4287656776,
+            "mask": 0,
+            "value": 4194304,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 4194304,
+            "kind": 0
+          },
+          {
+            "address": 4287656780,
+            "mask": 0,
+            "value": 805306368,
+            "kind": 0
+          },
+          {
+            "address": 4287656768,
+            "mask": 0,
+            "value": 4194368,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 4194368,
+            "kind": 0
+          },
+          {
+            "address": 0,
+            "mask": 0,
+            "value": 0,
+            "kind": 2
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 2,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 2,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 127,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 1,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 1,
+            "kind": 1
+          }
+        ]
+      },
+      "board_proofs": [
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734656,
+          "size": 220,
+          "sha256": "d55e89bd19e7ffb16eb732b8730e56e0717643e4a9627da280f20adac9f8e1b0"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734316,
+          "size": 340,
+          "sha256": "b29d9ebdefbc4f2d9877ccda9a7a423a8a9474527eddfd4a03171a85d752898b"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734156,
+          "size": 160,
+          "sha256": "fcebdd5d3275b98e75fa8dc1574c612744e5090a6fcfe60d8c69d0aff1a98ef1"
+        }
+      ]
+    },
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
-      "XP5 post-setup SD loader and gated handoff",
       "version-independent stock updater acceptance"
     ]
   },
@@ -2636,11 +3797,190 @@
     "source_sha256": "30ca22af2e1341c65d8f0637cc5e3ec675628cee8f517de0f1275bb5725c9f39",
     "update_filename": "FWUP0021.DAT",
     "generation": "xp4",
-    "plan": null,
+    "plan": {
+      "size": 66535424,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "28174d37409f7eb900eeaf58b9f925f62c4a99dad878b2509ecc8fdfee5b9cb5"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 13762560,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "43d88401e72ff44d36533eb0545ce076288e45ff5f387c14d6f892f5b29e7c0c"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 110784,
+            "compression": "raw",
+            "decoded_size": 110784,
+            "sha256": "bae8613409663200796fef039468f00895924921f07179c987e368f4bc0a6111"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 25166452,
+            "size": 5927988,
+            "compression": "raw",
+            "decoded_size": 5927988,
+            "sha256": "6641b5907b5a3e650b6690801e4cd6b9954d567b4e52fe2c14c1d6dff144a9ef"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 8257536,
+          "source": {
+            "dat_offset": 31195764,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 13763584,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 175424,
+            "compression": "raw",
+            "decoded_size": 175424,
+            "sha256": "bbb0b4b172ba152260d38b9b890d277a01f145fb4367ad5c0d479f4ef8d92765"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 175424,
+            "compression": "raw",
+            "decoded_size": 175424,
+            "sha256": "f43c1ab893257d35fd072c01930bf3d97d351a818ad7a997c6e478c62cc873a7"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 15863808,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 3276800,
+            "compression": "method4",
+            "decoded_size": 7530776,
+            "sha256": "c45dbd72ba3f2733c73713ae301fb0ac3c359df14d5cae5c0d94cfe6bb154f23"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 30289920,
+          "source": {
+            "dat_offset": 5767796,
+            "size": 4849664,
+            "compression": "method4",
+            "decoded_size": 8667136,
+            "sha256": "bc49ab43766dea21e43b812e2dc6f8b473c7bb4ca0cd4decd7427da659934546"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 55869440,
+          "source": {
+            "dat_offset": 10617460,
+            "size": 10665984,
+            "compression": "raw",
+            "decoded_size": 10665984,
+            "sha256": "b2955887c7a3aab7f516171a30f90501832f4631fdc7df9ac2ab43203a08e5ad"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 372928,
+          "size": 164864
+        },
+        {
+          "name": "module3",
+          "address": 13939008,
+          "size": 256704
+        },
+        {
+          "name": "module4",
+          "address": 14987584,
+          "size": 256704
+        },
+        {
+          "name": "section5",
+          "address": 23396352,
+          "size": 6893568
+        },
+        {
+          "name": "section6",
+          "address": 38957056,
+          "size": 16912384
+        }
+      ],
+      "edits": [
+        {
+          "address": 41708,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 13762568,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
     "packaging": null,
-    "setup": null,
-    "cold_start": null,
-    "file_api": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 29440,
+      "active_sha256": "4bd5b6f7aceb8f2da509d43b5e04ddfafd9b38f4a7b82791e8bc5ac58ee10901",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6848,
+      "code_sha256": "6b168c597219e780faada477522407f75546e2ae73b2c4230060228bb7e8f437",
+      "continuation_offset": 29280,
+      "continuation_address": 4026561120,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 41708,
+      "mode_test": 1484
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
     "sd_boot": {
       "usb": false,
       "hold": [
@@ -2653,9 +3993,47 @@
       ]
     },
     "firmware_update": null,
-    "missing": [
-      "located SD startup facts"
-    ]
+    "updater": {
+      "public_version": [
+        2,
+        0
+      ],
+      "version_getter": {
+        "address": 18065984,
+        "size": 72,
+        "sha256": "0da07e49d0c0fb8e3c46d00a3fa4fb0ec0de11fbf162547693cb9130a0b20cf1"
+      },
+      "configuration_reader": 18063824,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 31807684,
+        "size": 608,
+        "sha256": "bb4b9fdb4a9c3a2f666ce3ced163c50710719a02a6b468153a8f8154a71b8d29"
+      },
+      "target_major": 26758260,
+      "target_minor": 26758264,
+      "current_major": 26758268,
+      "current_minor": 26758272,
+      "version_producer": {
+        "address": 34444032,
+        "size": 248,
+        "sha256": "17c5de9532c4d54dc7c8bbca94c7ddb6e164e0cf44d8eb591b5f8b4043300218"
+      },
+      "producer_stop": 34444068,
+      "version_context_pointer": 47921256,
+      "version_context": 26757736,
+      "current_major_setter": {
+        "address": 34447628,
+        "size": 52,
+        "sha256": "9adb46c46fd9df9a3aa59e8625e7203016783390dbf47353c94fe1d8fcae4b5a"
+      },
+      "current_minor_setter": {
+        "address": 34447680,
+        "size": 52,
+        "sha256": "7f66ff5f1128522c595b58cc2fef84534b9eb9b036377aca320e6407122951f1"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xq1-121",
@@ -2856,10 +4234,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -3063,10 +4443,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -3248,6 +4630,7 @@
       "continuation_address": 4026563328,
       "linked_sram_base": 4293984256
     },
+    "xp5": null,
     "cold_start": {
       "mode_flag": 44592,
       "mode_test": 1484
@@ -3271,10 +4654,54 @@
         }
       ]
     },
-    "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "display_back_button"
+        }
+      ]
+    },
+    "updater": {
+      "public_version": [
+        3,
+        17
+      ],
+      "version_getter": {
+        "address": 19458072,
+        "size": 72,
+        "sha256": "57df0831cfe9f4234891567411b302c0ba3a080761cbd5c3001031afb7cb5830"
+      },
+      "configuration_reader": 19455912,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 33845152,
+        "size": 608,
+        "sha256": "f3c78617acbfe0eabf1b9cc09be7a58141595b11a8cf42417f0a6a99ee5e5c9a"
+      },
+      "target_major": 28299748,
+      "target_minor": 28299752,
+      "current_major": 28299756,
+      "current_minor": 28299760,
+      "version_producer": {
+        "address": 36645780,
+        "size": 248,
+        "sha256": "bb7bf77e99a1684e1c1ee5d63cf38553e3b7e8babda54fe49cc7998801e6ff73"
+      },
+      "producer_stop": 36645816,
+      "version_context_pointer": 52193716,
+      "version_context": 28299224,
+      "current_major_setter": {
+        "address": 36649728,
+        "size": 52,
+        "sha256": "5d800b9ac3c93a67d68afe32b84387df5936e7b6ef5def698ba0f79b74c3b0f5"
+      },
+      "current_minor_setter": {
+        "address": 36649780,
+        "size": 52,
+        "sha256": "4799a75ba15826b7769df69fe4d8ed4ff889f53ac26f142b653eb7431fc74c1f"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt1-552",
@@ -3475,10 +4902,12 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
+    "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
     ]
@@ -3682,13 +5111,52 @@
       "load_address": 0
     },
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        49
+      ],
+      "version_getter": {
+        "address": 9717360,
+        "size": 68,
+        "sha256": "59941bc165d793d298ade84db96f24445339cad9c09404b368a1c73caf4ad1f2"
+      },
+      "configuration_reader": 9717140,
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 17154584,
+        "size": 372,
+        "sha256": "a3c3d2a2115d33e64b14586d355edb9264e01338028e59b001b2b63bbf0cf237"
+      },
+      "target_major": 13296476,
+      "target_minor": 13296480,
+      "current_major": 13296484,
+      "current_minor": 13296488,
+      "version_producer": {
+        "address": 18927924,
+        "size": 264,
+        "sha256": "14079a8fab4f02899ae30b2b488f54e6647c2b5f3f05066adb658e12f9861759"
+      },
+      "producer_stop": 18927960,
+      "version_context_pointer": 23446388,
+      "version_context": 13295948,
+      "current_major_setter": {
+        "address": 18930736,
+        "size": 52,
+        "sha256": "0a52d1729dffb4c61888df4c700458240d205a6e951fc10ab7a28dbee6564afc"
+      },
+      "current_minor_setter": {
+        "address": 18930788,
+        "size": 52,
+        "sha256": "1728ea71901658e6a00c22614d1f0424866e78203ec3b01aa69eb256338bfd59"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt3-511",
@@ -3867,6 +5335,7 @@
       "continuation_address": 4026561120,
       "linked_sram_base": 4293984256
     },
+    "xp5": null,
     "cold_start": {
       "mode_flag": 41228,
       "mode_test": 1472
@@ -3881,9 +5350,47 @@
     },
     "sd_boot": null,
     "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        5,
+        17
+      ],
+      "version_getter": {
+        "address": 17953492,
+        "size": 72,
+        "sha256": "bf3bb88c311628ddb7dc6c3dea6168489ffdc26f3e30af6673c689e79cf27edc"
+      },
+      "configuration_reader": 17951284,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 30079528,
+        "size": 608,
+        "sha256": "ace5dc4c03a0925aa5da33f457d6f0b3824fa4c642ff6c5a2177513eaf9946e7"
+      },
+      "target_major": 25167220,
+      "target_minor": 25167224,
+      "current_major": 25167228,
+      "current_minor": 25167232,
+      "version_producer": {
+        "address": 32589104,
+        "size": 248,
+        "sha256": "40cfdfe7a65bd0025f25012bb651965062aeadacf16d1f9712fe0e26059a61f0"
+      },
+      "producer_stop": 32589140,
+      "version_context_pointer": 46998252,
+      "version_context": 25166696,
+      "current_major_setter": {
+        "address": 32592928,
+        "size": 52,
+        "sha256": "2e3c1db0d33b252d20c973f942ab5b267529ce1b569669a7fbc4bf5445f23390"
+      },
+      "current_minor_setter": {
+        "address": 32592980,
+        "size": 52,
+        "sha256": "157cba6f70dca78488c04879201b7651b667edcb7b52036d52af75b53e0f69cd"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt30-201",
@@ -3891,11 +5398,190 @@
     "source_sha256": "68388ed62e4900955d0b617b90396262f01c32e3ea08ff1412025ae285435914",
     "update_filename": "FWUP0020.DAT",
     "generation": "xp4",
-    "plan": null,
+    "plan": {
+      "size": 63664128,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "fb04ad9444b0a02cf5fad1a85b8e1d57ba7cdd44125f7702abe407850dfa68e7"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 13762560,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "6a75cd23fda3dbb0fd2eec19002ccbaf4766ea9d16a8d36ae399f8cc4f36fb4d"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 110720,
+            "compression": "raw",
+            "decoded_size": 110720,
+            "sha256": "9fc88e75704d3d17761524a691c9335aa0ebdb9c90a5922b006f70186d4be3e4"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 25166452,
+            "size": 5635900,
+            "compression": "raw",
+            "decoded_size": 5635900,
+            "sha256": "ed07daef71d6886c33337d6588e3c74bfffed9fc380243946d1458ed97fd6598"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 8257536,
+          "source": {
+            "dat_offset": 31195764,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 13763584,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 182432,
+            "compression": "raw",
+            "decoded_size": 182432,
+            "sha256": "b63ff4677f30d6331c110d31451b170c8b3b5f3821be1e92b64365b7972d6eed"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 182432,
+            "compression": "raw",
+            "decoded_size": 182432,
+            "sha256": "376f40ac893d3453ffed17322dd931665663899748064d2fc692292b3091c0c0"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 15863808,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 2883584,
+            "compression": "method4",
+            "decoded_size": 5833048,
+            "sha256": "4fdd7cff1699642b680337a9777b9548e77074eab5cbc9e7b90f1fe716891ff5"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 28250112,
+          "source": {
+            "dat_offset": 5374580,
+            "size": 4456448,
+            "compression": "method4",
+            "decoded_size": 7774208,
+            "sha256": "3713beba3334d59a382b61ec24513b9cf80a8babbcf4874537a391f93d1db69f"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 54435840,
+          "source": {
+            "dat_offset": 9831028,
+            "size": 9228288,
+            "compression": "raw",
+            "decoded_size": 9228288,
+            "sha256": "7c99889fdbdad8bb412d8a8b2f87663a5d77ece981b6497dcc5d2ed9cb55cb03"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 372864,
+          "size": 170816
+        },
+        {
+          "name": "module3",
+          "address": 13946016,
+          "size": 251520
+        },
+        {
+          "name": "module4",
+          "address": 14994592,
+          "size": 251520
+        },
+        {
+          "name": "section5",
+          "address": 21700608,
+          "size": 6549504
+        },
+        {
+          "name": "section6",
+          "address": 36024320,
+          "size": 18411520
+        }
+      ],
+      "edits": [
+        {
+          "address": 41804,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 13762568,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
     "packaging": null,
-    "setup": null,
-    "cold_start": null,
-    "file_api": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 29344,
+      "active_sha256": "61f3199e3362d6d2fdbb2a6838634ad07360e06df3d19c53b620d18134d15c44",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6752,
+      "code_sha256": "1e533de536145a7f8b2c4e7e4a9b57f323a89ecd333468638d54c05668f35f0c",
+      "continuation_offset": 29184,
+      "continuation_address": 4026561024,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 41804,
+      "mode_test": 1484
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
     "sd_boot": {
       "usb": false,
       "hold": [
@@ -3908,9 +5594,47 @@
       ]
     },
     "firmware_update": null,
-    "missing": [
-      "located SD startup facts"
-    ]
+    "updater": {
+      "public_version": [
+        2,
+        1
+      ],
+      "version_getter": {
+        "address": 17879816,
+        "size": 72,
+        "sha256": "bef6925d1858ac51bdc5ef046539a11ff562a617f4dd14c55c318fe1a5cd1757"
+      },
+      "configuration_reader": 17877656,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 29636168,
+        "size": 588,
+        "sha256": "abe931cb740e28b08e5c0b8d564094301febadb8c96e50ac332e8fdef6c17463"
+      },
+      "target_major": 24800140,
+      "target_minor": 24800144,
+      "current_major": 24800148,
+      "current_minor": 24800152,
+      "version_producer": {
+        "address": 32102936,
+        "size": 248,
+        "sha256": "0b4cd60329e30a7288608de02e548611fe09807b5a1573a2795260f7dda38777"
+      },
+      "producer_stop": 32102972,
+      "version_context_pointer": 43601392,
+      "version_context": 24799616,
+      "current_major_setter": {
+        "address": 32106760,
+        "size": 52,
+        "sha256": "c849199c86116cda2209d4c64952b7547c4aca898af75b1f9fa8debdfde5a3d9"
+      },
+      "current_minor_setter": {
+        "address": 32106812,
+        "size": 52,
+        "sha256": "a91436903bf17130c42d0020426e71e5bfc1479a9564f365717b7a7d90eb5d4f"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt30ii-204",
@@ -3918,11 +5642,190 @@
     "source_sha256": "723220a2c3781fa10585b1ed173a4df89aefe6208880f96fca97527bf398862c",
     "update_filename": "FWUP0029.DAT",
     "generation": "xp4",
-    "plan": null,
+    "plan": {
+      "size": 72175616,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "43d26aebe6a6db73581baad36c6c685459472b462d52cb61f3902c3c7f962dd7"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 14811136,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "bac4ffee9fb6af3a00c8914c8e1e4316868a9c3dbd7d4bb6e49216fca68eb64e"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 111328,
+            "compression": "raw",
+            "decoded_size": 111328,
+            "sha256": "73377e4a729e4de0329cc41db81417b2c5c8ac0faba7b3e158cb8437390487a4"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 27263604,
+            "size": 3407872,
+            "compression": "method4",
+            "decoded_size": 6602812,
+            "sha256": "756a1b9912caa13b4efbab8cd6ef40042c41fb6a2fce4fe0936998d04e2a27c4"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 9306112,
+          "source": {
+            "dat_offset": 31064692,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 147680,
+            "compression": "raw",
+            "decoded_size": 147680,
+            "sha256": "4a4dbf8caad1ce8a224f942c73ec2ef67405c7710dd5d1f38edee453b9777897"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 15860736,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 147680,
+            "compression": "raw",
+            "decoded_size": 147680,
+            "sha256": "c8cc9fc636a6565072129d08abac19611e23ab0aa023f2fcca8589df106e5b48"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 16912384,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 3801088,
+            "compression": "method4",
+            "decoded_size": 7392208,
+            "sha256": "39c6fbd8c33153bc1213c8dd86fa82de916b4037ad4c02da8fccd6b71ffce9bc"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 31531008,
+          "source": {
+            "dat_offset": 6292084,
+            "size": 5242880,
+            "compression": "method4",
+            "decoded_size": 9277440,
+            "sha256": "b6c150d365b47a56799c496bec2238a86abaf4fbd87e7d88d99971549ad1afb0"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 62001152,
+          "source": {
+            "dat_offset": 11534964,
+            "size": 4718592,
+            "compression": "method4",
+            "decoded_size": 10174464,
+            "sha256": "1b3dfeb1df16d2eabb76371cd20bcfad3bfbab9a6b0e2dddc275ea0702bda2d1"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 373472,
+          "size": 164864
+        },
+        {
+          "name": "module3",
+          "address": 14959840,
+          "size": 256320
+        },
+        {
+          "name": "module4",
+          "address": 16008416,
+          "size": 256320
+        },
+        {
+          "name": "section5",
+          "address": 24305664,
+          "size": 7225344
+        },
+        {
+          "name": "section6",
+          "address": 40808448,
+          "size": 21192704
+        }
+      ],
+      "edits": [
+        {
+          "address": 44704,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 14811144,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
     "packaging": null,
-    "setup": null,
-    "cold_start": null,
-    "file_api": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 33408,
+      "active_sha256": "6108e628e7c2dcf3913b024c993db22a247a28f71f87b4cd1a22f629293603c2",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 8512,
+      "code_sha256": "4c6ea36e83d0fd8018e98a41eb292dc4b9f948c64b0157935453250dc5e78047",
+      "continuation_offset": 33248,
+      "continuation_address": 4026565088,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 44704,
+      "mode_test": 1484
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
     "sd_boot": {
       "usb": false,
       "hold": [
@@ -3935,9 +5838,47 @@
       ]
     },
     "firmware_update": null,
-    "missing": [
-      "located SD startup facts"
-    ]
+    "updater": {
+      "public_version": [
+        2,
+        4
+      ],
+      "version_getter": {
+        "address": 19346884,
+        "size": 72,
+        "sha256": "847c6389b9f83929df22f42b1ecded6a86f2379925016facbeac492eb10c52ea"
+      },
+      "configuration_reader": 19344724,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 33127648,
+        "size": 608,
+        "sha256": "b6de63522bbc2b38ad1c7bc4b0976ed7b01bf8f7544802302e40d55955df2471"
+      },
+      "target_major": 27661892,
+      "target_minor": 27661896,
+      "current_major": 27661900,
+      "current_minor": 27661904,
+      "version_producer": {
+        "address": 35893040,
+        "size": 248,
+        "sha256": "b5fe95fa6ea47b236f3dd017103ec8810c5bd682c9f3104cf1c90f0c496325b3"
+      },
+      "producer_stop": 35893076,
+      "version_context_pointer": 51378308,
+      "version_context": 27661368,
+      "current_major_setter": {
+        "address": 35896748,
+        "size": 52,
+        "sha256": "6a6a3fc42da901f436641c834694222254061294683babf4f2af56d1e3df6e2a"
+      },
+      "current_minor_setter": {
+        "address": 35896800,
+        "size": 52,
+        "sha256": "bb1248d4cb62eb5f3f3d173a0fdca166047cb4e020072d6116eda31a25a0f142"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt4-212",
@@ -4116,6 +6057,7 @@
       "continuation_address": 4026563456,
       "linked_sram_base": 4293984256
     },
+    "xp5": null,
     "cold_start": {
       "mode_flag": 45152,
       "mode_test": 1484
@@ -4140,9 +6082,47 @@
       ]
     },
     "firmware_update": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        2,
+        18
+      ],
+      "version_getter": {
+        "address": 19284420,
+        "size": 72,
+        "sha256": "fe43a708d0033a3844556bdb63ec398cd112085358fb216a8fb739bcb2243784"
+      },
+      "configuration_reader": 19282260,
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 33173840,
+        "size": 608,
+        "sha256": "54910534219ecae83a5745786d4137d1750cfcc94b83a813c249ea4ac09eec1c"
+      },
+      "target_major": 27676900,
+      "target_minor": 27676904,
+      "current_major": 27676908,
+      "current_minor": 27676912,
+      "version_producer": {
+        "address": 36041656,
+        "size": 248,
+        "sha256": "5e79750f2006abc4fafbd230324d22d59ac19da8e82f5447bfde77162d3aff76"
+      },
+      "producer_stop": 36041692,
+      "version_context_pointer": 52379008,
+      "version_context": 27676376,
+      "current_major_setter": {
+        "address": 36045604,
+        "size": 52,
+        "sha256": "9bb0ecac6cb96994d099a9803a1516c9092b27fe8a7d459619e1fdb4b39e8602"
+      },
+      "current_minor_setter": {
+        "address": 36045656,
+        "size": 52,
+        "sha256": "6828081645e4c72926e6faf83506ca8c3c38c9604eea7f30ffaa522b09d927d6"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt5-431",
@@ -4153,6 +6133,7 @@
     "plan": null,
     "packaging": null,
     "setup": null,
+    "xp5": null,
     "cold_start": null,
     "file_api": null,
     "sd_boot": {
@@ -4166,8 +6147,9 @@
       ]
     },
     "firmware_update": null,
+    "updater": null,
     "missing": [
-      "located SD startup facts"
+      "located SD startup facts: No unique aligned AArch64 reset register-clear sequence"
     ]
   }
 ]

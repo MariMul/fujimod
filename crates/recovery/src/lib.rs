@@ -2,9 +2,13 @@
 #![forbid(unsafe_code)]
 pub mod image;
 mod xp4;
+mod xp5;
 use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, Setup};
+pub use xp5::{
+    Board as SdBoard, Operation as SdOperation, Setup as Xp5Setup, SourceProof as Xp5SourceProof,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -15,15 +19,66 @@ pub enum Generation {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct Proof {
+    pub address: usize,
+    pub size: usize,
+    pub sha256: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionContract {
+    pub public_version: [u8; 2],
+    pub version_getter: Proof,
+    pub configuration_reader: usize,
+    pub getter_arguments: u8,
+    pub comparison: Proof,
+    pub version_producer: Proof,
+    pub producer_stop: usize,
+    pub version_context_pointer: usize,
+    pub version_context: usize,
+    pub current_major_setter: Proof,
+    pub current_minor_setter: Proof,
+    pub target_major: usize,
+    pub target_minor: usize,
+    pub current_major: usize,
+    pub current_minor: usize,
+}
+impl VersionContract {
+    fn verify(&self, ram: &[u8]) -> Result<()> {
+        for proof in [
+            &self.version_getter,
+            &self.comparison,
+            &self.version_producer,
+            &self.current_major_setter,
+            &self.current_minor_setter,
+        ] {
+            image::hash(
+                image::extent(ram, proof.address, proof.size)?,
+                &proof.sha256,
+            )?;
+        }
+        require(
+            self.current_major == self.target_major + 8
+                && self.current_minor == self.target_minor + 8
+                && self.target_minor == self.target_major + 4,
+            "Updater version pair layout differs",
+        )?;
+        Ok(())
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Recipe {
     pub firmware_id: String,
     pub source_size: usize,
+    pub updater: Option<VersionContract>,
     pub source_sha256: String,
     pub update_filename: String,
     pub generation: Generation,
     pub plan: Option<Plan>,
     pub packaging: Option<Packaging>,
     pub setup: Option<Setup>,
+    pub xp5: Option<Xp5Setup>,
     pub cold_start: Option<ColdStart>,
     pub file_api: Option<FileApi>,
     pub sd_boot: Option<serde_json::Value>,
@@ -39,12 +94,90 @@ impl Recipe {
         .map_err(|e| image::Error::Invalid(e.to_string()))?;
         Ok(recipes.into_iter().find(|r| r.firmware_id == firmware_id))
     }
+    pub fn cold_worker(&self, source: &[u8]) -> Result<serde_json::Value> {
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let plan = self
+            .plan
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing RAM plan".into()))?;
+        let cold = self
+            .cold_start
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing cold startup".into()))?;
+        let loader = plan
+            .regions
+            .first()
+            .ok_or_else(|| image::Error::Invalid("Missing loader".into()))?
+            .source
+            .read(&fujimod_firmware::invert(source))?;
+        serde_json::to_value(xp4::worker(&loader, cold.mode_flag)?)
+            .map_err(|e| image::Error::Invalid(e.to_string()))
+    }
+    pub fn cold_plan(&self, source: &[u8]) -> Result<Plan> {
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let plan = self
+            .plan
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing RAM plan".into()))?;
+        let cold = self
+            .cold_start
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing cold startup".into()))?;
+        xp4::cold_plan(&fujimod_firmware::invert(source), plan, cold)
+    }
+    /// Explicit SRAM placement and file ABI for isolated loader execution.
+    pub fn compile_ffinit(
+        &self,
+        source: &[u8],
+        payload: &[u8],
+        base: u32,
+        api: &FileApi,
+        workspace: u32,
+    ) -> Result<(Vec<u8>, serde_json::Value)> {
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let setup = self
+            .setup
+            .as_ref()
+            .ok_or_else(|| image::Error::Invalid("Missing DDR setup".into()))?;
+        let bytes = xp4::ffinit(
+            &fujimod_firmware::invert(source),
+            setup,
+            api,
+            payload,
+            base,
+            Some(workspace),
+        )?;
+        let mut layout = xp4::layout(setup, api, base);
+        layout["workspace"] = workspace.into();
+        layout["file_api"] = serde_json::json!(api);
+        layout["payload_size"] = payload.len().into();
+        layout["payload_crc32"] = xp4::crc32(payload).into();
+        layout["bytes"] = bytes.len().into();
+        layout["sha256"] = fujimod_firmware::sha256(&bytes).into();
+        Ok((bytes, layout))
+    }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
     /// verbatim to its required root filename, including signed containers.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
         require(
             self.missing.is_empty(),
             &format!("Missing recovery facts: {}", self.missing.join(", ")),
+        )?;
+        require(
+            self.updater.is_some(),
+            "Missing version-independent stock updater acceptance",
         )?;
         self.build_startup(source)
     }
@@ -82,16 +215,19 @@ impl Recipe {
                     })?;
                     let plan = xp4::cold_plan(&inverted, plan, cold)?;
                     let ram = image::transform(&inverted, &plan)?;
-                    let init = xp4::ffinit(&inverted, setup, api, &ram, api.load_address)?;
+                    let init = xp4::ffinit(&inverted, setup, api, &ram, api.load_address, None)?;
                     vec![
                         File::new("ffinit.bin", init)?,
                         File::new("ffboot.bin", ram)?,
                     ]
                 }
                 Generation::Xp5 => {
-                    return Err(image::Error::Invalid(
-                        "Missing XP5 post-setup SD loader and handoff facts".into(),
-                    ));
+                    let setup = self.xp5.as_ref().ok_or_else(|| {
+                        image::Error::Invalid(
+                            "Missing XP5 post-setup SD loader and handoff facts".into(),
+                        )
+                    })?;
+                    xp5::package(&inverted, setup, image::transform(&inverted, plan)?)?
                 }
             };
         require(
@@ -100,6 +236,15 @@ impl Recipe {
                 .any(|f| f.name.eq_ignore_ascii_case(&self.update_filename)),
             "DAT filename collides with boot files",
         )?;
+        if let Some(contract) = &self.updater {
+            let ram = files
+                .iter()
+                .find(|f| f.name.eq_ignore_ascii_case("ffboot.bin"))
+                .ok_or_else(|| {
+                    image::Error::Invalid("Missing RAM image for updater proof".into())
+                })?;
+            contract.verify(&ram.bytes)?;
+        }
         files.push(File::new(&self.update_filename, source.to_vec())?);
         Ok(files)
     }
@@ -119,16 +264,10 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
     let recipe = Recipe::bundled(id)?;
     let sd_boot = recipe.as_ref().and_then(|r| r.sd_boot.clone());
     let firmware_update = recipe.as_ref().and_then(|r| r.firmware_update.clone());
-    let mut missing = recipe
+    let missing = recipe
         .as_ref()
         .map(|r| r.missing.clone())
         .unwrap_or_else(|| vec!["recovery recipe".into()]);
-    if sd_boot.is_none() {
-        missing.push("SD-boot button combination".into());
-    }
-    if firmware_update.is_none() {
-        missing.push("firmware-update button combination".into());
-    }
     let mut output_filenames = Vec::new();
     if let Some(recipe) = &recipe {
         match recipe.generation {

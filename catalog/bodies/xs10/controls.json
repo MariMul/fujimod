@@ -40,6 +40,13 @@
   },
   "analog_levels": null,
   "boot": {
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "display_back_button"
+        }
+      ]
+    },
     "sd": {
       "usb": false,
       "hold": [

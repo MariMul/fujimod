@@ -62,7 +62,15 @@ fn branch(code: &[u8], at: usize, opcode: u32) -> Result<usize> {
     )?;
     Ok(target as usize)
 }
-pub fn worker(code: &[u8], flag: usize) -> Result<usize> {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Worker {
+    pub compare: usize,
+    pub call: usize,
+    pub entry: usize,
+    pub join: usize,
+    pub barrier: u32,
+}
+pub fn worker(code: &[u8], flag: usize) -> Result<Worker> {
     let mut found = Vec::new();
     for at in (0..code.len().saturating_sub(40)).step_by(4) {
         if word(code, at + 8)? != 0xe5933000
@@ -75,26 +83,32 @@ pub fn worker(code: &[u8], flag: usize) -> Result<usize> {
         {
             continue;
         }
-        let candidate = (|| -> Result<()> {
+        let candidate = (|| -> Result<Worker> {
             require(
                 pair(code, at, 3)? as usize == flag,
                 "Worker uses a different mode flag",
             )?;
             let target = branch(code, at + 16, 0x0a)?;
-            branch(code, target, 0xeb)?;
+            let entry = branch(code, target, 0xeb)?;
             require(
                 branch(code, target + 4, 0xea)? == at + 20,
                 "Worker barrier join changed",
             )?;
-            pair(code, at + 20, 3)?;
-            Ok(())
+            let barrier = pair(code, at + 20, 3)?;
+            Ok(Worker {
+                compare: at + 12,
+                call: target,
+                entry,
+                join: at + 20,
+                barrier,
+            })
         })();
-        if candidate.is_ok() {
-            found.push(at + 12);
+        if let Ok(candidate) = candidate {
+            found.push(candidate);
         }
     }
     require(found.len() == 1, "No unique checked XP4 worker decision")?;
-    Ok(found[0])
+    Ok(found.remove(0))
 }
 pub fn cold_plan(inverted: &[u8], plan: &Plan, cold: &ColdStart) -> Result<Plan> {
     let loader = plan
@@ -119,7 +133,7 @@ pub fn cold_plan(inverted: &[u8], plan: &Plan, cold: &ColdStart) -> Result<Plan>
     )?;
     let mut plan = plan.clone();
     plan.edits.retain(|e| e.address != cold.mode_flag);
-    for address in [cold.mode_test + 12, cold.mode_test + 84, worker] {
+    for address in [cold.mode_test + 12, cold.mode_test + 84, worker.compare] {
         plan.edits.push(Edit {
             address,
             old: 0xe3530001,
@@ -130,15 +144,29 @@ pub fn cold_plan(inverted: &[u8], plan: &Plan, cold: &ColdStart) -> Result<Plan>
     Ok(plan)
 }
 pub fn crc32(bytes: &[u8]) -> u32 {
+    const fn table() -> [u32; 256] {
+        let mut rows = [0; 256];
+        let mut index = 0;
+        while index < 256 {
+            let mut value = index as u32;
+            let mut bit = 0;
+            while bit < 8 {
+                value = (value >> 1) ^ if value & 1 == 1 { 0xedb88320 } else { 0 };
+                bit += 1;
+            }
+            rows[index] = value;
+            index += 1;
+        }
+        rows
+    }
+    const TABLE: [u32; 256] = table();
     let mut crc = u32::MAX;
     for byte in bytes {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            crc = (crc >> 1) ^ if crc & 1 == 1 { 0xedb88320 } else { 0 };
-        }
+        crc = (crc >> 8) ^ TABLE[((crc ^ u32::from(*byte)) & 255) as usize];
     }
     !crc
 }
+
 /// Construct using only supplied setup bytes and the processor's file ABI.
 /// The low-address entry supports execution harnesses using the same loader.
 pub fn ffinit(
@@ -147,6 +175,7 @@ pub fn ffinit(
     api: &FileApi,
     payload: &[u8],
     base: u32,
+    workspace_override: Option<u32>,
 ) -> Result<Vec<u8>> {
     let prefix = extent(inverted, setup.dat_offset, setup.active_size)?;
     hash(prefix, &setup.active_sha256)?;
@@ -250,6 +279,7 @@ pub fn ffinit(
         .map(|n| n & !0xffff)
         .and_then(|n| u32::try_from(n).ok())
         .ok_or_else(|| image::Error::Invalid("Payload workspace overflow".into()))?;
+    let workspace = workspace_override.unwrap_or(workspace);
     for (index, value) in [
         0,
         payload.len() as u32,
@@ -342,4 +372,26 @@ pub fn ffinit(
         region + template::FFINIT_DRAM_READY as u32,
     )?;
     Ok(output)
+}
+
+pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
+    let data_size = setup.continuation_offset - setup.code_offset - setup.code_size;
+    let region = base + 0x4000;
+    let progress = template::FFINIT_PROGRESS + data_size - 4;
+    let symbols = serde_json::json!({
+        "ffinit_entry":region+template::FFINIT_ENTRY as u32,
+        "ffinit_dram_ready":region+template::FFINIT_DRAM_READY as u32,
+        "ffinit_prepare":region+template::FFINIT_PREPARE as u32,
+        "ffinit_load":region+template::FFINIT_LOAD as u32,
+        "ffinit_progress":region+progress as u32,
+        "ffinit_boot_header":region+template::FFINIT_BOOT_HEADER as u32,
+        "ffinit_setup_data":region+template::FFINIT_SETUP_DATA as u32,
+        "ffinit_config":region+template::FFINIT_CONFIG as u32,
+        "ffinit_counter_start":region+template::FFINIT_COUNTER_START as u32,
+        "ffinit_counter_read":region+template::FFINIT_COUNTER_READ as u32,
+        "ffinit_counter_stop":region+template::FFINIT_COUNTER_STOP as u32,
+        "ffinit_crc32":region+template::FFINIT_CRC32 as u32,
+        "ffinit_halt":region+template::FFINIT_HALT as u32
+    });
+    serde_json::json!({"load_address":base,"code_region":region,"stack_top":(api.workspace-api.load_address+base)&!0xfff,"symbols":symbols,"sections":[{"name":".text","offset":0,"size":template::TEXT.len()}]})
 }

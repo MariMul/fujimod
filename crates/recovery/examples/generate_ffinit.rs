@@ -173,6 +173,11 @@ PROVIDE(ffinit_stack_top = 0x11d000);
     if env::args().any(|a| a == "--check") {
         assert_eq!(fs::read_to_string(target).unwrap(), out);
     } else {
-        fs::write(target, out).unwrap();
+        let temporary = target.with_extension(format!("rs.{}.tmp", std::process::id()));
+        fs::write(&temporary, out).unwrap();
+        if let Err(error) = fs::rename(&temporary, target) {
+            let _ = fs::remove_file(temporary);
+            panic!("Cannot install generated template: {error}");
+        }
     }
 }

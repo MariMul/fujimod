@@ -176,3 +176,30 @@ fn recipes_match_catalog_identities_and_generation() {
         );
     }
 }
+
+#[test]
+fn cold_worker_requires_the_checked_condition_call_and_barrier_join() {
+    let mut code = vec![0; 0x100];
+    for (index, value) in [
+        0xe3003030, 0xe3403000, 0xe5933000, 0xe3530001, 0x0a000012, 0xe3003070, 0xe3403000,
+        0xe3a02000, 0xe583200c, 0xf57ff04f,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        image::put(&mut code, index * 4, value).unwrap();
+    }
+    image::put(&mut code, 0x60, 0xeb000006).unwrap();
+    image::put(&mut code, 0x64, 0xeaffffea).unwrap();
+    let worker = xp4::worker(&code, 0x30).unwrap();
+    assert_eq!(
+        (worker.compare, worker.call, worker.entry, worker.join),
+        (12, 0x60, 0x80, 20)
+    );
+    for address in [12, 0x64] {
+        let mut changed = code.clone();
+        changed[address] ^= 1;
+        assert!(xp4::worker(&changed, 0x30).is_err());
+    }
+    assert!(xp4::worker(&code, 0x34).is_err());
+}

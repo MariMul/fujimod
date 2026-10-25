@@ -1,0 +1,127 @@
+{
+  "xm5": {
+    "host": 4288348160,
+    "timeout_setting": 14,
+    "operations": [
+      {
+        "address": 4287656656,
+        "mask": 0,
+        "value": 12582976,
+        "kind": 0
+      },
+      {
+        "address": 4287656656,
+        "mask": 0,
+        "value": 50331904,
+        "kind": 0
+      },
+      {
+        "address": 4287656776,
+        "mask": 0,
+        "value": 4194304,
+        "kind": 0
+      },
+      {
+        "address": 4287656772,
+        "mask": 0,
+        "value": 4194304,
+        "kind": 0
+      },
+      {
+        "address": 4287656780,
+        "mask": 0,
+        "value": 805306368,
+        "kind": 0
+      },
+      {
+        "address": 4287656768,
+        "mask": 0,
+        "value": 4194368,
+        "kind": 0
+      },
+      {
+        "address": 4287656772,
+        "mask": 0,
+        "value": 4194368,
+        "kind": 0
+      },
+      {
+        "address": 0,
+        "mask": 0,
+        "value": 0,
+        "kind": 2
+      },
+      {
+        "address": 4287678784,
+        "mask": 1,
+        "value": 0,
+        "kind": 1
+      },
+      {
+        "address": 4287677228,
+        "mask": 127,
+        "value": 0,
+        "kind": 1
+      },
+      {
+        "address": 4287678784,
+        "mask": 1,
+        "value": 0,
+        "kind": 1
+      },
+      {
+        "address": 4287678784,
+        "mask": 2,
+        "value": 0,
+        "kind": 1
+      },
+      {
+        "address": 4287677228,
+        "mask": 127,
+        "value": 0,
+        "kind": 1
+      },
+      {
+        "address": 4287678784,
+        "mask": 2,
+        "value": 0,
+        "kind": 1
+      },
+      {
+        "address": 4287677228,
+        "mask": 127,
+        "value": 127,
+        "kind": 1
+      },
+      {
+        "address": 4287678784,
+        "mask": 1,
+        "value": 1,
+        "kind": 1
+      },
+      {
+        "address": 4287678784,
+        "mask": 1,
+        "value": 1,
+        "kind": 1
+      }
+    ],
+    "source_proofs": [
+      {
+        "address": 9651648,
+        "size": 220,
+        "sha256": "d55e89bd19e7ffb16eb732b8730e56e0717643e4a9627da280f20adac9f8e1b0"
+      },
+      {
+        "address": 9651308,
+        "size": 340,
+        "sha256": "b29d9ebdefbc4f2d9877ccda9a7a423a8a9474527eddfd4a03171a85d752898b"
+      },
+      {
+        "address": 9651148,
+        "size": 160,
+        "sha256": "fcebdd5d3275b98e75fa8dc1574c612744e5090a6fcfe60d8c69d0aff1a98ef1"
+      }
+    ]
+  }
+}

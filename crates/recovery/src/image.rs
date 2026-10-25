@@ -19,9 +19,10 @@ pub(crate) fn require(ok: bool, message: &str) -> Result<()> {
     }
 }
 pub(crate) fn hash(bytes: &[u8], expected: &str) -> Result<()> {
+    let actual = fujimod_firmware::sha256(bytes);
     require(
-        fujimod_firmware::sha256(bytes) == expected,
-        "Source SHA-256 differs from recipe",
+        actual == expected,
+        &format!("Source SHA-256 differs from recipe: expected {expected}, got {actual}"),
     )
 }
 pub(crate) fn extent(data: &[u8], at: usize, size: usize) -> Result<&[u8]> {
@@ -225,12 +226,23 @@ impl Packaging {
         Ok(bytes)
     }
     pub fn package(&self, inverted: &[u8], plan: &Plan, image: Vec<u8>) -> Result<Vec<File>> {
+        require(image.len() == plan.size, "SD image length differs")?;
+        self.package_bytes(inverted, plan.entry, image)
+    }
+    pub fn package_bytes(
+        &self,
+        inverted: &[u8],
+        entry: usize,
+        image: Vec<u8>,
+    ) -> Result<Vec<File>> {
         require(
-            self.entry == plan.entry && self.load_address == 0 && image.len() == plan.size,
+            self.entry == entry && self.load_address == 0,
             "SD image handoff differs",
         )?;
         require(
-            self.header_filename != self.image_filename,
+            !self
+                .header_filename
+                .eq_ignore_ascii_case(&self.image_filename),
             "Duplicate output filename",
         )?;
         Ok(vec![
@@ -251,7 +263,8 @@ impl File {
                 && name != "."
                 && name != ".."
                 && !name.contains(['/', '\\', ':', '\0'])
-                && name.is_ascii(),
+                && name.is_ascii()
+                && !name.bytes().any(|b| b < 32 || b == 127),
             "Output filename must be an ASCII basename",
         )?;
         Ok(Self {
