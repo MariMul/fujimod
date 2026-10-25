@@ -95,11 +95,15 @@ export function GettingStarted(props: {
     const pieces: { offset: number; data: Uint8Array<ArrayBuffer> }[] = [];
     let read = 0;
     const flash = await step('backup', 'Back up flash', (session, firmware) =>
-      session.backupFlash(firmware, ({ offset, data }) => {
-        pieces.push({ offset, data: new Uint8Array(data) });
-        read += data.length;
-        setProgress(`Read ${mib(read)}`);
-      }),
+      session.backupFlash(
+        firmware,
+        ({ offset, data }) => {
+          pieces.push({ offset, data: new Uint8Array(data) });
+          read += data.length;
+          setProgress(`Backing up flash · ${mib(read)}`);
+        },
+        (done, total) => setProgress(`Backing up flash · ${mib(done)} of ${mib(total)}`),
+      ),
     );
     if (!flash) return;
     pieces.sort((a, b) => a.offset - b.offset);
@@ -136,15 +140,18 @@ export function GettingStarted(props: {
     const file = props.onFile;
     const done = await step('state', 'Dump memory', async (session, firmware) => {
       const prepared = untrack(() => props.results.prepared);
-      await session.dumpState(firmware, ({ data, ...region }) => {
-        regions.push(region);
-        file(`state-${slug(region.name)}.bin`, new Blob([new Uint8Array(data)]), {
-          firmware,
-          ...region,
-          prepared,
-        });
-        setProgress(`${region.name} (${mib(region.size)})`);
-      });
+      await session.dumpState(
+        firmware,
+        ({ data, ...region }) => {
+          regions.push(region);
+          file(`memory-${slug(region.name)}.bin`, new Blob([new Uint8Array(data)]), {
+            firmware,
+            ...region,
+            prepared,
+          });
+        },
+        (done, total) => setProgress(`Dumping memory · ${mib(done)} of ${mib(total)}`),
+      );
       return true;
     });
     if (!done) return;

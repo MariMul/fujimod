@@ -42,7 +42,7 @@ export function StateCaptures(props: {
     setRunning(state.id);
     setFailure('');
     try {
-      const read = await props.model.withSession(camera.id, 'State capture', (session) =>
+      const read = await props.model.withSession(camera.id, 'Camera mode capture', (session) =>
         captureRanges(session, firmwareId, current, (done, total) => setProgress({ done, total })),
       );
       const capture = {
@@ -92,7 +92,7 @@ export function StateCaptures(props: {
 
   return (
     <CapturePanel
-      title="State captures"
+      title="Camera modes"
       camera={props.camera}
       selection={selection()}
       onConnect={props.onConnect}
@@ -128,7 +128,7 @@ export function StateCaptures(props: {
               </div>
               <Show when={state.named}>
                 <label class="wb-in">
-                  {state.id === 'menu-page' ? 'Page' : 'State'}
+                  {state.id === 'menu-page' ? 'Page' : 'Mode'}
                   <input
                     value={names()[state.id] ?? ''}
                     onInput={(event) =>

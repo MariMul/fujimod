@@ -125,13 +125,18 @@ test('a flash backup with a gap is refused and unlocks nothing', async () => {
   expect(button(p.host, 'Enable debug mode')!.disabled).toBe(true);
 });
 
-test('the state dump adds each region as its own file', async () => {
-  let status = '';
+test('Dump memory reports bytes read and adds each region as its own file', async () => {
+  const statuses: string[] = [];
+  const status = () => {
+    flush();
+    statuses.push(p.host.querySelector('[role="status"]')?.textContent ?? '');
+  };
   const p = mount({
     prepareServiceSession: async () => prepared,
-    async dumpState(_firmware, region) {
-      flush();
-      status = p.host.querySelector('[role="status"]')?.textContent ?? '';
+    async dumpState(_firmware, region, progress) {
+      status();
+      progress?.(1 << 20, 4 << 20);
+      status();
       region({
         name: 'boot-rom',
         address: 0x80000000,
@@ -145,8 +150,8 @@ test('the state dump adds each region as its own file', async () => {
   button(p.host, 'Dump memory')!.click();
   await vi.waitFor(() => expect(p.results().state).toBeTruthy());
   expect(p.results().state!.regions.map((region) => region.name)).toEqual(['boot-rom']);
-  expect(status).toBe('Dumping memory');
-  expect(p.files.map((file) => file.name)).toEqual(['state-boot-rom.bin']);
+  expect(statuses).toEqual(['Dumping memory', 'Dumping memory · 1 MiB of 4 MiB']);
+  expect(p.files.map((file) => file.name)).toEqual(['memory-boot-rom.bin']);
   expect(p.files[0]!.meta).toMatchObject({ address: 0x80000000, constant: true, sha256: 'cd' });
 });
 

@@ -66,7 +66,7 @@ shares them once.
 
 - Files are grouped by camera: one folder per camera, named for its model and
   serial (`X70 59012345`), holding a flat list of `type-name.ext` files:
-  `flash.bin`, `state-dram.bin`, `state-boot-rom.bin`,
+  `flash.bin`, `memory-dram.bin`, `memory-boot-rom.bin`,
   `capture-still-shooting-dram.bin`, `capture-af-s-half-press.jpg`,
   `mapping-shutter-dial-candidates.bin`, `configuration.bin`,
   `console-log.json`.
@@ -112,10 +112,10 @@ Download all and Contribute. Its dialog adds the delete-from-camera choice and
 says that the message is posted publicly on GitHub; its upload remains the
 issue-report upload.
 
-### State captures
+### Camera mode captures
 
-A state capture re-reads everything except frozen regions. The boot ROM and
-other constant regions are read once per camera, by the state dump. There is no
+A camera mode capture re-reads everything except frozen regions. The boot ROM
+and other constant regions are read once per camera, by Dump memory. There is no
 quick scope.
 
 The browser entry point is `pageCameraModel()` in `usb-camera-model.ts`. It pins
