@@ -69,8 +69,8 @@ inputs or touch starts can anchor coverage. Report inputs carry `kind`
 (`control` or `touch`); a touch also records its `phase`, `x` and `y`, with
 `pressed` true at the start, false at the lift and null while moving. The
 videos draw a translucent circle at a finger while it is down, following its
-moves and fading after the lift: the clean video too, so a tap is always
-visible. Screenshots stay unmarked. Input badges push onto a bottom-right stack, newest
+moves; a tap ends in a ripple and a longer contact fades where it lifts. The
+clean video shows touches too, so a tap is always visible. Screenshots stay unmarked. Input badges push onto a bottom-right stack, newest
 at the bottom, retaining up to five presses. Repeated presses have separate
 entries; each remains visible for five presentation seconds after release,
 fading only during the final 0.4 seconds. New presses push the oldest entries
@@ -117,7 +117,7 @@ screenshot may still show a highlighted destination before activation.
 trailing inputs, and can extend beyond the last step's `video_end`.
 The host records `start_from` as the parent identity so consumers can link guides.
 Failed runs retain diagnostics and never qualify coverage. The Rust recorder
-owns screenshot encoding, frame reuse, badges and optional 15 fps video.
+owns screenshot encoding, frame reuse, badges and optional 30 fps video.
 `media` identifies `screenshots` or `video`; only video reports contain
 `video.mp4` and `video-clean.mp4`. Websites request video recordings explicitly.
 Image assertions can call `camera.capture().png()`; video sampling and holds

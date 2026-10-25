@@ -10,6 +10,10 @@ use std::{
     time::Instant,
 };
 
+/// LCD frames are sampled at most this often; the video itself runs at the
+/// recorder's fps, so badges and touches animate at the full frame rate.
+const SAMPLE_FPS: u32 = 15;
+
 #[derive(Default, Clone, Serialize)]
 pub struct Metrics {
     pub samples: u64,
@@ -98,6 +102,10 @@ impl Recorder {
     pub fn seconds(&self) -> f64 {
         self.frames as f64 / f64::from(self.fps)
     }
+    /// How often LCD frames are sampled; the video runs at `fps`.
+    pub fn sample_fps(&self) -> u32 {
+        self.fps.min(SAMPLE_FPS)
+    }
     pub fn has_poster(&self) -> bool {
         self.has_poster
     }
@@ -110,7 +118,7 @@ impl Recorder {
             && (force
                 || self
                     .last_sample
-                    .is_none_or(|last| time - last >= 1. / f64::from(self.fps))))
+                    .is_none_or(|last| time - last >= 1. / f64::from(self.sample_fps()))))
     }
     fn advance(&mut self, time: f64) -> Result<()> {
         seconds(time)?;
@@ -224,7 +232,12 @@ impl Recorder {
         self.advance(time)?;
         self.idle_kept = 0.;
         match (phase, down) {
-            (TouchPhase::Start, _) => self.touches.push(Touch { x, y, lifted: None }),
+            (TouchPhase::Start, _) => self.touches.push(Touch {
+                x,
+                y,
+                down: self.frames,
+                lifted: None,
+            }),
             (_, Some(index)) => {
                 let touch = &mut self.touches[index];
                 (touch.x, touch.y) = (x, y);
@@ -292,9 +305,8 @@ impl Recorder {
     }
     fn write(&mut self) -> Result<()> {
         if !self.video {
-            let fade = touches::fade_frames(self.fps);
-            self.touches
-                .retain(|t| t.lifted.is_none_or(|at| self.frames - at < fade));
+            let (frames, fps) = (self.frames, self.fps);
+            self.touches.retain(|t| touches::showing(t, frames, fps));
             self.frames += 1;
             return Ok(());
         }

@@ -23,10 +23,15 @@ frame events are monotonic; holds add presentation time without advancing any
 source clock. Unchanged idle intervals retain at most 0.4 seconds. Released
 badges remain for five presentation seconds, fading in the last 0.4 seconds.
 Touches (`Recorder::touch`, phases start, move and end, in the recorded frames'
-coordinates) appear in both videos, never in screenshots, as the iOS Simulator
-shows them: a translucent circle at the finger while it is down, following moves and
-fading out after the lift. Its geometry is the `touch` entry of
+coordinates) appear in both videos, never in screenshots: a translucent circle
+at the finger while it is down, popping in as it lands and following moves. A
+tap (a contact under `tap_ms`) ends in a ripple, a ring that grows from the
+circle and fades as the circle goes; a longer contact's circle fades where the
+finger lifts. Every touch shows as down for at least `minimum_ms`. Geometry and
+timing are the `touch` entry of
 [`catalog/input-presentation.json`](../../catalog/input-presentation.json).
+LCD frames are sampled at most 15 times a second; video runs at the recorder's
+frame rate (30 fps for walkthroughs), so badges and touches animate smoothly.
 The final observation is retained and finalization is idempotent. Dropping a
 recorder reaps its child encoders, including on failure.
 

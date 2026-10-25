@@ -426,6 +426,12 @@
     "fill": "#d8d8d880",
     "border": "#ffffffc0",
     "border_width": 2,
+    "press_ms": 90,
+    "press_scale": 0.7,
+    "minimum_ms": 150,
+    "tap_ms": 300,
+    "ripple_ms": 350,
+    "ripple_scale": 1.5,
     "release_ms": 300
   }
 }

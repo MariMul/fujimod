@@ -374,7 +374,7 @@ class Guide[C: RecordingCamera]:
         role: str | None = None,
         feature: str | None = None,
         hero: Sequence[MenuReference | OptionReference] = (),
-        fps: int = 15,
+        fps: int = 30,
         video: bool = False,
         navigation_hold: float = 0.12,
         action_hold: float = 0.45,

@@ -262,34 +262,90 @@ fn previous_frames_keep_their_input_state_and_final_observation_is_visible() {
 }
 
 #[test]
-fn touches_follow_the_finger_and_fade_after_lift() {
+fn touches_land_follow_the_finger_and_end_by_their_contact() {
+    use touches::Mark;
     let output = Output::new();
-    let mut r = Recorder::new(output.0.clone(), 10, false).unwrap();
+    let mut r = Recorder::new(output.0.clone(), 30, false).unwrap();
     assert!(r.touch(TouchPhase::Move, 1., 1., 0.).is_err());
     assert!(r.touch(TouchPhase::End, 1., 1., 0.).is_err());
     assert!(r.touch(TouchPhase::Start, f64::NAN, 1., 0.).is_err());
-    r.touch(TouchPhase::Start, 100., 60., 0.).unwrap();
-    assert!(r.touch(TouchPhase::Start, 1., 1., 0.).is_err());
     // A 320x240 source fitted into 640x480 doubles positions and the radius.
     let marks =
         |r: &mut Recorder| touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 480));
-    assert_eq!(marks(&mut r), vec![(200., 120., 44., 255)]);
+    let circle = |mark: &Mark| match *mark {
+        Mark::Circle {
+            x,
+            y,
+            radius,
+            opacity,
+        } => (x, y, radius, opacity),
+        Mark::Ripple { .. } => panic!("expected the finger's circle, got {mark:?}"),
+    };
+    r.touch(TouchPhase::Start, 100., 60., 0.).unwrap();
+    assert!(r.touch(TouchPhase::Start, 1., 1., 0.).is_err());
+    // It lands at 70% of its radius and grows to full size.
+    let (x, y, radius, opacity) = circle(&marks(&mut r)[0]);
+    assert_eq!((x, y, opacity), (200., 120., 1.));
+    assert!((radius - 44. * 0.7).abs() < 1e-9, "{radius}");
+    r.frames = 3;
     r.touch(TouchPhase::Move, 110., 70., 0.).unwrap();
-    assert_eq!(marks(&mut r), vec![(220., 140., 44., 255)]);
-    r.touch(TouchPhase::End, 120., 70., 0.).unwrap();
-    assert_eq!(marks(&mut r), vec![(240., 140., 44., 255)]);
-    r.frames += 1;
-    assert_eq!(marks(&mut r), vec![(240., 140., 44., 170)]);
-    // A new finger may land while the previous one fades.
-    r.touch(TouchPhase::Start, 10., 10., 0.).unwrap();
-    assert_eq!(marks(&mut r).len(), 2);
-    r.frames += 2;
-    assert_eq!(marks(&mut r), vec![(20., 20., 44., 255)]);
-    // Letterboxed sources keep the centered fit offset.
     assert_eq!(
-        touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 240)),
-        vec![(170., 10., 22., 255)]
+        marks(&mut r),
+        vec![Mark::Circle {
+            x: 220.,
+            y: 140.,
+            radius: 44.,
+            opacity: 1.
+        }]
     );
+    // A 0.1 s tap still shows as down for its 0.15 s minimum...
+    r.touch(TouchPhase::End, 120., 70., 0.).unwrap();
+    r.frames = 4;
+    assert_eq!(
+        marks(&mut r),
+        vec![Mark::Circle {
+            x: 240.,
+            y: 140.,
+            radius: 44.,
+            opacity: 1.
+        }]
+    );
+    // ...then its circle fades while a ring grows from it.
+    r.frames = 6;
+    let now = marks(&mut r);
+    assert_eq!(now.len(), 2);
+    assert!(circle(&now[0]).3 < 1.);
+    let Mark::Ripple {
+        radius, opacity, ..
+    } = now[1]
+    else {
+        panic!("{now:?}")
+    };
+    assert!(
+        radius > 44. && radius < 66. && opacity < 1. && opacity > 0.,
+        "{now:?}"
+    );
+    // The ripple is done 0.35 s after the minimum.
+    r.frames = 15;
+    assert!(marks(&mut r).is_empty());
+    assert!(r.touches.is_empty());
+
+    // A longer contact fades in place without a ripple.
+    r.touch(TouchPhase::Start, 10., 10., 0.).unwrap();
+    r.frames = 30;
+    r.touch(TouchPhase::End, 10., 10., 0.).unwrap();
+    r.frames = 34;
+    let now = marks(&mut r);
+    assert_eq!(now.len(), 1);
+    let (x, y, radius, opacity) = circle(&now[0]);
+    assert_eq!((x, y, radius), (20., 20., 44.));
+    assert!(opacity > 0. && opacity < 1.);
+    // Letterboxed sources keep the centered fit offset.
+    let (x, y, radius, _) =
+        circle(&touches::marks(&mut r.touches, r.frames, r.fps, (320, 240), (640, 240))[0]);
+    assert_eq!((x, y, radius), (170., 10., 22.));
+    r.frames = 40;
+    assert!(marks(&mut r).is_empty());
 }
 
 #[test]
@@ -298,7 +354,15 @@ fn touch_edges_are_anti_aliased() {
     // half-pixel shift of the center changes the pixels, not a whole step.
     let draw = |cx: f64| {
         let mut canvas = crate::canvas::Canvas::from_rgb(&[0; 64 * 64 * 3], 64, 64);
-        touches::draw_on(&mut canvas, &[(cx, 32., 20., 255)]);
+        touches::draw_on(
+            &mut canvas,
+            &[touches::Mark::Circle {
+                x: cx,
+                y: 32.,
+                radius: 20.,
+                opacity: 1.,
+            }],
+        );
         canvas.rgb()
     };
     let pixels = draw(32.);

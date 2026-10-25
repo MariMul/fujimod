@@ -132,7 +132,7 @@ struct Recorder {
 #[pymethods]
 impl Recorder {
     #[new]
-    #[pyo3(signature=(output,*,fps=15,video=false))]
+    #[pyo3(signature=(output,*,fps=30,video=false))]
     fn new(output: PathBuf, fps: u32, video: bool) -> PyResult<Self> {
         Ok(Self {
             inner: NativeRecorder::new(output, fps, video).map_err(error)?,
@@ -186,6 +186,12 @@ impl Recorder {
     #[getter]
     fn fps(&self) -> u32 {
         self.inner.fps
+    }
+    /// How often LCD frames are sampled: at most 15 a second, whatever the
+    /// video frame rate.
+    #[getter]
+    fn sample_fps(&self) -> u32 {
+        self.inner.sample_fps()
     }
     #[getter]
     fn video(&self) -> bool {
