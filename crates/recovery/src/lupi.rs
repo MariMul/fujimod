@@ -68,14 +68,15 @@ pub fn package(
         .as_ref()
         .map(|transport| transport.install(api, inverted, plan, &mut ram))
         .transpose()?;
-    let mut files = vec![
+    if let Some(storage) = storage {
+        ram.resize((ram.len() + 3) & !3, 0);
+        ram.extend_from_slice(&storage);
+    }
+    let files = vec![
         File::new("ffsys.bin", system)?,
         File::new("ffboot.bin", stage(api, &ram)?)?,
-        File::new("ffimage.bin", ram)?,
+        File::new("ffuser.bin", ram)?,
     ];
-    if let Some(storage) = storage {
-        files.push(File::new("ffstore.bin", storage)?);
-    }
     Ok(files)
 }
 

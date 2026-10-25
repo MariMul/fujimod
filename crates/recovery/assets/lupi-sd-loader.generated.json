@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "image_bytes": 1540,
+  "image_bytes": 1612,
   "stage": {
     "offset": 0,
     "size": 388,
@@ -13,12 +13,12 @@
   "firmware": {
     "address": 8192,
     "offset": 388,
-    "size": 1152,
+    "size": 1224,
     "symbols": {
-      "lupi_firmware_config": 616,
+      "lupi_firmware_config": 680,
       "lupi_firmware_indexed": 72,
-      "lupi_firmware_indexed3": 580,
-      "lupi_firmware_indexed4": 560
+      "lupi_firmware_indexed3": 644,
+      "lupi_firmware_indexed4": 624
     }
   }
 }

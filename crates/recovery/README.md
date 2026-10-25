@@ -38,10 +38,11 @@ comparisons select the preloaded table, images, and worker bypass.
 
 EXR and EXR Pro use Lupi's 512-byte `ffsys.bin` header and a small
 `ffboot.bin`. That SD loader copies itself to SRAM and uses the ROM's u16 read
-ABI to load `ffimage.bin` in chunks, checking file length, actual counts and
+ABI to load `ffuser.bin` in chunks, checking file length, actual counts and
 CRC32 before entering the stock RAM image. The extra file avoids the ROM's
 16-bit truncation of the initial boot-file length. Updater code proofs are
-checked against `ffimage.bin`.
+checked against `ffuser.bin`. The runtime indexed reader opens this same file
+and reads the firmware namespace appended after its initialized RAM image.
 
 X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
 complete RAM image as `ffboot.bin`. The locator follows the update's single

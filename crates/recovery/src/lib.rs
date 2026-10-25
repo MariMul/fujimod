@@ -348,7 +348,7 @@ impl Recipe {
         )?;
         if let Some(contract) = &self.updater {
             let ram_filename = if matches!(self.generation, Generation::Exr | Generation::ExrPro) {
-                "ffimage.bin"
+                "ffuser.bin"
             } else {
                 "ffboot.bin"
             };
@@ -394,7 +394,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
                     ]);
                 }
                 if matches!(recipe.generation, Generation::Exr | Generation::ExrPro) {
-                    output_filenames.push("ffimage.bin".into());
+                    output_filenames.push("ffuser.bin".into());
                 }
             }
             Generation::Xp4 => output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()]),
