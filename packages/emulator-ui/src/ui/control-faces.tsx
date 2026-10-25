@@ -96,7 +96,7 @@ export function KeyFace(props: FaceProps & { hint?: string }) {
       <Actuator
         render={props.renderKey}
         action="press"
-        class={`key ${props.part.marking.icon === 'record' ? 'rec' : ''} ${props.held ? 'active' : ''} ${props.part.marking.face?.some((line) => line.length > 3) ? 'sm' : ''} ${props.hint ? 'wifi' : ''}`}
+        class={`key ${props.part.marking.icon === 'record' ? 'rec' : ''} ${props.held ? (props.size === 'mini' ? 'glow' : 'active') : ''} ${props.part.marking.face?.some((line) => line.length > 3) ? 'sm' : ''} ${props.hint ? 'wifi' : ''}`}
       >
         <PrintedMark marking={props.part.marking} />
         <Show when={props.hint}>
@@ -117,7 +117,10 @@ export function ShutterFace(props: FaceProps & { left?: string }) {
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
     >
       <span class={`slide ${stage() ?? ''}`}>
-        <span class="thumb" style={{ left: props.left }}>
+        <span
+          class={['thumb', { glow: props.size === 'mini' && props.held }]}
+          style={{ left: props.left }}
+        >
           {stage()?.toUpperCase()}
         </span>
         <span class="end">FULL</span>
@@ -142,7 +145,7 @@ export function CommandFace(props: FaceProps) {
               <Actuator
                 render={props.renderKey}
                 action={action}
-                class={`key ${action === 'press' ? 'tab' : `side ${action === 'decrease' ? 'l' : 'r'}`} ${held(action) ? 'active' : ''}`}
+                class={`key ${action === 'press' ? 'tab' : `side ${action === 'decrease' ? 'l' : 'r'}`} ${held(action) ? (props.size === 'mini' ? 'glow' : 'active') : ''}`}
               >
                 {action === 'decrease' ? (
                   '◀'
@@ -182,7 +185,7 @@ export function PadFace(props: FaceProps) {
             <Actuator
               render={props.renderKey}
               action={key.action}
-              class={`key ${key.class} ${held(key.action) ? 'active' : ''}`}
+              class={`key ${key.class} ${held(key.action) ? (props.size === 'mini' ? 'glow' : 'active') : ''}`}
             >
               <Show when={key.action === 'press'} fallback={<span>{key.glyph}</span>}>
                 <PrintedMark marking={props.part.marking} />
@@ -224,7 +227,11 @@ export function PositionsFace(
               <Actuator
                 render={props.renderKey}
                 action={position.id}
-                class={selected() === position.id ? 'on' : ''}
+                class={
+                  selected() === position.id
+                    ? `on ${props.size === 'mini' && props.held ? 'glow' : ''}`
+                    : ''
+                }
               >
                 {position.label}
               </Actuator>

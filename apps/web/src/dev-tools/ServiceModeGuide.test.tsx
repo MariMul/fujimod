@@ -142,7 +142,7 @@ test('the service guide connects without selecting firmware or writing anything'
     p.button('Begin')!.click();
     flush();
     expect(p.host.querySelector('.dm-camera')).toBeNull();
-    expect(p.host.querySelector('.dpad .u.active')).not.toBeNull();
+    expect(p.host.querySelector('.dpad .u.glow')).not.toBeNull();
     expect(p.host.querySelector('.slide.full')).not.toBeNull();
     expect(p.host.querySelector('[aria-label="USB connected"]')).not.toBeNull();
     expect(p.host.textContent).toContain('do not use the OFF switch');

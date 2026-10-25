@@ -574,3 +574,14 @@
 .combo .power-combo-keys {
   flex: 1 1 100%;
 }
+
+.glow {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 14px rgba(255, 255, 255, 0.45) !important;
+}
+/* The wedge clips its outer shadow; brighten the held direction inside its outline. */
+.dpad .a.glow {
+  background: linear-gradient(#c7c7cc, #686870);
+  color: #fff;
+}

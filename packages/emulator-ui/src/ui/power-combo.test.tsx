@@ -3,6 +3,7 @@ import { flush } from 'solid-js';
 import { expect, test } from 'vite-plus/test';
 import type { PhysicalControls } from 'fujimod';
 import x70 from '../../../../catalog/bodies/x70/controls.json';
+import { CommandFace, PadFace } from './control-faces';
 import { PowerComboKeys } from './power-combo';
 
 test('X70 recovery draws the panel faces with command center, record, DISP/BACK and ON', () => {
@@ -15,10 +16,10 @@ test('X70 recovery draws the panel faces with command center, record, DISP/BACK 
   expect([...host.querySelectorAll('[data-part]')].map((e) => e.getAttribute('data-part'))).toEqual(
     ['command', 'key', 'key', 'positions'],
   );
-  expect(host.querySelector('.knurl .tab.active')).toBeTruthy();
+  expect(host.querySelector('.knurl .tab.glow')).toBeTruthy();
   expect(host.querySelector('.control-short-name')?.textContent).toBe('CMD');
   expect(host.querySelector('.key.rec i')).toBeTruthy();
-  expect(host.querySelectorAll('.key.active')).toHaveLength(3);
+  expect(host.querySelectorAll('.key.glow')).toHaveLength(3);
   expect(host.textContent).toContain('DISP\nBACK');
   expect(host.querySelector('.seg .on')?.textContent).toBe('ON');
   expect(host.querySelectorAll('button')).toHaveLength(0);
@@ -33,7 +34,38 @@ test('service sequence draws USB, the held selector direction, and full shutter 
   );
   flush();
   expect(host.querySelector('[aria-label="USB connected"]')).toBeTruthy();
-  expect(host.querySelector('.dpad .u.active')).toBeTruthy();
+  expect(host.querySelector('.dpad .u.glow')).toBeTruthy();
   expect(host.querySelector('.slide.full')).toBeTruthy();
   dispose();
 });
+
+for (const held of ['decrease', 'press', 'increase'] as const) {
+  test(`command mini highlights only its held ${held} part`, () => {
+    const host = document.createElement('div');
+    const dispose = render(
+      () => (
+        <CommandFace part={{ kind: 'command', marking: { shortName: 'CMD' }, held }} size="mini" />
+      ),
+      host,
+    );
+    flush();
+    expect(host.querySelectorAll('.glow')).toHaveLength(1);
+    expect(host.querySelector('.glow')?.getAttribute('data-action')).toBe(held);
+    expect(host.querySelector('.active')).toBeNull();
+    dispose();
+  });
+}
+for (const held of ['up', 'down', 'left', 'right', 'press'] as const) {
+  test(`pad mini highlights only its held ${held} part`, () => {
+    const host = document.createElement('div');
+    const dispose = render(
+      () => <PadFace part={{ kind: 'pad', marking: {}, held }} size="mini" />,
+      host,
+    );
+    flush();
+    expect(host.querySelectorAll('.glow')).toHaveLength(1);
+    expect(host.querySelector('.glow')?.getAttribute('data-action')).toBe(held);
+    expect(host.querySelector('.active')).toBeNull();
+    dispose();
+  });
+}
