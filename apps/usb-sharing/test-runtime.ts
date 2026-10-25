@@ -37,11 +37,14 @@ export async function runtime(
             },
           },
           exports: {
+            Contributions: { type: 'durable-object', storage: 'sqlite' },
             IssueReports: { type: 'durable-object', storage: 'sqlite' },
             ShareRoom: { type: 'durable-object', storage: 'sqlite' },
             TurnBudget: { type: 'durable-object', storage: 'sqlite' },
           },
           env: {
+            CONTRIBUTIONS: { type: 'durable-object', worker: 'sharing', exportName: 'Contributions' },
+            CONTRIBUTION_LIMIT: { type: 'rate-limit', namespace: '1004', simple: { limit: 60, period: 60 } },
             ISSUES: { type: 'durable-object', worker: 'sharing', exportName: 'IssueReports' },
             ISSUE_REPORTS: { type: 'r2', name: 'reports' },
             ISSUE_LIMIT: {

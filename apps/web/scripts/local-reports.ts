@@ -1,3 +1,5 @@
+import { inflateRawSync } from 'node:zlib';
+import { crc32 } from '@fujimod/emulator-ui/archive';
 import type { Plugin, Connect } from 'vite';
 import { browserScript } from './browser-script.ts';
 import { createWriteStream } from 'node:fs';
@@ -142,7 +144,7 @@ async function extractReport(archive: string, destination: string) {
     if (
       (await file.read(header, 0, 30, 0)).bytesRead !== 30 ||
       header.readUInt32LE(0) !== 0x04034b50 ||
-      header.readUInt16LE(8) !== 0
+      ![0, 8].includes(header.readUInt16LE(8))
     )
       throw Error('Report ZIP header differs');
     const size = header.readUInt32LE(18),
@@ -155,7 +157,13 @@ async function extractReport(archive: string, destination: string) {
     const data = Buffer.alloc(size);
     if ((await file.read(data, 0, size, 30 + length + extra)).bytesRead !== size)
       throw Error('Report JSON is truncated');
-    await writeFile(destination, JSON.stringify(JSON.parse(data.toString()), null, 2) + '\n');
+    const decoded =
+      header.readUInt16LE(8) === 8
+        ? inflateRawSync(data, { maxOutputLength: 16 * 1024 * 1024 })
+        : data;
+    if (decoded.length !== header.readUInt32LE(22) || crc32(decoded) !== header.readUInt32LE(14))
+      throw Error('Report JSON checksum differs');
+    await writeFile(destination, JSON.stringify(JSON.parse(decoded.toString()), null, 2) + '\n');
   } finally {
     await file.close();
   }

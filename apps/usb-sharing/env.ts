@@ -1,8 +1,11 @@
+import type { Contributions } from './contributions.ts';
 import type { IssueReports } from './issue-reports.ts';
 import type { ShareRoom, TurnBudget } from './worker.ts';
 export interface Env {
   ISSUE_REPORTS: R2Bucket;
   REPORTS_INDEX: D1Database;
+  CONTRIBUTIONS: DurableObjectNamespace<Contributions>;
+  CONTRIBUTION_LIMIT: RateLimit;
   ISSUE_LIMIT: RateLimit;
   ERROR_LIMIT: RateLimit;
   CONNECTIONS: RateLimit;

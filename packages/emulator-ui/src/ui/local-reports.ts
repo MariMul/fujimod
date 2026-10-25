@@ -47,7 +47,7 @@ export class LocalReports {
     try {
       blob = await (typeof capture === 'function' ? capture() : capture);
     } catch (error) {
-      blob = errorReportZip({
+      blob = await errorReportZip({
         ...context,
         ...submission,
         snapshot: { unavailable: String(error) },

@@ -25,7 +25,7 @@ import { loadImageScene, loadRafScene } from './image-scene';
 import { EngineError, faultFrom, type EngineFault } from '@fujimod/emulator-ui/engine/fault';
 import type { CameraPerformance } from '@fujimod/emulator-ui/engine/performance';
 import type { ReportSubmission } from '@fujimod/emulator-ui/engine/report';
-import { zipFiles } from '@fujimod/emulator-ui/archive';
+import { zipBlob } from '@fujimod/emulator-ui/archive';
 import type {
   WasmRequest,
   WasmWorkerEvent,
@@ -328,7 +328,7 @@ export class WasmEngine implements Engine {
       ],
     ];
     if (exported.snapshot) files.push(['snapshot.emusnap', new Uint8Array(exported.snapshot)]);
-    return zipFiles(files);
+    return zipBlob(files.map(([path, bytes]) => ({ path, data: new Blob([bytes]) })));
   }
 
   async restartWithCardFiles(files: CardFile[], progress: LoadingProgress) {

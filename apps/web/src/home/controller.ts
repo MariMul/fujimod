@@ -328,7 +328,7 @@ export function startHome(
             const result = await patchFirmware(file);
             if (current !== generation) return;
             if (!result) throw Error('No release patch is available for this firmware.');
-            if (action === 'sd-card') downloadBlob(cardZip(result), 'sd-card.zip');
+            if (action === 'sd-card') downloadBlob(await cardZip(result), 'sd-card.zip');
             else {
               if (!flags.allowFpUpdateDownload || !result.fpupdate)
                 throw Error('FP update download unavailable.');

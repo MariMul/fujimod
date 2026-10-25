@@ -6,9 +6,9 @@ import type { Engine } from '../engine/api';
 import type { CardEntry, CardState } from 'fujimod/emulator';
 import { flags } from '../flags';
 import { downloadBlob } from './download';
-import { zipFiles } from '../archive';
+import { zipBlob } from '../archive';
 vi.mock('./download', () => ({ downloadBlob: vi.fn() }));
-vi.mock('../archive', { spy: true });
+vi.mock('../archive', () => ({ zipBlob: vi.fn(async () => new Blob()) }));
 vi.mock('../flags', () => ({
   flags: { allowFpUpdateDownload: false, allowSdCardBootDownload: false },
 }));
@@ -316,8 +316,8 @@ test.each([
   expect(readCardFile.mock.calls.map((call) => call[0])).toEqual(
     allowed.map((entry) => entry.path),
   );
-  expect(zipFiles).toHaveBeenLastCalledWith(
-    allowed.map((entry) => [entry.path.slice(1), new Uint8Array([1, 2])]),
+  expect(zipBlob).toHaveBeenLastCalledWith(
+    allowed.map((entry) => ({ path: entry.path.slice(1), data: expect.any(Blob) })),
   );
 });
 

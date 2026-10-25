@@ -1,3 +1,4 @@
+import { inflateRawSync } from 'node:zlib';
 import type { PatchMetadata, FileIdentity } from '../src/patch/patcher.ts';
 import { test } from 'vite-plus/test';
 import assert from 'node:assert/strict';
@@ -216,7 +217,7 @@ test('validates hash-to-filename catalog and rejects path traversal, missing map
 test('ZIP has known CRC32, correct file names and CRCs, data and directory offsets', async () => {
   assert.equal(crc32(text('123456789')), 0xcbf43926);
   const expected = { ffboot: text('boot bytes'), ffsys: text('sys bytes') };
-  const archive = new Uint8Array(await cardZip(expected).arrayBuffer()),
+  const archive = new Uint8Array(await (await cardZip(expected)).arrayBuffer()),
     view = new DataView(archive.buffer);
   let cursor = 0;
   for (const name of ['ffboot', 'ffsys'] as const) {
@@ -228,8 +229,11 @@ test('ZIP has known CRC32, correct file names and CRCs, data and directory offse
       name + '.bin',
     );
     assert.equal(view.getUint32(cursor + 14, true), crc32(expected[name]));
+    assert.equal(view.getUint16(cursor + 8, true), 8);
     assert.deepEqual(
-      archive.subarray(cursor + 30 + count, cursor + 30 + count + length),
+      Uint8Array.from(
+        inflateRawSync(archive.subarray(cursor + 30 + count, cursor + 30 + count + length)),
+      ),
       expected[name],
     );
     cursor += 30 + count + length;

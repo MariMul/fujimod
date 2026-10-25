@@ -1,3 +1,5 @@
+import { contributions } from './contributions.ts';
+export { Contributions } from './contributions.ts';
 import type { Env, BudgetRecord, IceServer, Attachment } from './env.ts';
 // USB rendezvous, explicit issue-report intake and website error logs. Shared USB payloads stay on WebRTC.
 import { issueReports } from './issue-reports.ts';
@@ -27,6 +29,7 @@ function attachment(socket: WebSocket): Attachment {
 export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
+    if (url.pathname === '/contributions' || url.pathname.startsWith('/contributions/')) return contributions(request, env);
     if (url.pathname === '/issue-reports') return issueReports(request, env);
     if (url.pathname === '/error-logs') return errorLogs(request, env);
     if (url.pathname === '/health' && request.method === 'GET')
