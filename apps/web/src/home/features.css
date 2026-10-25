@@ -191,9 +191,9 @@
   --credit-indent: calc(1.556 * var(--icon-size) + 0.45em);
   list-style: none;
   padding: 0;
-  margin: 10px 0 0;
+  margin: 6px 0 0;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.35;
   color: var(--dim);
 }
 .catalog-credits li {
@@ -201,7 +201,7 @@
   text-indent: calc(-1 * var(--credit-indent));
 }
 .catalog-credits li + li {
-  margin-top: 3px;
+  margin-top: 1px;
 }
 .catalog-credits .catalog-icon {
   margin-left: calc((1.556 - var(--w)) / 2 * var(--icon-size));
@@ -268,10 +268,10 @@
   margin: 0 0 6px;
 }
 .catalog-card .catalog-credits {
-  margin-top: 12px;
+  margin: 0 0 6px;
 }
 .catalog-card-heading {
-  margin: 14px 0 4px;
+  margin: 10px 0 3px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;

@@ -177,12 +177,14 @@ function CreditList(props: { credits: Credits }) {
   );
 }
 
-/** What tiles and hover cards share: the menus above the title, the title, WORLD PREMIERE, the body, the credits. */
+/** What tiles and hover cards share: the menus above the title, the title, WORLD PREMIERE, the description,
+    the credits, then the rest (options or Related). */
 function Entry(props: {
   path: string[];
   title: JSX.Element;
+  description: JSX.Element;
   credits: Credits;
-  children: JSX.Element;
+  children?: JSX.Element;
 }) {
   return (
     <>
@@ -193,8 +195,9 @@ function Entry(props: {
       <Show when={props.credits.premiere}>
         <Premiere />
       </Show>
-      {props.children}
+      {props.description}
       <CreditList credits={props.credits} />
+      {props.children}
     </>
   );
 }
@@ -254,17 +257,19 @@ function CardBody(props: { target: Target }) {
         path={crumbs()}
         title={<div class="catalog-card-title">{choice() ?? card().title}</div>}
         credits={credits()}
+        description={
+          <Show
+            when={choice()}
+            fallback={
+              <Show when={card().changes} fallback={<p>{card().summary}</p>}>
+                <p>In FujiMod: {card().changes}</p>
+              </Show>
+            }
+          >
+            <p>{card().choices[choice()!]}</p>
+          </Show>
+        }
       >
-        <Show
-          when={choice()}
-          fallback={
-            <Show when={card().changes} fallback={<p>{card().summary}</p>}>
-              <p>In FujiMod: {card().changes}</p>
-            </Show>
-          }
-        >
-          <p>{card().choices[choice()!]}</p>
-        </Show>
         <Show when={!choice() && card().related.length}>
           <h5 class="catalog-card-heading">Related</h5>
           <ul class="catalog-card-related">
@@ -380,10 +385,12 @@ export function FeatureCatalog() {
           </h4>
         }
         credits={props.feature.credits}
+        description={
+          <p>
+            <Prose text={props.feature.summary} />
+          </p>
+        }
       >
-        <p>
-          <Prose text={props.feature.summary} />
-        </p>
         <For each={props.feature.controls}>
           {(control) => (
             <Show when={!control.primary} fallback={<Chips control={control} />}>
