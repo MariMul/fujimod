@@ -94,14 +94,12 @@ export class LogBuffer {
     this.discarded = 0;
   }
 }
-/** Entries as JSON without payload bytes; sizes and decoded messages describe each exchange. */
+/** JSON Lines, one entry per line, without payload bytes; sizes and decoded messages describe each exchange. */
 export function exportLog(entries: readonly Omit<LogEntry, 'id'>[]): string {
-  return JSON.stringify(
-    entries.map(({ data: _data, ...entry }) => ({
-      ...entry,
-      time: new Date(entry.time).toISOString(),
-    })),
-    null,
-    2,
-  );
+  return entries
+    .map(({ data: _data, ...entry }) =>
+      JSON.stringify({ ...entry, time: new Date(entry.time).toISOString() }),
+    )
+    .map((line) => `${line}\n`)
+    .join('');
 }

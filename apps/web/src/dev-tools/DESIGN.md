@@ -69,7 +69,7 @@ shares them once.
   `flash.bin`, `memory-dram.bin`, `memory-boot-rom.bin`,
   `capture-still-shooting-dram.bin`, `capture-af-s-half-press.jpg`,
   `mapping-shutter-dial-candidates.bin`, `configuration.bin`,
-  `console-log.json`.
+  `log.jsonl`.
 - Each row shows an icon, name and size, a download arrow and a remove button.
   The camera folder has the same two actions for all of its files.
 - **Download all** saves one deflate-compressed zip with a folder per camera
@@ -78,11 +78,12 @@ shares them once.
 - **Contribute** (upload icon) opens the Contribute dialog.
 - The list keeps a fixed height and scrolls; adding a file never moves the
   tool above it. The newest file is briefly tinted.
-- `console-log.json` is the camera's log entries as JSON with no payload bytes:
-  each entry keeps its time, layer, level, direction, decoded message, detail
+- `log.jsonl` is the camera's log entries as JSON Lines (one entry per line)
+  with no payload bytes. It covers every log layer, not only console commands.
+  Each entry keeps its time, layer, level, direction, decoded message, detail
   and sizes. The transport keeps at most 256 bytes of each exchange's payload
   for the console's hex view; the full data lives only in the tool's own file.
-  Removing `console-log.json` drops the entries logged so far from the file;
+  Removing `log.jsonl` drops the entries logged so far from the file;
   it returns when new entries arrive.
 - Files live in browser memory as Blobs until removed or the page closes.
 

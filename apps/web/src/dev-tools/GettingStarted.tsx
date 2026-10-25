@@ -223,22 +223,28 @@ export function GettingStarted(props: {
           </button>
         </Item>
         <Item number={3} state={debugStep()}>
-          <button
-            class="wb-btn"
-            disabled={!available() || !unlocked() || !props.debug || debugStep() === 'done'}
-            onClick={() => void enableDebugMode()}
-          >
-            Enable debug mode
-          </button>
-          <Show when={debugStep() !== 'done'}>
-            <span class="wb-writes">Changes a camera setting</span>
-          </Show>
+          <div class="gs-stack">
+            <p class="gs-note">
+              In debug mode your camera works normally, but its USB connection can also inspect and
+              control the camera’s software. Ordinary file transfer needs USB plugged in twice. The
+              setting stays on after restarts until you disable it.
+            </p>
+            <div class="gs-row">
+              <button
+                class="wb-btn"
+                disabled={!available() || !unlocked() || !props.debug || debugStep() === 'done'}
+                onClick={() => void enableDebugMode()}
+              >
+                Enable debug mode
+              </button>
+              <Show when={debugStep() !== 'done'}>
+                <span class="wb-writes">Changes a camera setting</span>
+              </Show>
+            </div>
+          </div>
         </Item>
         <Item number={4} state={restarted() ? 'done' : 'todo'}>
-          <p class="gs-note">
-            Remove the battery, reinsert it, switch on and reconnect. Plug USB in twice for file
-            transfer.
-          </p>
+          <p class="gs-note">Remove the battery, reinsert it, switch on and reconnect.</p>
         </Item>
         <Item number={5} state="todo">
           <button

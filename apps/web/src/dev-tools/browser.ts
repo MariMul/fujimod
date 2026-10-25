@@ -160,7 +160,7 @@ try {
       const bundle = await readFile((await (await downloaded).path())!);
       assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'Download all is a zip');
       const text = bundle.toString('latin1');
-      for (const name of ['manifest.json', '/configuration.bin', '/console-log.json'])
+      for (const name of ['manifest.json', '/configuration.bin', '/log.jsonl'])
         assert.ok(text.includes(name), `archive contains ${name}`);
 
       // The Connection layer filters like every other layer.

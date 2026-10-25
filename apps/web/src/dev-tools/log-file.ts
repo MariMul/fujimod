@@ -14,10 +14,10 @@ export function shelfCamera(camera: Camera): ShelfCamera {
 }
 
 /**
- * Each camera's `console-log.json`: its log entries after the last removal, as
- * JSON without payload bytes. Rebuilt at most twice a second while the log grows.
+ * Each camera's `log.jsonl`: its log entries after the last removal, as JSON
+ * Lines without payload bytes. Rebuilt at most twice a second while the log grows.
  */
-export function createConsoleLogFiles(
+export function createLogFiles(
   log: () => readonly CameraLogEntry[],
   cameras: () => readonly Camera[],
 ) {
@@ -34,10 +34,8 @@ export function createConsoleLogFiles(
           (entry) => entry.camera === camera.id && entry.id > (after.get(camera.id) ?? -1),
         );
         if (!own.length) return [];
-        const blob = new Blob([exportLog(own)], { type: 'application/json' });
-        return [
-          { key: `log:${camera.id}`, camera: shelfCamera(camera), name: 'console-log.json', blob },
-        ];
+        const blob = new Blob([exportLog(own)], { type: 'application/jsonl' });
+        return [{ key: `log:${camera.id}`, camera: shelfCamera(camera), name: 'log.jsonl', blob }];
       }),
     );
   };
