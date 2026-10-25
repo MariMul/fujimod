@@ -1,6 +1,7 @@
 use crate::{
-    Frame, Result, badges,
+    CardPanel, Frame, Result, badges,
     canvas::Canvas,
+    card_panel,
     touches::{self, Mark, Touch, TouchPhase},
     video::Encoders,
 };
@@ -55,6 +56,9 @@ pub struct Recorder {
     labels: Vec<(String, u8)>,
     marks: Vec<Mark>,
     has_poster: bool,
+    card_reserved: bool,
+    card_panel: Option<CardPanel>,
+    card_changed: bool,
 }
 pub fn seconds(value: f64) -> Result<f64> {
     if value.is_finite() && value >= 0. {
@@ -97,7 +101,29 @@ impl Recorder {
             labels: Vec::new(),
             marks: Vec::new(),
             has_poster: false,
+            card_reserved: false,
+            card_panel: None,
+            card_changed: false,
         })
+    }
+    /// Reserve the SD presentation column before any video frames are written.
+    pub fn reserve_card_panel(&mut self) -> Result<()> {
+        if self.frames != 0 || self.finished {
+            return Err("Reserve the SD panel before presenting any frames".into());
+        }
+        self.card_reserved = true;
+        self.fitted = None;
+        Ok(())
+    }
+    pub fn card_panel(&mut self, snapshot: Option<CardPanel>) -> Result<()> {
+        if !self.card_reserved || self.finished {
+            return Err("SD presentation requires an active reserved column".into());
+        }
+        self.card_panel = snapshot;
+        self.card_changed = true;
+        self.latest_shown = false;
+        self.idle_kept = 0.;
+        Ok(())
     }
     pub fn seconds(&self) -> f64 {
         self.frames as f64 / f64::from(self.fps)
@@ -312,17 +338,34 @@ impl Recorder {
         }
         let frame = self.last.as_ref().ok_or("No LCD frames recorded")?;
         let source = (frame.width(), frame.height());
-        let size = *self.size.get_or_insert(source);
+        let size = *self.size.get_or_insert(if self.card_reserved {
+            (source.0 + source.1 * 3 / 4, source.1)
+        } else {
+            source
+        });
         let changed = self.fitted.is_none();
         if changed {
-            self.fitted = Some(frame.fit(size.0, size.1)?);
+            self.fitted = Some(if self.card_reserved {
+                card_panel::reserve(frame)?.fit(size.0, size.1)?
+            } else {
+                frame.fit(size.0, size.1)?
+            });
         }
         let labels = self.current_labels();
-        let marks = touches::marks(&mut self.touches, self.frames, self.fps, source, size);
+        let touch_source = if self.card_reserved {
+            (source.0 + source.1 * 3 / 4, source.1)
+        } else {
+            source
+        };
+        let marks = touches::marks(&mut self.touches, self.frames, self.fps, touch_source, size);
         let fitted = self.fitted.as_ref().unwrap();
-        if changed || labels != self.labels || marks != self.marks {
+        if changed || self.card_changed || labels != self.labels || marks != self.marks {
             let start = Instant::now();
             let mut canvas = Canvas::from_rgb(fitted.pixels(), fitted.width(), fitted.height());
+            if let Some(panel) = &self.card_panel {
+                card_panel::draw(&mut canvas, panel);
+            }
+            self.card_changed = false;
             // Both videos show touches; only the annotated one shows badges.
             touches::draw_on(&mut canvas, &marks);
             self.touched = canvas.rgb();

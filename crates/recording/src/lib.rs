@@ -4,6 +4,8 @@
 mod badges;
 pub mod cache;
 mod canvas;
+mod card_panel;
+pub use card_panel::CardPanel;
 pub mod frame;
 mod text;
 mod timeline;

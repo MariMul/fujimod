@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,6 +30,36 @@ class Source:
 
 
 class RecordingTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ffmpeg'), 'ffmpeg required')
+    def test_sd_panel_stays_in_video_while_native_screenshot_keeps_its_pixels(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            recorder = Recorder(root, fps=10, video=True)
+            frame = Frame.rgb(720, 480, bytes((40, 80, 120)) * 720 * 480)
+            recorder.reserve_card_panel()
+            recorder.frame(frame, 0)
+            recorder.still(frame, .2)
+            panel = dict(label='2026-10-25', rows=[dict(name='DCIM', path='/DCIM',
+                depth=0, directory=True, bytes=0), dict(name='DSCF0001.JPG',
+                path='/DCIM/DSCF0001.JPG', depth=1, directory=False, bytes=123456)],
+                highlight='/DCIM/DSCF0001.JPG')
+            recorder.card_panel(json.dumps(panel))
+            recorder.still(frame, .4)
+            recorder.screenshot(frame, 'native.png')
+            with self.assertRaisesRegex(ValueError, 'before presenting'):
+                recorder.reserve_card_panel()
+            recorder.finish()
+            self.assertEqual(Frame.from_png((root/'native.png').read_bytes()).pixels(), frame.pixels())
+            from PIL import Image
+            for movie in ('video.mp4', 'video-clean.mp4'):
+                raw = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', str(root/movie),
+                    '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'])
+                self.assertEqual(len(raw), 6 * 1080 * 480 * 3)
+                first = Image.frombytes('RGB', (1080, 480), raw[:1080*480*3])
+                last = Image.frombytes('RGB', (1080, 480), raw[-1080*480*3:])
+                self.assertEqual(first.getpixel((500, 200)), last.getpixel((500, 200)))
+                self.assertNotEqual(first.getpixel((760, 150)), last.getpixel((760, 150)))
+
     def test_pixels_preserve_the_unencoded_rgb_raster(self) -> None:
         pixels = bytes((10, 20, 30, 40, 50, 60))
         frame = Frame.rgb(2, 1, pixels)

@@ -120,6 +120,7 @@ class Presentation(TypedDict):
     navigation_hold: float
     action_hold: float
     duration_seconds: float
+    input_badges: list[str] | None
 
 
 class Hero(TypedDict):
@@ -402,6 +403,7 @@ class Guide[C: RecordingCamera]:
             fixtures=[],
             prerequisites=[],
         )
+        self.input_badges: frozenset[str] | None = None
         self._inside_step = False
         self._recording = False
         self._used = False
@@ -424,7 +426,8 @@ class Guide[C: RecordingCamera]:
     def input(self, name: str, pressed: bool, seconds: float) -> int | None:
         if self._preparing:
             return None
-        self.recording.input(name, pressed, seconds)
+        if self.input_badges is None or name in self.input_badges:
+            self.recording.input(name, pressed, seconds)
         event: Input = dict(
             kind="control",
             name=name,
@@ -673,6 +676,7 @@ class Guide[C: RecordingCamera]:
                 navigation_hold=self.navigation_hold,
                 action_hold=self.action_hold,
                 duration_seconds=self.recording.seconds,
+                input_badges=sorted(self.input_badges) if self.input_badges is not None else None,
             )
             artifacts = {
                 str(p.relative_to(self.output)): _digest(p)

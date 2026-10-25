@@ -143,6 +143,17 @@ impl Recorder {
             .frame(frame.inner.clone(), seconds)
             .map_err(error)
     }
+    fn reserve_card_panel(&mut self) -> PyResult<()> {
+        self.inner.reserve_card_panel().map_err(error)
+    }
+    #[pyo3(signature=(snapshot=None))]
+    fn card_panel(&mut self, snapshot: Option<&str>) -> PyResult<()> {
+        let panel = snapshot
+            .map(fujimod_recording::CardPanel::parse)
+            .transpose()
+            .map_err(error)?;
+        self.inner.card_panel(panel).map_err(error)
+    }
     fn input(&mut self, name: &str, pressed: bool, seconds: f64) -> PyResult<()> {
         self.inner.input(name, pressed, seconds).map_err(error)
     }

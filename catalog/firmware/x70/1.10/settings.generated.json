@@ -1370,6 +1370,9 @@
       "store": "main",
       "offset": 430,
       "values": {
+        "auto": [
+          0
+        ],
         "daylight": [
           1
         ]

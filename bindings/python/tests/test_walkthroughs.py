@@ -68,6 +68,19 @@ class WalkthroughTests(unittest.TestCase):
             video=video,
         )
 
+    def test_badge_filter_preserves_every_input_as_coverage_evidence(self) -> None:
+        from unittest.mock import Mock, call
+        _, guide = self.guide()
+        guide.recording = Mock(seconds=0)
+        guide.input_badges = frozenset({'control_ring'})
+        for name in ('menu_ok_button', 'control_ring'):
+            guide.input(name, True, 0)
+            guide.input(name, False, 0.1)
+        self.assertEqual([event['name'] for event in guide.report['inputs']],
+                         ['menu_ok_button', 'menu_ok_button', 'control_ring', 'control_ring'])
+        self.assertEqual(guide.recording.input.call_args_list,
+                         [call('control_ring', True, 0), call('control_ring', False, 0.1)])
+
     def test_multiple_functions_and_filename_identity(self) -> None:
         source = self.root / "example.py"
         source.write_text(
