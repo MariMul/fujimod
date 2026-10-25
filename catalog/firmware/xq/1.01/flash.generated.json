@@ -1,113 +1,113 @@
 {
-  "code_ranges": [
-    {
-      "address": 7475444,
-      "name": "nand_read_transfer",
-      "size": 1568
-    },
-    {
-      "address": 7463676,
-      "name": "NAND correction mode",
-      "size": 52
-    },
-    {
-      "address": 7397444,
-      "name": "NAND correction gate",
-      "size": 40
-    },
-    {
-      "address": 7473220,
-      "name": "NAND completion polling",
-      "size": 84
-    },
-    {
-      "address": 7396280,
-      "name": "NAND read command bytes",
-      "size": 48
-    },
-    {
-      "address": 7396040,
-      "name": "NAND read trigger",
-      "size": 32
-    },
-    {
-      "address": 7395976,
-      "name": "NAND corrected status",
-      "size": 32
-    },
-    {
-      "address": 7518064,
-      "name": "NAND driver lock",
-      "size": 24
-    },
-    {
-      "address": 7518088,
-      "name": "NAND driver unlock",
-      "size": 20
-    },
-    {
-      "address": 7518352,
-      "name": "NAND geometry initialization",
-      "size": 244
-    },
-    {
-      "address": 7518280,
-      "name": "NAND page geometry query",
-      "size": 72
-    },
-    {
-      "address": 9137180,
-      "name": "selected NAND geometry record",
-      "size": 24
-    }
-  ],
-  "control": {
-    "offset": 262144,
-    "size": 32768
-  },
+  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
+  "schema": 1,
+  "id": "xq2-101-flash",
+  "firmware_id": "xq2-101",
   "device": {
     "kind": "raw-nand"
-  },
-  "reader": {
-    "alignment": 2048,
-    "nand": {
-      "controller_mode": 0,
-      "destination_alignment": 32,
-      "event_mode": 0,
-      "lock": 7518064,
-      "max_pages_per_call": 1,
-      "page_bytes": 2048,
-      "pages_per_block": 64,
-      "timeout_ms": 2000,
-      "unlock": 7518088
-    },
-    "symbol": "nand_read_transfer"
-  },
-  "state_checks": [
-    {
-      "address": 10038572,
-      "name": "NAND driver initialized",
-      "size": 4,
-      "value": 1
-    },
-    {
-      "address": 10155040,
-      "name": "selected NAND geometry",
-      "size": 4,
-      "value": 3
-    }
-  ],
-  "transport": null,
-  "update_image": {
-    "dat_offset": 604,
-    "xor": 255
   },
   "window": {
     "address": 0,
     "size": 134217728
   },
-  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
-  "schema": 1,
-  "id": "xq2-101-flash",
-  "firmware_id": "xq2-101"
+  "update_image": {
+    "dat_offset": 604,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "nand_read_transfer",
+    "alignment": 2048,
+    "nand": {
+      "page_bytes": 2048,
+      "pages_per_block": 64,
+      "destination_alignment": 32,
+      "controller_mode": 0,
+      "event_mode": 0,
+      "timeout_ms": 2000,
+      "max_pages_per_call": 1,
+      "lock": 7518064,
+      "unlock": 7518088
+    }
+  },
+  "transport": null,
+  "code_ranges": [
+    {
+      "name": "nand_read_transfer",
+      "address": 7475444,
+      "size": 1568
+    },
+    {
+      "name": "NAND correction mode",
+      "address": 7463676,
+      "size": 52
+    },
+    {
+      "name": "NAND correction gate",
+      "address": 7397444,
+      "size": 40
+    },
+    {
+      "name": "NAND completion polling",
+      "address": 7473220,
+      "size": 84
+    },
+    {
+      "name": "NAND read command bytes",
+      "address": 7396280,
+      "size": 48
+    },
+    {
+      "name": "NAND read trigger",
+      "address": 7396040,
+      "size": 32
+    },
+    {
+      "name": "NAND corrected status",
+      "address": 7395976,
+      "size": 32
+    },
+    {
+      "name": "NAND driver lock",
+      "address": 7518064,
+      "size": 24
+    },
+    {
+      "name": "NAND driver unlock",
+      "address": 7518088,
+      "size": 20
+    },
+    {
+      "name": "NAND geometry initialization",
+      "address": 7518352,
+      "size": 244
+    },
+    {
+      "name": "NAND page geometry query",
+      "address": 7518280,
+      "size": 72
+    },
+    {
+      "name": "selected NAND geometry record",
+      "address": 9137180,
+      "size": 24
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "NAND driver initialized",
+      "address": 10038572,
+      "size": 4,
+      "value": 1
+    },
+    {
+      "name": "selected NAND geometry",
+      "address": 10155040,
+      "size": 4,
+      "value": 3
+    }
+  ],
+  "control": {
+    "offset": 262144,
+    "size": 32768
+  }
 }

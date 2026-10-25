@@ -47,8 +47,12 @@ pub fn boot_rom_audit<L: Lookup>(
     let pattern: Vec<u8> = (0..8).flat_map(|_| 0xe59ff018u32.to_le_bytes()).collect();
     let prefix = inverted;
     let mut vectors = vec![];
-    for (offset, window) in prefix.windows(32).enumerate() {
-        if window != pattern {
+    for (word_index, word_bytes) in prefix.as_chunks::<4>().0.iter().enumerate() {
+        if word_bytes != &0xe59ff018u32.to_le_bytes() {
+            continue;
+        }
+        let offset = word_index * 4;
+        if prefix.get(offset..offset + 32) != Some(pattern.as_slice()) {
             continue;
         }
         let Some(targets) = (0..8)

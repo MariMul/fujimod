@@ -11,10 +11,10 @@
       "constant": false
     },
     {
-      "address": 2147483648,
-      "constant": true,
       "name": "boot-rom",
-      "size": 16384
+      "address": 2147483648,
+      "size": 16384,
+      "constant": true
     }
   ]
 }

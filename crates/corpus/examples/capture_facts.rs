@@ -15,56 +15,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store = Store::open(std::env::args().nth(1).ok_or("index filename required")?)?;
     for line in io::stdin().lock().lines() {
         let input: Input = serde_json::from_str(&line?)?;
-        let flash = (|| -> Result<_, String> {
-            if !matches!(input.processor.as_str(), "xp5" | "exr2") {
-                return locators::flash(
+        let flash = input
+            .update_path
+            .as_ref()
+            .ok_or_else(|| "update input missing".to_string())
+            .and_then(|p| std::fs::read(p).map_err(|e| e.to_string()))
+            .and_then(|bytes| {
+                locators::flash_update(
                     &store,
                     &input.firmware_id,
                     &input.processor,
                     input.jedec_id,
-                    0,
-                    0,
-                );
-            }
-            let path = input.update_path.as_ref().ok_or("update input missing")?;
-            let mut bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-            let origin = fujimod_firmware::outer_header(&bytes)
-                .map_err(|e| e.to_string())?
-                .payload_offset as u64;
-            for byte in &mut bytes {
-                *byte ^= 255;
-            }
-            if input.processor == "exr2" {
-                let control = locators::exr2_control(&bytes[origin as usize..])?;
-                return locators::exr2_flash(&store, &input.firmware_id, origin, control);
-            }
-            let (origin, control) =
-                locators::image_offsets(&store, &input.firmware_id, &bytes, origin)?;
-            let value = locators::flash(
-                &store,
-                &input.firmware_id,
-                &input.processor,
-                input.jedec_id,
-                origin,
-                control,
-            )?;
-            let control = value["control"]["offset"]
-                .as_u64()
-                .ok_or("missing flash control")? as usize;
-            if bytes
-                .get(origin as usize + control..origin as usize + control + 32768)
-                .is_none()
-            {
-                return Err("truncated flash comparison control".into());
-            }
-            if value["device"]["kind"] == "serial-nand"
-                && bytes.get(origin as usize + control..origin as usize + control + 8)
-                    != Some(&[0x50, 1, 0, 0, 0x80, 0, 0, 0])
-            {
-                return Err("NAND controller parameter page differs".into());
-            }
-            Ok(value)
-        })();
+                    &bytes,
+                )
+            });
         let rom = locators::boot_rom(&input.processor);
         let audit = if matches!(input.processor.as_str(), "xp4" | "xppro" | "exr" | "exrpro") {
             input.update_path.as_ref().map(|p| {

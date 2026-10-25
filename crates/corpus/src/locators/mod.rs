@@ -2,6 +2,8 @@
 //! Names nominate candidates; decoded instructions and mapped tables verify them.
 mod exr2;
 mod flash;
+mod update;
+pub use update::flash_update;
 mod reset;
 pub use exr2::{exr2_control, exr2_flash};
 pub use flash::{flash, image_offsets};

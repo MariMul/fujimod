@@ -3,72 +3,72 @@
   "schema": 1,
   "id": "xm5-130-flash",
   "firmware_id": "xm5-130",
+  "device": {
+    "kind": "serial-nand",
+    "jedec_id": "efdc21",
+    "part": "Winbond W35N01JW"
+  },
+  "window": {
+    "address": 4026531840,
+    "size": 134217728
+  },
+  "update_image": {
+    "dat_offset": 700,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "flash_read",
+    "alignment": 64
+  },
+  "transport": "xp5-cmd-callback",
   "code_ranges": [
     {
-      "address": 21578348,
       "name": "flash_read",
+      "address": 21578348,
       "size": 48
     },
     {
-      "address": 21578028,
       "name": "flash read request",
+      "address": 21578028,
       "size": 320
     },
     {
-      "address": 21573536,
       "name": "flash read dispatcher",
+      "address": 21573536,
       "size": 704
     },
     {
-      "address": 21569588,
       "name": "flash DMA read",
+      "address": 21569588,
       "size": 1292
     },
     {
-      "address": 21569468,
       "name": "flash DMA completion poll",
+      "address": 21569468,
       "size": 120
     },
     {
-      "address": 22920452,
       "name": "destination cache maintenance",
+      "address": 22920452,
       "size": 64
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "serial NAND driver mode",
+      "address": 980416,
+      "size": 4,
+      "value": 1
+    },
+    {
+      "name": "flash driver initialized",
+      "address": 36006176,
+      "size": 4,
+      "value": 2003199317
     }
   ],
   "control": {
     "offset": 524288,
     "size": 32768
-  },
-  "device": {
-    "jedec_id": "efdc21",
-    "kind": "serial-nand",
-    "part": "Winbond W35N01JW"
-  },
-  "reader": {
-    "alignment": 64,
-    "symbol": "flash_read"
-  },
-  "state_checks": [
-    {
-      "address": 980416,
-      "name": "serial NAND driver mode",
-      "size": 4,
-      "value": 1
-    },
-    {
-      "address": 36006176,
-      "name": "flash driver initialized",
-      "size": 4,
-      "value": 2003199317
-    }
-  ],
-  "transport": "xp5-cmd-callback",
-  "update_image": {
-    "dat_offset": 700,
-    "xor": 255
-  },
-  "window": {
-    "address": 4026531840,
-    "size": 134217728
   }
 }

@@ -11,6 +11,7 @@ description = "Address-free ARM function families and locator queries"
 doctest = false
 
 [dependencies]
+fujimod-firmware.workspace = true
 capstone = { version = "0.14", default-features = false, features = [
   "std",
   "full",
@@ -24,6 +25,3 @@ regex = "1"
 sha2 = "0.10"
 rusqlite.workspace = true
 fujimod-workspace-hack.workspace = true
-
-[dev-dependencies]
-fujimod-firmware.workspace = true

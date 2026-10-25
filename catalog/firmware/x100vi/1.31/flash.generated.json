@@ -3,71 +3,71 @@
   "schema": 1,
   "id": "x100vi-131-flash",
   "firmware_id": "x100vi-131",
+  "device": {
+    "kind": "serial-nor",
+    "jedec_id": "2c5b1b",
+    "part": "Micron MT35XU01GBBA"
+  },
+  "window": {
+    "address": 4026531840,
+    "size": 134217728
+  },
+  "update_image": {
+    "dat_offset": 700,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "flash_read",
+    "alignment": 64
+  },
+  "transport": "xp5-cmd-callback",
   "code_ranges": [
     {
-      "address": 21431628,
       "name": "flash_read",
+      "address": 21431628,
       "size": 48
     },
     {
-      "address": 21430944,
       "name": "flash read request",
+      "address": 21430944,
       "size": 684
     },
     {
-      "address": 21429148,
       "name": "flash read dispatcher",
+      "address": 21429148,
       "size": 312
     },
     {
-      "address": 21426616,
       "name": "flash DMA read",
+      "address": 21426616,
       "size": 540
     },
     {
-      "address": 22666348,
       "name": "destination cache maintenance",
+      "address": 22666348,
       "size": 64
     },
     {
-      "address": 21433768,
       "name": "flash bank selection",
+      "address": 21433768,
       "size": 60
     },
     {
-      "address": 21427284,
       "name": "flash CPU tail copy",
+      "address": 21427284,
       "size": 168
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "flash driver initialized",
+      "address": 34321408,
+      "size": 4,
+      "value": 2003199317
     }
   ],
   "control": {
     "offset": 786432,
     "size": 32768
-  },
-  "device": {
-    "jedec_id": "2c5b1b",
-    "kind": "serial-nor",
-    "part": "Micron MT35XU01GBBA"
-  },
-  "reader": {
-    "alignment": 64,
-    "symbol": "flash_read"
-  },
-  "state_checks": [
-    {
-      "address": 34321408,
-      "name": "flash driver initialized",
-      "size": 4,
-      "value": 2003199317
-    }
-  ],
-  "transport": "xp5-cmd-callback",
-  "update_image": {
-    "dat_offset": 700,
-    "xor": 255
-  },
-  "window": {
-    "address": 4026531840,
-    "size": 134217728
   }
 }
