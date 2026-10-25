@@ -102,6 +102,47 @@ export interface ToolSession {
   pollConsole(): Promise<{ complete: boolean; status: number; output: Uint8Array }>;
   /** The debug-mode workflows, run by the Enter and Leave debug mode tools. */
   debug: Pick<Session, 'armResetGuard' | 'enterDebugMode' | 'leaveDebugMode'>;
+  /**
+   * Confirm service mode, arm the RAM reset guard and enable debug access in
+   * RAM until the camera restarts. Nothing is stored.
+   */
+  prepareServiceSession(firmwareId: string): Promise<ServicePreparation>;
+  /**
+   * Copy the whole internal flash through the firmware's own reader, calling
+   * `chunk` with each piece in read order. Restores everything it borrowed.
+   */
+  backupFlash(
+    firmwareId: string,
+    chunk: (piece: { offset: number; data: Uint8Array }) => void,
+  ): Promise<FlashBackup>;
+  /**
+   * Read every region of the firmware's camera state (DRAM, boot ROM, other
+   * readable device state), calling `region` as each completes.
+   */
+  dumpState(
+    firmwareId: string,
+    region: (piece: StateRegion & { data: Uint8Array }) => void,
+  ): Promise<void>;
+}
+
+export interface ServicePreparation {
+  guardBefore: number;
+  debugBefore: number;
+  progress: string[];
+}
+export interface FlashBackup {
+  /** Device kind and part, from the firmware's flash fact. */
+  device: { kind: string; part: string };
+  size: number;
+  sha256: string;
+}
+export interface StateRegion {
+  name: string;
+  address: number;
+  size: number;
+  /** Constant regions (boot ROM) are read twice and must match. */
+  constant: boolean;
+  sha256: string;
 }
 
 export interface CameraModel {

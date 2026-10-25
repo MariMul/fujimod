@@ -15,8 +15,10 @@ camera choice among the emulator's saved cameras (see DESIGN.md). The guide
 covers the power-on chord, the OFF-switch warning and the battery-removal exit.
 In service mode, do not use the OFF switch: shutdown factory-resets the camera.
 Restart by removing the battery. After connecting, Dev Tools confirms service
-mode and arms the RAM reset guard at once. It reads the guard's original value
-first and records it with the state dump.
+mode, arms the RAM reset guard and enables debug access in RAM, which the
+flash backup and state dumps need. Both stay set until the camera restarts;
+neither is stored. It reads both original values first and records them with
+the state dump.
 
 ## The path
 
