@@ -106,6 +106,16 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
     }
     let mut bss = vec![];
     let mut rows = vec![];
+    let tail = &data[offset + 8 * 20..offset + 0x400];
+    let padding = if tail[..20].iter().all(|value| *value == 0) {
+        &tail[20..]
+    } else {
+        tail
+    };
+    require(
+        padding.iter().all(|value| *value == 255),
+        "Older Lupi table has additional or malformed rows",
+    )?;
     for index in 0..8 {
         let row: [u32; 5] =
             std::array::from_fn(|i| word(data, offset + index * 20 + i * 4).unwrap());
