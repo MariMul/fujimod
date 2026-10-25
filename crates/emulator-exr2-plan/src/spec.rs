@@ -186,6 +186,10 @@ pub enum Model {
     Scanout {
         options: serde_json::Value,
     },
+    SerialAudioDuplex {
+        options: serde_json::Value,
+        routes: String,
+    },
     SerialAudioReceiver {
         options: serde_json::Value,
         routes: String,
@@ -470,6 +474,7 @@ impl Model {
             Model::SdhciClocks { .. } => "sdhci-clocks",
             Model::Usb { .. } => "usb",
             Model::Scanout { .. } => "scanout",
+            Model::SerialAudioDuplex { .. } => "serial-audio-duplex",
             Model::SerialAudioReceiver { .. } => "serial-audio-receiver",
             Model::SerialAudioTransmitter { .. } => "serial-audio-transmitter",
             Model::SerialDmaLink { .. } => "serial-dma-link",

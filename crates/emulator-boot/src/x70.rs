@@ -2005,9 +2005,11 @@ pub(super) fn assemble(
             _ => model_recipe(rule.name)?,
         };
         if receive_audio && rule.name == "audio_registers" {
-            recipe = json!({"kind":"serial-audio-receiver", "options": {
-                "ram_bytes":536870912, "max_transfer_bytes":1048576,
-                "ticks_per_second":12000000, "sample_rate":48000, "sample":0},
+            recipe = json!({"kind":"serial-audio-duplex", "options": {
+                "receive": {"ram_bytes":536870912, "max_transfer_bytes":1048576,
+                    "ticks_per_second":12000000, "sample_rate":48000, "sample":0},
+                "transmit": {"ram_bytes":536870912, "max_transfer_bytes":1048576,
+                    "ticks_per_byte":64, "minimum_ticks":1000}, "sinks":[true,true]},
                 "routes":"imaging_routes"});
         }
         if rule.name == "image_input" {

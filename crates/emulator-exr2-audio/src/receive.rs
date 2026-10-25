@@ -78,7 +78,7 @@ impl Receiver {
     fn word(&self, o: u16) -> u32 {
         self.state.registers.get(&o).copied().unwrap_or(0)
     }
-    fn configuration(value: u32) -> bool {
+    pub(crate) fn configuration(value: u32) -> bool {
         value & !0x50000000 == 0x00122011
     }
     fn descriptor(&self) -> Result<(u64, u64, usize), String> {
@@ -159,6 +159,12 @@ impl Receiver {
             });
         }
         Ok(())
+    }
+    pub(crate) fn dma_active(&self) -> bool {
+        self.state.active
+    }
+    pub(crate) fn validate_state(&self, value: &Value) -> Result<(), String> {
+        self.decode(value).map(|_| ())
     }
     fn decode(&self, value: &Value) -> Result<(State, SerialAudio), String> {
         let state: State =
