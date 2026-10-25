@@ -3,7 +3,7 @@ use super::*;
 // Synthetic setup grammar, not a camera program. Keep the legitimate SETEND
 // opcode in the full flash-address range to catch instruction/pointer confusion.
 fn fixture() -> (Vec<u8>, Setup, FileApi) {
-    let mut bytes = vec![0; 0x9c0];
+    let mut bytes = vec![0; 0x40000];
     put(&mut bytes, 0x800, 0xf1010000).unwrap();
     put(&mut bytes, 0x838, 0xe59fe060).unwrap(); // LDR lr,[pc,#0x60]
     put(&mut bytes, 0x8a0, 0xf00009c0).unwrap();
@@ -11,7 +11,7 @@ fn fixture() -> (Vec<u8>, Setup, FileApi) {
     put(&mut bytes, 0x8b4, immediate(0xe3403000, 0xf000)).unwrap();
     let setup = Setup {
         dat_offset: 0,
-        active_size: bytes.len(),
+        active_size: 0x9c0,
         active_sha256: String::new(),
         slot_size: 0x20000,
         flash_aperture: 0xf0000000,
@@ -35,7 +35,7 @@ fn fixture() -> (Vec<u8>, Setup, FileApi) {
 
 fn build(bytes: &[u8], setup: &Setup, api: &FileApi) -> Result<Vec<u8>> {
     let mut setup = setup.clone();
-    setup.active_sha256 = fujimod_firmware::sha256(bytes);
+    setup.active_sha256 = fujimod_firmware::sha256(&bytes[..setup.active_size]);
     setup.code_sha256 = fujimod_firmware::sha256(&bytes[0x800..0x900]);
     ffinit(bytes, &setup, api, &[1, 2, 3, 4], api.load_address, None)
 }
@@ -57,7 +57,7 @@ fn setup_relocates_its_data_and_continuation_without_misreading_opcodes() {
 
 #[test]
 fn references_beyond_the_setup_slot_cannot_escape_relocation_checks() {
-    for address in [0xf0020000, 0xf1000000, 0xf7fffffc] {
+    for address in [0xf00009c0, 0xf0020000, 0xf003fffc] {
         let (mut bytes, setup, api) = fixture();
         put(&mut bytes, 0x8b0, immediate(0xe3003000, address)).unwrap();
         put(&mut bytes, 0x8b4, immediate(0xe3403000, address >> 16)).unwrap();
@@ -78,6 +78,17 @@ fn references_beyond_the_setup_slot_cannot_escape_relocation_checks() {
             "{error}"
         );
     }
+}
+
+#[test]
+fn storage_beyond_the_update_envelope_is_preserved_as_a_separate_dependency() {
+    let (mut bytes, setup, api) = fixture();
+    // Setup may consult preserved per-unit storage outside the DAT payload.
+    // Retaining it does not establish qualification with the entire chip zeroed.
+    put(&mut bytes, 0x8c0, immediate(0xe3000000, 0xfff8)).unwrap();
+    put(&mut bytes, 0x8c4, immediate(0xe3400000, 0xf3ff)).unwrap();
+    let output = build(&bytes, &setup, &api).unwrap();
+    assert_eq!(pair(&output, 0xc0, 0).unwrap(), 0xf3fffff8);
 }
 
 #[test]

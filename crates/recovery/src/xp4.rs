@@ -188,17 +188,20 @@ pub fn ffinit(
             && flash_end <= 1u64 << 32,
         "Invalid XP4 setup flash extent",
     )?;
-    // A pointer beyond the setup slot still addresses internal storage. Never
-    // leave it untouched merely because its source is outside that slot.
-    let is_flash = |value: u32| {
-        u64::from(value) >= u64::from(setup.flash_aperture) && u64::from(value) < flash_end
+    // A pointer beyond the setup slot can still address update-covered bytes.
+    // Bound this conservative envelope by the supplied payload, not by the
+    // small setup slot. Per-unit bytes beyond it remain a separate dependency.
+    let update_end = u64::from(setup.flash_aperture)
+        + (inverted.len() - setup.dat_offset).min(FLASH_APERTURE_BYTES as usize) as u64;
+    let is_update_storage = |value: u32| {
+        u64::from(value) >= u64::from(setup.flash_aperture) && u64::from(value) < update_end
     };
     let header_count = word(prefix, 0x14)? as usize;
     require(header_count <= 0xfd, "Invalid XP4 header operation count")?;
     for index in 0..header_count {
         let encoded = word(prefix, 0x18 + index * 8)?;
         require(
-            encoded & 3 == 3 || !is_flash(encoded & !3),
+            encoded & 3 == 3 || !is_update_storage(encoded & !3),
             "XP4 header operation accesses internal storage",
         )?;
     }
@@ -254,7 +257,7 @@ pub fn ffinit(
     let mut data = original_data.to_vec();
     for at in (0..data.len()).step_by(4) {
         let value = word(&data, at)?;
-        if !is_flash(value) {
+        if !is_update_storage(value) {
             continue;
         }
         let relocated = relocate(value)?;
@@ -357,8 +360,8 @@ pub fn ffinit(
         {
             literals.push((at, low));
         }
-        // Check actual PC-relative word loads separately across the complete
-        // aperture. The continuation literal is replaced below; additional
+        // Check actual PC-relative word loads across the update envelope.
+        // The continuation literal is replaced below; additional
         // flash literals require a qualified relocation grammar.
         if low >> 28 != 15 && low & 0x0f7f0000 == 0x051f0000 {
             let displacement = i64::from(low & 0xfff);
@@ -375,7 +378,8 @@ pub fn ffinit(
             )?;
             let value = word(code, literal as usize)?;
             require(
-                !is_flash(value) || (literal == 0xa0 && value == setup.continuation_address),
+                !is_update_storage(value)
+                    || (literal == 0xa0 && value == setup.continuation_address),
                 "DDR literal load refers to internal storage",
             )?;
         }
@@ -392,7 +396,7 @@ pub fn ffinit(
             mov_half((high & 0x0fffffff) | 0xe0000000, register, true),
         ) {
             let value = lo | hi << 16;
-            if is_flash(value) {
+            if is_update_storage(value) {
                 let new = relocate(value)?;
                 put(&mut output, at, immediate(low, new))?;
                 put(&mut output, at + 4, immediate(high, new >> 16))?;
