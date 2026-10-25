@@ -65,6 +65,7 @@ impl Library {
             next_hook: Cell::new(1),
             translation: RefCell::new(None),
             thumb_metadata: Rc::new(Cell::new(false)),
+            instruction_active: Rc::new(Cell::new(false)),
             callback_error: Rc::new(RefCell::new(None)),
             inspection: Rc::new(Inspection::default()),
             run_until: Cell::new(None),
@@ -116,6 +117,7 @@ pub struct Core {
     next_hook: Cell<usize>,
     translation: RefCell<Option<Box<TranslationHooks>>>,
     thumb_metadata: Rc<Cell<bool>>,
+    instruction_active: Rc<Cell<bool>>,
     callback_error: Rc<RefCell<Option<String>>>,
     inspection: Rc<Inspection>,
     run_until: Cell<Option<u64>>,
@@ -225,6 +227,7 @@ struct StoredHook {
 struct HookData {
     hook: Hook,
     thumb_metadata: Rc<Cell<bool>>,
+    instruction_active: Rc<Cell<bool>>,
     error: Rc<RefCell<Option<String>>>,
     api: Rc<ffi::Api>,
 }
@@ -776,6 +779,12 @@ impl Cpu for Core {
     fn stop(&self) -> Result<(), String> {
         self.check(unsafe { (self.api.uc_emu_stop)(self.raw) })
     }
+    fn stop_before_instruction(&self) -> Result<(), String> {
+        if !self.instruction_active.replace(false) {
+            return Err("instruction interception requires a live, unconsumed entry".into());
+        }
+        self.stop()
+    }
     fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
         let mut raw = std::ptr::null_mut();
         self.check(unsafe { (self.api.uc_context_alloc)(self.raw, &mut raw) })?;
@@ -835,6 +844,7 @@ impl Cpu for Core {
         let mut data = Box::new(HookData {
             hook,
             thumb_metadata: self.thumb_metadata.clone(),
+            instruction_active: self.instruction_active.clone(),
             error: self.callback_error.clone(),
             api: self.api.clone(),
         });
@@ -985,10 +995,10 @@ impl Cpu for Core {
 
 unsafe extern "C" fn instruction(_: ffi::Engine, address: u64, size: u32, data: *mut c_void) {
     let data = unsafe { &*data.cast::<HookData>() };
-    if let Hook::Instruction { callback, data, .. } = data.hook {
-        unsafe {
-            callback(address, size, data);
-        }
+    if let Hook::Instruction { callback, data: argument, .. } = data.hook {
+        data.instruction_active.set(true);
+        unsafe { callback(address, size, argument); }
+        data.instruction_active.set(false);
     }
 }
 unsafe extern "C" fn block(_: ffi::Engine, address: u64, size: u32, data: *mut c_void) {

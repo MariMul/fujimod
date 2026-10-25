@@ -146,6 +146,27 @@ mod tests {
         assert!(cpu.write_register(mpidr, &u64::MAX.to_le_bytes()).is_err());
     }
     #[test]
+    fn pstate_write_alone_changes_the_execution_exception_level() {
+        let cpu = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.write_memory(0x1000, &0xd5384240u32.to_le_bytes())
+            .unwrap();
+        for (pstate, expected) in [(0x3cd, 12), (0x3c5, 4), (0x3cd, 12)] {
+            cpu.write_register(Register::Pstate, &u64::to_le_bytes(pstate))
+                .unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: Some(0x1004),
+                instructions: Some(1),
+                watchdog_us: 1_000_000,
+            })
+            .unwrap();
+            assert_eq!(value(&cpu, Register::X(0)), expected);
+        }
+    }
+    #[test]
     fn a53_executes_el3_system_registers_and_eret_to_el1() {
         let cpu = crate::test_support::library()
             .open(Model::ArmV8A, 1 << 20)
@@ -183,5 +204,53 @@ mod tests {
             .unwrap();
         cpu.restore(saved.as_ref()).unwrap();
         assert_eq!(value(&cpu, Register::X(2)), 16);
+    }
+}
+
+#[cfg(test)]
+mod interception_tests {
+    use super::*;
+    unsafe fn intercept(_: u64, _: u32, data: *mut c_void) {
+        let cpu = unsafe { &*data.cast::<Core>() };
+        cpu.stop_before_instruction().unwrap();
+        assert!(cpu.stop_before_instruction().is_err());
+    }
+    #[test]
+    fn observer_interception_keeps_pc_and_memory_before_the_instruction() {
+        let cpu = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        cpu.map_zeroed(0x1000, 0x2000, 7).unwrap();
+        cpu.write_register(Register::Pstate, &0x3cdu64.to_le_bytes())
+            .unwrap();
+        cpu.write_register(Register::X(0), &0x2000u64.to_le_bytes())
+            .unwrap();
+        cpu.write_register(Register::X(1), &0x12345678u64.to_le_bytes()).unwrap();
+        // STR x1,[x0].
+        cpu.write_memory(0x1000, &0xf9000001u32.to_le_bytes())
+            .unwrap();
+        let hook = unsafe {
+            cpu.install_hook(Hook::Instruction {
+                range: HookRange::All,
+                callback: intercept,
+                data: (&cpu as *const Core).cast_mut().cast(),
+            })
+        }
+        .unwrap();
+        assert!(cpu.stop_before_instruction().is_err());
+        cpu.run(Run {
+            begin: 0x1000,
+            until: None,
+            instructions: Some(1),
+            watchdog_us: 1_000_000,
+        })
+        .unwrap();
+        let mut pc = [0; 8];
+        cpu.read_register(Register::Pc, &mut pc).unwrap();
+        assert_eq!(u64::from_le_bytes(pc), 0x1000);
+        let mut bytes = [1; 8];
+        cpu.read_memory(0x2000, &mut bytes).unwrap();
+        assert_eq!(bytes, [0; 8]);
+        cpu.remove_hook(hook).unwrap();
     }
 }
