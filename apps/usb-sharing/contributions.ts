@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { BudgetRecord, Env } from './env.ts';
-import { completeUpload, indexExisting, putObject } from './bucket.ts';
+import { completeUpload, indexExisting, putObject, startUpload } from './bucket.ts';
 
 const MiB = 1024 * 1024;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
@@ -241,7 +241,7 @@ export class Contributions extends DurableObject<Env> {
     if (file.complete) return json(file);
     if (!match[3] && request.method === 'POST') {
       if (!file.uploadId) {
-        const upload = await this.env.ISSUE_REPORTS.createMultipartUpload(file.key, {
+        const upload = await startUpload(this.env, file.key, fileEntry(id, file), {
           httpMetadata: { contentType: 'application/gzip' },
         });
         file.uploadId = upload.uploadId;

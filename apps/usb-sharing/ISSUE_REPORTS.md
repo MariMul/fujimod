@@ -22,15 +22,17 @@ them; there is no automatic retention policy yet.
 
 ## Index
 
-Every object written to the bucket also gets a row in the `fujimod-reports` D1
-database (`objects` table: key, kind, item ID, size, content type, summary,
-metadata JSON, stored time). [`bucket.ts`](bucket.ts) is the only module that
-writes the bucket; `bucket.test.ts` fails on any other direct write. Query it
-with the Cloudflare CLI:
+Every object written to the bucket also has a row in the `fujimod-reports` D1
+database (`objects` table: key, kind, item ID, state, size, content type,
+summary, metadata JSON, start and stored times). The row is written as
+`uploading` before any bytes go to R2 and marked `stored`, with its size, when
+the upload finishes, so abandoned uploads stay visible. [`bucket.ts`](bucket.ts)
+is the only module that writes the bucket; `bucket.test.ts` fails on any other
+direct write. Query it with the Cloudflare CLI:
 
 ```sh
 cf d1 query 73658419-4432-430f-9ac8-53fa5a87d19b \
-  --sql "SELECT stored_at, kind, id, summary FROM objects ORDER BY stored_at DESC LIMIT 20"
+  --sql "SELECT started_at, state, kind, id, summary FROM objects ORDER BY started_at DESC LIMIT 20"
 ```
 
 Schema changes go in `migrations/`; apply them with

@@ -77,13 +77,13 @@ await test('explicit intake saves privately, creates one issue and deduplicates 
       tar,
     );
     const rows = await (await mf.getD1Database('REPORTS_INDEX'))
-      .prepare('SELECT key, kind, id, bytes, summary, metadata FROM objects ORDER BY key')
-      .all<{ key: string; kind: string; id: string; bytes: number; summary: string; metadata: string }>();
+      .prepare('SELECT key, kind, id, state, bytes, summary, metadata FROM objects ORDER BY key')
+      .all<{ key: string; kind: string; id: string; state: string; bytes: number; summary: string; metadata: string }>();
     assert.deepEqual(
-      rows.results.map(({ key, kind, summary }) => [key, kind, summary]),
+      rows.results.map(({ key, kind, state, summary }) => [key, kind, state, summary]),
       [
-        [`${id}/metadata.json`, 'issue-report', 'Menu froze'],
-        [`${id}/report.tar`, 'issue-report', 'Menu froze'],
+        [`${id}/metadata.json`, 'issue-report', 'stored', 'Menu froze'],
+        [`${id}/report.tar`, 'issue-report', 'stored', 'Menu froze'],
       ],
     );
     assert.equal(rows.results[1].bytes, tar.length);

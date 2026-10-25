@@ -26,6 +26,19 @@ await test('real R2 multipart upload resumes, finishes privately, and deduplicat
     assert.equal((await call('/finish', 'POST', { manifest: {}, message: '' })).status, 409);
     const started = (await (await call('/files/0')).json()) as { uploadId: string; key: string };
     assert.equal(started.key, `models/X_70/cameras/59_01/${id}/flash.bin.gz`);
+    const index = await mf.getD1Database('REPORTS_INDEX');
+    const row = (key: string) =>
+      index
+        .prepare('SELECT kind, id, state, bytes, stored_at FROM objects WHERE key = ?1')
+        .bind(key)
+        .first<{ kind: string; id: string; state: string; bytes: number | null; stored_at: string | null }>();
+    assert.deepEqual(await row(started.key), {
+      kind: 'contribution',
+      id,
+      state: 'uploading',
+      bytes: null,
+      stored_at: null,
+    });
     assert.equal(
       ((await (await call('/files/0')).json()) as { uploadId: string }).uploadId,
       started.uploadId,
@@ -45,6 +58,10 @@ await test('real R2 multipart upload resumes, finishes privately, and deduplicat
     const bucket = await mf.getR2Bucket('ISSUE_REPORTS');
     const object = await bucket.get(started.key);
     assert.equal(object!.size, first.length + last.length);
+    const stored = await row(started.key);
+    assert.equal(stored?.state, 'stored');
+    assert.equal(stored?.bytes, first.length + last.length);
+    assert.ok(stored?.stored_at);
     assert.deepEqual(new Uint8Array(await object!.arrayBuffer()).subarray(first.length), last);
     const finish = { manifest: { files: ['flash.bin'] }, message: 'Camera capture' };
     assert.equal((await call('/finish', 'POST', finish)).status, 200);

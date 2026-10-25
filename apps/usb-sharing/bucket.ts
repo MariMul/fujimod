@@ -9,17 +9,33 @@ export interface IndexEntry {
   metadata?: Record<string, unknown>;
 }
 
-/** Records an object that is already in the bucket, such as an upload whose index write was interrupted. */
-export async function indexExisting(env: Env, object: R2Object, entry: IndexEntry) {
-  await index(env, object, entry);
+/** Writes the row before any bytes go to R2, so abandoned uploads stay visible. */
+async function begin(env: Env, key: string, entry: IndexEntry, contentType?: string) {
+  await env.REPORTS_INDEX.prepare(
+    `INSERT INTO objects (key, kind, id, state, content_type, summary, metadata, started_at)
+     VALUES (?1, ?2, ?3, 'uploading', ?4, ?5, ?6, ?7)
+     ON CONFLICT (key) DO UPDATE SET kind = ?2, id = ?3, state = 'uploading', bytes = NULL,
+       content_type = ?4, summary = ?5, metadata = ?6, started_at = ?7, stored_at = NULL`,
+  )
+    .bind(
+      key,
+      entry.kind,
+      entry.id,
+      contentType ?? null,
+      entry.summary ?? null,
+      JSON.stringify(entry.metadata ?? {}),
+      new Date().toISOString(),
+    )
+    .run();
 }
 
-async function index(env: Env, object: R2Object, entry: IndexEntry) {
+/** Marks the row stored with what R2 holds; creates it if the start was never recorded. */
+async function finish(env: Env, object: R2Object, entry: IndexEntry) {
+  const stored = object.uploaded.toISOString();
   await env.REPORTS_INDEX.prepare(
-    `INSERT INTO objects (key, kind, id, bytes, content_type, summary, metadata, stored_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-     ON CONFLICT (key) DO UPDATE SET kind = ?2, id = ?3, bytes = ?4, content_type = ?5,
-       summary = ?6, metadata = ?7, stored_at = ?8`,
+    `INSERT INTO objects (key, kind, id, state, bytes, content_type, summary, metadata, started_at, stored_at)
+     VALUES (?1, ?2, ?3, 'stored', ?4, ?5, ?6, ?7, ?8, ?8)
+     ON CONFLICT (key) DO UPDATE SET state = 'stored', bytes = ?4, content_type = ?5, stored_at = ?8`,
   )
     .bind(
       object.key,
@@ -29,12 +45,12 @@ async function index(env: Env, object: R2Object, entry: IndexEntry) {
       object.httpMetadata?.contentType ?? null,
       entry.summary ?? null,
       JSON.stringify(entry.metadata ?? {}),
-      object.uploaded.toISOString(),
+      stored,
     )
     .run();
 }
 
-/** The only way to store an object in the private bucket: R2, then its index row. */
+/** The only way to store an object in the private bucket. */
 export async function putObject(
   env: Env,
   key: string,
@@ -42,13 +58,33 @@ export async function putObject(
   entry: IndexEntry,
   options?: R2PutOptions,
 ) {
+  const contentType =
+    options?.httpMetadata && !(options.httpMetadata instanceof Headers)
+      ? options.httpMetadata.contentType
+      : undefined;
+  await begin(env, key, entry, contentType);
   const object = await env.ISSUE_REPORTS.put(key, body, options);
   if (!object) throw Error(`R2 did not store ${key}`);
-  await index(env, object, entry);
+  await finish(env, object, entry);
   return object;
 }
 
-/** Completes a multipart upload into the private bucket, then writes its index row. */
+/** Starts a multipart upload into the private bucket after recording it. */
+export async function startUpload(
+  env: Env,
+  key: string,
+  entry: IndexEntry,
+  options?: R2MultipartOptions,
+) {
+  const contentType =
+    options?.httpMetadata && !(options.httpMetadata instanceof Headers)
+      ? options.httpMetadata.contentType
+      : undefined;
+  await begin(env, key, entry, contentType);
+  return env.ISSUE_REPORTS.createMultipartUpload(key, options);
+}
+
+/** Completes a multipart upload and marks its row stored. */
 export async function completeUpload(
   env: Env,
   upload: R2MultipartUpload,
@@ -56,6 +92,11 @@ export async function completeUpload(
   entry: IndexEntry,
 ) {
   const object = await upload.complete(parts);
-  await index(env, object, entry);
+  await finish(env, object, entry);
   return object;
+}
+
+/** Marks an object R2 already holds as stored, such as an upload whose completion response was lost. */
+export async function indexExisting(env: Env, object: R2Object, entry: IndexEntry) {
+  await finish(env, object, entry);
 }
