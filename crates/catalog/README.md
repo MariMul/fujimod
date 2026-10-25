@@ -134,3 +134,19 @@ caller-supplied qualification records. They keep source citations, manifest and
 input-file locations, verified input identities, and synthetic record seeds
 separate from reference records. These are data schemas; loading them does not
 execute firmware, apply a guard, or authorize a camera operation.
+
+## Capture facts
+
+`ResolvedSelection.flash` loads `flash.generated.json`: the installed device,
+CPU-visible window, update-image mapping, reader alignment, checked code spans,
+live driver preconditions and initial comparison read. The installed JEDEC ID
+is hardware input verified against the driver's supported-device table.
+
+`ResolvedSelection.state` loads `state.generated.json`. Each region has `name`,
+`address`, `size` and `constant`. A constant region must be read twice with equal
+bytes. Only established readable extents belong in this document; retained ROM
+pointers alone do not establish a readable ROM extent. Device registers with
+read side effects are excluded.
+
+Both formats are generated facts, have JSON Schemas derived from their Rust
+value types, and are checked when the catalog is loaded.

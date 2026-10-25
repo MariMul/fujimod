@@ -1351,6 +1351,7 @@ name = "fujimod-corpus"
 version = "0.1.0"
 dependencies = [
  "capstone",
+ "fujimod-firmware",
  "fujimod-workspace-hack",
  "regex",
  "rusqlite",

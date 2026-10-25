@@ -24,3 +24,6 @@ regex = "1"
 sha2 = "0.10"
 rusqlite.workspace = true
 fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+fujimod-firmware.workspace = true

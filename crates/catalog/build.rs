@@ -59,6 +59,8 @@ fn main() {
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "settings.generated.json") => "Settings",
+            ("Firmware", "flash.generated.json") => "Flash",
+            ("Firmware", "state.generated.json") => "State",
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
             _ => kind,

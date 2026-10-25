@@ -1649,6 +1649,26 @@ class FirmwareFixtureLayouts(TypedDict, total=False):
     status: Required[str]
 
 
+FirmwareFlash = TypedDict(
+    "FirmwareFlash",
+    {
+        "$schema": Required["str"],
+        "code_ranges": Required["list[FlashCodeRange]"],
+        "control": Required["FlashControl"],
+        "device": Required["FlashDevice"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "reader": Required["FlashReader"],
+        "schema": Required["int"],
+        "state_checks": Required["list[FlashStateCheck]"],
+        "transport": Required["str"],
+        "update_image": Required["FlashUpdateImage"],
+        "window": Required["FlashRange"],
+    },
+    total=False,
+)
+
+
 class FirmwareFlashImage(TypedDict, total=False):
     dat_origin: Required[int]
     xor: Required[int]
@@ -1865,6 +1885,19 @@ FirmwareSettings = TypedDict(
 )
 
 
+FirmwareState = TypedDict(
+    "FirmwareState",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "id": Required["str"],
+        "regions": Required["list[StateRegion]"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
+
+
 class FirmwareStorageLayout(TypedDict, total=False):
     cfgdata: Required[FirmwareCfgdata]
     configuration_banks: Required[list[FirmwareConfigurationBanks]]
@@ -1972,9 +2005,48 @@ FirstStartMenu = TypedDict(
 )
 
 
+class FlashCodeRange(TypedDict, total=False):
+    address: Required[int]
+    name: Required[str]
+    size: Required[int]
+
+
+class FlashControl(TypedDict, total=False):
+    offset: Required[int]
+    size: Required[int]
+
+
+class FlashDevice(TypedDict, total=False):
+    jedec_id: Required[str]
+    kind: Required[str]
+    part: Required[str]
+
+
+class FlashRange(TypedDict, total=False):
+    address: Required[int]
+    size: Required[int]
+
+
+class FlashReader(TypedDict, total=False):
+    alignment: Required[int]
+    symbol: Required[str]
+
+
 class FlashSeed(TypedDict, total=False):
     offset: Required[int]
     value: Required[int]
+
+
+class FlashStateCheck(TypedDict, total=False):
+    address: Required[int]
+    name: Required[str]
+    size: Required[int]
+    value: Required[int]
+
+
+class FlashUpdateImage(TypedDict, total=False):
+    dat_offset: Required[int]
+    xor: Required[int]
 
 
 class FocusAxis(TypedDict, total=False):
@@ -3591,10 +3663,12 @@ class ResolvedSelection(TypedDict, total=False):
     control_ids: NotRequired[FirmwareControlIds | None]
     firmware: Required[Firmware]
     first_start: NotRequired[FirstStartMenu | None]
+    flash: NotRequired[FirmwareFlash | None]
     parts: Required[list[Part]]
     physical_controls: NotRequired[PhysicalControls | None]
     settings: NotRequired[FirmwareSettings | None]
     soc: Required[Soc]
+    state: NotRequired[FirmwareState | None]
 
 
 class Resources(TypedDict, total=False):
@@ -4813,6 +4887,13 @@ class StabilizerCommandOperationVariant1(TypedDict, total=False):
 class StabilizerCommandOperationVariant2(TypedDict, total=False):
     bank: Required[int]
     kind: Required[Literal["ram_write"]]
+
+
+class StateRegion(TypedDict, total=False):
+    address: Required[int]
+    constant: Required[bool]
+    name: Required[str]
+    size: Required[int]
 
 
 class StatusRegister(TypedDict, total=False):

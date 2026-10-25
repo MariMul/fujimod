@@ -6911,6 +6911,83 @@
       ],
       "type": "object"
     },
+    "FirmwareFlash": {
+      "additionalProperties": false,
+      "description": "Stock flash-read contract for one firmware.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying this generated document.",
+          "type": "string"
+        },
+        "code_ranges": {
+          "description": "Stock instruction spans checked before running the reader.",
+          "items": {
+            "$ref": "#/$defs/FlashCodeRange"
+          },
+          "type": "array"
+        },
+        "control": {
+          "$ref": "#/$defs/FlashControl",
+          "description": "Initial update-backed control read."
+        },
+        "device": {
+          "$ref": "#/$defs/FlashDevice",
+          "description": "Installed device, checked against the stock driver."
+        },
+        "firmware_id": {
+          "description": "Firmware whose bytes establish this contract.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable document identity.",
+          "type": "string"
+        },
+        "reader": {
+          "$ref": "#/$defs/FlashReader",
+          "description": "Stock reader ABI and alignment."
+        },
+        "schema": {
+          "description": "Document version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state_checks": {
+          "description": "Live driver preconditions.",
+          "items": {
+            "$ref": "#/$defs/FlashStateCheck"
+          },
+          "type": "array"
+        },
+        "transport": {
+          "description": "Processor-specific payload transport.",
+          "type": "string"
+        },
+        "update_image": {
+          "$ref": "#/$defs/FlashUpdateImage",
+          "description": "Update packaging that supplies comparison bytes."
+        },
+        "window": {
+          "$ref": "#/$defs/FlashRange",
+          "description": "CPU-visible corrected data aperture."
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "device",
+        "window",
+        "update_image",
+        "reader",
+        "transport",
+        "code_ranges",
+        "state_checks",
+        "control"
+      ],
+      "type": "object"
+    },
     "FirmwareFlashImage": {
       "additionalProperties": false,
       "description": "Declared flash image facts.",
@@ -8186,6 +8263,45 @@
       ],
       "type": "object"
     },
+    "FirmwareState": {
+      "additionalProperties": false,
+      "description": "Safely readable regions captured as camera state.",
+      "properties": {
+        "$schema": {
+          "description": "Schema identifying this generated document.",
+          "type": "string"
+        },
+        "firmware_id": {
+          "description": "Firmware whose bytes establish this contract.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Stable document identity.",
+          "type": "string"
+        },
+        "regions": {
+          "description": "Capture order. Device registers with read side effects are excluded.",
+          "items": {
+            "$ref": "#/$defs/StateRegion"
+          },
+          "type": "array"
+        },
+        "schema": {
+          "description": "Document version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "regions"
+      ],
+      "type": "object"
+    },
     "FirmwareStorageLayout": {
       "additionalProperties": false,
       "description": "Declared storage layout facts.",
@@ -8723,6 +8839,184 @@
         "languages",
         "date_kind",
         "date_editor"
+      ],
+      "type": "object"
+    },
+    "FlashCodeRange": {
+      "additionalProperties": false,
+      "description": "Stock instruction range.",
+      "properties": {
+        "address": {
+          "description": "First CPU address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Role of these instructions.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FlashControl": {
+      "additionalProperties": false,
+      "description": "Update-backed initial read.",
+      "properties": {
+        "offset": {
+          "description": "Offset in the flash window.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FlashDevice": {
+      "additionalProperties": false,
+      "description": "Installed internal storage.",
+      "properties": {
+        "jedec_id": {
+          "description": "Six lowercase hexadecimal JEDEC digits in wire order.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Serial NAND, serial NOR or raw NAND.",
+          "type": "string"
+        },
+        "part": {
+          "description": "Manufacturer and part number.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "jedec_id",
+        "part"
+      ],
+      "type": "object"
+    },
+    "FlashRange": {
+      "additionalProperties": false,
+      "description": "Half-open CPU-visible flash aperture.",
+      "properties": {
+        "address": {
+          "description": "First CPU address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FlashReader": {
+      "additionalProperties": false,
+      "description": "Stock read request ABI.",
+      "properties": {
+        "alignment": {
+          "description": "Required destination, source and size alignment.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "symbol": {
+          "description": "Symbol used to link the payload.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol",
+        "alignment"
+      ],
+      "type": "object"
+    },
+    "FlashStateCheck": {
+      "additionalProperties": false,
+      "description": "Driver state that must match before reading.",
+      "properties": {
+        "address": {
+          "description": "CPU address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Meaning of the state.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Word width in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Required little-endian value.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "value"
+      ],
+      "type": "object"
+    },
+    "FlashUpdateImage": {
+      "additionalProperties": false,
+      "description": "Mapping from update file bytes to flash offsets.",
+      "properties": {
+        "dat_offset": {
+          "description": "File offset corresponding to flash offset zero.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "xor": {
+          "description": "Bytewise XOR applied to update bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dat_offset",
+        "xor"
       ],
       "type": "object"
     },
@@ -17715,6 +18009,39 @@
         }
       ]
     },
+    "StateRegion": {
+      "additionalProperties": false,
+      "description": "One safely readable CPU-visible region.",
+      "properties": {
+        "address": {
+          "description": "First CPU address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "constant": {
+          "description": "Read twice and require equal bytes.",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Region identity.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "constant"
+      ],
+      "type": "object"
+    },
     "StatusRegister": {
       "additionalProperties": false,
       "description": "An SPI status register initialized by a physical control part.",
@@ -18006,6 +18333,18 @@
       "default": null,
       "description": "Stock first-start menus, when located for this firmware."
     },
+    "flash": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareFlash"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Stock flash-read contract, when located for this firmware."
+    },
     "parts": {
       "description": "Resolved reusable parts referenced by the body.",
       "items": {
@@ -18040,6 +18379,18 @@
     "soc": {
       "$ref": "#/$defs/Soc",
       "description": "Resolved SoC record selected by the body."
+    },
+    "state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareState"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Safely readable state regions, when established for this selection."
     }
   },
   "required": [

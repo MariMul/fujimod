@@ -9,6 +9,18 @@ use std::collections::BTreeMap;
 pub fn generated_documents() -> BTreeMap<&'static str, Value> {
     let mut documents = BTreeMap::new();
     documents.insert(
+        "flash.generated.schema.json",
+        schema::<fujimod_catalog::capture::FirmwareFlash>(
+            fujimod_catalog::capture::FLASH_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "state.generated.schema.json",
+        schema::<fujimod_catalog::capture::FirmwareState>(
+            fujimod_catalog::capture::STATE_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "firmware-versions.generated.schema.json",
         schema::<fujimod_catalog::firmware_versions::FirmwareVersions>(
             fujimod_catalog::firmware_versions::SCHEMA_URI,

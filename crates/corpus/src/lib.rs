@@ -19,3 +19,6 @@ pub use store::Store;
 
 #[cfg(test)]
 mod tests;
+
+/// Firmware locators built on the shared index query API.
+pub mod locators;

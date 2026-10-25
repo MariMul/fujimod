@@ -2512,6 +2512,12 @@ pub struct ResolvedSelection {
     /// Settings-bank layout, when located for this firmware.
     #[serde(default)]
     pub settings: Option<fujimod_catalog_settings::FirmwareSettings>,
+    /// Stock flash-read contract, when located for this firmware.
+    #[serde(default)]
+    pub flash: Option<crate::capture::FirmwareFlash>,
+    /// Safely readable state regions, when established for this selection.
+    #[serde(default)]
+    pub state: Option<crate::capture::FirmwareState>,
 }
 
 /// A checked, ID-indexed catalog of processor, part, body and firmware facts.
@@ -2529,6 +2535,8 @@ pub struct ReferenceCatalog {
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
+    flash: BTreeMap<String, crate::capture::FirmwareFlash>,
+    state: BTreeMap<String, crate::capture::FirmwareState>,
 }
 
 impl ReferenceCatalog {
@@ -2625,6 +2633,8 @@ impl ReferenceCatalog {
             first_start: self.first_start.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
             settings: self.settings.get(&firmware.id).cloned(),
+            flash: self.flash.get(&firmware.id).cloned(),
+            state: self.state.get(&firmware.id).cloned(),
             soc,
             body,
             firmware,
@@ -2682,6 +2692,16 @@ impl ReferenceCatalog {
                     value,
                     path,
                 )
+            }
+            ReferenceKind::Flash => {
+                let value: crate::capture::FirmwareFlash = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.flash, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::State => {
+                let value: crate::capture::FirmwareState = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.state, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::Settings => {
                 let value: fujimod_catalog_settings::FirmwareSettings = decode(bytes, path)?;
@@ -2791,6 +2811,13 @@ impl ReferenceCatalog {
     }
 
     fn validate_references(&self) -> Result<(), String> {
+        for firmware_id in self.flash.keys().chain(self.state.keys()) {
+            if !self.firmwares.contains_key(firmware_id) {
+                return Err(format!(
+                    "capture facts refer to missing firmware {firmware_id}"
+                ));
+            }
+        }
         for release in &self.firmware_versions {
             if let Some(firmware) = self.firmwares.get(&release.firmware_id) {
                 if release.version != firmware.version
@@ -3268,6 +3295,8 @@ enum ReferenceKind {
     FirstStart,
     Bulk,
     Settings,
+    Flash,
+    State,
 }
 
 impl ReferenceKind {
@@ -3286,6 +3315,8 @@ impl ReferenceKind {
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("settings.generated.json") => Ok(Self::Settings),
+            Some("flash.generated.json") => Ok(Self::Flash),
+            Some("state.generated.json") => Ok(Self::State),
             _ => Err(format!("{} is not a firmware document", path.display())),
         }
     }
