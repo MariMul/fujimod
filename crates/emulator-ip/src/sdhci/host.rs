@@ -7,6 +7,7 @@ use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_devices::parts::read_fifo::ReadFifo;
 use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_devices::parts::sd_card::faults::{DataDirection, DataFault, DataFaultEvent};
+use fujimod_emulator_devices::storage_reads::StorageReads;
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -89,8 +90,20 @@ struct Request {
     command: u8,
     fault: Option<usize>,
 }
+fn read_media(
+    card: &Card,
+    reads: &mut StorageReads,
+    offset: u64,
+    out: &mut [u8],
+) -> Result<(), String> {
+    card.read_bytes(offset, out)?;
+    reads.record(offset, out.len() as u64, u64::from(card.sectors()) * 512)
+}
 pub struct SdHost {
     options: Options,
+    // Guest media transfers since the last explicit card replacement. Host
+    // inspection and contact removal do not affect this passive ledger.
+    reads: StorageReads,
     card: Card,
     contacts: Contacts,
     irq: Option<InterruptLine>,
@@ -136,6 +149,7 @@ impl SdHost {
         let clocks = Clocks::new(&[(options.base + 0x2c, options.clock_ticks)])?;
         Ok(Self {
             options,
+            reads: StorageReads::default(),
             card,
             contacts,
             irq,
@@ -247,6 +261,7 @@ impl SdHost {
             return Err("SD medium is busy".into());
         }
         card.supersede(self.card.revision())?;
+        self.reads = StorageReads::default();
         Ok(std::mem::replace(&mut self.card, card))
     }
     /// A new, unexecuted board reconnects its external medium without editing
@@ -665,8 +680,12 @@ impl SdHost {
                 && let Payload::Read(first) = r.payload
             {
                 let mut bytes = [0; 512];
-                self.card
-                    .read_bytes(first as u64 * 512 + r.cursor as u64, &mut bytes)?;
+                read_media(
+                    &self.card,
+                    &mut self.reads,
+                    first as u64 * 512 + r.cursor as u64,
+                    &mut bytes,
+                )?;
                 self.fifo.restore(&bytes, 0)?;
             }
             if rom {
@@ -705,7 +724,9 @@ impl SdHost {
                 )?;
             }
             Payload::Read(first) => {
-                self.card.read_bytes(
+                read_media(
+                    &self.card,
+                    &mut self.reads,
                     first as u64 * 512 + r.cursor as u64,
                     &mut self.scratch[..length],
                 )?;
@@ -991,6 +1012,7 @@ impl SdHost {
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
     card: Card,
+    reads: StorageReads,
     contacts: u8,
     regs: Registers,
     clocks: Clocks,
@@ -1023,6 +1045,7 @@ impl Device for SdHost {
         #[derive(Serialize)]
         struct View<'a> {
             card: &'a Card,
+            reads: &'a StorageReads,
             contacts: u8,
             regs: &'a Registers,
             clocks: &'a Clocks,
@@ -1044,6 +1067,7 @@ impl Device for SdHost {
             self.name(),
             &View {
                 card: &self.card,
+                reads: &self.reads,
                 contacts: self.contacts.checkpoint_level(),
                 regs: &self.regs,
                 clocks: &self.clocks,
@@ -1067,6 +1091,9 @@ impl Device for SdHost {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let state: Snapshot = saved.decode(self.name())?;
+        state
+            .reads
+            .validate(u64::from(state.card.sectors()) * 512)?;
         let mut clocks = Clocks::new(&[(self.options.base + 0x2c, self.options.clock_ticks)])?;
         clocks.restore(&state.clocks.save())?;
         self.fifo.validate(&state.fifo, state.fifo_position)
@@ -1079,6 +1106,7 @@ impl Device for SdHost {
         let s: Snapshot = saved.decode(self.name())?;
         self.fifo.restore(&s.fifo, s.fifo_position)?;
         self.card = s.card;
+        self.reads = s.reads;
         self.contacts.restore_level(s.contacts);
         self.regs = s.regs;
         self.clocks = s.clocks;
@@ -1110,7 +1138,7 @@ impl Device for SdHost {
                 "due":r.due,"command":r.command,"fault":r.fault})
         });
         Ok(
-            serde_json::json!({"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
+            serde_json::json!({"reads":self.reads,"card":self.card.fingerprint(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
             "response":self.response,"request":request,"fifo":fujimod_emulator_devices::fingerprint::bytes(&fifo),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
             "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
@@ -1203,6 +1231,7 @@ impl Device for SdHost {
     }
     fn save(&self) -> serde_json::Value {
         serde_json::json!({
+            "reads": self.reads,
             "card": {"present":self.contacts.present(), "protected":self.contacts.protected(),
                 "sectors":self.card.sectors(), "revision":self.card.revision(),
                 "dirty_sectors":self.card.dirty_sectors()},
@@ -1370,6 +1399,51 @@ mod tests {
         let mut bytes = [0; 512];
         a.card.read_bytes(512, &mut bytes).unwrap();
         assert_eq!(bytes, [1; 512]);
+    }
+    #[test]
+    fn media_read_ledger_tracks_pio_and_dma_without_counting_host_inspection() {
+        let mut m = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        m.card.write_bytes(512, &[0x42; 1024]).unwrap();
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 1);
+        command(&mut m, &mut h, 0x113a0010, 1);
+        due(&mut m, &mut h);
+        for _ in 0..128 {
+            assert_eq!(read(&mut m, &mut h, 0x20, 4), 0x42424242);
+        }
+        due(&mut m, &mut h);
+        assert_eq!(m.reads.bytes, 512);
+        assert_eq!(m.reads.ranges, [(512, 1024)]);
+        let saved = m.checkpoint().unwrap();
+        let fingerprint = m.fingerprint().unwrap();
+        assert_eq!(m.card().sector(2).unwrap(), [0x42; 512]);
+        assert_eq!(m.fingerprint().unwrap(), fingerprint);
+        write(&mut m, &mut h, 0, 4, 0x40001000);
+        write(&mut m, &mut h, 6, 2, 1);
+        command(&mut m, &mut h, 0x113a0011, 2);
+        due(&mut m, &mut h);
+        assert_eq!(&h.bytes[0x1000..0x1200], &[0x42; 512]);
+        assert_eq!(m.reads.bytes, 1024);
+        assert_eq!(m.reads.ranges, [(512, 1536)]);
+        m.contacts.set(false, false);
+        assert_eq!(m.save()["reads"]["bytes"], 1024);
+        m.restore_checkpoint(&saved).unwrap();
+        assert_eq!(m.reads.bytes, 512);
+        assert_eq!(m.reads.ranges, [(512, 1024)]);
+        write(&mut m, &mut h, 0x2f, 1, 1);
+        assert_eq!(m.reads.bytes, 512);
+        m.replace_card(
+            Card::new(sd_card::Options {
+                sectors: 0x800000,
+                max_dirty_sectors: 65536,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(m.reads, StorageReads::default());
     }
     fn write(m: &mut SdHost, h: &mut Ram, o: u64, s: u8, v: u64) {
         let mut cx = h.cx();
