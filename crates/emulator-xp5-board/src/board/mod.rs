@@ -37,6 +37,18 @@ fn register_with_resources(
     let clocks = &resources.clocks;
     let companion = resources.companion.as_ref().map(|c| c.pins.companion);
     match window.kind.as_str() {
+        "boot-control" => {
+            if window.base != 0xff90e000 || window.size != 4 {
+                return Err("invalid boot-control source window".into());
+            }
+            let inputs: fujimod_emulator_xp5_io::boot_control::Inputs =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e|format!("boot-control inputs: {e}"))?;
+            bus.register_windows(vec![
+                fujimod_emulator_devices::graph::Mapping { base:0xff90e000,size:4 },
+                fujimod_emulator_devices::graph::Mapping { base:0xff90e400,size:8 },
+                fujimod_emulator_devices::graph::Mapping { base:0xfa140000,size:4 },
+            ],Box::new(fujimod_emulator_xp5_io::boot_control::BootControl::new(inputs)))?;
+        }
         "interprocessor-mailbox" => {
             if window.base != 0xff90e100 || window.size != 0x24 || !window.options.is_empty() {
                 return Err("invalid interprocessor mailbox window".into());
