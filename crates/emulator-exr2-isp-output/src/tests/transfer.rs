@@ -1,32 +1,114 @@
 use crate::transfer::ImageTransfer;
 use fujimod_emulator_devices::{Device, exr2::irq_routes::Irq, test_host::*};
-#[test]
-fn image_transfer_reset_is_clocked_and_unknown_execution_refuses() {
+fn configured(h: &mut TestHost, destination: u32, pitch: u32) -> ImageTransfer {
     let mut d = ImageTransfer::new(Irq { core: 0, line: 73 });
-    let mut h = TestHost::new();
-    write(&mut d, &mut h, 0xfff64000, 0);
-    advance(&mut d, &mut h, 1);
-    assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
-    advance_from_checkpoint(&mut d, &mut h, 2);
-    assert_eq!(read(&mut d, &mut h, 0xfff64000), 0x10000);
+    h.ram[0x8000..0x8200].copy_from_slice(&(0..512).map(|n| (n % 251) as u8).collect::<Vec<_>>());
+    h.ram[0x9000..0x9200].fill(0xa5);
     for (o, v) in [
-        (0, 0x10030),
-        (0xc, 1920),
-        (0x10, 1088 << 16 | 1920),
+        (0, 0x10020),
+        (0xc, pitch),
+        (0x10, 4 << 16 | 64),
         (0x18, 0),
-        (0x1c, 0x31),
-        (4, 0x072fb400),
-        (8, 0x02000000),
+        (0x1c, 0),
+        (4, 0x8000),
+        (8, destination),
     ] {
-        write(&mut d, &mut h, 0xfff64000 + o, v);
+        write(&mut d, h, 0xfff64000 + o, v);
     }
-    let ram = h.ram.clone();
-    let mut cx = h.cx();
-    d.write(&mut cx, 0xfff64000, 4, 0x10131);
-    assert!(cx.refusal().unwrap().contains("layout is unsupported"));
-    drop(cx);
-    assert_eq!(h.ram, ram);
+    d
+}
+#[test]
+fn addressed_copy_latches_bytes_and_commits_receipt_dma_before_status_and_irq() {
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h, 0x9000, 64);
+    let source = h.ram[0x8000..0x8200].to_vec();
+    write(&mut d, &mut h, 0xfff64000, 0x10121);
+    assert!(d.save()["last_output"].is_null());
+    assert_eq!(d.save()["transfers"], 0);
+    let deadline = d.next_deadline(0).unwrap();
+    assert_eq!(deadline, 2);
+    h.ram[0x8000..0x8200].fill(0);
+    advance(&mut d, &mut h, 1);
+    assert_eq!(h.ram[0x9000], 0xa5);
     assert!(h.irqs.is_empty());
-    assert_eq!(d.save()["registers"][1], 0x072fb400);
-    assert_eq!(d.save()["registers"][2], 0x02000000);
+    advance_from_checkpoint(&mut d, &mut h, deadline);
+    assert_eq!(&h.ram[0x9000..0x9200], source.as_slice());
+    assert!(h.irqs.is_empty());
+    assert_eq!(read(&mut d, &mut h, 0xfff64014), 1);
+    let receipt = d.save()["last_output"].clone();
+    assert_eq!(receipt["source"], 0x8000);
+    assert_eq!(receipt["destination"], 0x9000);
+    assert_eq!(receipt["width"], 64);
+    assert_eq!(receipt["height"], 4);
+    assert_eq!(receipt["pitch"], 128);
+    assert_eq!(receipt["bytes"], 512);
+    assert_eq!(receipt["completed_tick"], 2);
+    assert_eq!(receipt["packing"], "yycbcr");
+    assert_eq!(receipt["source_sha256"], receipt["output_sha256"]);
+    assert_eq!(
+        receipt["output_sha256"],
+        fujimod_emulator_devices::fingerprint::bytes(&source)["sha256"]
+    );
+    write(&mut d, &mut h, 0xfff6401c, 0x31);
+    assert_eq!(h.irqs, [(0, 73)]);
+    write(&mut d, &mut h, 0xfff64018, 0x20);
+    assert!(h.levels[&(0, 73)]);
+    write(&mut d, &mut h, 0xfff64018, 1);
+    assert!(!h.levels[&(0, 73)]);
+    write(&mut d, &mut h, 0xfff64000, 0x10121);
+    assert_eq!(d.save()["last_output"], receipt);
+    assert_eq!(d.save()["transfers"], 1);
+    write(&mut d, &mut h, 0xfff64000, 0);
+    advance(&mut d, &mut h, 3);
+    assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
+    advance_from_checkpoint(&mut d, &mut h, 4);
+    assert_eq!(read(&mut d, &mut h, 0xfff64000), 0x10000);
+    assert_eq!(d.save()["transfers"], 1);
+    assert_eq!(d.next_deadline(4), None);
+}
+#[test]
+fn unsupported_copy_layout_and_overlapping_dma_refuse_without_output() {
+    for (destination, pitch, command, reason) in [
+        (0x9000, 66, 0x10121, "tightly packed"),
+        (0x8100, 64, 0x10121, "overlapping"),
+        (0x9000, 64, 0x10101, "aligned"),
+    ] {
+        let mut h = TestHost::new();
+        let mut d = configured(&mut h, destination, pitch);
+        let ram = h.ram.clone();
+        {
+            let mut cx = h.cx();
+            d.write(&mut cx, 0xfff64000, 4, command);
+            assert!(cx.refusal().unwrap().contains(reason));
+        }
+        assert_eq!(h.ram, ram);
+        assert!(h.irqs.is_empty());
+        assert_eq!(d.next_deadline(0), None);
+        assert_eq!(d.save()["transfers"], 0);
+        assert!(d.save()["last_output"].is_null());
+    }
+}
+#[test]
+fn copy_checkpoint_rejects_changed_payload_and_busy_reconfiguration() {
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h, 0x9000, 64);
+    write(&mut d, &mut h, 0xfff64000, 0x10121);
+    let saved = d.checkpoint().unwrap();
+    let bad = saved.clone().with_blobs(vec![vec![0u8; 512].into()]);
+    assert!(
+        d.validate_checkpoint(&bad)
+            .unwrap_err()
+            .contains("payload differs")
+    );
+    let before = d.fingerprint().unwrap();
+    {
+        let mut cx = h.cx();
+        d.write(&mut cx, 0xfff64008, 4, 0xa000);
+        assert!(cx.refusal().unwrap().contains("busy"));
+    }
+    assert_eq!(d.fingerprint().unwrap(), before);
+    d.restore_checkpoint(&saved).unwrap();
+    advance(&mut d, &mut h, 2);
+    assert_eq!(d.save()["transfers"], 1);
+    assert_eq!(h.effects, vec!["dma"]);
 }
