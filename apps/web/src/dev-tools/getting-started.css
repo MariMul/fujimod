@@ -17,6 +17,7 @@
   display: grid;
   grid-template-columns: 22px 1fr;
   gap: 8px;
+  align-items: center;
   padding: 8px 10px;
 }
 .gs-step + .gs-step {
@@ -41,36 +42,18 @@
   border-color: var(--wb-accent);
   color: var(--wb-text);
 }
-.gs-step[data-state='locked'] .gs-title,
-.gs-step[data-state='skipped'] .gs-title {
-  color: var(--wb-faint);
-}
-.gs-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.gs-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 20px;
-  font: 500 12px var(--wb-sans);
-}
-.gs-step[data-state='done'] .gs-title {
-  color: var(--wb-dim);
-}
 .gs-tag {
   font: 500 10.5px var(--wb-sans);
   color: var(--wb-faint);
 }
 .gs-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+.gs-row > .wb-btn {
+  flex: 1;
 }
 .gs-note {
   margin: 0;

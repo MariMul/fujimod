@@ -142,7 +142,7 @@ test('the state dump adds each region as its own file', async () => {
       });
     },
   });
-  button(p.host, 'Dump camera state')!.click();
+  button(p.host, 'Dump memory')!.click();
   await vi.waitFor(() => expect(p.results().state).toBeTruthy());
   expect(p.results().state!.regions.map((region) => region.name)).toEqual(['boot-rom']);
   expect(status).toBe('Dumping camera state');
@@ -156,7 +156,7 @@ test('a failed step shows the camera’s refusal', async () => {
       throw Error('Service mode did not verify');
     },
   });
-  button(p.host, 'Dump camera state')!.click();
+  button(p.host, 'Dump memory')!.click();
   await vi.waitFor(() => {
     flush();
     expect(p.host.textContent).toContain('Service mode did not verify');

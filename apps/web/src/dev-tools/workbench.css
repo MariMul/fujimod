@@ -410,7 +410,23 @@
   padding: 8px 10px;
 }
 .wb-command {
+  display: grid;
   grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+.wb-command-input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--wb-line-2);
+  border-radius: 5px;
+  background: #0a0a0b;
+  color: var(--wb-text);
+  font: 12px var(--wb-mono);
+}
+.wb-command-input:focus {
+  outline: none;
+  border-color: rgba(var(--wb-accent-rgb), 0.6);
 }
 .wb-in {
   display: flex;

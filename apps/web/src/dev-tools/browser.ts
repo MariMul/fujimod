@@ -149,7 +149,7 @@ try {
       await page.getByRole('button', { name: 'Dump configuration', exact: true }).waitFor();
       await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
 
-      await page.getByLabel('Command', { exact: true }).fill('help');
+      await page.getByLabel('Console command', { exact: true }).fill('help');
       await page.getByRole('button', { name: 'Send', exact: true }).click();
       await log.getByText('Fuji console ready', { exact: false }).first().waitFor();
 

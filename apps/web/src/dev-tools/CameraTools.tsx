@@ -96,30 +96,22 @@ export function CameraTools(props: {
         </button>
       </section>
 
-      <section class="wb-section" aria-labelledby="wb-console">
-        <h3 id="wb-console" class="wb-label">
-          Console
-        </h3>
-        <form class="wb-tool" onSubmit={sendCommand}>
-          <div class="wb-tool-head">Console command</div>
-          <div class="wb-tool-body wb-command">
-            <label class="wb-in">
-              Command
-              <input
-                value={command()}
-                onInput={(event) => setCommand(event.currentTarget.value)}
-                spellcheck={false}
-                autocomplete="off"
-                autocapitalize="off"
-                enterkeyhint="send"
-              />
-            </label>
-            <button class="wb-btn" type="submit" disabled={!available() || !command().trim()}>
-              Send
-            </button>
-          </div>
-        </form>
-      </section>
+      <form class="wb-command" onSubmit={sendCommand}>
+        <input
+          class="wb-command-input"
+          aria-label="Console command"
+          placeholder="Console command"
+          value={command()}
+          onInput={(event) => setCommand(event.currentTarget.value)}
+          spellcheck={false}
+          autocomplete="off"
+          autocapitalize="off"
+          enterkeyhint="send"
+        />
+        <button class="wb-btn" type="submit" disabled={!available() || !command().trim()}>
+          Send
+        </button>
+      </form>
 
       <section class="wb-section" aria-labelledby="wb-write">
         <h3 id="wb-write" class="wb-label wb-write">

@@ -95,6 +95,7 @@ export function FilesPane(props: {
           disabled={!props.files.length}
           onClick={() => void save(props.files, `fujimod-files-${stamp()}.zip`)}
         >
+          <Icon name="download" size={14} />
           Download all
         </button>
         <button

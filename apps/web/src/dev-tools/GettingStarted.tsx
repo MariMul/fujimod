@@ -134,7 +134,7 @@ export function GettingStarted(props: {
   async function dumpState() {
     const regions: StateRegion[] = [];
     const file = props.onFile;
-    const done = await step('state', 'Dump camera state', async (session, firmware) => {
+    const done = await step('state', 'Dump memory', async (session, firmware) => {
       const prepared = untrack(() => props.results.prepared);
       await session.dumpState(firmware, ({ data, ...region }) => {
         regions.push(region);
@@ -190,61 +190,56 @@ export function GettingStarted(props: {
         Get started
       </h3>
       <ol class="gs-steps">
-        <Item number={1} title="Back up flash" state={backupStep()}>
-          <Show when={typeof props.results.backup !== 'object'}>
-            <div class="gs-row">
-              <button
-                class="wb-btn wb-primary"
-                disabled={!available()}
-                onClick={() => void backUpFlash()}
-              >
-                Back up flash
-              </button>
-              <Show when={!props.results.backup}>
-                <button class="wb-text" disabled={Boolean(running())} onClick={skipBackup}>
-                  Skip
-                </button>
-              </Show>
-            </div>
+        <Item number={1} state={backupStep()}>
+          <button
+            class="wb-btn wb-primary"
+            disabled={!available() || backupStep() === 'done'}
+            onClick={() => void backUpFlash()}
+          >
+            Back up flash
+          </button>
+          <Show when={!props.results.backup}>
+            <button class="wb-text" disabled={Boolean(running())} onClick={skipBackup}>
+              Skip
+            </button>
+          </Show>
+          <Show when={backupStep() === 'skipped'}>
+            <span class="gs-tag">Skipped</span>
           </Show>
         </Item>
         <Item
           number={2}
-          title="Dump camera state"
           state={running() === 'state' ? 'running' : props.results.state ? 'done' : 'todo'}
         >
-          <Show when={!props.results.state}>
-            <button class="wb-btn" disabled={!available()} onClick={() => void dumpState()}>
-              Dump camera state
-            </button>
-          </Show>
+          <button class="wb-btn" disabled={!available()} onClick={() => void dumpState()}>
+            Dump memory
+          </button>
         </Item>
-        <Item number={3} title="Enable debug mode" state={debugStep()} write>
+        <Item number={3} state={debugStep()}>
+          <button
+            class="wb-btn"
+            disabled={!available() || !unlocked() || !props.debug || debugStep() === 'done'}
+            onClick={() => void enableDebugMode()}
+          >
+            Enable debug mode
+          </button>
           <Show when={debugStep() !== 'done'}>
-            <button
-              class="wb-btn"
-              disabled={!available() || !unlocked() || !props.debug}
-              onClick={() => void enableDebugMode()}
-            >
-              Enable debug mode
-            </button>
+            <span class="wb-writes">Changes a camera setting</span>
           </Show>
         </Item>
-        <Item number={4} title="Restart and reconnect" state={restarted() ? 'done' : 'todo'}>
-          <Show when={props.results.debugSaved && !restarted()}>
-            <p class="gs-note">
-              Remove the battery, reinsert it, switch on and connect again. Plug USB in twice for
-              file transfer.
-            </p>
-          </Show>
+        <Item number={4} state={restarted() ? 'done' : 'todo'}>
+          <p class="gs-note">
+            Remove the battery, reinsert it, switch on and reconnect. Plug USB in twice for file
+            transfer.
+          </p>
         </Item>
-        <Item number={5} title="States to capture" state="todo">
+        <Item number={5} state="todo">
           <button
             class="wb-btn"
             disabled={!restarted()}
             onClick={() => props.onWizard(Wizard.StateCaptures)}
           >
-            Capture states
+            Capture camera modes
           </button>
         </Item>
       </ol>
@@ -265,30 +260,13 @@ export function GettingStarted(props: {
   );
 }
 
-function Item(props: {
-  number: number;
-  title: string;
-  state: Step;
-  write?: boolean;
-  children?: JSX.Element;
-}) {
+function Item(props: { number: number; state: Step; children: JSX.Element }) {
   return (
     <li class="gs-step" data-state={props.state}>
       <span class="gs-number" aria-hidden="true">
         {props.state === 'done' ? '✓' : props.number}
       </span>
-      <div class="gs-body">
-        <div class="gs-title">
-          {props.title}
-          <Show when={props.state === 'skipped'}>
-            <span class="gs-tag">Skipped</span>
-          </Show>
-          <Show when={props.write && props.state !== 'done'}>
-            <span class="wb-writes">Changes a camera setting</span>
-          </Show>
-        </div>
-        <Show when={props.state !== 'done' || props.children}>{props.children}</Show>
-      </div>
+      <div class="gs-row">{props.children}</div>
     </li>
   );
 }
