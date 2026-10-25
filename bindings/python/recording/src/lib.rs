@@ -143,9 +143,6 @@ impl Recorder {
             .frame(frame.inner.clone(), seconds)
             .map_err(error)
     }
-    fn reserve_card_panel(&mut self) -> PyResult<()> {
-        self.inner.reserve_card_panel().map_err(error)
-    }
     #[pyo3(signature=(snapshot=None))]
     fn card_panel(&mut self, snapshot: Option<&str>) -> PyResult<()> {
         let panel = snapshot
@@ -153,6 +150,18 @@ impl Recorder {
             .transpose()
             .map_err(error)?;
         self.inner.card_panel(panel).map_err(error)
+    }
+    fn card_formatting(&mut self) -> PyResult<()> {
+        self.inner.card_formatting().map_err(error)
+    }
+    #[pyo3(signature=(frame=None,*,label="",width=0.6))]
+    fn display_panel(&mut self, frame: Option<&Frame>, label: &str, width: f32) -> PyResult<()> {
+        self.inner
+            .display_panel(frame.map(|frame| frame.inner.clone()), label.into(), width)
+            .map_err(error)
+    }
+    fn animate(&mut self, seconds: f64) -> PyResult<()> {
+        self.inner.animate(seconds).map_err(error)
     }
     fn input(&mut self, name: &str, pressed: bool, seconds: f64) -> PyResult<()> {
         self.inner.input(name, pressed, seconds).map_err(error)

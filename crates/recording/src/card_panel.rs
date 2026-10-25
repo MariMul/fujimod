@@ -1,8 +1,9 @@
 //! Optional video presentation of a caller-supplied SD directory snapshot.
-//! Captured frames and documentation screenshots retain their original pixels.
+//! Only the card's top and a short caller-pruned directory tree cover the video.
 use crate::{
-    Frame, Result,
+    Result,
     canvas::{Canvas, rounded_rect},
+    overlays::{BODY, BORDER, label as line},
     text,
 };
 use serde::Deserialize;
@@ -29,7 +30,7 @@ pub struct CardPanel {
 impl CardPanel {
     pub fn parse(json: &str) -> Result<Self> {
         let panel: Self = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        if panel.rows.len() > 4096
+        if panel.rows.len() > 6
             || panel.label.chars().count() > 64
             || panel.rows.iter().any(|r| {
                 r.depth > 32
@@ -51,33 +52,6 @@ impl CardPanel {
     }
 }
 
-/// Reserve a side column without scaling, covering or changing the source raster.
-pub(crate) fn reserve(frame: &Frame) -> Result<Frame> {
-    let width = frame.width() + (frame.height() * 3 / 4);
-    let mut rgb = vec![14; width as usize * frame.height() as usize * 3];
-    for (source, target) in frame
-        .pixels()
-        .chunks_exact(frame.width() as usize * 3)
-        .zip(rgb.chunks_exact_mut(width as usize * 3))
-    {
-        target[..source.len()].copy_from_slice(source);
-    }
-    Frame::rgb(width, frame.height(), rgb)
-}
-
-fn line(canvas: &mut Canvas, text: &str, x: f32, y: f32, size: f32, width: f32, color: [u8; 4]) {
-    let mut shown = text.to_owned();
-    while text::layout(&shown, x, y, size, size * 1.5).width > width && !shown.is_empty() {
-        shown.pop();
-    }
-    if shown != text && !shown.is_empty() {
-        shown.pop();
-        shown.push('…');
-    }
-    if let Some(path) = text::layout(&shown, x, y, size, size * 1.5).path {
-        canvas.fill(&path, color);
-    }
-}
 fn bytes(value: u64) -> String {
     if value < 1024 {
         format!("{value} B")
@@ -88,13 +62,16 @@ fn bytes(value: u64) -> String {
     }
 }
 
-pub(crate) fn draw(canvas: &mut Canvas, panel: &CardPanel) {
+pub(crate) fn draw(canvas: &mut Canvas, panel: &CardPanel, visibility: f32, shake: (f32, f32)) {
+    if visibility <= 0. {
+        return;
+    }
     let scale = canvas.height() / 480.;
     let (x, y, w, h) = (
-        canvas.width() - 340. * scale,
-        24. * scale,
-        316. * scale,
-        432. * scale,
+        canvas.width() - 314. * scale + shake.0 * scale,
+        canvas.height() - 250. * scale + (1. - visibility) * 265. * scale + shake.1 * scale,
+        300. * scale,
+        400. * scale,
     );
     let mut body = PathBuilder::new();
     body.move_to(x + 10. * scale, y);
@@ -108,8 +85,8 @@ pub(crate) fn draw(canvas: &mut Canvas, panel: &CardPanel) {
     body.quad_to(x, y, x + 10. * scale, y);
     body.close();
     let body = body.finish().expect("SD outline");
-    canvas.fill(&body, [25, 25, 28, 255]);
-    canvas.stroke(&body, [75, 75, 82, 255], scale);
+    canvas.fill(&body, BODY);
+    canvas.stroke(&body, BORDER, scale);
     for index in 0..7 {
         if let Some(pad) = rounded_rect(
             x + (20. + index as f32 * 29.) * scale,
@@ -130,38 +107,32 @@ pub(crate) fn draw(canvas: &mut Canvas, panel: &CardPanel) {
         w - 36. * scale,
         [142, 142, 147, 255],
     );
-    if !panel.label.is_empty() {
-        line(
-            canvas,
-            &panel.label,
-            x + 18. * scale,
-            y + 63. * scale,
-            17. * scale,
-            w - 36. * scale,
-            [238, 238, 242, 255],
-        );
-    }
-    let rows = ((h / scale - 110.) / 27.) as usize;
-    let selected = panel
-        .rows
-        .iter()
-        .position(|r| Some(&r.path) == panel.highlight.as_ref());
-    let start = selected
-        .map_or(0, |i| (i + 1).saturating_sub(rows))
-        .min(panel.rows.len().saturating_sub(rows));
-    for (index, row) in panel.rows.iter().skip(start).take(rows).enumerate() {
-        let top = y + (101. + index as f32 * 27.) * scale;
+    line(
+        canvas,
+        if panel.label.is_empty() {
+            "(untitled)"
+        } else {
+            &panel.label
+        },
+        x + 18. * scale,
+        y + 63. * scale,
+        17. * scale,
+        w - 36. * scale,
+        [238, 238, 242, 255],
+    );
+    for (index, row) in panel.rows.iter().enumerate() {
+        let top = y + (96. + index as f32 * 22.) * scale;
         let indent = row.depth.min(8) as f32 * 14. * scale;
-        if Some(&row.path) == panel.highlight.as_ref() {
-            if let Some(band) = rounded_rect(
+        if Some(&row.path) == panel.highlight.as_ref()
+            && let Some(band) = rounded_rect(
                 x + 10. * scale,
                 top,
                 w - 20. * scale,
-                26. * scale,
+                21. * scale,
                 4. * scale,
-            ) {
-                canvas.fill(&band, [35, 55, 40, 255]);
-            }
+            )
+        {
+            canvas.fill(&band, [35, 55, 40, 255]);
         }
         let left = x + 18. * scale + indent;
         if row.directory {
@@ -218,19 +189,21 @@ pub(crate) fn draw(canvas: &mut Canvas, panel: &CardPanel) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Frame;
     #[test]
-    fn panel_preserves_camera_pixels_and_requires_a_real_highlight() {
+    fn panel_overlays_only_the_card_corner_and_requires_a_real_highlight() {
         let frame = Frame::rgb(720, 480, vec![60; 720 * 480 * 3]).unwrap();
-        let padded = reserve(&frame).unwrap();
         let json = r#"{"label":"2026-10-25","rows":[{"name":"DCIM","path":"/DCIM","depth":0,"directory":true,"bytes":0}],"highlight":"/DCIM"}"#;
         let panel = CardPanel::parse(json).unwrap();
-        let mut canvas = Canvas::from_rgb(padded.pixels(), padded.width(), padded.height());
-        draw(&mut canvas, &panel);
+        let mut canvas = Canvas::from_rgb(frame.pixels(), frame.width(), frame.height());
+        draw(&mut canvas, &panel, 1., (0., 0.));
         let shown = canvas.rgb();
-        for row in shown.chunks_exact(padded.width() as usize * 3) {
-            assert_eq!(&row[..720 * 3], &vec![60; 720 * 3]);
+        for row in shown.chunks_exact(frame.width() as usize * 3) {
+            assert_eq!(&row[..400 * 3], &vec![60; 400 * 3]);
         }
-        assert_ne!(shown, padded.pixels());
+        assert_eq!(shown.len(), frame.pixels().len());
+        assert_eq!(&shown[..200 * 720 * 3], &frame.pixels()[..200 * 720 * 3]);
+        assert_ne!(shown, frame.pixels());
         assert!(CardPanel::parse(&json.replace("/DCIM\"}", "/MISSING\"}")).is_err());
     }
 }

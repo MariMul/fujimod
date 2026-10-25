@@ -70,16 +70,21 @@ class WalkthroughTests(unittest.TestCase):
 
     def test_badge_filter_preserves_every_input_as_coverage_evidence(self) -> None:
         from unittest.mock import Mock, call
+
         _, guide = self.guide()
         guide.recording = Mock(seconds=0)
-        guide.input_badges = frozenset({'control_ring'})
-        for name in ('menu_ok_button', 'control_ring'):
+        guide.input_badges = frozenset({"control_ring"})
+        for name in ("menu_ok_button", "control_ring"):
             guide.input(name, True, 0)
             guide.input(name, False, 0.1)
-        self.assertEqual([event['name'] for event in guide.report['inputs']],
-                         ['menu_ok_button', 'menu_ok_button', 'control_ring', 'control_ring'])
-        self.assertEqual(guide.recording.input.call_args_list,
-                         [call('control_ring', True, 0), call('control_ring', False, 0.1)])
+        self.assertEqual(
+            [event["name"] for event in guide.report["inputs"]],
+            ["menu_ok_button", "menu_ok_button", "control_ring", "control_ring"],
+        )
+        self.assertEqual(
+            guide.recording.input.call_args_list,
+            [call("control_ring", True, 0), call("control_ring", False, 0.1)],
+        )
 
     def test_multiple_functions_and_filename_identity(self) -> None:
         source = self.root / "example.py"
@@ -92,6 +97,38 @@ class WalkthroughTests(unittest.TestCase):
             [(w.name, w.title, w.source) for w in discover(source)],
             [("first", "One", source.resolve()), ("second", "Two", source.resolve())],
         )
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
+    def test_prerequisite_panels_neither_animate_nor_carry_into_the_child(self) -> None:
+        camera, guide = self.guide(video=True)
+
+        def prepare(camera: Camera, guide: Guide[Camera]) -> None:
+            card = guide.show_card(dict(label="OLD", rows=[], highlight=None))
+            assert card.visible
+            card.format(dict(label="", rows=[], highlight=None))
+            assert card.label == "(untitled)"
+            guide.show_display(camera.frame, label="EVF")
+
+        def run(camera: Camera, guide: Guide[Camera]) -> None:
+            with guide.step("Actual camera", hold=0.1):
+                assert guide.recording.frames == 0
+
+        report = guide.run(run, prerequisites=[("prepare", prepare)])
+        assert report["passed"], report.get("error")
+        assert not report.get("overlays")
+        raw = subprocess.check_output([
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(guide.output / "video-clean.mp4"),
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-",
+        ])
+        assert raw and min(raw) > 245
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
     def test_clean_screenshot_and_video_overlay(self) -> None:

@@ -35,6 +35,14 @@ frame rate (30 fps for walkthroughs), so badges and touches animate smoothly.
 The final observation is retained and finalization is idempotent. Dropping a
 recorder reaps its child encoders, including on failure.
 
+SD cards and secondary displays overlay the original canvas without resizing
+the camera image. Both use cubic slide motion. SD presentation accepts a volume
+label and at most six directory rows; an empty label renders as `(untitled)`.
+Formatting shakes the old card before the caller publishes its new snapshot.
+Secondary displays use a rounded rectangle with a small caller-supplied label,
+so HDMI, EVF and reference images share one style. These panels appear in both
+videos; screenshots retain their original pixels.
+
 `cache::CaptureCache` is an observational rendering memo. A source provides its
 register/configuration key and a read function. Reuse requires the same key and
 identical bytes at **every** previously addressed span. A changed register,

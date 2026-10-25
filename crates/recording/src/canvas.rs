@@ -1,5 +1,8 @@
 //! Anti-aliased vector drawing over an RGB frame, through tiny-skia.
-use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{
+    FillRule, LineCap, LineJoin, Mask, Paint, Path, PathBuilder, Pixmap, PixmapPaint, Stroke,
+    Transform,
+};
 
 /// An opaque RGB image being annotated. Drawing composites source-over, so
 /// the pixmap stays opaque and its premultiplied RGBA is plain RGB.
@@ -36,8 +39,10 @@ impl Canvas {
         let mut pixmap = Pixmap::new(width, height).expect("nonempty frame");
         for (out, pixel) in pixmap
             .data_mut()
-            .chunks_exact_mut(4)
-            .zip(rgb.chunks_exact(3))
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(rgb.as_chunks::<3>().0.iter())
         {
             out.copy_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
         }
@@ -52,9 +57,37 @@ impl Canvas {
     pub(crate) fn rgb(&self) -> Vec<u8> {
         self.pixmap
             .data()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|p| [p[0], p[1], p[2]])
             .collect()
+    }
+    pub(crate) fn image(
+        &mut self,
+        frame: &crate::Frame,
+        x: f32,
+        y: f32,
+        width: u32,
+        height: u32,
+        radius: f32,
+    ) -> crate::Result<()> {
+        let fitted = frame.fit(width, height)?;
+        let source = Self::from_rgb(fitted.pixels(), width, height);
+        let mut mask =
+            Mask::new(self.pixmap.width(), self.pixmap.height()).ok_or("Invalid panel mask")?;
+        let path = rounded_rect(x, y, width as f32, height as f32, radius)
+            .ok_or("Invalid display panel")?;
+        mask.fill_path(&path, FillRule::Winding, true, Transform::identity());
+        self.pixmap.draw_pixmap(
+            x.round() as i32,
+            y.round() as i32,
+            source.pixmap.as_ref(),
+            &PixmapPaint::default(),
+            Transform::identity(),
+            Some(&mask),
+        );
+        Ok(())
     }
     pub(crate) fn fill(&mut self, path: &Path, color: Color) {
         if color[3] > 0 {

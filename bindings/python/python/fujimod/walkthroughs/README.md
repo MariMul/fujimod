@@ -100,6 +100,41 @@ at most 0.4 seconds of guest waiting; transitions and input intervals remain.
 Input records retain their actual guest times and presentation timestamps.
 Neither video pacing nor holds change emulator execution or CPU speed.
 
+Presentation panels cover part of the video while keeping the camera canvas at
+its original size. The camera adapter supplies observed snapshots and frames:
+
+```python
+card = guide.show_card(snapshot)
+assert card.visible
+assert card.label == "(untitled)"
+assert "/DCIM/100_FUJI/DSCF0001.JPG" in card.paths
+
+# After the camera has formatted the card, reveal its observed new contents.
+card.format(formatted_snapshot)
+assert not card.paths
+card.hide()
+
+display = guide.show_display(hdmi_frame, label="HDMI", width=.6)
+display.update(next_hdmi_frame)
+assert display.visible and display.label == "HDMI"
+display.hide()
+```
+
+`CardSnapshot` contains `label`, `rows` and `highlight`. Each of at most six
+`CardRow` entries contains `name`, `path`, `depth`, `directory` and `bytes`.
+Adapters prune the tree before presenting it. Card handles expose immutable
+snapshot copies, the displayed label and paths for assertions. An empty label
+is displayed as `(untitled)`. `guide.format_card(snapshot)` and
+`guide.hide_card()` operate on the guide's current card too.
+
+Cards slide in with cubic easing. Formatting rapidly shakes the old card before
+the new label and files appear. `show_display` uses the same rounded panel style
+for HDMI, EVF or a labeled reference image. Its width is a fraction of the main
+canvas, from `.25` to `.75`. Show/hide animations add half a second of
+presentation time; frame updates add no holds or guest time. These overlays
+appear in both videos, and their events are recorded under `overlays` in the
+report. Native screenshots and option-coverage evidence remain clean.
+
 Use `guide.pause(1.5)` after opening a menu before navigating within it. The
 shared `open_menu` starter adds this pause automatically, after activation.
 

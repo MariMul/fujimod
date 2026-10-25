@@ -18,6 +18,7 @@ from string.templatelib import Template
 from typing import Literal, NotRequired, Protocol, Self, TypedDict, cast
 
 from ..recording import Frame
+from .overlays import CardOverlay, CardSnapshot, DisplayOverlay
 from .text import (
     MenuEntry,
     MenuReference,
@@ -151,6 +152,7 @@ class Report(TypedDict):
     video: NotRequired[str]
     presentation: NotRequired[Presentation]
     artifacts: NotRequired[dict[str, str]]
+    overlays: NotRequired[list[dict[str, object]]]
 
 
 SCHEMA = 3
@@ -410,11 +412,45 @@ class Guide[C: RecordingCamera]:
         self._failures: list[BaseException] = []
         self._preparing = False
         self._hero = hero
+        self._card_overlay: CardOverlay | None = None
 
     def save(self) -> None:
         temporary = self.output / ".guide.json.tmp"
         temporary.write_text(json.dumps(self.report, indent=2) + "\n")
         os.replace(temporary, self.output / "guide.json")
+
+    def _overlay_event(self, event: dict[str, object]) -> None:
+        if self._preparing:
+            return
+        self.report.setdefault("overlays", []).append(
+            dict(event, video_seconds=self.recording.seconds)
+        )
+
+    def show_card(self, snapshot: CardSnapshot) -> CardOverlay:
+        if self._card_overlay is None:
+            self._card_overlay = CardOverlay(
+                self.recording, snapshot, self._overlay_event
+            )
+        else:
+            self._card_overlay.update(snapshot)
+        return self._card_overlay
+
+    def hide_card(self) -> None:
+        if self._card_overlay is not None:
+            self._card_overlay.hide()
+
+    def format_card(self, snapshot: CardSnapshot) -> CardOverlay:
+        if self._card_overlay is None:
+            raise ValueError("Show the SD card before formatting it")
+        self._card_overlay.format(snapshot)
+        return self._card_overlay
+
+    def show_display(
+        self, frame: Frame, *, label: str, width: float = 0.6
+    ) -> DisplayOverlay:
+        return DisplayOverlay(
+            self.recording, frame, label=label, width=width, event=self._overlay_event
+        )
 
     def frame(self, frame: Frame, seconds: float) -> None:
         if self._preparing:
@@ -622,6 +658,9 @@ class Guide[C: RecordingCamera]:
                 if self._failures:
                     raise self._failures[0]
                 entry["passed"] = True
+            self.recording.card_panel(None)
+            self.recording.display_panel(None)
+            self._card_overlay = None
             self._preparing = False
             self._recording = True
             self.report["stage"] = "execution"
@@ -676,7 +715,9 @@ class Guide[C: RecordingCamera]:
                 navigation_hold=self.navigation_hold,
                 action_hold=self.action_hold,
                 duration_seconds=self.recording.seconds,
-                input_badges=sorted(self.input_badges) if self.input_badges is not None else None,
+                input_badges=sorted(self.input_badges)
+                if self.input_badges is not None
+                else None,
             )
             artifacts = {
                 str(p.relative_to(self.output)): _digest(p)
