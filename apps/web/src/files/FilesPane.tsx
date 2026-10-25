@@ -1,7 +1,7 @@
 import { Show, createMemo, createSignal } from 'solid-js';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
-import { FileList, formatBytes } from '@fujimod/emulator-ui/ui/file-list';
+import { FileList, formatBytes, type FileListItem } from '@fujimod/emulator-ui/ui/file-list';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { ContributeDialog, type Contribute } from './ContributeDialog';
 import { folderName, shelfItems, shelfManifest, type ShelfFile } from './shelf';
@@ -42,6 +42,13 @@ export function FilesPane(props: {
   const sharedItems = createMemo(() => shelfItems(shared()));
   const upload = createMemo(() => props.contribute(shared()));
 
+  async function downloadItem(item: FileListItem) {
+    const file = props.files.find((entry) => entry.key === item.key);
+    if (file) return downloadBlob(file.blob, file.name);
+    const camera = item.key.slice('camera:'.length);
+    const files = props.files.filter((entry) => entry.camera.id === camera);
+    if (files.length) await save(files, `${item.name} ${stamp()}.zip`);
+  }
   async function save(files: readonly ShelfFile[], name: string) {
     setFailure('');
     try {
@@ -67,13 +74,7 @@ export function FilesPane(props: {
             items={items()}
             folderActions
             highlight={props.newest}
-            download={async (item) => {
-              const file = props.files.find((entry) => entry.key === item.key);
-              if (file) return downloadBlob(file.blob, file.name);
-              const camera = item.key.slice('camera:'.length);
-              const files = props.files.filter((entry) => entry.camera.id === camera);
-              if (files.length) await save(files, `${item.name} ${stamp()}.zip`);
-            }}
+            download={downloadItem}
             remove={(item) => {
               const file = props.files.find((entry) => entry.key === item.key);
               if (file) props.onRemove(file);

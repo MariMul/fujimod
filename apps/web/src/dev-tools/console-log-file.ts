@@ -17,7 +17,7 @@ export function shelfCamera(camera: Camera): ShelfCamera {
  * Each camera's `console-log.json`: its log entries after the last removal, as
  * JSON without payload bytes. Rebuilt at most twice a second while the log grows.
  */
-export function consoleLogFiles(
+export function createConsoleLogFiles(
   log: () => readonly CameraLogEntry[],
   cameras: () => readonly Camera[],
 ) {

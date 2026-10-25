@@ -26,7 +26,7 @@ import { createOwnerCountdown, type Countdown } from './owner-countdown';
 import { StateCaptures } from './captures/StateCaptures';
 import { MapControls } from './captures/MapControls';
 import type { CaptureSet } from './captures/capture';
-import { consoleLogFiles, shelfCamera } from './console-log-file';
+import { createConsoleLogFiles, shelfCamera } from './console-log-file';
 import { FileShelf, type AddFile } from '../files/shelf';
 import { FilesPane } from '../files/FilesPane';
 import { shelfContribute } from '../files/shelf-contribute';
@@ -77,7 +77,7 @@ export function Workbench(props: {
     },
   );
   const camera = createMemo(() => cameras().find((entry) => entry.id === selected()));
-  const logs = consoleLogFiles(() => props.model.log(), cameras);
+  const logs = createConsoleLogFiles(() => props.model.log(), cameras);
   const files = createMemo(() => [...shelf.files(), ...logs.files()]);
   /** Adds a tool's output to the Files pane under the camera the tool started on. */
   const fileFor =

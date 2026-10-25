@@ -1,6 +1,6 @@
 /** RAM captures through a firmware's catalog bulk path. */
 import { catalog, type CaptureScope, type ResolvedSelection } from 'fujimod';
-import type { Camera, CameraIdentity, ToolSession } from '../camera-model';
+import type { CameraIdentity, ToolSession } from '../camera-model';
 import type { ControlDiff } from './mapping';
 
 /** Bytes requested per qualified bulk read. */

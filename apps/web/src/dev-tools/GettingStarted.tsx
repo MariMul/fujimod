@@ -1,4 +1,4 @@
-import { Show, createSignal } from 'solid-js';
+import { Show, createSignal, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import type {
   Camera,
@@ -134,12 +134,13 @@ export function GettingStarted(props: {
     const regions: StateRegion[] = [];
     const file = props.onFile;
     const done = await step('state', 'Dump camera state', async (session, firmware) => {
+      const prepared = untrack(() => props.results.prepared);
       await session.dumpState(firmware, ({ data, ...region }) => {
         regions.push(region);
         file(`state-${slug(region.name)}.bin`, new Blob([new Uint8Array(data)]), {
           firmware,
           ...region,
-          prepared: props.results.prepared,
+          prepared,
         });
         setProgress(`${region.name} (${mib(region.size)})`);
       });
