@@ -1,5 +1,6 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
+use crate::{boot, clocks, flash, sd, serial, timer};
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
     bus::{Bus, Mode},
@@ -11,7 +12,6 @@ use fujimod_emulator_devices::{
     signals::Level,
 };
 use fujimod_emulator_ip_arm::{gicv2, pl330};
-use fujimod_emulator_xppro::{boot, clocks, flash, sd, serial, timer};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, sync::Arc};
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
-    Xppro,
+    Xpp,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -108,7 +108,7 @@ impl Timers {
 }
 impl Device for Timers {
     fn name(&self) -> &'static str {
-        "xppro-timers"
+        "xpp-timers"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);

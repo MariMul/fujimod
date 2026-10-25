@@ -31,8 +31,8 @@ pub enum Generation {
     #[serde(rename = "exrpro")]
     ExrPro,
     Exr2,
-    #[serde(rename = "xppro")]
-    XpPro,
+    #[serde(rename = "xpp")]
+    Xpp,
     Xp4,
     Xp5,
 }
@@ -306,7 +306,7 @@ impl Recipe {
                         image::transform(&inverted, plan)?,
                     )?
                 }
-                Generation::Exr2 | Generation::XpPro => {
+                Generation::Exr2 | Generation::Xpp => {
                     let packaging = self.packaging.as_ref().ok_or_else(|| {
                         image::Error::Invalid("Missing SD header packaging".into())
                     })?;
@@ -392,7 +392,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
     let mut output_filenames = Vec::new();
     if let Some(recipe) = &recipe {
         match recipe.generation {
-            Generation::Exr | Generation::ExrPro | Generation::Exr2 | Generation::XpPro => {
+            Generation::Exr | Generation::ExrPro | Generation::Exr2 | Generation::Xpp => {
                 if let Some(packaging) = &recipe.packaging {
                     output_filenames.extend([
                         packaging.header_filename.clone(),

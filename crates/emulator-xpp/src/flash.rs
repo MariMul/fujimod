@@ -131,7 +131,7 @@ impl FlashController {
 }
 impl Device for FlashController {
     fn name(&self) -> &'static str {
-        "xppro-flash"
+        "xpp-flash"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if self.aperture.contains(address, size as usize) {

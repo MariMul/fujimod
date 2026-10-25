@@ -116,7 +116,7 @@ pub fn boot_rom_audit<L: Lookup>(
         "xp4" => {
             "Reset and SRAM setup hand off to the flash-backed RAM loader. Setup-size and loader-copy fields bound mutable code, not boot ROM; no complete ROM source/length contract is established."
         }
-        "xppro" => {
+        "xpp" => {
             "Reset and kernel handoff bound low-RAM loader images. High peripheral register constants and incoming ROM state do not establish a complete boot ROM extent."
         }
         "exr" => {

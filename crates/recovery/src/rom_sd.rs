@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub enum Processor {
     Exr,
     ExrPro,
-    XpPro,
+    Xpp,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -536,7 +536,7 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
         });
     }
     require(arenas == 1, "No unique overlay arena section")?;
-    let mut edits = if processor == Processor::XpPro {
+    let mut edits = if processor == Processor::Xpp {
         xpp_edits(&code, &table)?
     } else {
         exr_edits(
@@ -567,18 +567,18 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
     };
     // Check overlap, BSS and every old instruction before publishing a recipe.
     image::transform(data, &plan)?;
-    let header = if processor == Processor::XpPro {
+    let header = if processor == Processor::Xpp {
         xpp_header(data, bias, loader)?
     } else {
         bias
     };
-    let header_size = if processor == Processor::XpPro {
+    let header_size = if processor == Processor::Xpp {
         0x800
     } else {
         0x200
     };
     let bytes = extent(data, header, header_size)?;
-    let signature = if processor == Processor::XpPro {
+    let signature = if processor == Processor::Xpp {
         vec![0xffffffff, 0, 0x55555555, 0xaaaaaaaa]
     } else {
         vec![0x00ffaa55, 0x01234567, 0x89abcdef]
@@ -587,7 +587,7 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
         sequence(bytes, 0, &signature),
         "Boot header signatures differ",
     )?;
-    let header_edits = if processor == Processor::XpPro {
+    let header_edits = if processor == Processor::Xpp {
         vec![]
     } else {
         vec![Edit {

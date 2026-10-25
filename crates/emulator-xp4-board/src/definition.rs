@@ -39,9 +39,9 @@ pub struct Definition {
     #[serde(default)]
     pub storage_irq: Option<u32>,
     #[serde(default)]
-    pub xppro_storage: Option<XpproStorage>,
+    pub xpp_storage: Option<XppStorage>,
     #[serde(default)]
-    pub xppro_serial: Vec<u64>,
+    pub xpp_serial: Vec<u64>,
     #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
@@ -98,13 +98,13 @@ pub enum TimerLayout {
     /// Eight channels; select bits set in the control word.
     Xp4,
     /// Sixteen channels; select bits clear in the control word.
-    Xppro,
+    Xpp,
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct XpproStorage {
+pub struct XppStorage {
     pub flash_controller: u64,
     pub aperture: u64,
     pub aperture_size: u64,

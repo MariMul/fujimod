@@ -110,4 +110,4 @@ LUPI_CC=/path/to/arm-gcc LUPI_LD=/path/to/arm-ld \
 
 `cargo run -p fujimod-recovery --example locate_rom_sd -- exr UPDATE.DAT`
 emits freshly located startup plans and header facts from the supplied update.
-Use `exrpro` or `xppro` for the other processor families.
+Use `exrpro` or `xpp` for the other processor families.

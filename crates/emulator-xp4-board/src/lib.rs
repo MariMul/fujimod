@@ -6,7 +6,6 @@ mod client;
 mod definition;
 pub use definition::Definition;
 pub mod observation;
-pub mod xppro;
 use observation::Call;
 mod devices;
 mod timer;
@@ -929,8 +928,8 @@ impl Session {
             control_requests,
             storage_geometry,
             storage_irq,
-            xppro_storage,
-            xppro_serial,
+            xpp_storage,
+            xpp_serial,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -1009,7 +1008,7 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
-        if storage_jedec.is_some() && xppro_storage.is_some() {
+        if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
         let mut devices = if let Some(jedec) = storage_jedec {
@@ -1022,7 +1021,7 @@ impl Session {
                 storage_irq
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
             )?)
-        } else if let Some(storage) = xppro_storage {
+        } else if let Some(storage) = xpp_storage {
             if !storage_dma_routes.is_empty() || storage_geometry.is_some() || storage_irq.is_some()
             {
                 return Err("XP4 storage routes require the XP4 controller".to_owned());
@@ -1030,7 +1029,7 @@ impl Session {
             let image = storage_image
                 .ok_or_else(|| "X-Processor Pro flash requires explicit contents".to_owned())?;
             let mut devices = devices::Devices::empty();
-            devices.xppro_storage(storage, image)?;
+            devices.xpp_storage(storage, image)?;
             Some(devices)
         } else {
             if !storage_dma_routes.is_empty()
@@ -1044,10 +1043,10 @@ impl Session {
             }
             None
         };
-        for base in xppro_serial {
+        for base in xpp_serial {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xppro_serial(base)?;
+                .xpp_serial(base)?;
         }
         if let Some((inputs, sample_ticks)) = adc {
             devices

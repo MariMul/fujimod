@@ -655,12 +655,12 @@ impl Devices {
     }
     /// X-Processor Pro flash controller, its read aperture and the PL330 that
     /// copies from it. The flash contents are an explicit board input.
-    pub fn xppro_storage(
+    pub fn xpp_storage(
         &mut self,
-        storage: super::definition::XpproStorage,
+        storage: super::definition::XppStorage,
         image: Vec<u8>,
     ) -> Result<(), String> {
-        use fujimod_emulator_xppro::flash::{self, Aperture, FlashController};
+        use fujimod_emulator_xpp::flash::{self, Aperture, FlashController};
         struct ApertureSource(Arc<Aperture>);
         impl fujimod_emulator_ip_arm::pl330::Source for ApertureSource {
             fn contains(&self, address: u64, len: usize) -> bool {
@@ -708,8 +708,8 @@ impl Devices {
         Ok(())
     }
     /// One X-Processor Pro serial port without a peer.
-    pub fn xppro_serial(&mut self, base: u64) -> Result<(), String> {
-        use fujimod_emulator_xppro::serial::{REGISTERS, SerialPort};
+    pub fn xpp_serial(&mut self, base: u64) -> Result<(), String> {
+        use fujimod_emulator_xpp::serial::{REGISTERS, SerialPort};
         if self
             .windows
             .iter()

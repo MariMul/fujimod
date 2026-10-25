@@ -12612,7 +12612,7 @@
           "type": "string"
         },
         {
-          "const": "xppro",
+          "const": "xpp",
           "description": "Sixteen channels at +0x100 + n*0x10; control select bits clear.",
           "type": "string"
         }

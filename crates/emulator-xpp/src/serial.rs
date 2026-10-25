@@ -34,7 +34,7 @@ impl SerialPort {
 }
 impl Device for SerialPort {
     fn name(&self) -> &'static str {
-        "xppro-serial"
+        "xpp-serial"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let o = address - self.base;

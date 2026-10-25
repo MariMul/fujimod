@@ -1208,7 +1208,7 @@ pub enum TimerLayout {
     /// Eight channels at +0x10 + n*8; control select bits set.
     Xp4,
     /// Sixteen channels at +0x100 + n*0x10; control select bits clear.
-    Xppro,
+    Xpp,
 }
 
 /// Declared memory-mapped flash controller facts.

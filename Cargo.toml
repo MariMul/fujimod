@@ -48,7 +48,7 @@ members = [
   "crates/emulator-xp4-io",
   "crates/emulator-xp4-display",
   "crates/emulator-xp4-storage",
-  "crates/emulator-xppro",
+  "crates/emulator-xpp",
   "crates/emulator-xp5-board",
   "crates/emulator-xp5-io",
   "crates/emulator-xp5-display",
@@ -155,7 +155,7 @@ fujimod-emulator-exr2-isp-input = { path = "crates/emulator-exr2-isp-input", ver
 fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
 fujimod-emulator-xp4-display = { path = "crates/emulator-xp4-display", version = "0.1.0" }
 fujimod-emulator-xp4-storage = { path = "crates/emulator-xp4-storage", version = "0.1.0" }
-fujimod-emulator-xppro = { path = "crates/emulator-xppro", version = "0.1.0" }
+fujimod-emulator-xpp = { path = "crates/emulator-xpp", version = "0.1.0" }
 fujimod-emulator-xp5-board = { path = "crates/emulator-xp5-board", version = "0.1.0" }
 fujimod-emulator-xp5-io = { path = "crates/emulator-xp5-io", version = "0.1.0" }
 fujimod-emulator-xp5-display = { path = "crates/emulator-xp5-display", version = "0.1.0" }

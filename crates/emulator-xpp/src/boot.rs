@@ -192,7 +192,7 @@ impl BootController {
 }
 impl Device for BootController {
     fn name(&self) -> &'static str {
-        "xppro-boot"
+        "xpp-boot"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match self.transfer(cx, address, size, None) {

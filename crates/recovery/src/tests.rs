@@ -160,7 +160,7 @@ fn recipes_match_catalog_identities_and_generation() {
                     Generation::Exr => "exr",
                     Generation::ExrPro => "exrpro",
                     Generation::Exr2 => "exr2",
-                    Generation::XpPro => "xppro",
+                    Generation::Xpp => "xpp",
                     Generation::Xp4 => "xp4",
                     Generation::Xp5 => "xp5",
                 }

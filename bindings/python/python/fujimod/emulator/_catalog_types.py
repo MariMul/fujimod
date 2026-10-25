@@ -2703,7 +2703,7 @@ class HardwareTcm(TypedDict, total=False):
     btcm: Required[HardwareAtcm]
 
 
-type HardwareTimerLayout = Literal["xp4", "xppro"]
+type HardwareTimerLayout = Literal["xp4", "xpp"]
 
 
 class HardwareTimerRoute(TypedDict, total=False):

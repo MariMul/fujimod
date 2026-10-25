@@ -90,7 +90,7 @@ impl ClockControl {
 }
 impl Device for ClockControl {
     fn name(&self) -> &'static str {
-        "xppro-clock-control"
+        "xpp-clock-control"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match self.transfer(cx, address, size, None) {

@@ -66,7 +66,7 @@
     "source_size": 53544208,
     "source_sha256": "fdee77287b64f789da8e1b552caa3ccb45f8f2409adafc9e05811932d0871296",
     "update_filename": "GXUP0002.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 48300032,
       "entry": 0,
@@ -291,7 +291,7 @@
     "source_size": 53544164,
     "source_sha256": "6bbc740ec4c6fe410a24a2bba48fe5b1736cc221beb76827b838243b06cfa515",
     "update_filename": "GXUP0001.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 47484928,
       "entry": 0,
@@ -1018,7 +1018,7 @@
     "source_size": 53544672,
     "source_sha256": "c0d4c31985aaf793e060924fbfdfbd7cf205a27986cda43c1806688e01523f89",
     "update_filename": "FPUPDATE.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 44969984,
       "entry": 0,
@@ -4871,7 +4871,7 @@
     "source_size": 107104384,
     "source_sha256": "28a7786ee3cd86b44d714daaa19f82e0d61710798cffd0fa142c1a960a67830d",
     "update_filename": "FWUP0014.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": null,
     "packaging": null,
     "lupi": null,
@@ -5414,7 +5414,7 @@
     "source_size": 54407600,
     "source_sha256": "98187635e5b3e8356fbd9ad91d2d9b45863f2b451d8ce04f3a418d06e99646d0",
     "update_filename": "FWUP0015.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 51232768,
       "entry": 0,
@@ -7532,7 +7532,7 @@
     "source_size": 53543908,
     "source_sha256": "6f9792e53a776ee116732a6df4425b0f5393ad2f53655f573924afe9c61dc54d",
     "update_filename": "FWUP0008.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 40235008,
       "entry": 0,
@@ -9577,7 +9577,7 @@
     "source_size": 53543964,
     "source_sha256": "dd02ec5a862cf0e6f03a519a600ed99435efa442848249945b13ca6d78fabb25",
     "update_filename": "FWUP0010.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 46505984,
       "entry": 0,
@@ -9858,7 +9858,7 @@
     "source_size": 53543984,
     "source_sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad",
     "update_filename": "FWUP0013.DAT",
-    "generation": "xppro",
+    "generation": "xpp",
     "plan": {
       "size": 45481984,
       "entry": 0,

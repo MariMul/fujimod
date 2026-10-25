@@ -36,7 +36,7 @@ impl RecoveryAvailability {
                 core::Generation::Exr => "exr",
                 core::Generation::ExrPro => "exrpro",
                 core::Generation::Exr2 => "exr2",
-                core::Generation::XpPro => "xppro",
+                core::Generation::Xpp => "xpp",
                 core::Generation::Xp4 => "xp4",
                 core::Generation::Xp5 => "xp5",
             }

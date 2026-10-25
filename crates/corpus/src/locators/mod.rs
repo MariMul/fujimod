@@ -48,7 +48,7 @@ mod tests {
             (rom.address, rom.size, rom.constant),
             (0x80000000, 16384, true)
         );
-        for generation in ["exr", "exrpro", "xppro", "xp4", "xp5", "unknown"] {
+        for generation in ["exr", "exrpro", "xpp", "xp4", "xp5", "unknown"] {
             assert!(boot_rom(generation).is_err());
         }
     }

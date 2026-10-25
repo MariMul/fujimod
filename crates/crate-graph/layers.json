@@ -42,8 +42,7 @@
       "fujimod-emulator-xp5-display",
       "fujimod-emulator-xp5-imaging",
       "fujimod-emulator-xp5-io",
-      "fujimod-emulator-xp5-storage",
-      "fujimod-emulator-xppro"
+      "fujimod-emulator-xp5-storage"
     ],
     "plan": [
       "fujimod-emulator-exr2-plan"
@@ -52,7 +51,8 @@
       "fujimod-emulator-exr2-board",
       "fujimod-emulator-preparation",
       "fujimod-emulator-xp4-board",
-      "fujimod-emulator-xp5-board"
+      "fujimod-emulator-xp5-board",
+      "fujimod-emulator-xpp"
     ],
     "engine": [
       "fujimod-emulator",
@@ -142,8 +142,12 @@
         "fujimod-emulator-sensor-input",
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
-        "fujimod-emulator-xp4-storage",
-        "fujimod-emulator-xppro"
+        "fujimod-emulator-xp4-storage"
+      ],
+      "fujimod-emulator-xpp": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-xp4-io"
       ]
     },
     "oversize_models": [],

@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
             });
         let rom = locators::boot_rom(&input.processor);
-        let audit = if matches!(input.processor.as_str(), "xp4" | "xppro" | "exr" | "exrpro") {
+        let audit = if matches!(input.processor.as_str(), "xp4" | "xpp" | "exr" | "exrpro") {
             input.update_path.as_ref().map(|p| {
                 std::fs::read(p)
                     .map_err(|e| e.to_string())

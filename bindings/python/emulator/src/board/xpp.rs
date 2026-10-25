@@ -1,7 +1,7 @@
 //! Native X-Processor Pro graph construction; no host device adapters.
 use super::*;
 impl Board {
-    pub(super) fn xppro_graph(
+    pub(super) fn xpp_graph(
         graph: factory::Graph,
         devices: &str,
         assets: &Bound<'_, PyDict>,
@@ -25,7 +25,7 @@ impl Board {
                 "X-Processor Pro does not continue modeled refusals",
             ));
         }
-        let built = fujimod_emulator_xp4_board::xppro::build(graph, json(devices)?, &loaded, mode)
+        let built = fujimod_emulator_xpp::board::build(graph, json(devices)?, &loaded, mode)
             .map_err(error)?;
         let mut resources = fujimod_emulator_exr2_resources::Resources::default();
         for (name, level, node) in built.inputs {

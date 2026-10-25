@@ -10,7 +10,7 @@ await initialize({
 test('Agate recovery is available without a complete emulator board', () => {
   const status = recovery.availability('xpro2-511');
   try {
-    assert.equal(status.generation, 'xppro');
+    assert.equal(status.generation, 'xpp');
     assert.equal(status.canBuild, true);
     assert.deepEqual(status.missing, []);
     assert.deepEqual(status.outputFilenames, ['ffsys.bin', 'ffboot.bin', 'FWUP0008.DAT']);

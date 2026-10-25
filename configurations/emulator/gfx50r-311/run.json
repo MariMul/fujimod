@@ -15,7 +15,7 @@
   "preset": {
     "factory_options": {},
     "hardware_selection": {
-      "soc_profile_id": "xppro",
+      "soc_profile_id": "xpp",
       "body_profile_id": "gfx50r-discovery"
     },
     "hardware_inputs_id": "gfx50r-discovery"
