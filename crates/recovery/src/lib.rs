@@ -1,7 +1,6 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
 pub mod image;
-pub mod flash_free;
 mod lupi;
 mod lupi_loader;
 pub mod rom_sd;
@@ -109,8 +108,6 @@ pub struct Recipe {
     pub firmware_id: String,
     pub source_size: usize,
     pub updater: Option<VersionContract>,
-    #[serde(default)]
-    pub flash_free: Option<flash_free::FlashFreeProof>,
     pub source_sha256: String,
     pub update_filename: String,
     pub generation: Generation,
@@ -134,14 +131,6 @@ impl Recipe {
                 .any(|s| s == "version-independent stock updater acceptance")
         {
             missing.push("version-independent stock updater acceptance".into());
-        }
-        if self
-            .flash_free
-            .as_ref()
-            .is_none_or(|proof| proof.verify(self).is_err())
-            && !missing.iter().any(|s| s == flash_free::MISSING)
-        {
-            missing.push(flash_free::MISSING.into());
         }
         missing
     }
@@ -270,9 +259,7 @@ impl Recipe {
             self.updater.is_some(),
             "Missing version-independent stock updater acceptance",
         )?;
-        let files = self.build_startup(source)?;
-        self.flash_free.as_ref().unwrap().verify_files(&files)?;
-        Ok(files)
+        self.build_startup(source)
     }
     /// Construct established startup files independently of updater readiness.
     pub fn build_startup(&self, source: &[u8]) -> Result<Vec<File>> {

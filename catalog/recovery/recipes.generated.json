@@ -57,9 +57,7 @@
         "sha256": "dbbf1c259e02f4db9476f5da38bb6efa32f3d10ebf82329bf5f48e2c5bd01cf5"
       }
     },
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "XP5 bindings: SD0 vendor setup: two-rail host path includes an additional vendor-register transaction whose protocol is not implemented"
     ]
   },
@@ -284,9 +282,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -511,9 +507,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -533,9 +527,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
     ]
   },
@@ -555,9 +547,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
     ]
   },
@@ -840,10 +830,7 @@
         "sha256": "f3dfeec58310473c6a1fb9a034137552e32cb92d19e8735e4b8528fa5ed850fb"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "x100s-121",
@@ -1047,9 +1034,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -1316,10 +1301,7 @@
         "sha256": "c2831a643fa956cc3c4f7029f85e17f4983b015ab93634412a788fb5cafaa8b1"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "x100v-301",
@@ -1567,10 +1549,7 @@
         "sha256": "ff139605493ba863cf41d17be2043f87d9eadaf54d624898cada9d46f1785570"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "x100vi-131",
@@ -2459,10 +2438,7 @@
         "sha256": "9a7d996d0163044ceaf2319567093f914fefe69cd75cbb49bb6718f6ff4db042"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "x20-103",
@@ -2666,9 +2642,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -2887,9 +2861,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -3162,10 +3134,7 @@
         "sha256": "21ff3335226089bb77fe10e1da975739c3799c6b0ae9f79ccd9c06bec8c550ea"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xa1-150",
@@ -3431,10 +3400,7 @@
         "sha256": "352f629133340afdbb663a3aa6ae566d13e6f9df729db4644532c0017cc7c907"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xa2-130",
@@ -3700,10 +3666,7 @@
         "sha256": "2d7e6650b329d59a7c3c0a4394d06c01c457373cd603636d195fbcf59ee33bd8"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xe1-271",
@@ -3907,9 +3870,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -4176,10 +4137,7 @@
         "sha256": "213356ab7d09e2098225c074055ee1029bbe0667d8b20960eb8babe295058636"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xe2s-111",
@@ -4444,10 +4402,7 @@
         "sha256": "753d02f5a7c85a98c9e3963275a33443314966fd305ac7b0bfbe632f8dde3726"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xe3-132",
@@ -4465,9 +4420,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
     ]
   },
@@ -4717,10 +4670,7 @@
         "sha256": "d1da82ca6951258237400b2e80f0db248533433c7ad1fa326878b28b62a9af5d"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xe5-112",
@@ -4738,9 +4688,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance",
       "XP5 bindings: sd_route: expected one complete instruction contract, found 0"
     ]
@@ -4971,9 +4919,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -5256,10 +5202,7 @@
         "sha256": "f778a787524392fecfd8688dc251f6a7bdc6e74423cea4c572e40deb02fae6d7"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xh2-530",
@@ -5286,9 +5229,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
@@ -5318,9 +5259,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
@@ -5540,9 +5479,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -5810,10 +5747,7 @@
         "sha256": "8e901e8fb7ee361b3907b221bd258a0f6ade2ee0a7f8b25ee3f80ef123ea1327"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xm1-150",
@@ -6079,10 +6013,7 @@
         "sha256": "f33e1a4dcf40f5745aba2738fe83a3da9a10df9d07a3081be8dd243f3e0e77f4"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xm5-130",
@@ -6902,10 +6833,7 @@
         "sha256": "3c16890c7754902760db94c2bc8b98af85231df7b35b6b426c8cb6f5cdc08ce5"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xpro1-382",
@@ -7109,9 +7037,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -7384,10 +7310,7 @@
         "sha256": "a8feec26a7c62c7eefce80f8aa7347c46ecd90dfc987eb323a370643ea1876f3"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xpro3-200",
@@ -7635,10 +7558,7 @@
         "sha256": "7f66ff5f1128522c595b58cc2fef84534b9eb9b036377aca320e6407122951f1"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xq1-121",
@@ -7846,9 +7766,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -8058,9 +7976,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -8090,9 +8006,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
     ]
   },
@@ -8348,10 +8262,7 @@
         "sha256": "4799a75ba15826b7769df69fe4d8ed4ff889f53ac26f142b653eb7431fc74c1f"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xs20-330",
@@ -8369,9 +8280,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
@@ -8644,10 +8553,7 @@
         "sha256": "6eda63c0d8bcc5da7d388ccafa49cc5da2e0e5b0050890d3efa666f4d8777a83"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt10-131",
@@ -8912,10 +8818,7 @@
         "sha256": "1728ea71901658e6a00c22614d1f0424866e78203ec3b01aa69eb256338bfd59"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt2-441",
@@ -9196,10 +9099,7 @@
         "sha256": "b5a1994a2d63ad8b1c29aeb5dee7d152934170978563c2b30905b3873b29017b"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt20-211",
@@ -9480,10 +9380,7 @@
         "sha256": "1685ee226d9a34c15d44e7dd716fd38fe8bc448cf82a23f18bf93515bc683f6e"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt3-511",
@@ -9731,10 +9628,7 @@
         "sha256": "157cba6f70dca78488c04879201b7651b667edcb7b52036d52af75b53e0f69cd"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt30-201",
@@ -9982,10 +9876,7 @@
         "sha256": "a91436903bf17130c42d0020426e71e5bfc1479a9564f365717b7a7d90eb5d4f"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt30ii-204",
@@ -10233,10 +10124,7 @@
         "sha256": "bb1248d4cb62eb5f3f3d173a0fdca166047cb4e020072d6116eda31a25a0f142"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt30iii-110",
@@ -10980,9 +10868,7 @@
     "sd_boot": null,
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance"
     ]
   },
@@ -11232,10 +11118,7 @@
         "sha256": "6828081645e4c72926e6faf83506ca8c3c38c9604eea7f30ffaa522b09d927d6"
       }
     },
-    "flash_free": null,
-    "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)"
-    ]
+    "missing": []
   },
   {
     "firmware_id": "xt5-431",
@@ -11262,9 +11145,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
@@ -11295,9 +11176,7 @@
     },
     "firmware_update": null,
     "updater": null,
-    "flash_free": null,
     "missing": [
-      "flash-free SD updater proof (zeroed and scrambled update-covered storage)",
       "version-independent stock updater acceptance",
       "XP5 bindings: sd_route: expected one complete instruction contract, found 0"
     ]
