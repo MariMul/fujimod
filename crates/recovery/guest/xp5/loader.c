@@ -18,7 +18,7 @@ struct setup_sd_progress {
     uint64_t magic, stage, error, loaded, crc32, stock_delay_scale, current_el, sctlr;
 } __attribute__((aligned(64)));
 volatile struct setup_sd_progress setup_sd_progress;
-static uint8_t bounce[16384] __attribute__((aligned(64)));
+static uint8_t bounce[512] __attribute__((aligned(64)));
 static uint8_t scratch[512] __attribute__((aligned(64)));
 static struct sd_card card;
 static struct fat32_volume volume;

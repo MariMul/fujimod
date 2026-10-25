@@ -11,11 +11,20 @@ FFINIT with the update's DDR setup and relocated tables, the Topaz filesystem
 ABI, and a cold preloaded RAM image. Reset mode remains cold; three checked
 comparisons select the preloaded table, images, and worker bypass.
 
-XP5 preserves the copied setup prefix, retains its stock DDR initialization,
-then loads FAT32 `FFBOOT.BIN` and checks its exact length and CRC32 before
-publishing readiness to the secondary-core gate. Ordered SD host, power, and
-clock effects come from catalog inputs pinned to source spans. Flash-linked
-setup tails and missing board routing remain explicit missing facts.
+XP5 emits raw `marble_init.bin` with the update's setup at byte zero. Its
+entry guest preserves registers and stack, initializes serial NOR access,
+scans read timing, copies the complete source header into the boot-service
+area, applies header operations, and restores the setup entry. Device bases,
+flash pins, SD routing/power/clock operations, and status-lamp fields are
+catalog inputs with checked source spans. The guest makes no ROM calls.
+
+Startup and recovery use this same entry guest, then load FAT32 `FFBOOT.BIN`
+after stock DDR setup and check its exact length and CRC32 before publishing
+the setup gate. The gate applies to cores executing that bootstrap. Stock
+setup and later startup retain internal-flash dependencies. Missing device or
+setup facts produce specific construction refusals. `Recipe::build_stage_one`
+uses the same guest and preserves the original internal-flash continuation;
+it produces only `marble_init.bin`.
 
 `availability(firmware_id)` returns `can_build`, the exact missing facts, output
 file names, and the catalog's SD-boot and firmware-update button combinations.
@@ -33,7 +42,7 @@ card after copying their contents to downloads or an archive. Construction has
 no filesystem, USB, camera, or network access.
 
 The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
-`startup FIRMWARE DAT NEW_DIRECTORY`.
+`startup FIRMWARE DAT NEW_DIRECTORY`, and `stage-one FIRMWARE DAT NEW_DIRECTORY`.
 
 The guest loader sources are in `guest/`. Its checked-in generated Rust
 template contains the compiled loader and relocations, with no update or ROM
@@ -56,7 +65,8 @@ XP5_CC=/path/to/aarch64-none-elf-gcc XP5_LD=/path/to/aarch64-none-elf-ld \
   cargo run -p fujimod-recovery --example generate_xp5
 ```
 
-The XP5 generator rejects unsupported relocations and requires GCC 9.2.1.
-Append `-- --check` to compare it with the checked-in template. Both template
+The XP5 generator checks the pre-setup call graph and GCC stack reports,
+rejects unsupported relocations, and requires GCC 9.2.1. Append `-- --check`
+to compare it with the checked-in template. Both template
 generators use empty camera-data placeholders; card construction needs only
 the official DAT and the compiled catalog recipes.

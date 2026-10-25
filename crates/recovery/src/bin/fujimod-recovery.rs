@@ -15,11 +15,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect::<Result<Vec<_>, _>>()?;
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
-        Some(command @ ("build" | "startup")) if args.len() == 4 => {
+        Some(command @ ("build" | "startup" | "stage-one")) if args.len() == 4 => {
             let recipe = Recipe::bundled(&args[1])?.ok_or("Missing recovery recipe")?;
             let source = fs::read(&args[2])?;
             let files = if command == "build" {
                 recipe.build(&source)?
+            } else if command == "stage-one" {
+                recipe.build_stage_one(&source)?
             } else {
                 recipe.build_startup(&source)?
             };
@@ -34,7 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-recovery list | build|startup FIRMWARE DAT NEW_DIRECTORY".into(),
+                "Usage: fujimod-recovery list | build|startup|stage-one FIRMWARE DAT NEW_DIRECTORY"
+                    .into(),
             );
         }
     }

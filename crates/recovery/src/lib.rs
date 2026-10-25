@@ -7,7 +7,9 @@ use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, Setup};
 pub use xp5::{
-    Board as SdBoard, Operation as SdOperation, Setup as Xp5Setup, SourceProof as Xp5SourceProof,
+    Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash, Lamp as Xp5Lamp,
+    Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
+    SourceProof as Xp5SourceProof,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -168,6 +170,25 @@ impl Recipe {
         layout["sha256"] = fujimod_firmware::sha256(&bytes).into();
         Ok((bytes, layout))
     }
+    /// Prepare XP5 flash and resume the update's original internal startup.
+    pub fn build_stage_one(&self, source: &[u8]) -> Result<Vec<File>> {
+        require(
+            matches!(self.generation, Generation::Xp5),
+            "Stage one requires XP5",
+        )?;
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let setup = self.xp5.as_ref().ok_or_else(|| {
+            image::Error::Invalid(format!(
+                "Missing XP5 flash/setup bindings: {}",
+                self.missing.join(", ")
+            ))
+        })?;
+        xp5::package(&fujimod_firmware::invert(source), setup, None)
+    }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
     /// verbatim to its required root filename, including signed containers.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
@@ -189,10 +210,12 @@ impl Recipe {
         )?;
         image::hash(source, &self.source_sha256)?;
         let inverted = fujimod_firmware::invert(source);
-        let plan = self
-            .plan
-            .as_ref()
-            .ok_or_else(|| image::Error::Invalid("Missing RAM image plan".into()))?;
+        let plan = self.plan.as_ref().ok_or_else(|| {
+            image::Error::Invalid(format!(
+                "Missing RAM image plan: {}",
+                self.missing.join(", ")
+            ))
+        })?;
         let mut files =
             match self.generation {
                 Generation::Exr2 => {
@@ -227,7 +250,7 @@ impl Recipe {
                             "Missing XP5 post-setup SD loader and handoff facts".into(),
                         )
                     })?;
-                    xp5::package(&inverted, setup, image::transform(&inverted, plan)?)?
+                    xp5::package(&inverted, setup, Some(image::transform(&inverted, plan)?))?
                 }
             };
         require(

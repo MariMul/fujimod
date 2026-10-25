@@ -40,6 +40,9 @@ fn main() {
         "fat32.c",
         "crc32.c",
         "boot.S",
+        "flash_boot.c",
+        "flash_entry.c",
+        "flash_entry.S",
     ] {
         let output = format!("{source}.o");
         run(
@@ -54,7 +57,9 @@ fn main() {
                 "-ffunction-sections",
                 "-fdata-sections",
                 "-fno-asynchronous-unwind-tables",
-                "-O1",
+                "-O2",
+                "-mstrict-align",
+                "-fstack-usage",
                 "-mcpu=cortex-a53",
                 "-fno-omit-frame-pointer",
                 "-mgeneral-regs-only",
@@ -70,9 +75,9 @@ fn main() {
     fs::write(
         work.join("loader.ld"),
         r#"
-ENTRY(setup_sd_initialize)
+ENTRY(xp5_flash_entry)
 SECTIONS {
- .text 0x100000 : { *(.text .text.*) }
+ .text 0x100000 : { KEEP(*flash_entry.S.o(.text)) KEEP(*loader.c.o(.text.setup_sd_initialize)) *(.text .text.*) }
  .rodata : { *(.rodata .rodata.*) }
  .data : { *(.data .data.*) }
  .bss : { *(.bss .bss.* COMMON) }
@@ -80,7 +85,6 @@ SECTIONS {
 }
 PROVIDE(boot_setup_initialize = 0x0c0000);
 PROVIDE(boot_setup_delay = 0x0c0200);
-PROVIDE(boot_setup_ram_entry_resume = 0x0c0400);
 "#,
     )
     .unwrap();
@@ -110,10 +114,94 @@ PROVIDE(boot_setup_ram_entry_resume = 0x0c0400);
             image[offset..offset + data.len()].copy_from_slice(data);
         }
     }
+    // Verify the pre-setup C graph from our compiled guest, including GCC's
+    // stack reports. Stock-call relocations are permitted only after setup.
+    let functions: std::collections::BTreeMap<_, _> = elf
+        .symbols()
+        .filter(|s| s.kind() == object::SymbolKind::Text && s.size() > 0 && s.address() >= base)
+        .map(|s| (s.address(), (s.name().unwrap().to_string(), s.size())))
+        .collect();
+    let mut frames = std::collections::BTreeMap::new();
+    for source in ["flash_boot.c", "flash_entry.c"] {
+        for line in fs::read_to_string(work.join(format!("{source}.su")))
+            .unwrap()
+            .lines()
+        {
+            let fields: Vec<_> = line.split('\t').collect();
+            assert_eq!(fields[2], "static", "Unbounded prelude stack");
+            frames.insert(
+                fields[0].rsplit(':').next().unwrap().to_string(),
+                fields[1].parse::<usize>().unwrap(),
+            );
+        }
+    }
+    fn stack_depth(
+        at: u64,
+        base: u64,
+        image: &[u8],
+        functions: &std::collections::BTreeMap<u64, (String, u64)>,
+        frames: &std::collections::BTreeMap<String, usize>,
+        path: &mut Vec<u64>,
+    ) -> usize {
+        assert!(!path.contains(&at), "Recursive prelude");
+        let (name, size) = functions.get(&at).expect("Prelude has an external call");
+        path.push(at);
+        let mut child = 0;
+        for (n, bytes) in image[(at - base) as usize..(at + size - base) as usize]
+            .chunks_exact(4)
+            .enumerate()
+        {
+            let word = u32::from_le_bytes(bytes.try_into().unwrap());
+            assert!(
+                ![0xd61f0000, 0xd63f0000, 0xd69f0000].contains(&(word & 0xfffffc1f)),
+                "Indirect prelude transfer"
+            );
+            if word & 0x7c000000 == 0x14000000 {
+                let target = (at as i64
+                    + n as i64 * 4
+                    + ((((word & 0x3ffffff) ^ 0x2000000) as i64 - 0x2000000) * 4))
+                    as u64;
+                if word & 0x80000000 != 0 || !(at..at + size).contains(&target) {
+                    child = child.max(stack_depth(target, base, image, functions, frames, path));
+                }
+            }
+        }
+        path.pop();
+        frames.get(name).expect("Missing GCC stack report") + child
+    }
+    let maximum = stack_depth(
+        symbols["xp5_flash_prepare"],
+        base,
+        &image,
+        &functions,
+        &frames,
+        &mut Vec::new(),
+    );
+    assert!(
+        maximum + 512 <= (symbols["xp5_flash_stack_top"] - symbols["xp5_flash_stack"]) as usize,
+        "Prelude stack overflow"
+    );
+    for section in elf.sections() {
+        for (_, rel) in section.relocations() {
+            let object::RelocationFlags::Elf { r_type } = rel.flags() else {
+                panic!("ELF relocation expected")
+            };
+            assert!(
+                [261, 274, 275, 277, 278, 282, 283, 284, 285, 286, 299].contains(&r_type),
+                "Nonportable guest relocation {r_type}"
+            );
+        }
+    }
     let mut out = String::from(
         "// Generated from guest/xp5 by cargo run -p fujimod-recovery --example generate_xp5.\n",
     );
+    out += &format!("pub const PRELUDE_STACK_MAX: usize = {maximum};\n");
     for name in [
+        "xp5_flash_entry",
+        "xp5_flash_configuration",
+        "xp5_flash_setup_branch",
+        "xp5_flash_stack",
+        "xp5_flash_stack_top",
         "setup_sd_initialize",
         "setup_sd_request",
         "setup_sd_progress",

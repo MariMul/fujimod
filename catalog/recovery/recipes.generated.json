@@ -1,144 +1,208 @@
 [
   {
-    "firmware_id": "gfx100rf-113",
-    "source_size": 106613548,
-    "source_sha256": "33ad2dc787defdbdac3bb0a95e914407f768b0532f119cfac1e034c18648397f",
-    "update_filename": "GXUP0008.DAT",
-    "generation": "xp5",
+    "firmware_id": "gfx100-512",
+    "source_size": 110744016,
+    "source_sha256": "c24a410267ffe2d254caa58f9d54eb28945dad0eec69c630ca904a5479aa066a",
+    "update_filename": "GXUP0003.DAT",
+    "generation": "xp4",
     "plan": {
-      "size": 115953664,
+      "size": 72093696,
       "entry": 0,
       "regions": [
         {
-          "name": "reset stage",
+          "name": "loader+sync",
           "address": 0,
           "source": {
-            "dat_offset": 262844,
-            "size": 131072,
+            "dat_offset": 131700,
+            "size": 262144,
             "compression": "raw",
-            "decoded_size": 131072,
-            "sha256": "62f51b93b51bdd428c34c90c606a6bb364ff83d2631a99b1c3ccb2cb782af7b7"
+            "decoded_size": 262144,
+            "sha256": "a921bd607d35ceb15d7d4babad63a8b5f66edab5f1ba69bad0fa03b5023838ec"
           }
         },
         {
-          "name": "cold section table",
+          "name": "section table",
+          "address": 15204352,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "25a350900acd6e56647fad263c5477070495e72342e46e42d2a7bee64e5d7d79"
+          }
+        },
+        {
+          "name": "kernel0",
           "address": 262144,
           "source": {
-            "dat_offset": 4981436,
-            "size": 2048,
+            "dat_offset": 393844,
+            "size": 112224,
             "compression": "raw",
-            "decoded_size": 2048,
-            "sha256": "649bcde79ade0905a80b47b44b057f3c91bb58b17353e6847a21b7fdc67a617f"
+            "decoded_size": 112224,
+            "sha256": "584d41523762a1565f49b8852543dc81ec49dbbedc9078f3d3ce1e447fe36219"
           }
         },
         {
-          "name": "section0",
-          "address": 528384,
+          "name": "resources1",
+          "address": 1966080,
           "source": {
-            "dat_offset": 787132,
-            "size": 123584,
-            "compression": "raw",
-            "decoded_size": 123584,
-            "sha256": "5575d75c31a2cb99d9d5d2a004c8469041948732bbac129939f10e836c7bde37"
-          }
-        },
-        {
-          "name": "section3",
-          "address": 6819840,
-          "source": {
-            "dat_offset": 44040892,
-            "size": 4849664,
+            "dat_offset": 26215028,
+            "size": 3801088,
             "compression": "method4",
-            "decoded_size": 8934040,
-            "sha256": "d25035a04c5f167d63ef0f2e9e2671b42b5b576006564cc2d73135c0367b1284"
+            "decoded_size": 7138104,
+            "sha256": "13c094c03b5cf72100b416016a13ec9e108549f7d7e380ec935034c88db8e79f"
           }
         },
         {
-          "name": "section4",
-          "address": 16388096,
+          "name": "resources2",
+          "address": 9699328,
           "source": {
-            "dat_offset": 49152700,
-            "size": 710171,
+            "dat_offset": 31588980,
+            "size": 671421,
             "compression": "raw",
-            "decoded_size": 710171,
-            "sha256": "8b6a0bc103d88154cfe1c081cff781f3e473b2b801768eae3139ca971ddc6f8f"
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 15205376,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 149888,
+            "compression": "raw",
+            "decoded_size": 149888,
+            "sha256": "8388013ada1c16ed37a763d5be5f3a82659656aad4d6151e183613a9e19904db"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 16253952,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 149888,
+            "compression": "raw",
+            "decoded_size": 149888,
+            "sha256": "5be9de6e8b22b5e2e23dd4ef5bdd8a2dac3645ba8f307e931ba68f386d8e95a3"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 17305600,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 3932160,
+            "compression": "method4",
+            "decoded_size": 8499412,
+            "sha256": "bdf51193cb11c5851827dcb22c33ce3fcae59b9fd1823fad44fe92ecf1402263"
           }
         },
         {
           "name": "section6",
-          "address": 18616320,
+          "address": 33275904,
           "source": {
-            "dat_offset": 8782524,
-            "size": 7602176,
+            "dat_offset": 6423156,
+            "size": 5373952,
             "compression": "method4",
-            "decoded_size": 27462872,
-            "sha256": "fa93654fd92de9d1a556f8f1f8547f8fcddf44ac58327e3b05a6369760f7c899",
-            "initialized_prefix": {
-              "size": 11735040,
-              "sha256": "25e3c2231b0ca9b8a2dab57843de75ada02b23719b4b0a86c1ea4f1e749ecc35"
-            }
-          }
-        },
-        {
-          "name": "section7",
-          "address": 46018560,
-          "source": {
-            "dat_offset": 16384700,
-            "size": 9830400,
-            "compression": "method4",
-            "decoded_size": 22974464,
-            "sha256": "7dfcd3e834c31dd58a70299c8d337dbe3da0ce3adf8df404271b8dbdc50e78dd"
+            "decoded_size": 10108928,
+            "sha256": "a7f24cabf6b8b5c002a7702ed6f74da7105ab02934868f4631dddaf5ba0c1d7b"
           }
         },
         {
           "name": "overlays",
-          "address": 99233792,
+          "address": 63049728,
           "source": {
-            "dat_offset": 26215100,
-            "size": 8257536,
+            "dat_offset": 11797108,
+            "size": 3407872,
             "compression": "method4",
-            "decoded_size": 16719872,
-            "sha256": "8bee040cf4641401f6eaa21d44acfe42be502f60cbdf9dbd5928c3a11102e8f2"
-          }
-        },
-        {
-          "name": "controller payload cache",
-          "address": 266240,
-          "source": {
-            "dat_offset": 524988,
-            "size": 221472,
-            "compression": "raw",
-            "decoded_size": 221472,
-            "sha256": "d4e4196f03908730504c4f6e57f6579b7f86637de848e845838a4300a5d01fa4"
+            "decoded_size": 9043968,
+            "sha256": "f2d0de197608c5fc6e8d7ebc055e869019699093cd1edea6bb453088850462ad"
           }
         }
       ],
       "bss": [
         {
-          "name": "section0",
-          "address": 651968,
-          "size": 4623680
+          "name": "kernel0",
+          "address": 374368,
+          "size": 171712
+        },
+        {
+          "name": "module3",
+          "address": 15355264,
+          "size": 232576
+        },
+        {
+          "name": "module4",
+          "address": 16403840,
+          "size": 232576
+        },
+        {
+          "name": "section5",
+          "address": 25808896,
+          "size": 7467008
         },
         {
           "name": "section6",
-          "address": 30351360,
-          "size": 15667200
-        },
-        {
-          "name": "section7",
-          "address": 68993024,
-          "size": 30240768
+          "address": 43384832,
+          "size": 19664896
         }
       ],
       "edits": [
         {
-          "address": 73968,
+          "address": 45992,
           "old": 1,
           "new": 0,
-          "what": "select stock preloaded table/sections and skip reset load wait"
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 15204360,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
         }
       ]
     },
+    "packaging": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 29696,
+      "active_sha256": "f690bc1bb0f6f14cd948de49830daeaf8876aab9a5e7694a2ae81731093d2046",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6816,
+      "code_sha256": "1a1ecd48f2d813ff530a524d7a1e019a5127afcdef341c9af06afbb2dff0c62a",
+      "continuation_offset": 29536,
+      "continuation_address": 4026561376,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 45992,
+      "mode_test": 1540
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "version-independent stock updater acceptance"
+    ]
+  },
+  {
+    "firmware_id": "gfx100ii-250",
+    "source_size": 163184655,
+    "source_sha256": "b5bba32fd98dc5f2364852d1007d1fe6c004216e601972d5760aae7f1254d6b1",
+    "update_filename": "GXUP0006.DAT",
+    "generation": "xp5",
+    "plan": null,
     "packaging": null,
     "setup": null,
     "xp5": null,
@@ -148,9 +212,458 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "XP5 SRAM continuation without a flash tail",
-      "XP5 SD host routing and clock/power operations",
+      "XP5 bindings: setup/header: No unique stock AArch64 reset copy for rooted cold table"
+    ]
+  },
+  {
+    "firmware_id": "gfx100rf-113",
+    "source_size": 106613548,
+    "source_sha256": "33ad2dc787defdbdac3bb0a95e914407f768b0532f119cfac1e034c18648397f",
+    "update_filename": "GXUP0008.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: SD0 vendor setup: two-rail host path includes an additional vendor-register transaction whose protocol is not implemented"
+    ]
+  },
+  {
+    "firmware_id": "gfx100s-213",
+    "source_size": 50197040,
+    "source_sha256": "ea997915ac5accc79699392b47909bb29506f66ec8d571e5804dd1fb0408fd12",
+    "update_filename": "GXUP0004.DAT",
+    "generation": "xp4",
+    "plan": {
+      "size": 73842688,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "e067903cb047a9e8d1e9d3b88518cefdcf655e5ed4d7b810c58eb4696d9befa8"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 14811136,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "4afe9459c5ce3172338304efe12b6a76bb0a229fa695fb88e62bd217d0e741fa"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 112224,
+            "compression": "raw",
+            "decoded_size": 112224,
+            "sha256": "584d41523762a1565f49b8852543dc81ec49dbbedc9078f3d3ce1e447fe36219"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 26215028,
+            "size": 3538944,
+            "compression": "method4",
+            "decoded_size": 6797480,
+            "sha256": "8ed6e7215a101961e2fd87401a8fafcf6f6f86a1db63fa589adf695ee710044d"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 9306112,
+          "source": {
+            "dat_offset": 31195764,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 149888,
+            "compression": "raw",
+            "decoded_size": 149888,
+            "sha256": "87b32511a0da3024888e6bbc37116f22aaa3b530e36de5c13aadc95081a992ec"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 15860736,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 149888,
+            "compression": "raw",
+            "decoded_size": 149888,
+            "sha256": "c57f7c9656700f67b1f2813ece4222babefd0afb3be20e01efe29b22c075b6e3"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 16912384,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 3932160,
+            "compression": "method4",
+            "decoded_size": 8389100,
+            "sha256": "eb5372dfda41009b969ccf148f031b3976230a6a9d249d0ea3d0588e6feab157"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 32669696,
+          "source": {
+            "dat_offset": 6423156,
+            "size": 5505024,
+            "compression": "method4",
+            "decoded_size": 10248192,
+            "sha256": "cf6c76fde4415ba452b7f5ad350f0b8f30ac39e888b5889e1289bd9d4078b9f2"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 62861312,
+          "source": {
+            "dat_offset": 11928180,
+            "size": 4980736,
+            "compression": "method4",
+            "decoded_size": 10981376,
+            "sha256": "45a0aad4051571b8b7b7790470bddd6ab7489e45b258dc7ab0f122620c82f217"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 374368,
+          "size": 171712
+        },
+        {
+          "name": "module3",
+          "address": 14962048,
+          "size": 231552
+        },
+        {
+          "name": "module4",
+          "address": 16010624,
+          "size": 231552
+        },
+        {
+          "name": "section5",
+          "address": 25305088,
+          "size": 7364608
+        },
+        {
+          "name": "section6",
+          "address": 42917888,
+          "size": 19943424
+        }
+      ],
+      "edits": [
+        {
+          "address": 46040,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 14811144,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
+    "packaging": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 29696,
+      "active_sha256": "d3c5b65e03f9c77c91e0fb96886e15588180419b80a1459de909da940ea5dc87",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6816,
+      "code_sha256": "1a1ecd48f2d813ff530a524d7a1e019a5127afcdef341c9af06afbb2dff0c62a",
+      "continuation_offset": 29536,
+      "continuation_address": 4026561376,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 46040,
+      "mode_test": 1540
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
       "version-independent stock updater acceptance"
+    ]
+  },
+  {
+    "firmware_id": "gfx100sii-120",
+    "source_size": 103860300,
+    "source_sha256": "e45747b0cadeb6acf4765835283507dd3e46e7ceeb2f2e143069667567dc2378",
+    "update_filename": "GXUP0007.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: No unique stock AArch64 reset copy for rooted cold table"
+    ]
+  },
+  {
+    "firmware_id": "gfx50sii-212",
+    "source_size": 50197040,
+    "source_sha256": "550b683473d6d6d54b18bd7c8c94aaa022bc6dda99c451ad790e1c211a104c29",
+    "update_filename": "GXUP0005.DAT",
+    "generation": "xp4",
+    "plan": {
+      "size": 69451776,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader+sync",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "2b03b99d8ae37c076cd30fad89605f147bc38d2628799e934a786e8e47a181ff"
+          }
+        },
+        {
+          "name": "section table",
+          "address": 14811136,
+          "source": {
+            "dat_offset": 1311348,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "b930b357ccfb241a9073efb30c54034ad754b9636c2e181c460f42b352183e7c"
+          }
+        },
+        {
+          "name": "kernel0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 112352,
+            "compression": "raw",
+            "decoded_size": 112352,
+            "sha256": "b6aada0e50594f95ddb79dff7f9fe6ddab89043a217d29dbdb291df18e249ac4"
+          }
+        },
+        {
+          "name": "resources1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 26215028,
+            "size": 3407872,
+            "compression": "method4",
+            "decoded_size": 6564168,
+            "sha256": "1253345db99a199f26dd15186939e072b38f0e17633a50449e7a7f28f74b64c4"
+          }
+        },
+        {
+          "name": "resources2",
+          "address": 9306112,
+          "source": {
+            "dat_offset": 31195764,
+            "size": 671421,
+            "compression": "raw",
+            "decoded_size": 671421,
+            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+          }
+        },
+        {
+          "name": "module3",
+          "address": 14812160,
+          "source": {
+            "dat_offset": 1442420,
+            "size": 148928,
+            "compression": "raw",
+            "decoded_size": 148928,
+            "sha256": "c88cfb893995ac04da764ef136bcbc11558777f3b437d2d7c4467c05242d3e3a"
+          }
+        },
+        {
+          "name": "module4",
+          "address": 15860736,
+          "source": {
+            "dat_offset": 1966708,
+            "size": 148928,
+            "compression": "raw",
+            "decoded_size": 148928,
+            "sha256": "4e8936459ba0d6c6a4a7f30c6759f9fe6b905c2ffb5cf032af3cdefca85a48db"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 16912384,
+          "source": {
+            "dat_offset": 2490996,
+            "size": 3932160,
+            "compression": "method4",
+            "decoded_size": 8371228,
+            "sha256": "5dfa1a805670e3e608ab13ce02f5fd85d6f2eee583f6029807d96e01b5a4d336"
+          }
+        },
+        {
+          "name": "section6",
+          "address": 32653312,
+          "source": {
+            "dat_offset": 6423156,
+            "size": 5242880,
+            "compression": "method4",
+            "decoded_size": 9949184,
+            "sha256": "d5e95939edee0ad9c9ed1ed72e8e7551b877c90a5e09c11d3d42e6640585b895"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 58544128,
+          "source": {
+            "dat_offset": 11666036,
+            "size": 4980736,
+            "compression": "method4",
+            "decoded_size": 10907648,
+            "sha256": "165cbaaad9c27c521102643a1ec001412f1b2623330d85d9a654b21165a84ba2"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "kernel0",
+          "address": 374496,
+          "size": 171712
+        },
+        {
+          "name": "module3",
+          "address": 14961088,
+          "size": 231520
+        },
+        {
+          "name": "module4",
+          "address": 16009664,
+          "size": 231520
+        },
+        {
+          "name": "section5",
+          "address": 25284608,
+          "size": 7368704
+        },
+        {
+          "name": "section6",
+          "address": 42602496,
+          "size": 15941632
+        }
+      ],
+      "edits": [
+        {
+          "address": 45976,
+          "old": 1,
+          "new": 0,
+          "what": "select stock XP4 RAM-preloaded loader branch"
+        },
+        {
+          "address": 14811144,
+          "old": 0,
+          "new": 1,
+          "what": "XP4 section table preloaded flag"
+        }
+      ]
+    },
+    "packaging": null,
+    "setup": {
+      "dat_offset": 628,
+      "active_size": 31712,
+      "active_sha256": "201c8f9def8f2929ebfab4e7994f6cb3bbcd1bb052802aebacdc5e625710d23a",
+      "slot_size": 131072,
+      "flash_aperture": 4026531840,
+      "code_offset": 2048,
+      "code_size": 6816,
+      "code_sha256": "fa9b900e6d31ae8ea6e26dcc4dc49543951c970ee0182259017d9207e5745500",
+      "continuation_offset": 31552,
+      "continuation_address": 4026563392,
+      "linked_sram_base": 4293984256
+    },
+    "xp5": null,
+    "cold_start": {
+      "mode_flag": 45976,
+      "mode_test": 1540
+    },
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "version-independent stock updater acceptance"
+    ]
+  },
+  {
+    "firmware_id": "gfxeterna55-110",
+    "source_size": 194720500,
+    "source_sha256": "d1a28cace1bafba6155dda60063ec55997bc40fae22a77fc32c98e2ee64c7193",
+    "update_filename": "GXUP0009.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: No unique stock AArch64 reset copy for rooted cold table"
     ]
   },
   {
@@ -980,7 +1493,585 @@
     },
     "packaging": null,
     "setup": null,
-    "xp5": null,
+    "xp5": {
+      "prefix": {
+        "dat_offset": 700,
+        "size": 262144,
+        "compression": "raw",
+        "decoded_size": 262144,
+        "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+      },
+      "low_length": 73728,
+      "length_flags": 0,
+      "base": 4286578688,
+      "stack": 4286666496,
+      "bootstrap_offset": 2128,
+      "initialize_offset": 2184,
+      "continuation": 4026691856,
+      "gate_offset": 2168,
+      "initializer": {
+        "address": 4286578824,
+        "size": 944,
+        "sha256": "e4a19defd9dc72e0af6c4af45bfc623e37e34f6f63f96faa53cbb77565248c15"
+      },
+      "delay": {
+        "address": 4286582980,
+        "size": 160,
+        "sha256": "12c1bfd4a1e801daecb2228483f5a88ab3e970aff0c9d2dcf9d2971d5bb98be7"
+      },
+      "reset_dat": 262844,
+      "reset_copy_size": 81920,
+      "selector": 74032,
+      "flash": {
+        "controller": 4287668224,
+        "aperture": 4026531840,
+        "window_mask": 4160749568,
+        "clock": 4288778304,
+        "clock_commit": 4288778368,
+        "pins": [
+          {
+            "address": 4287672320,
+            "value": 131074
+          },
+          {
+            "address": 4287672324,
+            "value": 983055
+          },
+          {
+            "address": 4287672328,
+            "value": 1073692671
+          },
+          {
+            "address": 4287672332,
+            "value": 1426412805
+          },
+          {
+            "address": 4287672336,
+            "value": 22348117
+          },
+          {
+            "address": 4287672340,
+            "value": 1072840690
+          }
+        ]
+      },
+      "lamp": {
+        "pio_base": 4287655936,
+        "clock_address": 4287677208,
+        "clock_mask": 131072,
+        "reset_address": 4287678764,
+        "reset_mask": 65536,
+        "green_port": 8,
+        "red_port": 6,
+        "pin": 2
+      },
+      "board": {
+        "host": 4288348160,
+        "timeout_setting": 14,
+        "operations": [
+          {
+            "address": 4287656656,
+            "mask": 0,
+            "value": 12582976,
+            "kind": 0
+          },
+          {
+            "address": 4287656656,
+            "mask": 0,
+            "value": 50331904,
+            "kind": 0
+          },
+          {
+            "address": 4287656776,
+            "mask": 0,
+            "value": 4194304,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 4194304,
+            "kind": 0
+          },
+          {
+            "address": 4287656780,
+            "mask": 0,
+            "value": 805306368,
+            "kind": 0
+          },
+          {
+            "address": 4287656768,
+            "mask": 0,
+            "value": 4194368,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 4194368,
+            "kind": 0
+          },
+          {
+            "address": 0,
+            "mask": 0,
+            "value": 0,
+            "kind": 2
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 2,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 2,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 127,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 1,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 1,
+            "kind": 1
+          }
+        ]
+      },
+      "proofs": [
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 569912,
+          "size": 92,
+          "sha256": "569799afcc7f48af9a2b787069385cba46dcd8b9f598423892f7400477add927"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 586216,
+          "size": 24,
+          "sha256": "9f6c2e719c1d7cd885cf55b3cfa19ed18e8de6363c8ddcab94bbbb3138127123"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 587056,
+          "size": 24,
+          "sha256": "9f6c2e719c1d7cd885cf55b3cfa19ed18e8de6363c8ddcab94bbbb3138127123"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 712748,
+          "size": 160,
+          "sha256": "d93e908314c5d58f37b172e99e5f90df4667695e938ca64d87123efba754f655"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 712908,
+          "size": 340,
+          "sha256": "85ecd0a8f80044557ceef69d365a0ef254e84239b5bb86f7f0ad2203203648d7"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 713000,
+          "size": 4,
+          "sha256": "f9ba9cc4152337666fcde2269df1be2dd0e3e19f5f68e61c01408b7d90360cc7"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 713012,
+          "size": 4,
+          "sha256": "c36e1a1224e11199967ba3f536d90ab16be56e62a0a4bad63b58e20ea7acb27d"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 713024,
+          "size": 4,
+          "sha256": "bf3f32bafaf345dee87cbd3f4cf4609444484a420af48c25ec6904de22f0aa14"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 713036,
+          "size": 4,
+          "sha256": "36bb3f906f639841810d7d8a1677a7d63fb4d50850af17c85277e59870b0cf3c"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 713048,
+          "size": 4,
+          "sha256": "87942f6f7685d933019b9e35f7cd80ad22a44d635a6d8a522179257f172c8a43"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 713248,
+          "size": 220,
+          "sha256": "11ce9a79372f70b9e9109836255004bdb3e000886bb3b0e7aae008270b817b2c"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 714900,
+          "size": 92,
+          "sha256": "cc5c00b87dd6dac39593033c315d361b368ffd9ea044cda7adb25572f5b58796"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 1563608,
+          "size": 24,
+          "sha256": "8e527fe8ebacaa9484bdab83625d0c6980d2845d908faab58eb86bd6f4521d7e"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1146798,
+            "compression": "method4",
+            "decoded_size": 2091592,
+            "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+          },
+          "offset": 1565680,
+          "size": 24,
+          "sha256": "ff791747f0cee8649d3f05b464ceb2d2b8b24a6eb8fdc7307be4ce79c508cafd"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 2798032,
+          "size": 24,
+          "sha256": "9f6c2e719c1d7cd885cf55b3cfa19ed18e8de6363c8ddcab94bbbb3138127123"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 2798872,
+          "size": 24,
+          "sha256": "9f6c2e719c1d7cd885cf55b3cfa19ed18e8de6363c8ddcab94bbbb3138127123"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 2971296,
+          "size": 116,
+          "sha256": "d01363ca26e4f5f9f3eef56aa7846b921dc4f152d4febd5a4b4aa19c8ea7cd7e"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 2972012,
+          "size": 116,
+          "sha256": "45d0c0ca788e02c32471d8977af3459f27cd70323909f598a4d99cbb7543e302"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 8577232,
+          "size": 144,
+          "sha256": "f0ae9f810f345b25084c0146beb1ee1299a46a4ad35f287694528e7b0f331efc"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 8577376,
+          "size": 120,
+          "sha256": "a04b00620e88ce7d297889c098b2e2cbbaa9a1fc06cc8a3a2926627076684db5"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 8577496,
+          "size": 60,
+          "sha256": "501c48a0d9867428a4d756f88f893d73745cfb93fba6c12acbb25e6537848e12"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 8577560,
+          "size": 72,
+          "sha256": "62dad65c56bf2f786ad11fe76f4af143fa5a4d38f1761983fbe84c12dec23b47"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 7400642,
+            "compression": "method4",
+            "decoded_size": 27121096,
+            "sha256": "77456fe5c9808ce5e638b1a5f6f12d9e8e40c1751e1f9b4640134fde662e09d4"
+          },
+          "offset": 8666304,
+          "size": 64,
+          "sha256": "1e3634dc03f158c278d7a5a40255765558a4324ef75bfad5fd51b406f0a1f541"
+        },
+        {
+          "source": {
+            "dat_offset": 17695420,
+            "size": 9573574,
+            "compression": "method4",
+            "decoded_size": 22253568,
+            "sha256": "14b0557bd724fa74b51ff641fcd5481da5b3ac64146d4fc69375086dafcfb174"
+          },
+          "offset": 9740544,
+          "size": 312,
+          "sha256": "ccce20377ba3fa9797add661d54576dfa23f5839351c36997de7c8202d3ec0f5"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 4996,
+          "size": 28,
+          "sha256": "0300b8064231e0e977ab7c3a325d6fb24d9876fa55efe802fe11cd7f76dcbcbc"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68288,
+          "size": 20,
+          "sha256": "9940adbd2e654a8756eb761c4a08fa6129b6d5d241307886f509e29ed8914d8e"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68304,
+          "size": 20,
+          "sha256": "0e165294c21e4fba1f455ae62ee7fece21e14c0c069c9fd064301d857cc51e5f"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68320,
+          "size": 20,
+          "sha256": "0a2a8d601231b45829b7f61b8ee741946d60b31216242ad80c4de46060def285"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68340,
+          "size": 20,
+          "sha256": "672bbca61a37fcfb53e469dd8f9627771ad65fa96f665c07f4e852efd0c40008"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68360,
+          "size": 20,
+          "sha256": "b4eefd0bb4fac803b68ede5dc6d94f6b0997ac904b8c1c75cc360f1c75c53686"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68380,
+          "size": 20,
+          "sha256": "26564265690d336f3fff779f93bb2105407fe2f5f98e52ef3bc07ebc83d3b931"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 68424,
+          "size": 20,
+          "sha256": "208b0b28dbf219931bc7803ece87a6f4b95b55633fd937c9730bab5d6afecd09"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "d8e898a4c1b71dc37aee46bd2d055014cc72f52d67fa1598614ee73161ae1f04"
+          },
+          "offset": 72316,
+          "size": 28,
+          "sha256": "54136f3d7bf06b31aa2e2f3ccab5ecb049974d1d5c6eee2f370d51a5e8fd8c12"
+        }
+      ]
+    },
     "cold_start": null,
     "file_api": null,
     "sd_boot": {
@@ -997,8 +2088,6 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "XP5 SRAM continuation without a flash tail",
-      "XP5 SD host routing and clock/power operations",
       "version-independent stock updater acceptance"
     ]
   },
@@ -2832,6 +3921,81 @@
     "missing": []
   },
   {
+    "firmware_id": "xe5-112",
+    "source_size": 110561552,
+    "source_sha256": "0982ffa51332e148134df378ecd3e485e798eeb4ce91738509bfa0b6629e1e52",
+    "update_filename": "FWUP0036.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: extent outside DAT: offset 0x0, size 0x4, available 0x0"
+    ]
+  },
+  {
+    "firmware_id": "xh2-530",
+    "source_size": 110302544,
+    "source_sha256": "be47168cb075ef726e67cb4bb08175a896047a3b0de2bcb6e65333b22cfcb203",
+    "update_filename": "FWUP0028.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "iso_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
+    ]
+  },
+  {
+    "firmware_id": "xh2s-730",
+    "source_size": 110302568,
+    "source_sha256": "87c566c1ff6343e4c7463a4ef968183f41d1f24cc63d610433d3a387b13f731b",
+    "update_filename": "FWUP0027.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "iso_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
+    ]
+  },
+  {
     "firmware_id": "xm1-101",
     "source_size": 38405156,
     "source_sha256": "bfc5947eab8a1d9d92e464c16a2e480b8d52753d1d32aea6d5af7fdd8e17dd72",
@@ -3623,10 +4787,15 @@
       "length_flags": 1073741824,
       "base": 4286578688,
       "stack": 4286778624,
-      "active_size": 181248,
       "bootstrap_offset": 2048,
       "initialize_offset": 2104,
-      "gate_offset": 181088,
+      "continuation": 4286757704,
+      "gate_offset": 2088,
+      "initializer": {
+        "address": 4286578744,
+        "size": 936,
+        "sha256": "fce3b74b604403f712ce107f4f17869f6b71b25ca38bbdbdfa85c930d549f39d"
+      },
       "delay": {
         "address": 4286583644,
         "size": 160,
@@ -3635,6 +4804,49 @@
       "reset_dat": 262844,
       "reset_copy_size": 102400,
       "selector": 94784,
+      "flash": {
+        "controller": 4287668224,
+        "aperture": 4026531840,
+        "window_mask": 4160749568,
+        "clock": 4288778304,
+        "clock_commit": 4288778368,
+        "pins": [
+          {
+            "address": 4287672320,
+            "value": 131074
+          },
+          {
+            "address": 4287672324,
+            "value": 983055
+          },
+          {
+            "address": 4287672328,
+            "value": 1073692671
+          },
+          {
+            "address": 4287672332,
+            "value": 1426412805
+          },
+          {
+            "address": 4287672336,
+            "value": 22348117
+          },
+          {
+            "address": 4287672340,
+            "value": 1072840690
+          }
+        ]
+      },
+      "lamp": {
+        "pio_base": 4287655936,
+        "clock_address": 4287677208,
+        "clock_mask": 131072,
+        "reset_address": 4287678764,
+        "reset_mask": 65536,
+        "green_port": 8,
+        "red_port": 6,
+        "pin": 2
+      },
       "board": {
         "host": 4288348160,
         "timeout_setting": 14,
@@ -3743,7 +4955,31 @@
           }
         ]
       },
-      "board_proofs": [
+      "proofs": [
+        {
+          "source": {
+            "dat_offset": 262844,
+            "size": 131072,
+            "compression": "raw",
+            "decoded_size": 131072,
+            "sha256": "cf7245d03762385b6fc1dc0a6819945fa0bc2bee172c8be7f64ef3d1857c8c5c"
+          },
+          "offset": 28168,
+          "size": 24,
+          "sha256": "f3983de251b1d56e0a07d5d8b303e3a4562976cb601e5a1bf6a62359b04a4f36"
+        },
+        {
+          "source": {
+            "dat_offset": 262844,
+            "size": 131072,
+            "compression": "raw",
+            "decoded_size": 131072,
+            "sha256": "cf7245d03762385b6fc1dc0a6819945fa0bc2bee172c8be7f64ef3d1857c8c5c"
+          },
+          "offset": 29024,
+          "size": 24,
+          "sha256": "b7e979bba873c59048b594fbf9c8842beb89f7f4cb5eca7fa8afe6a63835a761"
+        },
         {
           "source": {
             "dat_offset": 1311420,
@@ -3752,9 +4988,45 @@
             "decoded_size": 2097208,
             "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
           },
-          "offset": 734656,
-          "size": 220,
-          "sha256": "d55e89bd19e7ffb16eb732b8730e56e0717643e4a9627da280f20adac9f8e1b0"
+          "offset": 591256,
+          "size": 92,
+          "sha256": "2e28d0f0d431b64e2ad303413df23b5a98e576b31301af830536a5ba2478866e"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 607628,
+          "size": 24,
+          "sha256": "f3983de251b1d56e0a07d5d8b303e3a4562976cb601e5a1bf6a62359b04a4f36"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 608484,
+          "size": 24,
+          "sha256": "b7e979bba873c59048b594fbf9c8842beb89f7f4cb5eca7fa8afe6a63835a761"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734156,
+          "size": 160,
+          "sha256": "fcebdd5d3275b98e75fa8dc1574c612744e5090a6fcfe60d8c69d0aff1a98ef1"
         },
         {
           "source": {
@@ -3776,9 +5048,333 @@
             "decoded_size": 2097208,
             "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
           },
-          "offset": 734156,
-          "size": 160,
-          "sha256": "fcebdd5d3275b98e75fa8dc1574c612744e5090a6fcfe60d8c69d0aff1a98ef1"
+          "offset": 734408,
+          "size": 4,
+          "sha256": "29f6a4ed02ce55a9dcb16e1354a3bcae8a9a9f0b674d7e1cd3ec2ed4619d768c"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734420,
+          "size": 4,
+          "sha256": "b9ee7448b58692a539ddd237aafca923d5cc7bb8d941cc5769acfc413d34b04c"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734432,
+          "size": 4,
+          "sha256": "922dac5a79b37ea0a70c27d73d15d6a1250354788bd55c9fe8d95288329cab6e"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734444,
+          "size": 4,
+          "sha256": "f59f7016a41dc7483d30603d78ede46a811f8b35784b12111854dd995c7c1a8b"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734456,
+          "size": 4,
+          "sha256": "9c0bb7d02745341246a0aa47a4b452bb08dce0dfc02dedf9326f2cae6fd6b498"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 734656,
+          "size": 220,
+          "sha256": "d55e89bd19e7ffb16eb732b8730e56e0717643e4a9627da280f20adac9f8e1b0"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 736308,
+          "size": 92,
+          "sha256": "a80d4ae04ccccdc93ae5890344d27989c2bce7a41295d8fd1ac223e3786aa475"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 1580408,
+          "size": 24,
+          "sha256": "8e527fe8ebacaa9484bdab83625d0c6980d2845d908faab58eb86bd6f4521d7e"
+        },
+        {
+          "source": {
+            "dat_offset": 1311420,
+            "size": 1150127,
+            "compression": "method4",
+            "decoded_size": 2097208,
+            "sha256": "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+          },
+          "offset": 1582480,
+          "size": 24,
+          "sha256": "ff791747f0cee8649d3f05b464ceb2d2b8b24a6eb8fdc7307be4ce79c508cafd"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 2940716,
+          "size": 24,
+          "sha256": "f3983de251b1d56e0a07d5d8b303e3a4562976cb601e5a1bf6a62359b04a4f36"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 2941572,
+          "size": 24,
+          "sha256": "b7e979bba873c59048b594fbf9c8842beb89f7f4cb5eca7fa8afe6a63835a761"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 3138464,
+          "size": 116,
+          "sha256": "3bac0a63bfb330a141a36b5abf9fa3b27a526068f59361d9b0d61287b5ad9966"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 3139180,
+          "size": 116,
+          "sha256": "eea620cca68533c98ff64dc11062baf4d5440bea03ce9b593c35c32356dd0450"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 9098672,
+          "size": 144,
+          "sha256": "f0ae9f810f345b25084c0146beb1ee1299a46a4ad35f287694528e7b0f331efc"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 9098816,
+          "size": 120,
+          "sha256": "a04b00620e88ce7d297889c098b2e2cbbaa9a1fc06cc8a3a2926627076684db5"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 9098936,
+          "size": 60,
+          "sha256": "501c48a0d9867428a4d756f88f893d73745cfb93fba6c12acbb25e6537848e12"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 9099000,
+          "size": 72,
+          "sha256": "62dad65c56bf2f786ad11fe76f4af143fa5a4d38f1761983fbe84c12dec23b47"
+        },
+        {
+          "source": {
+            "dat_offset": 10224316,
+            "size": 8161688,
+            "compression": "method4",
+            "decoded_size": 29247904,
+            "sha256": "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+          },
+          "offset": 9187776,
+          "size": 64,
+          "sha256": "1e3634dc03f158c278d7a5a40255765558a4324ef75bfad5fd51b406f0a1f541"
+        },
+        {
+          "source": {
+            "dat_offset": 18481852,
+            "size": 9896764,
+            "compression": "method4",
+            "decoded_size": 23113728,
+            "sha256": "8bd88929e684021633b7eedef4669794fc15077c5b59318f5a136322551d621f"
+          },
+          "offset": 10035656,
+          "size": 312,
+          "sha256": "e3cd2ce52555efdecb4a18d472b7f3157b89376500814d02d9032c5df1427b58"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 68488,
+          "size": 20,
+          "sha256": "42bfa935de337cdfd64980747f25c73a355c723ea8a1471ee59cb3bc9d540f0f"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 68504,
+          "size": 20,
+          "sha256": "aaaf9cfaf59a9eb03c343522bec5d4cfefc78ed568a5f97e4f4d25eeca36b275"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 68520,
+          "size": 20,
+          "sha256": "7074de4ada69818ba2e8db7529e926f37f8776e75ee3f423ab8100fb0d0a5177"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 68540,
+          "size": 20,
+          "sha256": "a4bc14dafbd29f92d3ee2e0f7fa820a32cac24634df98aa1209b77b590b495b1"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 68560,
+          "size": 20,
+          "sha256": "e441e723175d5f325c3cc2c8d03fabc24d53258c2daa961e5851b92b8ecc1f16"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 68580,
+          "size": 20,
+          "sha256": "7a85d59f415583956ec5dd9abc4c32c5f54effbd27a545b66ea80d6fa7017142"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 69340,
+          "size": 20,
+          "sha256": "3455b72d084764d90d1606bdfb06c540bce4576838378af3e4d6692a3ff54ca2"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 69592,
+          "size": 28,
+          "sha256": "ba89c0d89c934912b3aefee55d735cc2174dc8aad1f28a108ec7eae8ce0015d2"
+        },
+        {
+          "source": {
+            "dat_offset": 700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "cae02180b0cc4c9c75f4a6c9695cb67cd4ead67d9f8db26b57982a25b644e79b"
+          },
+          "offset": 79564,
+          "size": 28,
+          "sha256": "6858af055bcc30ba7347a928e0761ef8f8204557b02b4d6d17a62e97a087ff14"
         }
       ]
     },
@@ -4702,6 +6298,25 @@
       }
     },
     "missing": []
+  },
+  {
+    "firmware_id": "xs20-330",
+    "source_size": 109365264,
+    "source_sha256": "ca1c02452f8eb7763a5a4d2b042665dd10156d63dfa63b8da316e0385889ea8b",
+    "update_filename": "FWUP0031.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
+    ]
   },
   {
     "firmware_id": "xt1-552",
@@ -5881,6 +7496,25 @@
     "missing": []
   },
   {
+    "firmware_id": "xt30iii-110",
+    "source_size": 110561516,
+    "source_sha256": "8a32087606b1ded920458042528054b3b0416fbb04873e6840cfde031abd0d79",
+    "update_filename": "FWUP0037.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: setup/header: extent outside DAT: offset 0x0, size 0x4, available 0x0"
+    ]
+  },
+  {
     "firmware_id": "xt4-212",
     "source_size": 51278280,
     "source_sha256": "853d273b5603d3a2b93493f0ebd6a762b0b4b6bdc70317777775ae5f8ed93bc5",
@@ -6149,7 +7783,36 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "located SD startup facts: No unique aligned AArch64 reset register-clear sequence"
+      "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
+    ]
+  },
+  {
+    "firmware_id": "xt50-132",
+    "source_size": 110561484,
+    "source_sha256": "2c360848736985531db407c8597911f1b701b4a854dc3b9b949ccc9f7b274212",
+    "update_filename": "FWUP0033.DAT",
+    "generation": "xp5",
+    "plan": null,
+    "packaging": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "front_command_dial.press"
+        },
+        {
+          "id": "rear_command_dial.press"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "XP5 bindings: mapped update: source regions have not been unpacked"
     ]
   }
 ]

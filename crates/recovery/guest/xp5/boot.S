@@ -13,8 +13,8 @@ a64_copy_to_physical:
     ret
 .size a64_copy_to_physical, .-a64_copy_to_physical
 
-/* Replace the stock LDR X30,=0 without using a secondary core's stack or
- * changing any other register/NZCV. The caller binds the checked ISB resume. */
+/* Replace the setup continuation load without using a secondary core's stack or
+ * changing any other register/NZCV. Replay the zero handoff locally. */
 .global a64_boot_zero_gate
 .type a64_boot_zero_gate, %function
 a64_boot_zero_gate:
@@ -27,7 +27,8 @@ a64_boot_zero_gate:
     b 1b
 2:
     mov x30, xzr
-    b boot_setup_ram_entry_resume
+    isb
+    ret
 .size a64_boot_zero_gate, .-a64_boot_zero_gate
 
 .bss
