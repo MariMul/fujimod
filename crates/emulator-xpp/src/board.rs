@@ -72,7 +72,7 @@ pub enum Model {
         base: u64,
         routes: Vec<(usize, usize)>,
     },
-    Serial {
+    SerialConfiguration {
         base: u64,
     },
     Flash {
@@ -268,10 +268,10 @@ pub fn build(
                     model: timer::TickTimers::new(&routes)?,
                 }),
             )?,
-            Model::Serial { base } => devices.register(
+            Model::SerialConfiguration { base } => devices.register(
                 base,
                 serial::REGISTERS,
-                Box::new(serial::SerialPort::new(base)?),
+                Box::new(serial::ConfigurationPort::new(base)?),
             )?,
             Model::Flash {
                 controller,
