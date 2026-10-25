@@ -1287,6 +1287,14 @@ impl Board {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    fn device_fingerprints(&self, kind: &str) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.device_fingerprints(kind).map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
+    fn device_buffer<'py>(&self, py: Python<'py>, kind: &str, name: &str) -> PyResult<Bound<'py, PyBytes>> {
+        let bytes = self.board()?.device_buffer(kind, name).map_err(error)?;
+        Ok(PyBytes::new(py, &bytes))
+    }
     fn state(&self, py: Python<'_>) -> PyResult<String> {
         if let Some(Backend::Xp4(session)) = &self.backend {
             return py

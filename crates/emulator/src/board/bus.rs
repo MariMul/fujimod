@@ -280,8 +280,25 @@ impl Bus {
         self.windows
             .iter()
             .filter(|node| node.device.name() == kind)
-            .map(|node| node.device.save())
+            .map(|node| node.device.diagnostic_state())
             .collect()
+    }
+
+    pub fn device_fingerprints(&self, kind: &str) -> Result<Vec<Value>, String> {
+        self.windows
+            .iter()
+            .filter(|node| node.device.name() == kind)
+            .map(|node| node.device.fingerprint())
+            .collect()
+    }
+
+    pub fn device_buffer(&self, kind: &str, name: &str) -> Result<Vec<u8>, String> {
+        let mut devices = self.windows.iter().filter(|node| node.device.name() == kind);
+        let device = devices.next().ok_or("no matching device")?;
+        if devices.next().is_some() {
+            return Err("buffer observation requires one matching device".into());
+        }
+        Ok(device.device.diagnostic_buffer(name)?.to_vec())
     }
 
     /// Typed stopped-board access. This is never used by register dispatch.
@@ -1110,6 +1127,8 @@ mod tests {
         let mut bus = Bus::new(Mode::Strict);
         let mut expected = bus.state();
         bus.register(0x1000, 4, Box::new(Complete)).unwrap();
+        assert_eq!(bus.device_fingerprints("complete").unwrap(), vec![json!({"payload":[1,2,3],"pending":7})]);
+        assert!(bus.device_fingerprints("absent").unwrap().is_empty());
         expected["devices"] = json!([{"kind":"complete","windows":bus.windows[0].mappings,
             "native_dependencies":[],"state":{"payload":[1,2,3],"pending":7}}]);
         expected["skipped_deadlines"] = json!({});

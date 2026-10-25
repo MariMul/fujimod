@@ -256,6 +256,20 @@ impl Device for Warp {
     fn save(&self) -> serde_json::Value {
         serde_json::json!((&self.r, &self.dma, self.stop, &*self.stream.lock().unwrap()))
     }
+    fn diagnostic_state(&self) -> serde_json::Value {
+        let stream = self.stream.lock().unwrap();
+        let summary = serde_json::json!({"state":stream.state,"width":stream.width,
+            "height":stream.height,
+            "pixels":fujimod_emulator_devices::fingerprint::bytes(&stream.pixels)});
+        serde_json::json!((&self.r, self.dma.fingerprint(), self.stop, summary))
+    }
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        if name != "dma-output" {
+            return Err(format!("warp has no diagnostic buffer {name}"));
+        }
+        self.dma.pixels.check()?;
+        Ok(&self.dma.pixels)
+    }
     fn restore(&mut self, v: &serde_json::Value) -> Result<(), String> {
         let (r, d, t, s): (
             Vec<u32>,

@@ -390,6 +390,15 @@ pub trait Device: Send + std::any::Any {
     fn save(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
+    /// Stopped-board diagnostics, separate from complete checkpoint payloads.
+    fn diagnostic_state(&self) -> serde_json::Value {
+        self.save()
+    }
+    /// Read an owned buffer without encoding binary data as JSON integers.
+    /// This observation must not advance time or change device behavior.
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        Err(format!("{} has no diagnostic buffer {name}", self.name()))
+    }
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
         if state.is_null() {
             Ok(())

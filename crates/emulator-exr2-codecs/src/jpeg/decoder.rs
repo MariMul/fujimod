@@ -292,6 +292,16 @@ impl Device for Decoder {
     fn save(&self) -> serde_json::Value {
         serde_json::json!((&self.r, &self.dma, &self.pending))
     }
+    fn diagnostic_state(&self) -> serde_json::Value {
+        serde_json::json!((&self.r, self.dma.fingerprint(), &self.pending))
+    }
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        if name != "dma-output" {
+            return Err(format!("JPEG decoder has no diagnostic buffer {name}"));
+        }
+        self.dma.pixels.check()?;
+        Ok(&self.dma.pixels)
+    }
     fn restore(&mut self, v: &serde_json::Value) -> Result<(), String> {
         let (r, d, p): (Vec<u32>, Transfer, Option<Pending>) =
             serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
@@ -381,11 +391,11 @@ mod checkpoint_tests {
                 5,
                 Raster {
                     address: 0x4000,
-                    width: 8,
-                    height: 8,
-                    pitch: 16,
+                    width: 1024,
+                    height: 512,
+                    pitch: 2048,
                 },
-                16,
+                2048,
             )
             .unwrap();
         for (i, byte) in device.dma.pixels.iter_mut().enumerate() {
@@ -393,6 +403,10 @@ mod checkpoint_tests {
         }
         device.pending = Some(Pending::Decode(41));
         let identity = device.fingerprint().unwrap();
+        assert!(serde_json::to_vec(&device.diagnostic_state()).unwrap().len() < 4096);
+        assert_eq!(device.diagnostic_buffer("dma-output").unwrap(), &*device.dma.pixels);
+        assert!(device.diagnostic_buffer("missing").is_err());
+        assert_eq!(device.fingerprint().unwrap(), identity);
         let saved = device.checkpoint().unwrap();
         assert!(saved.bytes() < device.source.len() + device.dma.pixels.len() + 1024);
         Arc::make_mut(&mut device.source).fill(0);
@@ -402,7 +416,7 @@ mod checkpoint_tests {
         assert_eq!(&*device.source, &vec![0xf9; 4096]);
         assert_eq!(
             &**device.dma.pixels,
-            &(0..128).map(|i| i as u8).collect::<Vec<_>>()
+            &(0..1024 * 512 * 2).map(|i| i as u8).collect::<Vec<_>>()
         );
         assert!(matches!(device.pending, Some(Pending::Decode(41))));
         assert_eq!(device.fingerprint().unwrap(), identity);

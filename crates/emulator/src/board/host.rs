@@ -9,6 +9,18 @@ impl Board {
         Ok(serde_json::json!(state.bus.device_states(kind)))
     }
 
+    pub fn device_fingerprints(&self, kind: &str) -> Result<serde_json::Value, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_kind(kind, &state.bus);
+        Ok(serde_json::json!(state.bus.device_fingerprints(kind)?))
+    }
+
+    pub fn device_buffer(&self, kind: &str, name: &str) -> Result<Vec<u8>, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        self.track_device_kind(kind, &state.bus);
+        state.bus.device_buffer(kind, name)
+    }
+
     /// CPU/IRQ/scheduler observation without serializing device DMA payloads.
     pub fn observation(&self) -> Result<serde_json::Value, String> {
         let s = self.state.try_borrow().map_err(|_| "board is executing")?;
