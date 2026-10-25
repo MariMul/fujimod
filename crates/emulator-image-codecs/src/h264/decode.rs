@@ -387,7 +387,13 @@ mod tests {
             bank.extend_from_slice(&packet);
             assert_eq!(access_unit(&bank).unwrap().0, packet.len() + padding);
         }
-        let mut truncated = packet[..packet.len() / 2].to_vec();
+        let vcl = (0..packet.len())
+            .find(|&at| {
+                let count = prefix(&packet[at..]);
+                count != 0 && packet[at + count] & 31 == 5
+            })
+            .unwrap();
+        let mut truncated = packet[..vcl + (packet.len() - vcl) / 2].to_vec();
         truncated.extend_from_slice(&[0; 19]);
         truncated.extend_from_slice(&[128; 128]);
         let used = access_unit(&truncated).unwrap().0;
