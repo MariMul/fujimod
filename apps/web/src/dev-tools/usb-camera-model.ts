@@ -220,7 +220,14 @@ function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): 
       enterDebugMode: (...args) => session.enterDebugMode(...args),
       leaveDebugMode: (...args) => session.leaveDebugMode(...args),
     },
+    prepareServiceSession: () => unbuilt('Service session preparation'),
+    backupFlash: () => unbuilt('Flash backup'),
+    dumpState: () => unbuilt('Camera state dump'),
   };
+}
+
+function unbuilt(operation: string): Promise<never> {
+  return Promise.reject(Error(`${operation} is not built yet.`));
 }
 
 const runtimes = new WeakMap<CameraModel, DevShareOptions & { stop?: () => void }>();
