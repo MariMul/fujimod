@@ -257,7 +257,7 @@ fn xpp_edits(code: &[u8], table: &Table) -> Result<Vec<Edit>> {
         found.len() == 1,
         "No unique Agate cold/preloaded table, header and image branches",
     )?;
-    found
+    let mut edits: Vec<Edit> = found
         .remove(0)
         .into_iter()
         .map(|at| {
@@ -268,7 +268,75 @@ fn xpp_edits(code: &[u8], table: &Table) -> Result<Vec<Edit>> {
                 "select preloaded data while retaining cold reset mode",
             )
         })
-        .collect()
+        .collect::<Result<_>>()?;
+    edits.push(xpp_flash_probe_edit(code)?);
+    Ok(edits)
+}
+
+/// Cold startup probes the installed flash before testing the preloaded flag.
+/// Keep controller initialization, but take the detector's existing no-match
+/// configuration without consulting signatures or their pointed-to data.
+fn xpp_flash_probe_edit(code: &[u8]) -> Result<Edit> {
+    let mut probes = vec![];
+    for at in (0..code.len().saturating_sub(0xdc)).step_by(4) {
+        if !sequence(code, at, &[0xe92d4878, 0xe28db014, 0xe3a0020f])
+            || !sequence(code, at + 0x58, &[0xe3a00014, 0xe34f0000])
+            || !sequence(code, at + 0x68, &[0xe2803201, 0xe3530301])
+            || word(code, at + 0x18)? != 0xe3a0024f
+            || word(code, at + 0x28)? != 0xe3a0028f
+            || word(code, at + 0x40)? != 0xe3a002cf
+            || word(code, at + 0x98)? != 0xe3540e19
+            || !sequence(
+                code,
+                at + 0xcc,
+                &[0xe3a00000, 0xe8bd8878, 0xe3a00001, 0xe8bd8878],
+            )
+        {
+            continue;
+        }
+        let reads = [0x0c, 0x1c, 0x2c, 0x44, 0x60, 0x80];
+        let Ok(reader) = call(code, at + reads[0]) else {
+            continue;
+        };
+        if reads
+            .iter()
+            .all(|offset| call(code, at + offset).ok() == Some(reader))
+        {
+            probes.push(at);
+        }
+    }
+    require(probes.len() == 1, "No unique Agate flash signature probe")?;
+    let mut callers = vec![];
+    for at in (0..code.len().saturating_sub(28)).step_by(4) {
+        let Ok(detector) = call(code, at) else {
+            continue;
+        };
+        if address(code, at + 4, 3).is_err()
+            || word(code, at + 12)? != 0xe58305bc
+            || !sequence(code, detector, &[0xe92d4818, 0xe28db00c])
+        {
+            continue;
+        }
+        let direct = sequence(code, at + 16, &[0xe3500002]) && word(code, at + 24)? == 0xe3500003;
+        let indexed = sequence(code, at + 16, &[0xe2403001, 0xe3530005, 0x979ff103]);
+        let probe_calls = (detector..(detector + 0x200).min(code.len().saturating_sub(4)))
+            .step_by(4)
+            .filter(|p| call(code, *p).ok() == Some(probes[0]))
+            .count();
+        if (direct || indexed) && probe_calls >= 6 {
+            callers.push(at);
+        }
+    }
+    require(
+        callers.len() == 1,
+        "No unique Agate cold flash-mode selection",
+    )?;
+    edit(
+        code,
+        callers[0],
+        0xe3a00000,
+        "skip installed-flash signature probe for preloaded startup",
+    )
 }
 fn exr_edits(code: &[u8], table: &Table, flash: usize) -> Result<Vec<Edit>> {
     let mut wrappers = vec![];
@@ -541,6 +609,76 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn flash_probe_loader() -> Vec<u8> {
+        let mut code = vec![0; 0x1000];
+        let branch = |at: usize, target: usize| {
+            0xeb000000 | (((target as i32 - at as i32 - 8) >> 2) as u32 & 0xffffff)
+        };
+        for (at, value) in [
+            (0x80, branch(0x80, 0x200)),
+            (0x84, 0xe3003000),
+            (0x88, 0xe3403001),
+            (0x8c, 0xe58305bc),
+            (0x90, 0xe2403001),
+            (0x94, 0xe3530005),
+            (0x98, 0x979ff103),
+            (0x200, 0xe92d4818),
+            (0x204, 0xe28db00c),
+            (0x400, 0xe92d4878),
+            (0x404, 0xe28db014),
+            (0x408, 0xe3a0020f),
+            (0x418, 0xe3a0024f),
+            (0x428, 0xe3a0028f),
+            (0x440, 0xe3a002cf),
+            (0x458, 0xe3a00014),
+            (0x45c, 0xe34f0000),
+            (0x468, 0xe2803201),
+            (0x46c, 0xe3530301),
+            (0x498, 0xe3540e19),
+            (0x4cc, 0xe3a00000),
+            (0x4d0, 0xe8bd8878),
+            (0x4d4, 0xe3a00001),
+            (0x4d8, 0xe8bd8878),
+        ] {
+            image::put(&mut code, at, value).unwrap();
+        }
+        for offset in [0x0c, 0x1c, 0x2c, 0x44, 0x60, 0x80] {
+            image::put(&mut code, 0x400 + offset, branch(0x400 + offset, 0x600)).unwrap();
+        }
+        for at in (0x210..0x228).step_by(4) {
+            image::put(&mut code, at, branch(at, 0x400)).unwrap();
+        }
+        code
+    }
+    #[test]
+    fn cold_flash_probe_requires_the_signature_reader_and_its_mode_consumer() {
+        let code = flash_probe_loader();
+        let edit = xpp_flash_probe_edit(&code).unwrap();
+        assert_eq!((edit.address, edit.new), (0x80, 0xe3a00000));
+        for at in [
+            0x80, 0x84, 0x8c, 0x94, 0x200, 0x210, 0x408, 0x41c, 0x45c, 0x498,
+        ] {
+            let mut bad = code.clone();
+            image::put(&mut bad, at, 0).unwrap();
+            assert!(
+                xpp_flash_probe_edit(&bad).is_err(),
+                "accepted changed word {at:#x}"
+            );
+        }
+        let mut ambiguous = code.clone();
+        ambiguous.copy_within(0x400..0x4dc, 0x700);
+        // Relocate the six calls in the second candidate to the same reader.
+        for offset in [0x0c, 0x1c, 0x2c, 0x44, 0x60, 0x80] {
+            let at = 0x700 + offset;
+            image::put(
+                &mut ambiguous,
+                at,
+                0xeb000000 | (((0x600i32 - at as i32 - 8) >> 2) as u32 & 0xffffff),
+            )
+            .unwrap();
+        }
+        assert!(xpp_flash_probe_edit(&ambiguous).is_err());
+    }
     fn rooted_table() -> Vec<u8> {
         let mut data = vec![0; 0x800];
         for (at, value) in [

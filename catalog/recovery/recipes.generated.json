@@ -231,6 +231,12 @@
           "what": "select preloaded data while retaining cold reset mode"
         },
         {
+          "address": 1152,
+          "old": 3942656632,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
+        },
+        {
           "address": 9895944,
           "old": 0,
           "new": 1,
@@ -450,6 +456,12 @@
           "old": 3813867521,
           "new": 3813867520,
           "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1152,
+          "old": 3942656687,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
         },
         {
           "address": 9764872,
@@ -715,6 +727,12 @@
           "old": 3813867521,
           "new": 3813867520,
           "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1200,
+          "old": 3942656072,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
         },
         {
           "address": 9764872,
@@ -5061,6 +5079,12 @@
           "what": "select preloaded data while retaining cold reset mode"
         },
         {
+          "address": 1200,
+          "old": 3942658835,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
+        },
+        {
           "address": 9764872,
           "old": 0,
           "new": 1,
@@ -7175,6 +7199,12 @@
           "what": "select preloaded data while retaining cold reset mode"
         },
         {
+          "address": 1152,
+          "old": 3942656171,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
+        },
+        {
           "address": 9764872,
           "old": 0,
           "new": 1,
@@ -8949,6 +8979,12 @@
           "what": "select preloaded data while retaining cold reset mode"
         },
         {
+          "address": 1200,
+          "old": 3942656562,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
+        },
+        {
           "address": 9764872,
           "old": 0,
           "new": 1,
@@ -9219,6 +9255,12 @@
           "old": 3813867521,
           "new": 3813867520,
           "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1200,
+          "old": 3942656225,
+          "new": 3818913792,
+          "what": "skip installed-flash signature probe for preloaded startup"
         },
         {
           "address": 9764872,
