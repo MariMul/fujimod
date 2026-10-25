@@ -1,6 +1,7 @@
 //! Topaz raw FFINIT, relocated DDR setup, and cold preloaded startup.
 use crate::image::{self, Edit, Plan, Result, extent, hash, put, require, word};
 use serde::{Deserialize, Serialize};
+const FLASH_APERTURE_BYTES: u64 = 0x08000000;
 #[allow(dead_code)]
 mod template {
     include!("ffinit.generated.rs");
@@ -179,6 +180,28 @@ pub fn ffinit(
 ) -> Result<Vec<u8>> {
     let prefix = extent(inverted, setup.dat_offset, setup.active_size)?;
     hash(prefix, &setup.active_sha256)?;
+    let flash_end = u64::from(setup.flash_aperture) + FLASH_APERTURE_BYTES;
+    require(
+        setup.slot_size > 0
+            && u64::from(setup.slot_size) <= FLASH_APERTURE_BYTES
+            && setup.active_size <= setup.slot_size as usize
+            && flash_end <= 1u64 << 32,
+        "Invalid XP4 setup flash extent",
+    )?;
+    // A pointer beyond the setup slot still addresses internal storage. Never
+    // leave it untouched merely because its source is outside that slot.
+    let is_flash = |value: u32| {
+        u64::from(value) >= u64::from(setup.flash_aperture) && u64::from(value) < flash_end
+    };
+    let header_count = word(prefix, 0x14)? as usize;
+    require(header_count <= 0xfd, "Invalid XP4 header operation count")?;
+    for index in 0..header_count {
+        let encoded = word(prefix, 0x18 + index * 8)?;
+        require(
+            encoded & 3 == 3 || !is_flash(encoded & !3),
+            "XP4 header operation accesses internal storage",
+        )?;
+    }
     let code = extent(prefix, setup.code_offset, setup.code_size)?;
     hash(code, &setup.code_sha256)?;
     let data_start = setup
@@ -218,10 +241,6 @@ pub fn ffinit(
         .flash_aperture
         .checked_add(data_start as u32)
         .ok_or_else(|| image::Error::Invalid("Flash pointer overflow".into()))?;
-    let flash_end = u64::from(setup.flash_aperture) + u64::from(setup.slot_size);
-    let is_flash = |value: u32| {
-        u64::from(value) >= u64::from(setup.flash_aperture) && u64::from(value) < flash_end
-    };
     let data_end = setup.flash_aperture as u64 + setup.continuation_offset as u64;
     let relocate = |value: u32| -> Result<u32> {
         require(
@@ -331,8 +350,34 @@ pub fn ffinit(
     let mut literals = Vec::new();
     for at in (0..code.len()).step_by(4) {
         let low = word(code, at)?;
-        if is_flash(low) {
+        // Preserve the raw setup-slot literal check, but do not classify A32
+        // opcodes such as SETEND (0xf1010000) as pointers into the wider aperture.
+        if u64::from(low) >= u64::from(setup.flash_aperture)
+            && u64::from(low) < u64::from(setup.flash_aperture) + u64::from(setup.slot_size)
+        {
             literals.push((at, low));
+        }
+        // Check actual PC-relative word loads separately across the complete
+        // aperture. The continuation literal is replaced below; additional
+        // flash literals require a qualified relocation grammar.
+        if low >> 28 != 15 && low & 0x0f7f0000 == 0x051f0000 {
+            let displacement = i64::from(low & 0xfff);
+            let literal = at as i64
+                + 8
+                + if low & 0x00800000 != 0 {
+                    displacement
+                } else {
+                    -displacement
+                };
+            require(
+                literal >= 0 && literal as usize + 4 <= code.len() && literal % 4 == 0,
+                "DDR literal load outside extracted code",
+            )?;
+            let value = word(code, literal as usize)?;
+            require(
+                !is_flash(value) || (literal == 0xa0 && value == setup.continuation_address),
+                "DDR literal load refers to internal storage",
+            )?;
         }
         if at + 8 > code.len() {
             continue;
@@ -373,6 +418,9 @@ pub fn ffinit(
     )?;
     Ok(output)
 }
+
+#[cfg(test)]
+mod tests;
 
 pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
     let data_size = setup.continuation_offset - setup.code_offset - setup.code_size;
