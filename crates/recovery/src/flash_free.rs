@@ -1,6 +1,6 @@
 //! Recorded qualification of the exact card files with destroyed internal storage.
 use crate::{
-    Recipe,
+    Generation, Recipe,
     image::{self, File, Result, require},
 };
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,7 @@ pub enum StoragePattern {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StorageRange {
+    pub medium: String,
     pub offset: u64,
     pub size: u64,
 }
@@ -75,10 +76,9 @@ impl FlashFreeProof {
         )?;
         require(
             !self.update_covered_ranges.is_empty()
-                && self
-                    .update_covered_ranges
-                    .iter()
-                    .all(|r| r.size > 0 && r.offset.checked_add(r.size).is_some()),
+                && self.update_covered_ranges.iter().all(|r| {
+                    !r.medium.is_empty() && r.size > 0 && r.offset.checked_add(r.size).is_some()
+                }),
             "Missing update-covered storage extents",
         )?;
         require(
@@ -104,16 +104,15 @@ impl FlashFreeProof {
         )?;
         for run in &self.runs {
             require(
-                run.destroyed_ranges
-                    .iter()
-                    .all(|r| r.size > 0 && r.offset.checked_add(r.size).is_some())
-                    && self.update_covered_ranges.iter().all(|covered| {
-                        run.destroyed_ranges.iter().any(|destroyed| {
-                            destroyed.offset <= covered.offset
-                                && destroyed.offset + destroyed.size
-                                    >= covered.offset + covered.size
-                        })
-                    }),
+                run.destroyed_ranges.iter().all(|r| {
+                    !r.medium.is_empty() && r.size > 0 && r.offset.checked_add(r.size).is_some()
+                }) && self.update_covered_ranges.iter().all(|covered| {
+                    run.destroyed_ranges.iter().any(|destroyed| {
+                        destroyed.medium == covered.medium
+                            && destroyed.offset <= covered.offset
+                            && destroyed.offset + destroyed.size >= covered.offset + covered.size
+                    })
+                }),
                 "Flash-free execution leaves update-covered storage intact",
             )?;
             require(
@@ -140,6 +139,28 @@ impl FlashFreeProof {
                 "Invalid qualified card file",
             )?;
         }
+        let boot_names = match recipe.generation {
+            Generation::Exr | Generation::ExrPro | Generation::Exr2 | Generation::XpPro => {
+                let packaging = recipe.packaging.as_ref().ok_or_else(|| {
+                    image::Error::Invalid("Qualified card lacks header packaging".into())
+                })?;
+                let mut names = vec![
+                    packaging.header_filename.as_str(),
+                    packaging.image_filename.as_str(),
+                ];
+                if matches!(recipe.generation, Generation::Exr | Generation::ExrPro) {
+                    names.push("ffimage.bin");
+                }
+                names
+            }
+            Generation::Xp4 => vec!["ffinit.bin", "ffboot.bin"],
+            Generation::Xp5 => vec!["marble_init.bin", "ffboot.bin"],
+        };
+        require(
+            names.len() == boot_names.len() + 1
+                && boot_names.iter().all(|name| names.contains(*name)),
+            "Flash-free proof omits boot files",
+        )?;
         require(
             self.files.iter().any(|f| {
                 f.name == recipe.update_filename
@@ -195,19 +216,33 @@ mod tests {
             configuration_sha256: "3".repeat(64),
             complete_internal_storage_audit: true,
             update_covered_ranges: vec![StorageRange {
+                medium: "nand".into(),
                 offset: 0,
                 size: 4096,
             }],
-            files: vec![FileIdentity {
-                name: recipe.update_filename.clone(),
-                size: recipe.source_size,
-                sha256: recipe.source_sha256.clone(),
-            }],
+            files: vec![
+                FileIdentity {
+                    name: recipe.update_filename.clone(),
+                    size: recipe.source_size,
+                    sha256: recipe.source_sha256.clone(),
+                },
+                FileIdentity {
+                    name: "ffsys.bin".into(),
+                    size: 1024,
+                    sha256: "5".repeat(64),
+                },
+                FileIdentity {
+                    name: "ffboot.bin".into(),
+                    size: 32768000,
+                    sha256: "6".repeat(64),
+                },
+            ],
             runs: [StoragePattern::Zeroed, StoragePattern::Scrambled]
                 .into_iter()
                 .map(|storage| Run {
                     storage,
                     destroyed_ranges: vec![StorageRange {
+                        medium: "nand".into(),
                         offset: 0,
                         size: 4096,
                     }],
@@ -253,7 +288,7 @@ mod tests {
         let mut recipe = Recipe::bundled("x70-110").unwrap().unwrap();
         let qualified = proof(&recipe);
         qualified.verify(&recipe).unwrap();
-        for field in 0..12 {
+        for field in 0..15 {
             let mut bad = qualified.clone();
             match field {
                 0 => {
@@ -270,6 +305,11 @@ mod tests {
                 9 => bad.runs[0].receipt_sha256.clear(),
                 10 => bad.complete_internal_storage_audit = false,
                 11 => bad.runs[0].destroyed_ranges[0].size -= 1,
+                12 => {
+                    bad.files.pop();
+                }
+                13 => bad.files[1].name = bad.files[0].name.clone(),
+                14 => bad.runs[0].destroyed_ranges[0].medium = "another-medium".into(),
                 _ => unreachable!(),
             }
             assert!(bad.verify(&recipe).is_err(), "field {field}");
