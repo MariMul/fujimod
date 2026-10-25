@@ -4,6 +4,7 @@
 import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
+import iconMetrics from '../ui/assets/feature-icon-metrics.generated.json';
 import { FeatureTile } from './FeatureTile';
 import { fadeLoop } from './fade-loop';
 import { featureMedia, type Media } from './feature-media';
@@ -17,8 +18,14 @@ type Card = {
   related: { card: string; reason: string }[];
   manual: string | null;
   changes: string | null;
-  thanks: { user: string; profile: string; suggestion: string }[];
+  credits: Credits;
+  choice_credits: Record<string, Credits>;
 };
+/** Inline Markdown from the docs: text, bold, italic and links. */
+type Inline = string | { b: Inline[] } | { i: Inline[] } | { href: string; text: Inline[] };
+type Credits = { premiere: boolean; inspired: Inline[][]; thanks: Inline[][] };
+/** Ink box in symbol units, and the width and height that give it the shared optical size (scripts/icon-metrics.ts). */
+type IconMetric = { box: number[]; view: number[]; width: number; height: number };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
@@ -39,7 +46,12 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/image_size',
     changes:
       'Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   shape_aspect_item: {
     title: 'ASPECT RATIO',
@@ -64,7 +76,12 @@ const CARDS: Record<string, Card> = {
     ],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   shape_surround_item: {
     title: 'SURROUND VIEW',
@@ -78,7 +95,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   shape_desqueeze_item: {
     title: 'DESQUEEZE',
@@ -88,7 +110,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   shape_jpeg_item: {
     title: 'DESQUEEZE JPEG',
@@ -98,7 +125,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   c: {
     title: 'FRAMING GUIDELINE',
@@ -119,7 +151,12 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_setup/screen_set-up#framing_guidline',
     changes:
       'Adds GOLDEN RATIO and four GOLDEN SPIRAL focal-point placements. All guides follow the selected image bounds and aspect ratio.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   film_simulation: {
     title: 'FILM SIMULATION',
@@ -130,7 +167,12 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/film_simulation',
     changes:
       'Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   film_editor_item: {
     title: 'FILM EDITOR',
@@ -140,7 +182,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   photometry: {
     title: 'PHOTOMETRY',
@@ -161,7 +208,18 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/photometry',
     changes:
       'Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {
+      'RAW HIGHLIGHT': {
+        premiere: false,
+        inspired: [],
+        thanks: [],
+      },
+    },
   },
   raw_view: {
     title: 'RAW VIEW',
@@ -172,7 +230,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   f_log_recording_item: {
     title: 'F-Log RECORDING',
@@ -185,7 +248,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   hdmi_rec_behavior_item: {
     title: 'HDMI OUTPUT',
@@ -198,7 +266,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_exposure_compensation_dial: {
     title: 'EV DIAL',
@@ -208,7 +281,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_command_control: {
     title: 'COMMAND CONTROL',
@@ -218,7 +296,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_auto_mode_selector_lever: {
     title: 'AUTO LEVER',
@@ -228,7 +311,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_shutter_speed_dial: {
     title: 'SHUTTER DIAL',
@@ -238,7 +326,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_aperture_ring: {
     title: 'APERTURE RING',
@@ -248,7 +341,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_focus_mode_selector: {
     title: 'FOCUS MODE',
@@ -258,7 +356,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_af_ae_lock_button: {
     title: 'AE-L/AF-L',
@@ -268,7 +371,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_drive_button: {
     title: 'DRIVE BUTTON',
@@ -278,7 +386,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_quick_menu_button: {
     title: 'Q BUTTON',
@@ -288,7 +401,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bindings_row_command_control_press: {
     title: 'COMMAND PRESS',
@@ -298,7 +416,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   control_ring_setting: {
     title: 'CONTROL RING SETTING',
@@ -309,7 +432,12 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/control_ring_setting',
     changes:
       'Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   menu_theme_item: {
     title: 'MENU THEME',
@@ -319,7 +447,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   touch_screen_setting: {
     title: 'TOUCH SCREEN SETTING',
@@ -333,7 +466,12 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_setup/touch_panel_setting',
     changes:
       'Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   edit_save_custom_setting: {
     title: 'EDIT/SAVE CUSTOM SETTING',
@@ -344,7 +482,12 @@ const CARDS: Record<string, Card> = {
     manual: 'menu_shooting/edit-save_custom_setting',
     changes:
       'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   snap_menu_item: {
     title: 'MF SNAP FOCUS',
@@ -354,7 +497,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   bug_report_shortcut: {
     title: 'BUG REPORT SHORTCUT',
@@ -364,7 +512,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   sd_volume_name_item: {
     title: 'DATE CARD NAME',
@@ -377,7 +530,12 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
   date_folders_item: {
     title: 'DATE FOLDERS',
@@ -391,16 +549,93 @@ const CARDS: Record<string, Card> = {
     related: [],
     manual: null,
     changes: null,
-    thanks: [],
+    credits: {
+      premiere: false,
+      inspired: [],
+      thanks: [],
+    },
+    choice_credits: {},
   },
 };
 const media = featureMedia();
 
+/** A sprite icon cropped to its ink, sized by the context's --icon-size so every icon has the same optical size. */
 function Icon(props: { name: string }) {
+  const metric = () => (iconMetrics as Record<string, IconMetric>)[props.name];
   return (
-    <svg class="catalog-icon" aria-hidden="true">
-      <use href={`${featureIcons}#${props.name}`} />
+    <svg
+      class="catalog-icon"
+      aria-hidden="true"
+      viewBox={metric().box.join(' ')}
+      style={{ '--w': metric().width, '--h': metric().height }}
+    >
+      <use
+        href={`${featureIcons}#${props.name}`}
+        x={metric().view[0]}
+        y={metric().view[1]}
+        width={metric().view[2]}
+        height={metric().view[3]}
+      />
     </svg>
+  );
+}
+
+function Rich(props: { inline: Inline[] }) {
+  return (
+    <For each={props.inline}>
+      {(part) =>
+        typeof part === 'string' ? (
+          part
+        ) : 'b' in part ? (
+          <b>
+            <Rich inline={part.b} />
+          </b>
+        ) : 'i' in part ? (
+          <i>
+            <Rich inline={part.i} />
+          </i>
+        ) : (
+          <a href={part.href} target="_blank" rel="noreferrer">
+            <Rich inline={part.text} />
+          </a>
+        )
+      }
+    </For>
+  );
+}
+
+/** First offered in any digital camera. */
+function Premiere() {
+  return (
+    <div class="catalog-premiere">
+      <Icon name="ticket" />
+      WORLD PREMIERE
+    </div>
+  );
+}
+
+function CreditList(props: { credits: Credits }) {
+  return (
+    <Show when={props.credits.inspired.length || props.credits.thanks.length}>
+      <ul class="catalog-credits">
+        <For each={props.credits.inspired}>
+          {(line) => (
+            <li>
+              <Icon name="heart" />
+              <b>INSPIRED BY</b>: <Rich inline={line} />
+            </li>
+          )}
+        </For>
+        <For each={props.credits.thanks}>
+          {(line) => (
+            <li>
+              <Icon name="gift" />
+              <b>THANKS</b>: <Rich inline={line} />
+            </li>
+          )}
+        </For>
+      </ul>
+    </Show>
   );
 }
 
@@ -462,6 +697,8 @@ function CardBody(props: { target: Target }) {
   const choice = () => props.target.choice;
   /** The menus above the title: a control's menus, and for an option its control too. */
   const crumbs = () => (choice() ? [...card().path, card().title] : card().path);
+  const none: Credits = { premiere: false, inspired: [], thanks: [] };
+  const credits = () => (choice() ? (card().choice_credits[choice()!] ?? none) : card().credits);
   return (
     <>
       <Show when={media(props.target.card)}>
@@ -471,6 +708,9 @@ function CardBody(props: { target: Target }) {
         <div class="catalog-card-path">{crumbs().join(' › ')} ›</div>
       </Show>
       <div class="catalog-card-title">{choice() ?? card().title}</div>
+      <Show when={credits().premiere}>
+        <Premiere />
+      </Show>
       <Show
         when={choice()}
         fallback={
@@ -496,22 +736,7 @@ function CardBody(props: { target: Target }) {
           </For>
         </ul>
       </Show>
-      <Show when={!choice()}>
-        <For each={card().thanks}>
-          {(person) => (
-            <p class="catalog-thanks">
-              THANKS:{' '}
-              <a href={person.suggestion} target="_blank" rel="noreferrer">
-                suggested
-              </a>{' '}
-              by{' '}
-              <a href={person.profile} target="_blank" rel="noreferrer">
-                {person.user}
-              </a>
-            </p>
-          )}
-        </For>
-      </Show>
+      <CreditList credits={credits()} />
     </>
   );
 }
