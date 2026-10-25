@@ -8,7 +8,10 @@
     "preset": {
       "factory_options": {
         "audio_input_profile": "declared-silent-stereo-pcm48000",
-        "video_encoder_backend": "software"
+        "video_encoder_backend": "software",
+        "image_work_data_ticks": 100000,
+        "movrsz_ticks": 100000,
+        "raw_readback_ticks": 100000
       }
     }
   }

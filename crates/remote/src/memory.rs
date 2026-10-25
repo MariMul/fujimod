@@ -1,5 +1,5 @@
 //! Bounded live-memory observation. No reads advance execution.
-use crate::{InputState, ReadSet, Readiness, Result, State, backend::Backend};
+use crate::{Control, InputState, ReadSet, Readiness, Result, State, backend::Backend};
 use fujimod_catalog_controls::facts::{ConfigurationLocation, DecodedTouch};
 use fujimod_catalog_remote::Facts;
 
@@ -82,12 +82,27 @@ impl<B: Backend> Memory<'_, B> {
         })
     }
     /// Every check that must pass before the firmware accepts a new input.
-    pub async fn readiness(&mut self) -> Result<Readiness> {
+    pub async fn readiness(&mut self, control: Option<&Control>) -> Result<Readiness> {
         let f = &self.facts.firmware.state;
         let mut pending = vec![];
         let mode_pending = self.word(f.pending_mode).await?;
         if mode_pending != 0 {
             pending.push(format!("pending UI mode={mode_pending}"));
+        }
+        let mut parameter_independent = false;
+        if let Some(control) = control {
+            for input in &self.facts.parameter_independent_inputs.clone() {
+                if input.control != control.id() {
+                    continue;
+                }
+                let mut matches = true;
+                for state in &input.conditions {
+                    matches &= state
+                        .values
+                        .contains(&self.uint(state.address, state.width).await?);
+                }
+                parameter_independent |= matches;
+            }
         }
         let f = &f.readiness;
         let one = self.uint(f.category_one, 8).await?;
@@ -105,17 +120,18 @@ impl<B: Backend> Memory<'_, B> {
         let override_value = self.word(f.override_address).await?;
         // REC parameter readiness observes category-one bit 9. Other
         // category-one operations may remain active while inputs are accepted.
-        if one & (1 << 9) != 0 {
+        if !parameter_independent && one & (1 << 9) != 0 {
             pending.push(format!("UI category one={one:#x}"));
         }
-        if two & !u64::from(f.excluded_mask) != 0
-            || override_value != 1 && two & u64::from(f.excluded_mask) != 0
+        if !parameter_independent
+            && (two & !u64::from(f.excluded_mask) != 0
+                || override_value != 1 && two & u64::from(f.excluded_mask) != 0)
         {
             pending.push(format!(
                 "UI category two={two:#x}, override={override_value}"
             ));
         }
-        if input != 0 {
+        if !parameter_independent && input != 0 {
             pending.push(format!("input pending={input}"));
         }
         if timer != 0 {

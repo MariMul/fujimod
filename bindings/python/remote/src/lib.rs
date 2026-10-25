@@ -339,9 +339,14 @@ impl Camera {
                     remote::operations::screenshot(r, deadline).await?,
                 )),
                 "frame" => Ok(Output::Capture(r.frame().await?)),
-                "readiness" => Ok(Output::Readiness(r.readiness().await?)),
+                "readiness" => Ok(Output::Readiness(r.readiness(None).await?)),
                 "wait_ready" => {
-                    remote::operations::wait_ready(r, deadline).await?;
+                    let control = match reference.as_ref() {
+                        Some(Reference::Control(control)) => Some(control),
+                        None => None,
+                        _ => return Err("wait_ready requires a control reference".into()),
+                    };
+                    remote::operations::wait_ready(r, control, deadline).await?;
                     Ok(Output::Unit)
                 }
                 "wait" => {

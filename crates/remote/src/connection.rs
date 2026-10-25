@@ -32,8 +32,8 @@ impl<B: Backend> Connection<B> {
     pub fn observe(&mut self, observer: Option<Observer>) {
         self.observer = observer;
     }
-    async fn ready(&mut self, deadline: u64) -> Result<()> {
-        crate::operations::wait_ready(self, deadline).await
+    async fn ready(&mut self, control: &Control, deadline: u64) -> Result<()> {
+        crate::operations::wait_ready(self, Some(control), deadline).await
     }
     pub async fn press(&mut self, control: &Control, deadline: u64) -> Result<()> {
         crate::operations::press(self, control, deadline).await
@@ -105,14 +105,14 @@ impl<B: Backend> RemoteReader for View<'_, B> {
                 .await
         })
     }
-    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+    fn readiness<'a>(&'a mut self, control: Option<&'a Control>) -> LocalFuture<'a, Readiness> {
         Box::pin(async move {
             Memory {
                 backend: self.backend,
                 facts: self.facts,
                 reads: ReadSet::default(),
             }
-            .readiness()
+            .readiness(control)
             .await
         })
     }
@@ -148,13 +148,13 @@ impl<B: Backend> RemoteReader for Connection<B> {
                 .await
         })
     }
-    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+    fn readiness<'a>(&'a mut self, control: Option<&'a Control>) -> LocalFuture<'a, Readiness> {
         Box::pin(async move {
             View {
                 backend: &mut self.backend,
                 facts: &self.facts,
             }
-            .readiness()
+            .readiness(control)
             .await
         })
     }
@@ -199,7 +199,7 @@ impl<B: Backend> Remote for Connection<B> {
                 input.state,
                 InputState::Released | InputState::TouchMove { .. } | InputState::TouchEnd
             ) {
-                self.ready(deadline).await?;
+                self.ready(&input.control, deadline).await?;
                 let read_result = self
                     .read(&Reference::Control(input.control.clone()))
                     .await?;
@@ -229,7 +229,7 @@ impl<B: Backend> Remote for Connection<B> {
                 for step in 0..steps.unsigned_abs() {
                     for pressed in [true, false] {
                         if pressed && step > 0 {
-                            self.ready(deadline).await?;
+                            self.ready(&input.control, deadline).await?;
                         }
                         self.backend.contact(&actuator, pressed)?;
                         loop {

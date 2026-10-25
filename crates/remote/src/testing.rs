@@ -480,7 +480,7 @@ fn rec_readiness_gates_parameter_changes_without_blocking_other_category_one_wor
         for bit in 0..64 {
             let category = 1u64 << bit;
             remote.backend.bytes[800..808].copy_from_slice(&category.to_le_bytes());
-            let result = remote.readiness().await.unwrap();
+            let result = remote.readiness(None).await.unwrap();
             assert_eq!(result.ready, bit != 9, "category-one bit {bit}");
             assert!(
                 result
@@ -678,7 +678,7 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
             backend.word(address, value);
         }
         let mut r = Connection::connect(backend, facts).unwrap();
-        let ready = r.readiness().await.unwrap();
+        let ready = r.readiness(None).await.unwrap();
         assert!(ready.ready);
         assert!(
             ready
@@ -697,18 +697,18 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
                 .any(|&(lo, hi)| lo < 36110 && hi > 800)
         );
         r.backend.word(35068, 0);
-        assert!(!r.readiness().await.unwrap().ready);
+        assert!(!r.readiness(None).await.unwrap().ready);
         r.backend.word(35068, 0x12);
         r.backend.word(920, 1);
-        assert!(!r.readiness().await.unwrap().ready);
+        assert!(!r.readiness(None).await.unwrap().ready);
         r.backend.word(920, 0);
         r.backend.word(36108, 0x10);
-        assert!(r.readiness().await.unwrap_err().contains("ambiguous"));
+        assert!(r.readiness(None).await.unwrap_err().contains("ambiguous"));
         r.backend.word(36108, 0x30);
         r.backend.word(36048, 0x40);
-        assert!(r.readiness().await.unwrap_err().contains("missing"));
+        assert!(r.readiness(None).await.unwrap_err().contains("missing"));
         r.backend.word(904, 129);
-        assert!(r.readiness().await.unwrap_err().contains("unavailable"));
+        assert!(r.readiness(None).await.unwrap_err().contains("unavailable"));
     });
 }
 
@@ -839,5 +839,109 @@ fn touch_is_accepted_when_the_decoded_report_shows_it() {
         assert!(memory::touch_decoded(layout, &report, &start).unwrap());
         assert!(!memory::touch_decoded(layout, &report, &InputState::TouchEnd).unwrap());
         assert!(memory::touch_decoded(layout, &report[..12], &start).is_err());
+    });
+}
+
+#[test]
+fn parameter_independent_control_requires_every_declared_state_and_keeps_other_gates() {
+    futures_lite::future::block_on(async {
+        let mut f = facts();
+        f.parameter_independent_inputs = serde_json::from_value(json!([{
+            "control":"wifi_button", "conditions":[
+                {"address":768,"width":4,"values":[3]},
+                {"address":776,"width":4,"values":[0]},
+                {"address":840,"width":2,"values":[184,185,186]}]
+        }]))
+        .unwrap();
+        let mut r = Connection::connect(Synthetic::new(), f.clone()).unwrap();
+        r.backend.word(768, 3);
+        r.backend.word(776, 0);
+        r.backend.word(840, 184);
+        r.backend.word(800, 512);
+        r.backend.word(808, 16);
+        r.backend.word(816, 1);
+        assert!(!r.readiness(None).await.unwrap().ready);
+        assert!(
+            !r.readiness(Some(&control("menu_ok_button")))
+                .await
+                .unwrap()
+                .ready
+        );
+        let ready = r.readiness(Some(&control("wifi_button"))).await.unwrap();
+        assert!(ready.ready);
+        assert!(
+            ready
+                .reads
+                .stores
+                .iter()
+                .any(|&(a, b)| a <= 840 && b >= 842)
+        );
+        for (address, wrong) in [(768, 5), (776, 1), (840, 182)] {
+            let old = r.backend.bytes[address..address + 4].to_vec();
+            r.backend.word(address, wrong);
+            assert!(
+                !r.readiness(Some(&control("wifi_button")))
+                    .await
+                    .unwrap()
+                    .ready
+            );
+            r.backend.bytes[address..address + 4].copy_from_slice(&old);
+        }
+        for address in [780, 820] {
+            r.backend.word(address, 1);
+            assert!(
+                !r.readiness(Some(&control("wifi_button")))
+                    .await
+                    .unwrap()
+                    .ready
+            );
+            r.backend.word(address, 0);
+        }
+        for (button, page) in [("menu_ok_button", 184), ("wifi_button", 182)] {
+            r.backend.word(840, page);
+            let count = r.backend.edges.len();
+            let deadline = r.backend.now;
+            assert!(
+                r.set_input(
+                    &Input {
+                        control: control(button),
+                        state: InputState::Pressed
+                    },
+                    deadline
+                )
+                .await
+                .unwrap_err()
+                .contains("input readiness")
+            );
+            assert_eq!(r.backend.edges.len(), count);
+        }
+        r.backend.word(840, 184);
+        // The set_input path uses the same qualified readiness, rather than
+        // reapplying the generic REC gate after an explicit wait.
+        r.set_input(
+            &Input {
+                control: control("wifi_button"),
+                state: InputState::Pressed,
+            },
+            100,
+        )
+        .await
+        .unwrap();
+        r.set_input(
+            &Input {
+                control: control("wifi_button"),
+                state: InputState::Released,
+            },
+            100,
+        )
+        .await
+        .unwrap();
+        f.parameter_independent_inputs[0].conditions.clear();
+        assert!(
+            Connection::connect(Synthetic::new(), f)
+                .err()
+                .unwrap()
+                .contains("conditions")
+        );
     });
 }

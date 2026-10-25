@@ -28,6 +28,9 @@ pub struct Facts {
     /// Optional task receive boundary required by native input consumers.
     #[serde(default)]
     pub input_tasks: Option<InputTasks>,
+    /// Controls accepted in declared states while REC parameter work remains active.
+    #[serde(default)]
+    pub parameter_independent_inputs: Vec<ParameterIndependentInput>,
 }
 
 impl Facts {
@@ -66,6 +69,7 @@ impl Facts {
             firmware,
             menu_manifest,
             input_tasks: None,
+            parameter_independent_inputs: Vec::new(),
         };
         facts.physical_controls.validate()?;
         facts
@@ -113,6 +117,26 @@ pub struct InputTasks {
     pub receive_state: u8,
     /// Additional mode-qualified busy registers required at the input boundary.
     pub busy: Vec<ModeBusy>,
+}
+
+/// A control with a state-qualified input path independent of REC parameter work.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct ParameterIndependentInput {
+    pub control: String,
+    /// Every condition must match before the parameter checks are inapplicable.
+    pub conditions: Vec<InputStateCondition>,
+}
+
+/// A bounded integer observation and its permitted values.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct InputStateCondition {
+    pub address: u64,
+    pub width: usize,
+    pub values: Vec<u64>,
 }
 
 /// A busy register whose nonzero value withholds native input in one UI mode.
@@ -969,6 +993,22 @@ impl Facts {
     /// Validate identities before exposing any remote operations.
     pub fn validate(&self) -> Result<(), String> {
         self.firmware.validate()?;
+        for input in &self.parameter_independent_inputs {
+            self.physical_controls.control(&input.control)?;
+            if input.conditions.is_empty()
+                || input.conditions.iter().any(|state| {
+                    state.address == 0
+                        || !matches!(state.width, 1 | 2 | 4 | 8)
+                        || state.values.is_empty()
+                        || state
+                            .values
+                            .iter()
+                            .any(|value| state.width < 8 && *value >= 1u64 << (state.width * 8))
+                })
+            {
+                return Err("Invalid parameter-independent input conditions".into());
+            }
+        }
         if let Some(tasks) = &self.input_tasks {
             let distinct: BTreeSet<_> = tasks.entries.iter().collect();
             if tasks.headers.is_empty()
