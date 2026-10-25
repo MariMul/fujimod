@@ -60,10 +60,11 @@ The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
 
 `startup` and `stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
-green using the located setup timer before continuing. The guest divides the
-wait into one-second intervals; the timer initializes its counter on each call.
-Zero leaves the normal entry behavior unchanged. The library exposes the same
-setting through `StartupOptions` and the corresponding `_with_options` methods.
+green using a counted loop before continuing. Each second requests 2,048 units
+of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
+second; the startup clock can make the hold longer. This early hold calls no
+stock code and requires no initialized timer. Zero skips the hold. The library
+exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
 
 The guest loader sources are in `guest/`. Its checked-in generated Rust
 template contains the compiled loader and relocations, with no update or ROM

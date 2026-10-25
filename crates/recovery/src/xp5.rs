@@ -288,7 +288,9 @@ pub fn package(
     put64(
         &mut program,
         cfg + 192,
-        u64::from(success_hold_seconds) * 1_000_000,
+        // Each unit executes 1,000,000 four-NOP iterations. Even allowing
+        // two billion iterations per second, 2,048 units take >= 1.024 s.
+        u64::from(success_hold_seconds) * 2_048,
     )?;
     let restore = template::XP5_FLASH_SETUP_BRANCH;
     require(
@@ -581,14 +583,16 @@ mod tests {
         assert_eq!(crate::StartupOptions::default().success_hold_seconds, 0);
         for payload in [None, Some(ram)] {
             let normal = package(&data, &s, payload.clone(), 0).unwrap();
-            let held = package(&data, &s, payload, 3).unwrap();
             let at = 0xc000 + template::XP5_FLASH_CONFIGURATION + 192;
             assert_eq!(&normal[0].bytes[at..at + 8], &[0; 8]);
-            let mut expected = normal[0].bytes.clone();
-            put64(&mut expected, at, 3_000_000).unwrap();
-            assert_eq!(expected, held[0].bytes);
-            if normal.len() == 2 {
-                assert_eq!(normal[1].bytes, held[1].bytes);
+            for seconds in [1, 3, u32::MAX] {
+                let held = package(&data, &s, payload.clone(), seconds).unwrap();
+                let mut expected = normal[0].bytes.clone();
+                put64(&mut expected, at, u64::from(seconds) * 2_048).unwrap();
+                assert_eq!(expected, held[0].bytes);
+                if normal.len() == 2 {
+                    assert_eq!(normal[1].bytes, held[1].bytes);
+                }
             }
         }
     }

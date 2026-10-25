@@ -143,12 +143,7 @@ PROVIDE(boot_setup_delay = 0x0c0200);
         functions: &std::collections::BTreeMap<u64, (String, u64)>,
         frames: &std::collections::BTreeMap<String, usize>,
         path: &mut Vec<u64>,
-        setup_delay: u64,
     ) -> usize {
-        // Budget for the source-checked setup timer and its MMIO accessors.
-        if at == setup_delay {
-            return 256;
-        }
         assert!(!path.contains(&at), "Recursive prelude");
         let (name, size) = functions.get(&at).expect("Prelude has an external call");
         path.push(at);
@@ -168,15 +163,7 @@ PROVIDE(boot_setup_delay = 0x0c0200);
                     + ((((word & 0x3ffffff) ^ 0x2000000) as i64 - 0x2000000) * 4))
                     as u64;
                 if word & 0x80000000 != 0 || !(at..at + size).contains(&target) {
-                    child = child.max(stack_depth(
-                        target,
-                        base,
-                        image,
-                        functions,
-                        frames,
-                        path,
-                        setup_delay,
-                    ));
+                    child = child.max(stack_depth(target, base, image, functions, frames, path));
                 }
             }
         }
@@ -190,7 +177,6 @@ PROVIDE(boot_setup_delay = 0x0c0200);
         &functions,
         &frames,
         &mut Vec::new(),
-        symbols["boot_setup_delay"],
     );
     assert!(
         maximum + 512 <= (symbols["xp5_flash_stack_top"] - symbols["xp5_flash_stack"]) as usize,

@@ -17,8 +17,6 @@ _Static_assert(sizeof(struct xp5_flash_configuration)==200 && offsetof(struct xp
     && offsetof(struct xp5_flash_configuration,success_hold_units)==192,"flash configuration ABI");
 volatile struct xp5_flash_configuration xp5_flash_configuration = {.abi = 1};
 volatile uint64_t xp5_flash_progress[4];
-/* The located setup timer initializes its counter and accepts microseconds. */
-extern void boot_setup_delay(uint32_t units);
 static void write32(uintptr_t address, uint32_t value) { *(volatile uint32_t *)address = value; }
 static void lamp_pin(uintptr_t pio, uint32_t port, uint32_t pin, int high)
 {
@@ -82,10 +80,10 @@ void xp5_flash_prepare(void)
     if (hold) {
         show(1,0);
         while (hold) {
-            /* Keep each counter interval below its 32-bit wrap period. */
-            uint32_t units=hold>1000000?1000000:(uint32_t)hold;
-            boot_setup_delay(units);
-            hold-=units;
+            /* One unit matches the early-boot four-NOP counted delay. */
+            for (uint32_t n=0;n<1000000;n++)
+                __asm__ volatile("nop; nop; nop; nop" ::: "memory");
+            hold--;
         }
         show(0,0);
     }
