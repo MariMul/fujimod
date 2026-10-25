@@ -33,7 +33,10 @@ impl RecoveryAvailability {
     pub fn generation(&self) -> Option<String> {
         self.inner.generation.as_ref().map(|g| {
             match g {
+                core::Generation::Exr => "exr",
+                core::Generation::ExrPro => "exrpro",
                 core::Generation::Exr2 => "exr2",
+                core::Generation::XpPro => "xppro",
                 core::Generation::Xp4 => "xp4",
                 core::Generation::Xp5 => "xp5",
             }

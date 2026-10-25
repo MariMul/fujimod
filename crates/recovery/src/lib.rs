@@ -1,6 +1,9 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
 pub mod image;
+mod lupi;
+pub mod rom_sd;
+pub use lupi::Lupi;
 mod xp4;
 mod xp5;
 use image::{File, Packaging, Plan, Result, require};
@@ -15,7 +18,12 @@ pub use xp5::{
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Generation {
+    Exr,
+    #[serde(rename = "exrpro")]
+    ExrPro,
     Exr2,
+    #[serde(rename = "xppro")]
+    XpPro,
     Xp4,
     Xp5,
 }
@@ -29,8 +37,13 @@ pub struct Proof {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum VersionConfiguration {
-    Reader { address: usize },
-    Memory { pointer: usize, selector_offset: usize },
+    Reader {
+        address: usize,
+    },
+    Memory {
+        pointer: usize,
+        selector_offset: usize,
+    },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -85,6 +98,7 @@ pub struct Recipe {
     pub generation: Generation,
     pub plan: Option<Plan>,
     pub packaging: Option<Packaging>,
+    pub lupi: Option<Lupi>,
     pub setup: Option<Setup>,
     pub xp5: Option<Xp5Setup>,
     pub cold_start: Option<ColdStart>,
@@ -224,9 +238,25 @@ impl Recipe {
         })?;
         let mut files =
             match self.generation {
-                Generation::Exr2 => {
+                Generation::Exr | Generation::ExrPro => {
+                    let header = self
+                        .packaging
+                        .as_ref()
+                        .ok_or_else(|| image::Error::Invalid("Missing Lupi header".into()))?;
+                    let api = self.lupi.as_ref().ok_or_else(|| {
+                        image::Error::Invalid("Missing Lupi filesystem ABI".into())
+                    })?;
+                    lupi::package(
+                        api,
+                        header,
+                        &inverted,
+                        plan,
+                        image::transform(&inverted, plan)?,
+                    )?
+                }
+                Generation::Exr2 | Generation::XpPro => {
                     let packaging = self.packaging.as_ref().ok_or_else(|| {
-                        image::Error::Invalid("Missing EXR II SD packaging".into())
+                        image::Error::Invalid("Missing SD header packaging".into())
                     })?;
                     packaging.package(&inverted, plan, image::transform(&inverted, plan)?)?
                 }
@@ -266,9 +296,14 @@ impl Recipe {
             "DAT filename collides with boot files",
         )?;
         if let Some(contract) = &self.updater {
+            let ram_filename = if matches!(self.generation, Generation::Exr | Generation::ExrPro) {
+                "ffimage.bin"
+            } else {
+                "ffboot.bin"
+            };
             let ram = files
                 .iter()
-                .find(|f| f.name.eq_ignore_ascii_case("ffboot.bin"))
+                .find(|f| f.name.eq_ignore_ascii_case(ram_filename))
                 .ok_or_else(|| {
                     image::Error::Invalid("Missing RAM image for updater proof".into())
                 })?;
@@ -300,12 +335,15 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
     let mut output_filenames = Vec::new();
     if let Some(recipe) = &recipe {
         match recipe.generation {
-            Generation::Exr2 => {
+            Generation::Exr | Generation::ExrPro | Generation::Exr2 | Generation::XpPro => {
                 if let Some(packaging) = &recipe.packaging {
                     output_filenames.extend([
                         packaging.header_filename.clone(),
                         packaging.image_filename.clone(),
                     ]);
+                }
+                if matches!(recipe.generation, Generation::Exr | Generation::ExrPro) {
+                    output_filenames.push("ffimage.bin".into());
                 }
             }
             Generation::Xp4 => output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()]),

@@ -31,7 +31,14 @@
       "version": "4.52",
       "internal_version": "2.30",
       "update_sha256": "6bbc740ec4c6fe410a24a2bba48fe5b1736cc221beb76827b838243b06cfa515",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx-50s/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx-50s/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "x10-201",
@@ -54,7 +61,14 @@
       "version": "2.11",
       "internal_version": "2.54",
       "update_sha256": "ee1895d639ee6c64fff118a9fe4bab3dc821b145bbfa381110ff678a3ddc8998",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100/",
+      "boot_rom": {
+        "content": {
+          "size": 16384,
+          "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+        },
+        "address": 2147483648
+      }
     },
     {
       "firmware_id": "x100f-212",

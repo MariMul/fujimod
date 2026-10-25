@@ -11,6 +11,20 @@ FFINIT with the update's DDR setup and relocated tables, the Topaz filesystem
 ABI, and a cold preloaded RAM image. Reset mode remains cold; three checked
 comparisons select the preloaded table, images, and worker bypass.
 
+EXR and EXR Pro use Lupi's 512-byte `ffsys.bin` header and a small
+`ffboot.bin`. That guest copies itself to SRAM and uses the ROM's u16 read
+ABI to load `ffimage.bin` in chunks, checking file length, actual counts and
+CRC32 before entering the stock RAM image. The extra file avoids the ROM's
+16-bit truncation of the initial boot-file length. Updater code proofs are
+checked against `ffimage.bin`.
+
+X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
+complete RAM image as `ffboot.bin`. The locator follows the update's single
+or initial/trained DDR-copy helper to choose the header. Three checked
+comparisons select the stock preloaded table, header and image paths while
+retaining cold reset mode. Both families use rooted section tables and checked
+source mappings; unrecognized table or update-device layouts refuse.
+
 XP5 emits raw `marble_init.bin` with the update's setup at byte zero. Its
 entry guest preserves registers and stack, initializes serial NOR access,
 scans read timing, copies the complete source header into the boot-service
@@ -70,3 +84,14 @@ rejects unsupported relocations, and requires GCC 9.2.1. Append `-- --check`
 to compare it with the checked-in template. Both template
 generators use empty camera-data placeholders; card construction needs only
 the official DAT and the compiled catalog recipes.
+
+Generate and check the Lupi guest with GNU GCC 4.6.4 and GNU ld:
+
+```sh
+LUPI_CC=/path/to/arm-gcc LUPI_LD=/path/to/arm-ld \
+  cargo run -p fujimod-recovery --example generate_lupi -- --check
+```
+
+`cargo run -p fujimod-recovery --example locate_rom_sd -- exr UPDATE.DAT`
+emits freshly located startup plans and header facts from the supplied update.
+Use `exrpro` or `xppro` for the other processor families.

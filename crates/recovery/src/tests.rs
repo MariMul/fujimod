@@ -157,7 +157,10 @@ fn recipes_match_catalog_identities_and_generation() {
             assert_eq!(
                 selected.soc.id,
                 match recipe.generation {
+                    Generation::Exr => "exr",
+                    Generation::ExrPro => "exrpro",
                     Generation::Exr2 => "exr2",
+                    Generation::XpPro => "xppro",
                     Generation::Xp4 => "xp4",
                     Generation::Xp5 => "xp5",
                 }
@@ -172,7 +175,8 @@ fn recipes_match_catalog_identities_and_generation() {
                 .as_ref()
                 .and_then(|c| c.pointer("/boot/sd"))
                 .cloned()
-                .unwrap_or(serde_json::Value::Null)
+                .unwrap_or(serde_json::Value::Null),
+            "SD boot controls for {id}"
         );
     }
 }

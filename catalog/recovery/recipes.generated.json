@@ -1,221 +1,5 @@
 [
   {
-    "firmware_id": "gfx100-512",
-    "source_size": 110744016,
-    "source_sha256": "c24a410267ffe2d254caa58f9d54eb28945dad0eec69c630ca904a5479aa066a",
-    "update_filename": "GXUP0003.DAT",
-    "generation": "xp4",
-    "plan": {
-      "size": 72093696,
-      "entry": 0,
-      "regions": [
-        {
-          "name": "loader+sync",
-          "address": 0,
-          "source": {
-            "dat_offset": 131700,
-            "size": 262144,
-            "compression": "raw",
-            "decoded_size": 262144,
-            "sha256": "a921bd607d35ceb15d7d4babad63a8b5f66edab5f1ba69bad0fa03b5023838ec"
-          }
-        },
-        {
-          "name": "section table",
-          "address": 15204352,
-          "source": {
-            "dat_offset": 1311348,
-            "size": 1024,
-            "compression": "raw",
-            "decoded_size": 1024,
-            "sha256": "25a350900acd6e56647fad263c5477070495e72342e46e42d2a7bee64e5d7d79"
-          }
-        },
-        {
-          "name": "kernel0",
-          "address": 262144,
-          "source": {
-            "dat_offset": 393844,
-            "size": 112224,
-            "compression": "raw",
-            "decoded_size": 112224,
-            "sha256": "584d41523762a1565f49b8852543dc81ec49dbbedc9078f3d3ce1e447fe36219"
-          }
-        },
-        {
-          "name": "resources1",
-          "address": 1966080,
-          "source": {
-            "dat_offset": 26215028,
-            "size": 3801088,
-            "compression": "method4",
-            "decoded_size": 7138104,
-            "sha256": "13c094c03b5cf72100b416016a13ec9e108549f7d7e380ec935034c88db8e79f"
-          }
-        },
-        {
-          "name": "resources2",
-          "address": 9699328,
-          "source": {
-            "dat_offset": 31588980,
-            "size": 671421,
-            "compression": "raw",
-            "decoded_size": 671421,
-            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
-          }
-        },
-        {
-          "name": "module3",
-          "address": 15205376,
-          "source": {
-            "dat_offset": 1442420,
-            "size": 149888,
-            "compression": "raw",
-            "decoded_size": 149888,
-            "sha256": "8388013ada1c16ed37a763d5be5f3a82659656aad4d6151e183613a9e19904db"
-          }
-        },
-        {
-          "name": "module4",
-          "address": 16253952,
-          "source": {
-            "dat_offset": 1966708,
-            "size": 149888,
-            "compression": "raw",
-            "decoded_size": 149888,
-            "sha256": "5be9de6e8b22b5e2e23dd4ef5bdd8a2dac3645ba8f307e931ba68f386d8e95a3"
-          }
-        },
-        {
-          "name": "section5",
-          "address": 17305600,
-          "source": {
-            "dat_offset": 2490996,
-            "size": 3932160,
-            "compression": "method4",
-            "decoded_size": 8499412,
-            "sha256": "bdf51193cb11c5851827dcb22c33ce3fcae59b9fd1823fad44fe92ecf1402263"
-          }
-        },
-        {
-          "name": "section6",
-          "address": 33275904,
-          "source": {
-            "dat_offset": 6423156,
-            "size": 5373952,
-            "compression": "method4",
-            "decoded_size": 10108928,
-            "sha256": "a7f24cabf6b8b5c002a7702ed6f74da7105ab02934868f4631dddaf5ba0c1d7b"
-          }
-        },
-        {
-          "name": "overlays",
-          "address": 63049728,
-          "source": {
-            "dat_offset": 11797108,
-            "size": 3407872,
-            "compression": "method4",
-            "decoded_size": 9043968,
-            "sha256": "f2d0de197608c5fc6e8d7ebc055e869019699093cd1edea6bb453088850462ad"
-          }
-        }
-      ],
-      "bss": [
-        {
-          "name": "kernel0",
-          "address": 374368,
-          "size": 171712
-        },
-        {
-          "name": "module3",
-          "address": 15355264,
-          "size": 232576
-        },
-        {
-          "name": "module4",
-          "address": 16403840,
-          "size": 232576
-        },
-        {
-          "name": "section5",
-          "address": 25808896,
-          "size": 7467008
-        },
-        {
-          "name": "section6",
-          "address": 43384832,
-          "size": 19664896
-        }
-      ],
-      "edits": [
-        {
-          "address": 45992,
-          "old": 1,
-          "new": 0,
-          "what": "select stock XP4 RAM-preloaded loader branch"
-        },
-        {
-          "address": 15204360,
-          "old": 0,
-          "new": 1,
-          "what": "XP4 section table preloaded flag"
-        }
-      ]
-    },
-    "packaging": null,
-    "setup": {
-      "dat_offset": 628,
-      "active_size": 29696,
-      "active_sha256": "f690bc1bb0f6f14cd948de49830daeaf8876aab9a5e7694a2ae81731093d2046",
-      "slot_size": 131072,
-      "flash_aperture": 4026531840,
-      "code_offset": 2048,
-      "code_size": 6816,
-      "code_sha256": "1a1ecd48f2d813ff530a524d7a1e019a5127afcdef341c9af06afbb2dff0c62a",
-      "continuation_offset": 29536,
-      "continuation_address": 4026561376,
-      "linked_sram_base": 4293984256
-    },
-    "xp5": null,
-    "cold_start": {
-      "mode_flag": 45992,
-      "mode_test": 1540
-    },
-    "file_api": {
-      "mount": 4293927888,
-      "open": 4293928064,
-      "read": 4293928420,
-      "close": 4293928920,
-      "load_address": 4293984256,
-      "workspace": 4294105088
-    },
-    "sd_boot": null,
-    "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
-  },
-  {
-    "firmware_id": "gfx100ii-250",
-    "source_size": 163184655,
-    "source_sha256": "b5bba32fd98dc5f2364852d1007d1fe6c004216e601972d5760aae7f1254d6b1",
-    "update_filename": "GXUP0006.DAT",
-    "generation": "xp5",
-    "plan": null,
-    "packaging": null,
-    "setup": null,
-    "xp5": null,
-    "cold_start": null,
-    "file_api": null,
-    "sd_boot": null,
-    "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "XP5 bindings: setup/header: No unique stock AArch64 reset copy for rooted cold table"
-    ]
-  },
-  {
     "firmware_id": "gfx100rf-113",
     "source_size": 106613548,
     "source_sha256": "33ad2dc787defdbdac3bb0a95e914407f768b0532f119cfac1e034c18648397f",
@@ -223,6 +7,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -277,210 +62,213 @@
     ]
   },
   {
-    "firmware_id": "gfx100s-213",
-    "source_size": 50197040,
-    "source_sha256": "ea997915ac5accc79699392b47909bb29506f66ec8d571e5804dd1fb0408fd12",
-    "update_filename": "GXUP0004.DAT",
-    "generation": "xp4",
+    "firmware_id": "gfx50r-311",
+    "source_size": 53544208,
+    "source_sha256": "fdee77287b64f789da8e1b552caa3ccb45f8f2409adafc9e05811932d0871296",
+    "update_filename": "GXUP0002.DAT",
+    "generation": "xppro",
     "plan": {
-      "size": 73842688,
+      "size": 48300032,
       "entry": 0,
       "regions": [
         {
-          "name": "loader+sync",
+          "name": "loader",
           "address": 0,
           "source": {
-            "dat_offset": 131700,
+            "dat_offset": 131676,
             "size": 262144,
             "compression": "raw",
             "decoded_size": 262144,
-            "sha256": "e067903cb047a9e8d1e9d3b88518cefdcf655e5ed4d7b810c58eb4696d9befa8"
+            "sha256": "7b26f5bf03887b80673283232b734a2c2e30ac6cd470fc0bf84b5552c1a05f7e"
           }
         },
         {
-          "name": "section table",
-          "address": 14811136,
+          "name": "section-table",
+          "address": 9895936,
           "source": {
-            "dat_offset": 1311348,
+            "dat_offset": 1180252,
             "size": 1024,
             "compression": "raw",
             "decoded_size": 1024,
-            "sha256": "4afe9459c5ce3172338304efe12b6a76bb0a229fa695fb88e62bd217d0e741fa"
+            "sha256": "f72454df0aaadec1b08518f1310a0fc3c8ef427f92a87904f86e05f3c740da94"
           }
         },
         {
-          "name": "kernel0",
+          "name": "section-0",
           "address": 262144,
           "source": {
-            "dat_offset": 393844,
-            "size": 112224,
+            "dat_offset": 393820,
+            "size": 113440,
             "compression": "raw",
-            "decoded_size": 112224,
-            "sha256": "584d41523762a1565f49b8852543dc81ec49dbbedc9078f3d3ce1e447fe36219"
+            "decoded_size": 113440,
+            "sha256": "0314158d153bebed047cc991c0c16dbddce7a02e29009136148b751da16a5a52"
           }
         },
         {
-          "name": "resources1",
+          "name": "section-1",
           "address": 1966080,
           "source": {
-            "dat_offset": 26215028,
-            "size": 3538944,
-            "compression": "method4",
-            "decoded_size": 6797480,
-            "sha256": "8ed6e7215a101961e2fd87401a8fafcf6f6f86a1db63fa589adf695ee710044d"
-          }
-        },
-        {
-          "name": "resources2",
-          "address": 9306112,
-          "source": {
-            "dat_offset": 31195764,
-            "size": 671421,
+            "dat_offset": 21430876,
+            "size": 4563876,
             "compression": "raw",
-            "decoded_size": 671421,
-            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+            "decoded_size": 4563876,
+            "sha256": "73d08458bd4bbaefb6c1ce4511ff7bd94849877d0ecb16e5b9e0eef69e1426c0"
           }
         },
         {
-          "name": "module3",
-          "address": 14812160,
+          "name": "section-2",
+          "address": 7274496,
           "source": {
-            "dat_offset": 1442420,
-            "size": 149888,
+            "dat_offset": 27460188,
+            "size": 671424,
             "compression": "raw",
-            "decoded_size": 149888,
-            "sha256": "87b32511a0da3024888e6bbc37116f22aaa3b530e36de5c13aadc95081a992ec"
+            "decoded_size": 671424,
+            "sha256": "6d68a438f0159e7a820392a4d3e636a529530457ea8ae21db8619de76939950b"
           }
         },
         {
-          "name": "module4",
-          "address": 15860736,
+          "name": "section-3",
+          "address": 9896960,
           "source": {
-            "dat_offset": 1966708,
-            "size": 149888,
+            "dat_offset": 1245788,
+            "size": 244064,
             "compression": "raw",
-            "decoded_size": 149888,
-            "sha256": "c57f7c9656700f67b1f2813ece4222babefd0afb3be20e01efe29b22c075b6e3"
+            "decoded_size": 244064,
+            "sha256": "f7cff3cbd14316461ce3b83522481e9d0a44df914f308926258f5671f4b65ed9"
           }
         },
         {
-          "name": "section5",
-          "address": 16912384,
+          "name": "section-4",
+          "address": 10945536,
           "source": {
-            "dat_offset": 2490996,
-            "size": 3932160,
-            "compression": "method4",
-            "decoded_size": 8389100,
-            "sha256": "eb5372dfda41009b969ccf148f031b3976230a6a9d249d0ea3d0588e6feab157"
+            "dat_offset": 1770076,
+            "size": 244064,
+            "compression": "raw",
+            "decoded_size": 244064,
+            "sha256": "ea22852cbf655ebf0ea59af7bebdd193b7e64aad8b91418930dc51eac6f5aa53"
           }
         },
         {
-          "name": "section6",
-          "address": 32669696,
+          "name": "section-5",
+          "address": 11997184,
           "source": {
-            "dat_offset": 6423156,
-            "size": 5505024,
+            "dat_offset": 2294364,
+            "size": 2621440,
             "compression": "method4",
-            "decoded_size": 10248192,
-            "sha256": "cf6c76fde4415ba452b7f5ad350f0b8f30ac39e888b5889e1289bd9d4078b9f2"
+            "decoded_size": 5382260,
+            "sha256": "fe2a1714755516358aab40edb1f992e75dd45d6dd3467086f976ce95124aa7ec"
           }
         },
         {
-          "name": "overlays",
-          "address": 62861312,
+          "name": "section-6",
+          "address": 23478272,
           "source": {
-            "dat_offset": 11928180,
-            "size": 4980736,
+            "dat_offset": 4915804,
+            "size": 4390912,
             "compression": "method4",
-            "decoded_size": 10981376,
-            "sha256": "45a0aad4051571b8b7b7790470bddd6ab7489e45b258dc7ab0f122620c82f217"
+            "decoded_size": 7913472,
+            "sha256": "f478871bf1ff2c76d523d7cc15b89241d4cd37ece7e80f0e6699da36119058a9"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 37756928,
+          "source": {
+            "dat_offset": 9306716,
+            "size": 10543104,
+            "compression": "raw",
+            "decoded_size": 10543104,
+            "sha256": "ad8f3778df01bc718bb11060ccc59520ad3f35eb17cdaf7edf73e713c219f210"
           }
         }
       ],
       "bss": [
         {
-          "name": "kernel0",
-          "address": 374368,
-          "size": 171712
+          "name": "section-0",
+          "address": 375584,
+          "size": 148960
         },
         {
-          "name": "module3",
-          "address": 14962048,
-          "size": 231552
+          "name": "section-3",
+          "address": 10141024,
+          "size": 360064
         },
         {
-          "name": "module4",
-          "address": 16010624,
-          "size": 231552
+          "name": "section-4",
+          "address": 11189600,
+          "size": 360064
         },
         {
-          "name": "section5",
-          "address": 25305088,
-          "size": 7364608
+          "name": "section-5",
+          "address": 17383424,
+          "size": 6094848
         },
         {
-          "name": "section6",
-          "address": 42917888,
-          "size": 19943424
+          "name": "section-6",
+          "address": 31391744,
+          "size": 6365184
         }
       ],
       "edits": [
         {
-          "address": 46040,
-          "old": 1,
-          "new": 0,
-          "what": "select stock XP4 RAM-preloaded loader branch"
+          "address": 1400,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
         },
         {
-          "address": 14811144,
+          "address": 1476,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1608,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9895944,
           "old": 0,
           "new": 1,
-          "what": "XP4 section table preloaded flag"
+          "what": "preloaded section table"
         }
       ]
     },
-    "packaging": null,
-    "setup": {
-      "dat_offset": 628,
-      "active_size": 29696,
-      "active_sha256": "d3c5b65e03f9c77c91e0fb96886e15588180419b80a1459de909da940ea5dc87",
-      "slot_size": 131072,
-      "flash_aperture": 4026531840,
-      "code_offset": 2048,
-      "code_size": 6816,
-      "code_sha256": "1a1ecd48f2d813ff530a524d7a1e019a5127afcdef341c9af06afbb2dff0c62a",
-      "continuation_offset": 29536,
-      "continuation_address": 4026561376,
-      "linked_sram_base": 4293984256
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1132,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "7aa79e97c654e533889ecd2570892a05ccd0cd6b5f26aa6d62c214165b90d0c7",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
     },
-    "xp5": null,
-    "cold_start": {
-      "mode_flag": 46040,
-      "mode_test": 1540
-    },
-    "file_api": {
-      "mount": 4293927888,
-      "open": 4293928064,
-      "read": 4293928420,
-      "close": 4293928920,
-      "load_address": 4293984256,
-      "workspace": 4294105088
-    },
-    "sd_boot": null,
-    "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
-  },
-  {
-    "firmware_id": "gfx100sii-120",
-    "source_size": 103860300,
-    "source_sha256": "e45747b0cadeb6acf4765835283507dd3e46e7ceeb2f2e143069667567dc2378",
-    "update_filename": "GXUP0007.DAT",
-    "generation": "xp5",
-    "plan": null,
-    "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -489,214 +277,217 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "XP5 bindings: setup/header: No unique stock AArch64 reset copy for rooted cold table"
+      "version-independent stock updater acceptance"
     ]
   },
   {
-    "firmware_id": "gfx50sii-212",
-    "source_size": 50197040,
-    "source_sha256": "550b683473d6d6d54b18bd7c8c94aaa022bc6dda99c451ad790e1c211a104c29",
-    "update_filename": "GXUP0005.DAT",
-    "generation": "xp4",
+    "firmware_id": "gfx50s-452",
+    "source_size": 53544164,
+    "source_sha256": "6bbc740ec4c6fe410a24a2bba48fe5b1736cc221beb76827b838243b06cfa515",
+    "update_filename": "GXUP0001.DAT",
+    "generation": "xppro",
     "plan": {
-      "size": 69451776,
+      "size": 47484928,
       "entry": 0,
       "regions": [
         {
-          "name": "loader+sync",
+          "name": "loader",
           "address": 0,
           "source": {
-            "dat_offset": 131700,
+            "dat_offset": 131676,
             "size": 262144,
             "compression": "raw",
             "decoded_size": 262144,
-            "sha256": "2b03b99d8ae37c076cd30fad89605f147bc38d2628799e934a786e8e47a181ff"
+            "sha256": "c967bb39f05d5b23d7b5fa5c739ffde2f796fc993774db5c1ed1d8a9e2cdde1e"
           }
         },
         {
-          "name": "section table",
-          "address": 14811136,
+          "name": "section-table",
+          "address": 9764864,
           "source": {
-            "dat_offset": 1311348,
+            "dat_offset": 1180252,
             "size": 1024,
             "compression": "raw",
             "decoded_size": 1024,
-            "sha256": "b930b357ccfb241a9073efb30c54034ad754b9636c2e181c460f42b352183e7c"
+            "sha256": "50658089b2f262d3a54f7c8ae122afc073e573e025ed191c073054464215c4f5"
           }
         },
         {
-          "name": "kernel0",
+          "name": "section-0",
           "address": 262144,
           "source": {
-            "dat_offset": 393844,
-            "size": 112352,
+            "dat_offset": 393820,
+            "size": 113440,
             "compression": "raw",
-            "decoded_size": 112352,
-            "sha256": "b6aada0e50594f95ddb79dff7f9fe6ddab89043a217d29dbdb291df18e249ac4"
+            "decoded_size": 113440,
+            "sha256": "6338110ef2e4441d9bd0dd3fd44679cb2dcf207e0d574cfd1e3c9c7afdff6518"
           }
         },
         {
-          "name": "resources1",
+          "name": "section-1",
           "address": 1966080,
           "source": {
-            "dat_offset": 26215028,
-            "size": 3407872,
-            "compression": "method4",
-            "decoded_size": 6564168,
-            "sha256": "1253345db99a199f26dd15186939e072b38f0e17633a50449e7a7f28f74b64c4"
-          }
-        },
-        {
-          "name": "resources2",
-          "address": 9306112,
-          "source": {
-            "dat_offset": 31195764,
-            "size": 671421,
+            "dat_offset": 21430876,
+            "size": 4109768,
             "compression": "raw",
-            "decoded_size": 671421,
-            "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844"
+            "decoded_size": 4109768,
+            "sha256": "6c049e83ab3c71259d76cd0c5eb6f38bc4a9ec17b4e1100a9144299d37ace922"
           }
         },
         {
-          "name": "module3",
-          "address": 14812160,
+          "name": "section-2",
+          "address": 7274496,
           "source": {
-            "dat_offset": 1442420,
-            "size": 148928,
+            "dat_offset": 27460188,
+            "size": 637588,
             "compression": "raw",
-            "decoded_size": 148928,
-            "sha256": "c88cfb893995ac04da764ef136bcbc11558777f3b437d2d7c4467c05242d3e3a"
+            "decoded_size": 637588,
+            "sha256": "8782703256d019b4ce3bd3fc239814c2b2c17f71efa1815e746d6b5d025db614"
           }
         },
         {
-          "name": "module4",
-          "address": 15860736,
+          "name": "section-3",
+          "address": 9765888,
           "source": {
-            "dat_offset": 1966708,
-            "size": 148928,
+            "dat_offset": 1245788,
+            "size": 243552,
             "compression": "raw",
-            "decoded_size": 148928,
-            "sha256": "4e8936459ba0d6c6a4a7f30c6759f9fe6b905c2ffb5cf032af3cdefca85a48db"
+            "decoded_size": 243552,
+            "sha256": "51fdea9c4054511689bc61054bbe6039e2be75a31dae993094c9e3e2ac65b5a5"
           }
         },
         {
-          "name": "section5",
-          "address": 16912384,
+          "name": "section-4",
+          "address": 10814464,
           "source": {
-            "dat_offset": 2490996,
-            "size": 3932160,
-            "compression": "method4",
-            "decoded_size": 8371228,
-            "sha256": "5dfa1a805670e3e608ab13ce02f5fd85d6f2eee583f6029807d96e01b5a4d336"
+            "dat_offset": 1770076,
+            "size": 243552,
+            "compression": "raw",
+            "decoded_size": 243552,
+            "sha256": "9911d9f816784de4e07cf0b1bfae000371a7d04a29b1e30bc68841974a99d277"
           }
         },
         {
-          "name": "section6",
-          "address": 32653312,
+          "name": "section-5",
+          "address": 11866112,
           "source": {
-            "dat_offset": 6423156,
-            "size": 5242880,
+            "dat_offset": 2294364,
+            "size": 2293760,
             "compression": "method4",
-            "decoded_size": 9949184,
-            "sha256": "d5e95939edee0ad9c9ed1ed72e8e7551b877c90a5e09c11d3d42e6640585b895"
+            "decoded_size": 4883212,
+            "sha256": "fa1282b478d5d2be224a65da728f9a72b2659344f423af158b9044c11f18a9c4"
           }
         },
         {
-          "name": "overlays",
-          "address": 58544128,
+          "name": "section-6",
+          "address": 21135360,
           "source": {
-            "dat_offset": 11666036,
-            "size": 4980736,
+            "dat_offset": 4588124,
+            "size": 4194304,
             "compression": "method4",
-            "decoded_size": 10907648,
-            "sha256": "165cbaaad9c27c521102643a1ec001412f1b2623330d85d9a654b21165a84ba2"
+            "decoded_size": 7524352,
+            "sha256": "0f14edc113b550fc1b2f2c70c56208e43ba6f2cf27cf2d576076c6f1e0406d6a"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 38473728,
+          "source": {
+            "dat_offset": 8782428,
+            "size": 9011200,
+            "compression": "raw",
+            "decoded_size": 9011200,
+            "sha256": "e37b8cc720ddc543a6658bae2709b84e67b5db9a4b88e9d1da62e69a3cba620e"
           }
         }
       ],
       "bss": [
         {
-          "name": "kernel0",
-          "address": 374496,
-          "size": 171712
+          "name": "section-0",
+          "address": 375584,
+          "size": 148416
         },
         {
-          "name": "module3",
-          "address": 14961088,
-          "size": 231520
+          "name": "section-3",
+          "address": 10009440,
+          "size": 360064
         },
         {
-          "name": "module4",
-          "address": 16009664,
-          "size": 231520
+          "name": "section-4",
+          "address": 11058016,
+          "size": 360064
         },
         {
-          "name": "section5",
-          "address": 25284608,
-          "size": 7368704
+          "name": "section-5",
+          "address": 16752640,
+          "size": 4382720
         },
         {
-          "name": "section6",
-          "address": 42602496,
-          "size": 15941632
+          "name": "section-6",
+          "address": 28659712,
+          "size": 9814016
         }
       ],
       "edits": [
         {
-          "address": 45976,
-          "old": 1,
-          "new": 0,
-          "what": "select stock XP4 RAM-preloaded loader branch"
+          "address": 1400,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
         },
         {
-          "address": 14811144,
+          "address": 1476,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1608,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9764872,
           "old": 0,
           "new": 1,
-          "what": "XP4 section table preloaded flag"
+          "what": "preloaded section table"
         }
       ]
     },
-    "packaging": null,
-    "setup": {
-      "dat_offset": 628,
-      "active_size": 31712,
-      "active_sha256": "201c8f9def8f2929ebfab4e7994f6cb3bbcd1bb052802aebacdc5e625710d23a",
-      "slot_size": 131072,
-      "flash_aperture": 4026531840,
-      "code_offset": 2048,
-      "code_size": 6816,
-      "code_sha256": "fa9b900e6d31ae8ea6e26dcc4dc49543951c970ee0182259017d9207e5745500",
-      "continuation_offset": 31552,
-      "continuation_address": 4026563392,
-      "linked_sram_base": 4293984256
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1132,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "d72448807cd394f157e31f38f1fb8eac4f628b7ddb674fa1fc1c447c68103d8e",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
     },
-    "xp5": null,
-    "cold_start": {
-      "mode_flag": 45976,
-      "mode_test": 1540
-    },
-    "file_api": {
-      "mount": 4293927888,
-      "open": 4293928064,
-      "read": 4293928420,
-      "close": 4293928920,
-      "load_address": 4293984256,
-      "workspace": 4294105088
-    },
-    "sd_boot": null,
-    "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
-  },
-  {
-    "firmware_id": "gfxeterna55-110",
-    "source_size": 194720500,
-    "source_sha256": "d1a28cace1bafba6155dda60063ec55997bc40fae22a77fc32c98e2ee64c7193",
-    "update_filename": "GXUP0009.DAT",
-    "generation": "xp5",
-    "plan": null,
-    "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -705,8 +496,317 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "XP5 bindings: setup/header: No unique stock AArch64 reset copy for rooted cold table"
+      "version-independent stock updater acceptance"
     ]
+  },
+  {
+    "firmware_id": "x10-201",
+    "source_size": 25887752,
+    "source_sha256": "bfa394d40b7e9cdda2fd78ac1e5ebe21dbe1e41dbb1d6cc615b88d6c10295897",
+    "update_filename": "FPUPDATE.DAT",
+    "generation": "exr",
+    "plan": null,
+    "packaging": null,
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
+    ]
+  },
+  {
+    "firmware_id": "x100-211",
+    "source_size": 33850564,
+    "source_sha256": "ee1895d639ee6c64fff118a9fe4bab3dc821b145bbfa381110ff678a3ddc8998",
+    "update_filename": "FPUPDATE.DAT",
+    "generation": "exr",
+    "plan": null,
+    "packaging": null,
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
+    ]
+  },
+  {
+    "firmware_id": "x100f-212",
+    "source_size": 53544672,
+    "source_sha256": "c0d4c31985aaf793e060924fbfdfbd7cf205a27986cda43c1806688e01523f89",
+    "update_filename": "FPUPDATE.DAT",
+    "generation": "xppro",
+    "plan": {
+      "size": 44969984,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 131676,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "def96ff1b2984c1a5a38cbdffc0984ef2c674d47d50632a913d1c953bfccaf3e"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 9764864,
+          "source": {
+            "dat_offset": 1180252,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "9582fa79f9c05261750725caf1f26e02441cae5550fdab949f25c619f13d56ef"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393820,
+            "size": 113408,
+            "compression": "raw",
+            "decoded_size": 113408,
+            "sha256": "3721aa21d38ef44caefc320e8c251ff4be12e36258e54dc2b3bae1c95f2af03f"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 19333724,
+            "size": 4406416,
+            "compression": "raw",
+            "decoded_size": 4406416,
+            "sha256": "86162b5f00cb8651e9b99846e97a544961f5b2d662ab681c4007fdc51c0ff46f"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 7274496,
+          "source": {
+            "dat_offset": 25363036,
+            "size": 590640,
+            "compression": "raw",
+            "decoded_size": 590640,
+            "sha256": "1767b5a2896fb32b294c1252b99ac302cb886d71a4c8ae4951114ec45d0af294"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 9765888,
+          "source": {
+            "dat_offset": 1245788,
+            "size": 236160,
+            "compression": "raw",
+            "decoded_size": 236160,
+            "sha256": "502356c9c66f2b7bcd14aded608cf86b23dedfe02f5487f782e4c2bc3d16d862"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 10814464,
+          "source": {
+            "dat_offset": 1770076,
+            "size": 236160,
+            "compression": "raw",
+            "decoded_size": 236160,
+            "sha256": "d1e692ef8eb97154863251e5a4861d650f9adcda7c2edb1759243332a7c94a4e"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 11866112,
+          "source": {
+            "dat_offset": 2294364,
+            "size": 2031616,
+            "compression": "method4",
+            "decoded_size": 4267284,
+            "sha256": "4ec64967516c2a7cb92f13e4ef6c69c3636c55ae7d71afcbeb3f8ca9d70ad1a0"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 20299776,
+          "source": {
+            "dat_offset": 4325980,
+            "size": 3866624,
+            "compression": "method4",
+            "decoded_size": 6746112,
+            "sha256": "54def9a1e4bfa2f58df117119fab46ea8e45d0ea24a473243cb59441e9ce088c"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 36675584,
+          "source": {
+            "dat_offset": 8192604,
+            "size": 8294400,
+            "compression": "raw",
+            "decoded_size": 8294400,
+            "sha256": "1fcc6b108314b58298a9ae6107e265dc4da55705ed84b4f4972db3e697e9322c"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-0",
+          "address": 375552,
+          "size": 148416
+        },
+        {
+          "name": "section-3",
+          "address": 10002048,
+          "size": 360032
+        },
+        {
+          "name": "section-4",
+          "address": 11050624,
+          "size": 360032
+        },
+        {
+          "name": "section-5",
+          "address": 16134144,
+          "size": 4165632
+        },
+        {
+          "name": "section-6",
+          "address": 27045888,
+          "size": 9629696
+        }
+      ],
+      "edits": [
+        {
+          "address": 1448,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1524,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1656,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9764872,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1132,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "b1e52216d083b43b430b2abcb880ebf72ca055c0ff9623d23bc03bddcb539351",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "metering_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": {
+      "public_version": [
+        2,
+        18
+      ],
+      "version_getter": {
+        "address": 13367884,
+        "size": 232,
+        "sha256": "cb27f501432aaa5e90bf7ed3a7fc82a3499b92360df8a4cb8445755bc3ca7e8b"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 13367800
+      },
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 21317012,
+        "size": 556,
+        "sha256": "2cee221d3a013c3b2b902fc367d898d278db8f5464dc06d56d590fa9c49be581"
+      },
+      "target_major": 17919888,
+      "target_minor": 17919892,
+      "current_major": 17919896,
+      "current_minor": 17919900,
+      "version_producer": {
+        "address": 23356528,
+        "size": 256,
+        "sha256": "c6bb75263738956ae1a1b6ba0381c27508af74be4d699dd770e5ff2c9aea4ffe"
+      },
+      "producer_stop": 23356564,
+      "version_context_pointer": 29336732,
+      "version_context": 17919364,
+      "current_major_setter": {
+        "address": 23358728,
+        "size": 52,
+        "sha256": "b9bf4ace18f7981f02928904471caf113a8adfcdef778de66216a56884539bb0"
+      },
+      "current_minor_setter": {
+        "address": 23358780,
+        "size": 52,
+        "sha256": "f3dfeec58310473c6a1fb9a034137552e32cb92d19e8735e4b8528fa5ed850fb"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "x100s-121",
@@ -902,6 +1002,7 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -1111,11 +1212,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -1124,8 +1235,8 @@
       ],
       "version_getter": {
         "address": 9730920,
-        "size": 68,
-        "sha256": "8a8e5e6e462347b17a0258d05c1df59483b9e3c87cf0bf5614a18984559859d2"
+        "size": 100,
+        "sha256": "ed3cb7dfc178f6a1cda85397dc7fcbdc4b2aa4623619dca180b86f8872e28f6c"
       },
       "configuration": {
         "kind": "reader",
@@ -1326,6 +1437,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29312,
@@ -1352,7 +1464,17 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -1540,6 +1662,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": {
       "prefix": {
@@ -2373,6 +2496,7 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -2582,11 +2706,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "view_mode_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -2791,6 +2925,7 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -2819,8 +2954,8 @@
       ],
       "version_getter": {
         "address": 9720752,
-        "size": 68,
-        "sha256": "58272bb267f3c6d5369a5f81556df6a9d44cffd4377b416f26fa8289bc176869"
+        "size": 100,
+        "sha256": "6d22b31bd5c5ab46a7df74fd958fe08dcfd7c6e0dcc3ca095407594b4cb312f1"
       },
       "configuration": {
         "kind": "reader",
@@ -3055,11 +3190,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -3305,11 +3450,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -3356,6 +3511,212 @@
       }
     },
     "missing": []
+  },
+  {
+    "firmware_id": "xe1-271",
+    "source_size": 38274220,
+    "source_sha256": "2cd3be7c65a3c269a1be230180d6da9634c37755389963705c35ae1081090a63",
+    "update_filename": "FWUP0001.DAT",
+    "generation": "exrpro",
+    "plan": {
+      "size": 23724032,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 262748,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "76c2a9890d53ac926ef4c87c0960fc930f383b36ad01f047f2eb047b9e1f4005"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 7798784,
+          "source": {
+            "dat_offset": 918108,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "ee2821b8050ed3e94991ebf92cef153a50cb80e56b861a14f955e5ff25ede63d"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 524892,
+            "size": 55200,
+            "compression": "raw",
+            "decoded_size": 55200,
+            "sha256": "47fddbbc4580d918245bd81d2012f3949ab72a7050ac7af81526d3e9376ec172"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 655964,
+            "size": 55136,
+            "compression": "raw",
+            "decoded_size": 55136,
+            "sha256": "9a99c090cfeb8bdb747b42c5184c30c309b3d23c14a428b46ca6306ac6aa5046"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 13107804,
+            "size": 2367008,
+            "compression": "raw",
+            "decoded_size": 2367008,
+            "sha256": "35eac27250b4e2546edf6f04229fbab158290b6bed6349319bd17777bb6a8b90"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 5308416,
+          "source": {
+            "dat_offset": 22282844,
+            "size": 528692,
+            "compression": "raw",
+            "decoded_size": 528692,
+            "sha256": "87f3e8794e1613e78cefa24dea5dc2cb22a8c855bcae689ed1b15ea1bb604984"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 7815168,
+          "source": {
+            "dat_offset": 1049180,
+            "size": 1310720,
+            "compression": "method4",
+            "decoded_size": 2421280,
+            "sha256": "a139baa4b5828983e63ba938d2e369ae1e8fc9e17bd342bb3b49ce6c7fc22c99"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 14717952,
+          "source": {
+            "dat_offset": 2359900,
+            "size": 2228224,
+            "compression": "method4",
+            "decoded_size": 4045728,
+            "sha256": "74ae3136b91bc1d4ae017f6569530d567edabbb7dd63436a1a8c780163f02906"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 21102592,
+          "source": {
+            "dat_offset": 4588124,
+            "size": 2621440,
+            "compression": "raw",
+            "decoded_size": 2621440,
+            "sha256": "008f5938ef293f01fbccf411a42bbf76a5d43dc5c8535666fb5bf7f4682ff850"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-4",
+          "address": 10236448,
+          "size": 3615456
+        },
+        {
+          "name": "section-5",
+          "address": 18763680,
+          "size": 2269952
+        }
+      ],
+      "edits": [
+        {
+          "address": 18540,
+          "old": 3959422845,
+          "new": 3818913792,
+          "what": "retain preloaded section table"
+        },
+        {
+          "address": 18128,
+          "old": 3942646022,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 18140,
+          "old": 3942646019,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 18168,
+          "old": 3942646053,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 7798792,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        }
+      ],
+      "header_sha256": "83a3fc5e9e88e6eda0dacb8657cb4c8a83163f2df846bff250b53368e28c9a24",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 768,
+          "new": 769,
+          "what": "hold power through SD load"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    },
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "version-independent stock updater acceptance"
+    ]
   },
   {
     "firmware_id": "xe2-411",
@@ -3555,11 +3916,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "fn7_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -3568,8 +3939,8 @@
       ],
       "version_getter": {
         "address": 9717640,
-        "size": 68,
-        "sha256": "236ab02c38febb36a0f3399b3c1b4820b5be034d1aea4797963f6381bdff7d1e"
+        "size": 100,
+        "sha256": "852fb5ccdd8463fb75173328680342c94503c03aba8062b85b01b6e0dbb7bd92"
       },
       "configuration": {
         "kind": "reader",
@@ -3804,11 +4175,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "fn7_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -3817,8 +4198,8 @@
       ],
       "version_getter": {
         "address": 9717900,
-        "size": 68,
-        "sha256": "f5a4a62b32269563cc040c7c3fddd361a5c3018772982484c3bfbf01a942adc9"
+        "size": 100,
+        "sha256": "006581df039379dc5ca7d662bf5a35efa070dd0c047c8f5b4c2644470dd8e70f"
       },
       "configuration": {
         "kind": "reader",
@@ -3854,6 +4235,26 @@
       }
     },
     "missing": []
+  },
+  {
+    "firmware_id": "xe3-132",
+    "source_size": 107104384,
+    "source_sha256": "28a7786ee3cd86b44d714daaa19f82e0d61710798cffd0fa142c1a960a67830d",
+    "update_filename": "FWUP0014.DAT",
+    "generation": "xppro",
+    "plan": null,
+    "packaging": null,
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
+    ]
   },
   {
     "firmware_id": "xe4-201",
@@ -4019,6 +4420,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 31648,
@@ -4110,6 +4512,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4122,6 +4525,481 @@
     ]
   },
   {
+    "firmware_id": "xf1-101",
+    "source_size": 27362356,
+    "source_sha256": "776c992ad4ead288d3fe25db8e8bbb59349a74044e75b976a82b9ec5ad653a9b",
+    "update_filename": "FPUPDATE.DAT",
+    "generation": "exr",
+    "plan": {
+      "size": 23470368,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 33372,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "9cbf78a3e8b2c1410b4915d406fca36833909bad0bf7a16ec5b51a58431a27d8"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 5914624,
+          "source": {
+            "dat_offset": 819804,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "809da4175391e2640202dd482c3715bd233c8c13329a54432b96d9534fdc32e8"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 295516,
+            "size": 55520,
+            "compression": "raw",
+            "decoded_size": 55520,
+            "sha256": "d93ab2085394aa77e6988046fbe307af810b3eace5c0173ecaa0dc19cf7a0dbb"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 361052,
+            "size": 55456,
+            "compression": "raw",
+            "decoded_size": 55456,
+            "sha256": "06fbe5f9b27650c4a4cfdc28a122eb2d464fc84b71dd3480bb10b8de81b21751"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 9880156,
+            "size": 1838428,
+            "compression": "raw",
+            "decoded_size": 1838428,
+            "sha256": "0adc920f4c8434fbf94256f3c7e3c9ba33121a386eb4cfe147594d9273bdf6c6"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 3424256,
+          "source": {
+            "dat_offset": 11928156,
+            "size": 480848,
+            "compression": "raw",
+            "decoded_size": 480848,
+            "sha256": "c94074ddd21ffca18e61c326703746b46379b00faadca7e4910280b09a7e524b"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 5915648,
+          "source": {
+            "dat_offset": 836188,
+            "size": 1032192,
+            "compression": "method4",
+            "decoded_size": 2012128,
+            "sha256": "288351afb502c8806b211877bb081352a39d6c43658fdf3adfd281fe05105bd2"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 13614592,
+          "source": {
+            "dat_offset": 1868380,
+            "size": 2752512,
+            "compression": "method4",
+            "decoded_size": 4952928,
+            "sha256": "c118b6a230dca8bd514d26d71e295b4a60e04428501ce05508a2fdd0b7c1f854"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 18612224,
+          "source": {
+            "dat_offset": 4620892,
+            "size": 2621440,
+            "compression": "raw",
+            "decoded_size": 2621440,
+            "sha256": "e7b23b0a20f98a98337b7ecbdd37f73fb26febf1d858452c7c4ad3d0090f9266"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-4",
+          "address": 7927776,
+          "size": 2197024
+        },
+        {
+          "name": "section-5",
+          "address": 21233664,
+          "size": 2236704
+        }
+      ],
+      "edits": [
+        {
+          "address": 18320,
+          "old": 3959422845,
+          "new": 3818913792,
+          "what": "retain preloaded section table"
+        },
+        {
+          "address": 17908,
+          "old": 3942646063,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 17920,
+          "old": 3942646060,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 17948,
+          "old": 3942646094,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 5914632,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        }
+      ],
+      "header_sha256": "1fccbfc95b4a334433ccf8b55fcea591bd9a2bf4ae054e235e6150e68ebae91f",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 768,
+          "new": 769,
+          "what": "hold power through SD load"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    },
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "version-independent stock updater acceptance"
+    ]
+  },
+  {
+    "firmware_id": "xh1-215",
+    "source_size": 54407600,
+    "source_sha256": "98187635e5b3e8356fbd9ad91d2d9b45863f2b451d8ce04f3a418d06e99646d0",
+    "update_filename": "FWUP0015.DAT",
+    "generation": "xppro",
+    "plan": {
+      "size": 51232768,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 131700,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "2f6276a812fa218f51f0f5b2ab5d73d8afbdcb6724b4517242877116ba0acd44"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 9764864,
+          "source": {
+            "dat_offset": 1180276,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "606e0d3c90a8bd05fa2d2e2e5c8265e15075e3dc3d29c1f0f04d965e18915e84"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 113408,
+            "compression": "raw",
+            "decoded_size": 113408,
+            "sha256": "dd945d1e4c30a347fc89541bcb9192ae46104305c9bef888dbcf3b2c14860dd4"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 22479476,
+            "size": 4406008,
+            "compression": "raw",
+            "decoded_size": 4406008,
+            "sha256": "7efd05db7034ca74d1495a478d5a58f3f5f819cefbe68bb54f47d87aad87279d"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 7274496,
+          "source": {
+            "dat_offset": 28508788,
+            "size": 590640,
+            "compression": "raw",
+            "decoded_size": 590640,
+            "sha256": "1767b5a2896fb32b294c1252b99ac302cb886d71a4c8ae4951114ec45d0af294"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 9765888,
+          "source": {
+            "dat_offset": 1245812,
+            "size": 234176,
+            "compression": "raw",
+            "decoded_size": 234176,
+            "sha256": "e83d68ad18d4dd7ee6026754a1b89c99782dc69da3d194a2d02dc15f42f9b422"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 10814464,
+          "source": {
+            "dat_offset": 1770100,
+            "size": 234176,
+            "compression": "raw",
+            "decoded_size": 234176,
+            "sha256": "7e324b3a7354d9e89b4b5cefa93a6784ab908d44119b9b9f862f7e86375d81e4"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 11866112,
+          "source": {
+            "dat_offset": 2294388,
+            "size": 2752512,
+            "compression": "method4",
+            "decoded_size": 5879716,
+            "sha256": "46a43ce844bd94639c24ba34ebb2c7c3e59126d4d36b37f07ffa32ecffe1ae95"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 22466560,
+          "source": {
+            "dat_offset": 5046900,
+            "size": 4390912,
+            "compression": "method4",
+            "decoded_size": 7954432,
+            "sha256": "b810f24f16856b7e11ed0d387af100a89cd49a63b63d7c508be129a546feb851"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 40206336,
+          "source": {
+            "dat_offset": 9437812,
+            "size": 11026432,
+            "compression": "raw",
+            "decoded_size": 11026432,
+            "sha256": "3cc60a5d2d9505878bf885496ea1b186850a578911715a9237ba9fdedeac472b"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-0",
+          "address": 375552,
+          "size": 148960
+        },
+        {
+          "name": "section-3",
+          "address": 10000064,
+          "size": 355040
+        },
+        {
+          "name": "section-4",
+          "address": 11048640,
+          "size": 355040
+        },
+        {
+          "name": "section-5",
+          "address": 17747968,
+          "size": 4718592
+        },
+        {
+          "name": "section-6",
+          "address": 30420992,
+          "size": 9785344
+        }
+      ],
+      "edits": [
+        {
+          "address": 1448,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1524,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1656,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9764872,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1156,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "d9fc088f618e529dc8a69417762a9a35b6df3f3d844ef26e3ee01a10287eb693",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "secondary_monitor_backlight_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": {
+      "public_version": [
+        2,
+        21
+      ],
+      "version_getter": {
+        "address": 13780052,
+        "size": 72,
+        "sha256": "b405cc059e5b9cc7b7bf006c803a3390e22eceecfb6e6e368af8f287fab1900a"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 13777544
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 23764748,
+        "size": 672,
+        "sha256": "cfcca8c0921cf3b8ab6f6f455079d7e265bafcce2cfddeecdcac9030a237835e"
+      },
+      "target_major": 19761656,
+      "target_minor": 19761660,
+      "current_major": 19761664,
+      "current_minor": 19761668,
+      "version_producer": {
+        "address": 26144300,
+        "size": 252,
+        "sha256": "f0e0880344c8c1f1c8b871d8d30656a031aa3f5c607b0f1607f67b96b398611f"
+      },
+      "producer_stop": 26144336,
+      "version_context_pointer": 33180108,
+      "version_context": 19761132,
+      "current_major_setter": {
+        "address": 26147840,
+        "size": 52,
+        "sha256": "33e76e42a05b819b8372964351b95b93f1bfaf72c36a967f9daab3b37d77a12f"
+      },
+      "current_minor_setter": {
+        "address": 26147892,
+        "size": 52,
+        "sha256": "f778a787524392fecfd8688dc251f6a7bdc6e74423cea4c572e40deb02fae6d7"
+      }
+    },
+    "missing": []
+  },
+  {
     "firmware_id": "xh2-530",
     "source_size": 110302544,
     "source_sha256": "be47168cb075ef726e67cb4bb08175a896047a3b0de2bcb6e65333b22cfcb203",
@@ -4129,6 +5007,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4157,6 +5036,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4375,11 +5255,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": null,
     "missing": [
@@ -4584,11 +5474,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -4834,11 +5734,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -5038,6 +5948,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": {
       "prefix": {
@@ -5644,7 +6555,17 @@
     },
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "quick_menu_button"
+        },
+        {
+          "id": "front_command_dial.press"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -5687,6 +6608,471 @@
         "address": 53274016,
         "size": 56,
         "sha256": "3c16890c7754902760db94c2bc8b98af85231df7b35b6b426c8cb6f5cdc08ce5"
+      }
+    },
+    "missing": []
+  },
+  {
+    "firmware_id": "xpro1-382",
+    "source_size": 38274200,
+    "source_sha256": "709e26f6dd77e922660010628fb20937b269be871b188b8810eb2cb4d5d33236",
+    "update_filename": "FPUPDATE.DAT",
+    "generation": "exrpro",
+    "plan": {
+      "size": 23724032,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 262748,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "ff31ef67c7b024a33ea3757cbff3d9564618c9660a90bbbbfecffaf6a31f24a7"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 7798784,
+          "source": {
+            "dat_offset": 918108,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "4ba2d8b9656570b73e0cb0b7b488088cb6f0a8e611de104454ba4f50df098429"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 524892,
+            "size": 55200,
+            "compression": "raw",
+            "decoded_size": 55200,
+            "sha256": "bfdb29ecd090878289db26944cddfc2d7bf6ea832dd16e41e032213693e08e0a"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 655964,
+            "size": 55136,
+            "compression": "raw",
+            "decoded_size": 55136,
+            "sha256": "14cea1290e2e69c60e052df0c52d9af7b26be4e203e091c7ebc002d057e80290"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 13107804,
+            "size": 2185812,
+            "compression": "raw",
+            "decoded_size": 2185812,
+            "sha256": "cf5e91f4a28f0c716742dc4ae1e9ddc408e1b3db14ad871ec25e2f8e6c798779"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 5308416,
+          "source": {
+            "dat_offset": 22282844,
+            "size": 528692,
+            "compression": "raw",
+            "decoded_size": 528692,
+            "sha256": "87f3e8794e1613e78cefa24dea5dc2cb22a8c855bcae689ed1b15ea1bb604984"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 7815168,
+          "source": {
+            "dat_offset": 1049180,
+            "size": 1310720,
+            "compression": "method4",
+            "decoded_size": 2443712,
+            "sha256": "be5e61a562270c12e9c90fc98ea1ec2c262d7da3f5c40504c15a4eb512964c19"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 14740608,
+          "source": {
+            "dat_offset": 2359900,
+            "size": 2228224,
+            "compression": "method4",
+            "decoded_size": 4045568,
+            "sha256": "76d474a607a1a6c95bb69b7f82a6d7d8599dedd2a7b7de6d17f1cfe5fe5844a8"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 21102592,
+          "source": {
+            "dat_offset": 4588124,
+            "size": 2621440,
+            "compression": "raw",
+            "decoded_size": 2621440,
+            "sha256": "ae1f3fde820ecbee0787f994b2ad8b1812c9988f9bc697d5d619e2144b0dd1a8"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-4",
+          "address": 10258880,
+          "size": 3615680
+        },
+        {
+          "name": "section-5",
+          "address": 18786176,
+          "size": 2276160
+        }
+      ],
+      "edits": [
+        {
+          "address": 18540,
+          "old": 3959422845,
+          "new": 3818913792,
+          "what": "retain preloaded section table"
+        },
+        {
+          "address": 18128,
+          "old": 3942646022,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 18140,
+          "old": 3942646019,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 18168,
+          "old": 3942646053,
+          "new": 3818913792,
+          "what": "retain preloaded stock kernel/application"
+        },
+        {
+          "address": 7798792,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        }
+      ],
+      "header_sha256": "83a3fc5e9e88e6eda0dacb8657cb4c8a83163f2df846bff250b53368e28c9a24",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 768,
+          "new": 769,
+          "what": "hold power through SD load"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    },
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "version-independent stock updater acceptance"
+    ]
+  },
+  {
+    "firmware_id": "xpro2-511",
+    "source_size": 53543908,
+    "source_sha256": "6f9792e53a776ee116732a6df4425b0f5393ad2f53655f573924afe9c61dc54d",
+    "update_filename": "FWUP0008.DAT",
+    "generation": "xppro",
+    "plan": {
+      "size": 40235008,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 131676,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "77895318f4a15178c3a837f0f351ef04e3c7ecf28d41f1a4e825e870808a20d1"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 9764864,
+          "source": {
+            "dat_offset": 1180252,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "62df9b749e6ce6780e4718406f3aa8b3cd0d5e2e1e756a2204880c4af0be1811"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393820,
+            "size": 113120,
+            "compression": "raw",
+            "decoded_size": 113120,
+            "sha256": "29108d027635ccd86a44a0a35bfbdad597ad1f310995aa49aa2ee9ffdf8742f9"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 17236572,
+            "size": 4448260,
+            "compression": "raw",
+            "decoded_size": 4448260,
+            "sha256": "4a41b6f18c3f839d14e6f5e4c2201c746fb610616dd02f8bcc2470429c29f7af"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 7274496,
+          "source": {
+            "dat_offset": 23265884,
+            "size": 590640,
+            "compression": "raw",
+            "decoded_size": 590640,
+            "sha256": "1767b5a2896fb32b294c1252b99ac302cb886d71a4c8ae4951114ec45d0af294"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 9765888,
+          "source": {
+            "dat_offset": 1245788,
+            "size": 183744,
+            "compression": "raw",
+            "decoded_size": 183744,
+            "sha256": "b5d73f7a8554f6ded5ac4fec966ac0852325a284073df084c264b161c17ec1bc"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 10290176,
+          "source": {
+            "dat_offset": 1770076,
+            "size": 183744,
+            "compression": "raw",
+            "decoded_size": 183744,
+            "sha256": "4aa00dc52dc8d94b9b42b059bb80c5a603843d79047a0b1f14a0ba8d2f1fa530"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 10817536,
+          "source": {
+            "dat_offset": 2294364,
+            "size": 1966080,
+            "compression": "method4",
+            "decoded_size": 4075500,
+            "sha256": "7c2feecc2656954dd137c5dc25c7c16de696e668d01da92e8a13046fc6983e87"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 19279872,
+          "source": {
+            "dat_offset": 4260444,
+            "size": 3932160,
+            "compression": "method4",
+            "decoded_size": 6815744,
+            "sha256": "17701d89a3c4ac6a6b1ec08b8abc12bcb27faec94d7ec6ec1fd5ffe6789312fd"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 33259520,
+          "source": {
+            "dat_offset": 8192604,
+            "size": 6975488,
+            "compression": "raw",
+            "decoded_size": 6975488,
+            "sha256": "7286535166fc3126b1beb9482b7c0d80d7109ddd2ab3850e4ab44b6733333832"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-0",
+          "address": 375264,
+          "size": 147392
+        },
+        {
+          "name": "section-3",
+          "address": 9949632,
+          "size": 228480
+        },
+        {
+          "name": "section-4",
+          "address": 10473920,
+          "size": 228480
+        },
+        {
+          "name": "section-5",
+          "address": 14893056,
+          "size": 4386816
+        },
+        {
+          "name": "section-6",
+          "address": 26095616,
+          "size": 7163904
+        }
+      ],
+      "edits": [
+        {
+          "address": 1388,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1464,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1596,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9764872,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1248,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "946ba2b364ed81d1e66eb7f19e3da8ef5d39038079ae1d0eba5910d47511198d",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": null,
+    "firmware_update": null,
+    "updater": {
+      "public_version": [
+        5,
+        17
+      ],
+      "version_getter": {
+        "address": 12142428,
+        "size": 232,
+        "sha256": "96f2f6b81e6637defae26cc4f7991b18c4df2490b9aa3a851ef7700ab44438b6"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 12142344
+      },
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 20321840,
+        "size": 672,
+        "sha256": "118803b3e9fd6236a7cb352cd342e02bfe3e473c4df0ff02262902e9f2216152"
+      },
+      "target_major": 16800360,
+      "target_minor": 16800364,
+      "current_major": 16800368,
+      "current_minor": 16800372,
+      "version_producer": {
+        "address": 22413016,
+        "size": 244,
+        "sha256": "be3be5890bee0f52ef451914f4aa018ebf74a54e913d245ed9f92607066b9e81"
+      },
+      "producer_stop": 22413052,
+      "version_context_pointer": 28353036,
+      "version_context": 16799836,
+      "current_major_setter": {
+        "address": 22416284,
+        "size": 52,
+        "sha256": "d1db10879f90dbd13a9bc28fd1e533631d0b31a7856395d4403189e73aca5ff7"
+      },
+      "current_minor_setter": {
+        "address": 22416336,
+        "size": 52,
+        "sha256": "a8feec26a7c62c7eefce80f8aa7347c46ecd90dfc987eb323a370643ea1876f3"
       }
     },
     "missing": []
@@ -5855,6 +7241,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29440,
@@ -6136,6 +7523,7 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6345,6 +7733,7 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6354,6 +7743,36 @@
     "updater": null,
     "missing": [
       "version-independent stock updater acceptance"
+    ]
+  },
+  {
+    "firmware_id": "xs1-102",
+    "source_size": 25887716,
+    "source_sha256": "049e1b5e726cce2e96a780caeb6da9f0f9f8b25dc5378c251a3cac4631ad163f",
+    "update_filename": "FPUPDATE.DAT",
+    "generation": "exr",
+    "plan": null,
+    "packaging": null,
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "shutter_button"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": null,
+    "missing": [
+      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
     ]
   },
   {
@@ -6520,6 +7939,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 31648,
@@ -6617,6 +8037,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6826,11 +8247,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "ae_lock_button"
+        },
+        {
+          "id": "fn2_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -7076,11 +8507,21 @@
       "entry": 0,
       "load_address": 0
     },
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
     "file_api": null,
-    "sd_boot": null,
+    "sd_boot": {
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "delete_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -7089,8 +8530,8 @@
       ],
       "version_getter": {
         "address": 9717360,
-        "size": 68,
-        "sha256": "59941bc165d793d298ade84db96f24445339cad9c09404b368a1c73caf4ad1f2"
+        "size": 100,
+        "sha256": "b3f7d955ca03089c2e4a2cb1fef277da5993ffaf4aa1860c1a47aeb724d07cfc"
       },
       "configuration": {
         "kind": "reader",
@@ -7123,6 +8564,544 @@
         "address": 18930788,
         "size": 52,
         "sha256": "1728ea71901658e6a00c22614d1f0424866e78203ec3b01aa69eb256338bfd59"
+      }
+    },
+    "missing": []
+  },
+  {
+    "firmware_id": "xt2-441",
+    "source_size": 53543964,
+    "source_sha256": "dd02ec5a862cf0e6f03a519a600ed99435efa442848249945b13ca6d78fabb25",
+    "update_filename": "FWUP0010.DAT",
+    "generation": "xppro",
+    "plan": {
+      "size": 46505984,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 131676,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "621fff2dcb9f22fab4a86b9fb19f9bc99e7cdbb435e4a11900794d2f30fc974e"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 9764864,
+          "source": {
+            "dat_offset": 1180252,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "caed32aa3ca8255959e3f657b601813628449414ef9b89b2105878cb9da78a48"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393820,
+            "size": 113408,
+            "compression": "raw",
+            "decoded_size": 113408,
+            "sha256": "3721aa21d38ef44caefc320e8c251ff4be12e36258e54dc2b3bae1c95f2af03f"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 19333724,
+            "size": 4313740,
+            "compression": "raw",
+            "decoded_size": 4313740,
+            "sha256": "a04b3c30d1f153e022be6ac1cd1498554d2610254788135b4bc5d51521971c45"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 7274496,
+          "source": {
+            "dat_offset": 25363036,
+            "size": 590640,
+            "compression": "raw",
+            "decoded_size": 590640,
+            "sha256": "1767b5a2896fb32b294c1252b99ac302cb886d71a4c8ae4951114ec45d0af294"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 9765888,
+          "source": {
+            "dat_offset": 1245788,
+            "size": 243456,
+            "compression": "raw",
+            "decoded_size": 243456,
+            "sha256": "6e35f861c0dd267962fcbafe307075f77116be049f2669ced7adbf2df8539ab3"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 10814464,
+          "source": {
+            "dat_offset": 1770076,
+            "size": 243456,
+            "compression": "raw",
+            "decoded_size": 243456,
+            "sha256": "65f4472d39ddc9c152fb7e84b2d8df5f20f0c026cd791d77f169a9b58ad8807f"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 11866112,
+          "source": {
+            "dat_offset": 2294364,
+            "size": 2162688,
+            "compression": "method4",
+            "decoded_size": 4584284,
+            "sha256": "992b9f207182cc10ab28e777a44cbcaac6fc15bfad14a977a943819cb0c7433e"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 20791296,
+          "source": {
+            "dat_offset": 4457052,
+            "size": 4063232,
+            "compression": "method4",
+            "decoded_size": 7168000,
+            "sha256": "303af230324e4ffe536d590b78d0ab4f94d8f8799079e9b96e13b434d7165222"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 38498304,
+          "source": {
+            "dat_offset": 8520284,
+            "size": 8007680,
+            "compression": "raw",
+            "decoded_size": 8007680,
+            "sha256": "1b3d391590cd538e7f09014d16df43589c463662c0f611b6c0533a41ed76cbea"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-0",
+          "address": 375552,
+          "size": 148416
+        },
+        {
+          "name": "section-3",
+          "address": 10009344,
+          "size": 360064
+        },
+        {
+          "name": "section-4",
+          "address": 11057920,
+          "size": 360064
+        },
+        {
+          "name": "section-5",
+          "address": 16453632,
+          "size": 4337664
+        },
+        {
+          "name": "section-6",
+          "address": 27959296,
+          "size": 10539008
+        }
+      ],
+      "edits": [
+        {
+          "address": 1448,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1524,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1656,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9764872,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1132,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "b1e52216d083b43b430b2abcb880ebf72ca055c0ff9623d23bc03bddcb539351",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": {
+      "public_version": [
+        4,
+        65
+      ],
+      "version_getter": {
+        "address": 13513360,
+        "size": 232,
+        "sha256": "9229ef77a143c4ccac3e883009349619b3705edbc259fd882b4dc9d5d49f5075"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 13513276
+      },
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 21853888,
+        "size": 672,
+        "sha256": "940a92a8d780ced9351bb71d254f3ee90e4ddf09b8a1615b1fe9bd11f8761325"
+      },
+      "target_major": 18359240,
+      "target_minor": 18359244,
+      "current_major": 18359248,
+      "current_minor": 18359252,
+      "version_producer": {
+        "address": 24087848,
+        "size": 248,
+        "sha256": "d971900fdf081f1222c978ebdfdf0efa3c6c1e3f7e9c8c8442b720760bced5cc"
+      },
+      "producer_stop": 24087884,
+      "version_context_pointer": 30420532,
+      "version_context": 18358716,
+      "current_major_setter": {
+        "address": 24091140,
+        "size": 52,
+        "sha256": "34628c5b61f64e2259e9c4cc9ba6473c0d4d8eb4bdbecc6ceee1350cbe149fd9"
+      },
+      "current_minor_setter": {
+        "address": 24091192,
+        "size": 52,
+        "sha256": "b5a1994a2d63ad8b1c29aeb5dee7d152934170978563c2b30905b3873b29017b"
+      }
+    },
+    "missing": []
+  },
+  {
+    "firmware_id": "xt20-211",
+    "source_size": 53543984,
+    "source_sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad",
+    "update_filename": "FWUP0013.DAT",
+    "generation": "xppro",
+    "plan": {
+      "size": 45481984,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 131676,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "ae72c2c03d7d517ba417a24de3da86bb70be1d7cc63e877ee7d436eece2b6cf2"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 9764864,
+          "source": {
+            "dat_offset": 1180252,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "86f8da3f3474ddbdefb88269bbdcb84b3c6bafe9e54e65f1ce47ce07389bc9c7"
+          }
+        },
+        {
+          "name": "section-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393820,
+            "size": 113408,
+            "compression": "raw",
+            "decoded_size": 113408,
+            "sha256": "9dccf886ee4d544776826b725c04d619f4c15c790c6632036cf24dbf3fb978ef"
+          }
+        },
+        {
+          "name": "section-1",
+          "address": 1966080,
+          "source": {
+            "dat_offset": 19333724,
+            "size": 4381800,
+            "compression": "raw",
+            "decoded_size": 4381800,
+            "sha256": "6ffe3cc6b088588000aba973c8765927611dd1524a7a8e3f8559b869a6a2fe48"
+          }
+        },
+        {
+          "name": "section-2",
+          "address": 7274496,
+          "source": {
+            "dat_offset": 25363036,
+            "size": 590640,
+            "compression": "raw",
+            "decoded_size": 590640,
+            "sha256": "1767b5a2896fb32b294c1252b99ac302cb886d71a4c8ae4951114ec45d0af294"
+          }
+        },
+        {
+          "name": "section-3",
+          "address": 9765888,
+          "source": {
+            "dat_offset": 1245788,
+            "size": 236096,
+            "compression": "raw",
+            "decoded_size": 236096,
+            "sha256": "5f1e59db3b1a78aa11cecfad2a6598ea4be3d11a7d8ce5a738d76193d866270e"
+          }
+        },
+        {
+          "name": "section-4",
+          "address": 10814464,
+          "source": {
+            "dat_offset": 1770076,
+            "size": 236096,
+            "compression": "raw",
+            "decoded_size": 236096,
+            "sha256": "de7fd790224611299bc9a8ddf6d0cacf2401d3b3360450a123d85ef3e539514e"
+          }
+        },
+        {
+          "name": "section-5",
+          "address": 11866112,
+          "source": {
+            "dat_offset": 2294364,
+            "size": 2097152,
+            "compression": "method4",
+            "decoded_size": 4411492,
+            "sha256": "ea4bbc47aadcddb95c8b80c731f40a90d77c4cce23aaaf3320dc8de952041b6c"
+          }
+        },
+        {
+          "name": "section-6",
+          "address": 20463616,
+          "source": {
+            "dat_offset": 4391516,
+            "size": 3997696,
+            "compression": "method4",
+            "decoded_size": 7016448,
+            "sha256": "b5b6afef630662bb9314ac50762571f7e33e7c3b1667f37ca657cd2b6a2a0026"
+          }
+        },
+        {
+          "name": "section-7",
+          "address": 37437440,
+          "source": {
+            "dat_offset": 8389212,
+            "size": 8044544,
+            "compression": "raw",
+            "decoded_size": 8044544,
+            "sha256": "7fedd4eaee9eb759b1640dddd386c104fc6086e6021676b1a951c4027b1cf50c"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section-0",
+          "address": 375552,
+          "size": 148416
+        },
+        {
+          "name": "section-3",
+          "address": 10001984,
+          "size": 360032
+        },
+        {
+          "name": "section-4",
+          "address": 11050560,
+          "size": 360032
+        },
+        {
+          "name": "section-5",
+          "address": 16281600,
+          "size": 4182016
+        },
+        {
+          "name": "section-6",
+          "address": 27480064,
+          "size": 9957376
+        }
+      ],
+      "edits": [
+        {
+          "address": 1448,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1524,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 1656,
+          "old": 3813867521,
+          "new": 3813867520,
+          "what": "select preloaded data while retaining cold reset mode"
+        },
+        {
+          "address": 9764872,
+          "old": 0,
+          "new": 1,
+          "what": "preloaded section table"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 1132,
+          "size": 2048
+        }
+      ],
+      "header_sha256": "d72448807cd394f157e31f38f1fb8eac4f628b7ddb674fa1fc1c447c68103d8e",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 4294967295
+        },
+        {
+          "offset": 4,
+          "value": 0
+        },
+        {
+          "offset": 8,
+          "value": 1431655765
+        },
+        {
+          "offset": 12,
+          "value": 2863311530
+        }
+      ],
+      "edits": [],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": null,
+    "setup": null,
+    "xp5": null,
+    "cold_start": null,
+    "file_api": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "delete_button"
+        }
+      ]
+    },
+    "firmware_update": null,
+    "updater": {
+      "public_version": [
+        2,
+        17
+      ],
+      "version_getter": {
+        "address": 13464796,
+        "size": 232,
+        "sha256": "38a3179f05320e5c46797b20335d69b55ca764fa8b57bc8dcf4ca04f03c7e4cd"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 13464712
+      },
+      "getter_arguments": 2,
+      "comparison": {
+        "address": 21532148,
+        "size": 556,
+        "sha256": "1d49c9de264ba8d050b241af10903d5be3cbdc855a8f83ee87540bb34276a253"
+      },
+      "target_major": 18073976,
+      "target_minor": 18073980,
+      "current_major": 18073984,
+      "current_minor": 18073988,
+      "version_producer": {
+        "address": 23632604,
+        "size": 256,
+        "sha256": "ffde48a6dc85e27346d306e0ebaceb5fab14166bb1aef8206601a073be127dfb"
+      },
+      "producer_stop": 23632640,
+      "version_context_pointer": 29700204,
+      "version_context": 18073452,
+      "current_major_setter": {
+        "address": 23635352,
+        "size": 52,
+        "sha256": "4eff75325c797fe53caf8cc10e48d5cea5bb49f4f56afe9c9beecacae011cb38"
+      },
+      "current_minor_setter": {
+        "address": 23635404,
+        "size": 52,
+        "sha256": "1685ee226d9a34c15d44e7dd716fd38fe8bc448cf82a23f18bf93515bc683f6e"
       }
     },
     "missing": []
@@ -7291,6 +9270,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29440,
@@ -7317,7 +9297,17 @@
       "load_address": 4293984256,
       "workspace": 4294105088
     },
-    "sd_boot": null,
+    "sd_boot": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
     "firmware_update": null,
     "updater": {
       "public_version": [
@@ -7528,6 +9518,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29344,
@@ -7775,6 +9766,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 33408,
@@ -7866,6 +9858,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -8041,6 +10034,7 @@
       ]
     },
     "packaging": null,
+    "lupi": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 31776,
@@ -8132,6 +10126,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -8161,6 +10156,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
+    "lupi": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
