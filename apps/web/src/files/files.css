@@ -1,5 +1,6 @@
 /* Dev Tools' Files pane, pinned to the bottom of the tools column. */
 .files {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
