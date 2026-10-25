@@ -53,11 +53,70 @@ link. Unmapped lower versions say they appear outdated; newer or unparseable
 versions do not get that inference. Simulated cameras display their version
 without a hardware update prompt.
 
-## Exported files
+## Files
 
 Binary data stays binary. Descriptive fields (identity, geometry, times) may
-be JSON; bytes read from a camera are stored as binary files, never as JSON
-number arrays.
+be JSON; bytes read from a camera are stored as binary files, never in JSON as
+number arrays, hex or base64.
+
+Tools do not offer their own downloads. Everything a tool produces is added to
+one Files pane pinned to the bottom of the tools column, which stays in place
+while the user moves between tools. The user collects files across tools and
+shares them once.
+
+- Files are grouped by camera: one folder per camera, named for its model and
+  serial (`X70 59012345`), holding a flat list of `type-name.ext` files:
+  `flash.bin`, `state-dram.bin`, `state-boot-rom.bin`,
+  `capture-still-shooting-dram.bin`, `capture-af-s-half-press.jpg`,
+  `mapping-shutter-dial-candidates.bin`, `configuration.bin`,
+  `console-log.json`.
+- Each row shows an icon, name and size, a download arrow and a remove button.
+  The camera folder has the same two actions for all of its files.
+- **Download all** saves one deflate-compressed zip with a folder per camera
+  and a `manifest.json` describing every file (identity, addresses, sizes,
+  SHA-256, tool metadata). There is never a zip inside the list.
+- **Contribute** (upload icon) opens the Contribute dialog.
+- The list keeps a fixed height and scrolls; adding a file never moves the
+  tool above it. The newest file is briefly tinted.
+- `console-log.json` is the camera's log entries as JSON with no payload bytes:
+  each entry keeps its time, layer, level, direction, decoded message, detail
+  and sizes. The transport keeps at most 256 bytes of each exchange's payload
+  for the console's hex view; the full data lives only in the tool's own file.
+  Removing `console-log.json` drops the entries logged so far from the file;
+  it returns when new entries arrive.
+- Files live in browser memory as Blobs until removed or the page closes.
+
+The same file list component renders the emulator's SD card, the Files pane,
+the Contribute dialog and the bug report page.
+
+### Contribute dialog
+
+The dialog opens on every Contribute click. It shows the disclosure, the same
+file list read-only, a **Message (optional)** field, and **Cancel** and
+**Upload**. The footer is one fixed-height row, status on the left and buttons
+on the right, so the progress bar, the result and an error (clamped to two
+lines) appear without reflowing anything. On success, Close replaces Cancel
+and Upload, and the files stay in the pane. A failed upload keeps the message;
+Upload retries the same contribution.
+
+Uploads are private and open no GitHub issue. Each file is gzip-compressed in
+the browser and uploaded as its own object through R2 multipart parts, so file
+size is not limited by the request size. Objects are stored as
+`models/<model>/cameras/<serial>/<contribution>/<file>.gz`, with the
+contribution's `manifest.json` and `message.json` under
+`contributions/<contribution>/`. The service is described in
+`apps/usb-sharing/CONTRIBUTIONS.md`.
+
+The bug report page lists its report's files with the same component and offers
+Download all and Contribute. Its dialog adds the delete-from-camera choice and
+says that the message is posted publicly on GitHub; its upload remains the
+issue-report upload.
+
+### State captures
+
+A state capture re-reads everything except frozen regions. The boot ROM and
+other constant regions are read once per camera, by the state dump. There is no
+quick scope.
 
 The browser entry point is `pageCameraModel()` in `usb-camera-model.ts`. It pins
 one model to the browser page, outside component ownership, so component and
@@ -91,6 +150,7 @@ camera is saved. Once a camera is known:
 - Tools start with the numbered path in `GETTING-STARTED.md` (back up flash,
   dump camera state, enable debug mode, restart, states to capture), followed
   by the other tools.
+- The tools column is 420 px wide, with the Files pane pinned at its bottom.
 - The console log fills the right side. Its camera column and camera filters
   appear only once more than one camera is known.
 
