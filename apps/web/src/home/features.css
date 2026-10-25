@@ -210,6 +210,14 @@
 .catalog-credits b {
   color: #eee;
 }
+/* On tiles credits sit behind the summary and options: label and icon dimmed, text faint. */
+.catalog-tile .catalog-credits {
+  color: var(--faint);
+}
+.catalog-tile .catalog-credits b,
+.catalog-tile .catalog-credits .catalog-icon {
+  color: var(--dim);
+}
 .catalog-credits a {
   color: inherit;
   text-decoration: none;
