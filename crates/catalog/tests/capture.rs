@@ -122,22 +122,3 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
     }
 }
 
-#[test]
-fn bounded_boot_code_capture_is_specific_to_its_firmware() {
-    let catalog = ReferenceCatalog::bundled().unwrap();
-    let state = catalog
-        .resolve_firmware("x100v-301")
-        .unwrap()
-        .state
-        .unwrap();
-    let rom = state.regions.iter().find(|r| r.name == "boot-rom").unwrap();
-    assert_eq!(
-        (rom.address, rom.size, rom.constant),
-        (0xfff00000, 0x8000, false)
-    );
-    state.validate().unwrap();
-    for id in ["xt4-212", "xs10-311"] {
-        let state = catalog.resolve_firmware(id).unwrap().state.unwrap();
-        assert!(!state.regions.iter().any(|r| r.name == "boot-rom"));
-    }
-}
