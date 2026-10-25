@@ -306,6 +306,8 @@ enum Command {
     },
     State,
     Progress,
+    InstructionPoints { core: usize, addresses: Vec<u64> },
+    InstructionEvent,
     RunInstructions {
         count: u64,
     },
@@ -405,6 +407,7 @@ struct Worker {
     output_directory: PathBuf,
     archive: u64,
     unmodeled_devices: Vec<String>,
+    instruction_points: Option<(usize, Box<board::observation::InstructionPoints>)>,
 }
 impl Worker {
     fn new(config: Config) -> Result<Self, String> {
@@ -615,6 +618,7 @@ impl Worker {
             output_directory: config.output_directory,
             archive: 0,
             unmodeled_devices,
+            instruction_points: None,
         })
     }
     fn state(&self) -> Value {
@@ -638,6 +642,19 @@ impl Worker {
             Command::Progress => {
                 Ok(json!({"now":self.board.now(),"instructions":self.board.instruction_counts()}))
             }
+            Command::InstructionPoints { core, addresses } => {
+                self.board.cpu(core)?;
+                if let Some((previous, mut points)) = self.instruction_points.take() {
+                    self.board.instruction_points_end(previous, &mut points)?;
+                }
+                if !addresses.is_empty() {
+                    self.instruction_points = Some((core, self.board.instruction_points_begin(core, addresses)?));
+                }
+                Ok(Value::Null)
+            }
+            Command::InstructionEvent => Ok(self.instruction_points.as_ref().and_then(|(core, points)| {
+                points.event().map(|address| json!({"core":core,"address":address}))
+            }).unwrap_or(Value::Null)),
             Command::State => Ok(self.state()),
             Command::ReadMemory {
                 core,
