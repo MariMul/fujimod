@@ -33,7 +33,7 @@
   "analog_levels": 1024,
   "controls": {
     "ae_button": {
-      "name": "AE (autoexposure) button / k (playback zoom in) button",
+      "name": "AE (autoexposure) button / Playback zoom in button",
       "location": "rear",
       "manual_page": 50,
       "face": "AE",
@@ -109,7 +109,7 @@
       "positions": []
     },
     "continuous_shooting_button": {
-      "name": "I (continuous shooting) button / n (playback zoom out) button",
+      "name": "Continuous shooting button / Playback zoom out button",
       "location": "rear",
       "manual_page": 45,
       "face": "I",
@@ -183,7 +183,7 @@
       "positions": []
     },
     "flash_pop_up_switch": {
-      "name": "N (flash pop-up) switch",
+      "name": "Flash pop-up switch",
       "location": "rear",
       "manual_page": 42,
       "face": null,
@@ -468,7 +468,7 @@
       ]
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 19,
       "face": null,

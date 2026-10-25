@@ -798,7 +798,7 @@
       "positions": []
     },
     "fn1_exposure_compensation_button": {
-      "name": "Fn1 button / d (exposure compensation) button",
+      "name": "Fn1 button / Exposure compensation button",
       "location": "top",
       "manual_page": 216,
       "face": null,
@@ -834,7 +834,7 @@
       "positions": []
     },
     "delete_button": {
-      "name": "b (delete) button",
+      "name": "Delete button",
       "location": "rear",
       "manual_page": 48,
       "face": null,
@@ -852,7 +852,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 47,
       "face": null,

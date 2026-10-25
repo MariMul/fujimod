@@ -370,7 +370,7 @@
       "positions": []
     },
     "movie_recording_button": {
-      "name": "t (movie recording) button",
+      "name": "Movie recording button",
       "location": "top",
       "manual_page": 298,
       "face": null,
@@ -442,7 +442,7 @@
       "positions": []
     },
     "drive_delete_button": {
-      "name": "DRIVE button / b (delete) button",
+      "name": "DRIVE button / Delete button",
       "location": "rear",
       "manual_page": 9,
       "face": null,
@@ -460,7 +460,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 59,
       "face": null,
@@ -711,7 +711,7 @@
       "positions": []
     },
     "bluetooth_button": {
-      "name": "x (Bluetooth) button",
+      "name": "Bluetooth button",
       "location": "rear",
       "manual_page": 3,
       "face": null,

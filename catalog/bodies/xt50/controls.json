@@ -578,7 +578,7 @@
       ]
     },
     "flash_pop_up_lever": {
-      "name": "N (flash pop-up) lever",
+      "name": "Flash pop-up lever",
       "location": "front",
       "manual_page": 121,
       "face": null,
@@ -729,7 +729,7 @@
       ]
     },
     "drive_delete_button": {
-      "name": "DRIVE button / (delete) button",
+      "name": "DRIVE button / Delete button",
       "location": "top",
       "manual_page": 7,
       "face": null,
@@ -798,7 +798,7 @@
       ]
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 54,
       "face": null,
@@ -978,7 +978,7 @@
       "positions": []
     },
     "disp_back_bluetooth_button": {
-      "name": "DISP (display)/BACK button / x (Bluetooth) button",
+      "name": "DISP (display)/BACK button / Bluetooth button",
       "location": "rear",
       "manual_page": 21,
       "face": null,

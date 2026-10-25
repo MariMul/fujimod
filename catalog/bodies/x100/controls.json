@@ -539,7 +539,7 @@
       ]
     },
     "playback_zoom_in_button": {
-      "name": "a (playback) / k (playback zoom in) button",
+      "name": "Playback / Playback zoom in button",
       "location": "rear",
       "manual_page": 58,
       "face": null,
@@ -557,7 +557,7 @@
       "positions": []
     },
     "ae_zoom_out_button": {
-      "name": "AE (autoexposure) / n (playback zoom out) button",
+      "name": "AE (autoexposure) / Playback zoom out button",
       "location": "rear",
       "manual_page": 52,
       "face": null,

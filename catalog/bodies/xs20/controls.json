@@ -39,7 +39,7 @@
   "analog_levels": null,
   "controls": {
     "movie_recording_button": {
-      "name": "t (movie recording) button",
+      "name": "Movie recording button",
       "location": "top",
       "manual_page": 317,
       "face": null,
@@ -286,7 +286,7 @@
       "positions": []
     },
     "flash_pop_up_lever": {
-      "name": "N (flash pop-up) lever",
+      "name": "Flash pop-up lever",
       "location": "top",
       "manual_page": 123,
       "face": null,
@@ -408,7 +408,7 @@
       "positions": []
     },
     "drive_delete_button": {
-      "name": "I (drive) button / b (delete) button",
+      "name": "Drive button / Delete button",
       "location": "rear",
       "manual_page": 5,
       "face": null,
@@ -426,7 +426,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 50,
       "face": null,
@@ -623,7 +623,7 @@
       "positions": []
     },
     "bluetooth_button": {
-      "name": "x(Bluetooth) button",
+      "name": "Bluetooth button",
       "location": "rear",
       "manual_page": 247,
       "face": null,

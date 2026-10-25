@@ -243,7 +243,7 @@
       ]
     },
     "flash_pop_up_switch": {
-      "name": "N (flash pop-up) switch",
+      "name": "Flash pop-up switch",
       "location": "left",
       "manual_page": 88,
       "face": null,
@@ -352,7 +352,7 @@
       "positions": []
     },
     "drive_delete_button": {
-      "name": "DRIVE button / b (delete) button (playback mode)",
+      "name": "DRIVE button / Delete button (playback mode)",
       "location": "rear",
       "manual_page": 5,
       "face": null,
@@ -370,7 +370,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 36,
       "face": null,

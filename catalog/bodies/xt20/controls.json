@@ -529,7 +529,7 @@
       ]
     },
     "flash_pop_up_lever": {
-      "name": "N (flash pop-up) lever",
+      "name": "Flash pop-up lever",
       "location": "top",
       "manual_page": 107,
       "face": null,
@@ -698,7 +698,7 @@
       "positions": []
     },
     "delete_button": {
-      "name": "b (delete) button",
+      "name": "Delete button",
       "location": "rear",
       "manual_page": 52,
       "face": null,
@@ -716,7 +716,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 51,
       "face": null,

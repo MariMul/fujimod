@@ -240,7 +240,7 @@
       ]
     },
     "flash_pop_up_switch": {
-      "name": "N (flash pop-up) switch",
+      "name": "Flash pop-up switch",
       "location": "right",
       "manual_page": 71,
       "face": null,
@@ -396,7 +396,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 29,
       "face": null,
@@ -414,7 +414,7 @@
       "positions": []
     },
     "movie_recording_button": {
-      "name": "t (movie recording) button",
+      "name": "Movie recording button",
       "location": "rear",
       "manual_page": 33,
       "face": null,

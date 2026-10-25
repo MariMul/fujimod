@@ -869,7 +869,7 @@
       "positions": []
     },
     "bluetooth_button": {
-      "name": "x (Bluetooth) button",
+      "name": "Bluetooth button",
       "location": "bottom",
       "manual_page": 7,
       "face": null,

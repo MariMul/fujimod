@@ -170,7 +170,7 @@
       "positions": []
     },
     "flash_pop_up_lever": {
-      "name": "⚡ (flash pop-up) lever",
+      "name": "Flash pop-up lever",
       "location": "front",
       "manual_page": 98,
       "face": null,
@@ -268,7 +268,7 @@
       "positions": []
     },
     "movie_record_button": {
-      "name": "t (movie recording) button",
+      "name": "Movie recording button",
       "location": "top",
       "manual_page": 46,
       "face": null,
@@ -363,7 +363,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 42,
       "face": null,
@@ -465,7 +465,7 @@
       "positions": []
     },
     "selector": {
-      "name": "Selector (efgh buttons)",
+      "name": "Selector",
       "location": "rear",
       "manual_page": 5,
       "face": null,
