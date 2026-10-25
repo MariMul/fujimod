@@ -1,0 +1,15 @@
+{
+  "xp4": {
+    "file_api": {
+      "mount": 4293927888,
+      "open": 4293928064,
+      "read": 4293928420,
+      "close": 4293928920,
+      "load_address": 4293984256,
+      "workspace": 4294105088
+    },
+    "boot_code_sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4",
+    "boot_code_address": 4293918720,
+    "boot_code_size": 32768
+  }
+}

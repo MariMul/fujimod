@@ -11,6 +11,7 @@ pub mod error;
 mod exporter;
 mod install;
 mod range;
+mod recovery;
 mod reference;
 mod requests;
 mod sequence;

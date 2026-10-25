@@ -20,6 +20,7 @@ fujimod-usb-proxy = { path = "../../crates/usb-proxy" }
 futures-timer.workspace = true
 fujimod-workflows.workspace = true
 fujimod-catalog.workspace = true
+fujimod-recovery.workspace = true
 fujimod-catalog-bulk.workspace = true
 fujimod-catalog-camera.workspace = true
 fujimod-catalog-firmware-identity.workspace = true

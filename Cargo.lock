@@ -2226,6 +2226,7 @@ dependencies = [
  "fujimod-catalog-camera",
  "fujimod-catalog-firmware-identity",
  "fujimod-catalog-service",
+ "fujimod-recovery",
  "fujimod-usb",
  "fujimod-usb-app80",
  "fujimod-usb-app80-types",
@@ -2473,6 +2474,19 @@ dependencies = [
  "serde_json",
  "sha2",
  "tiny-skia",
+]
+
+[[package]]
+name = "fujimod-recovery"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-firmware",
+ "fujimod-workspace-hack",
+ "object",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -3561,6 +3575,15 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "windows-sys",
+]
+
+[[package]]
+name = "object"
+version = "0.38.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271638cd5fa9cca89c4c304675ca658efc4e64a66c716b7cfe1afb4b9611dbbc"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
