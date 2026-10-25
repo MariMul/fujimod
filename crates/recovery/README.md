@@ -5,6 +5,14 @@ by the caller. It checks the complete DAT identity, decoded source hashes,
 initialized mappings, BSS, expected old words, header policy, and file names.
 The official DAT is included unchanged at its required card-root name.
 
+## Card contract
+
+A card's startup files are self-contained: the files the boot ROM requires,
+plus one firmware file holding everything the boot path needs. Startup never
+reads the update DAT on the card, so that DAT can be any firmware the updater
+flashes. It also never reads internal-storage regions a firmware update
+writes, so a card recovers a camera after a failed or corrupted update.
+
 The processor selects the packaging mechanism. EXR II uses the stock NAND
 header fragments with SD power hold and a preloaded RAM image. XP4 uses raw
 FFINIT with the update's DDR setup and relocated tables, the Topaz filesystem
