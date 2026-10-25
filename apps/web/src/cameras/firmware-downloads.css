@@ -27,6 +27,12 @@
   outline: none;
 }
 .downloads-table {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  border-radius: 12px;
+  background: rgb(44 44 46 / 80%);
+  overflow-x: hidden;
   display: grid;
   max-height: 452px;
   overflow-y: auto;

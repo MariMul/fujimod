@@ -111,6 +111,8 @@
   color: #c7c7cc;
 }
 .recovery .launcher {
+  grid-template-columns: 1fr;
+  gap: 28px;
   width: 100%;
   margin: 4px 0 0;
 }
