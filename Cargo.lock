@@ -2601,6 +2601,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-bulk",
  "fujimod-catalog-camera",
+ "fujimod-catalog-firmware-identity",
  "fujimod-usb",
  "fujimod-workspace-hack",
  "futures-lite",

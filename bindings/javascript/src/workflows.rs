@@ -6,6 +6,7 @@ use fujimod_workflows::{Limits, bulk, debug_mode, service_mode};
 
 pub(crate) enum Action {
     ArmResetGuard,
+    PrepareServiceSession,
     Enter,
     Leave,
 }
@@ -55,6 +56,20 @@ impl Session {
             Action::ArmResetGuard,
         )
     }
+    #[wasm_bindgen(js_name=prepareServiceSession, unchecked_return_type="Promise<ServicePreparation>")]
+    pub fn prepare_service_session(
+        &self,
+        camera_table: &str,
+        firmware_id: String,
+        firmware_sha256: &str,
+    ) -> Result<js_sys::Promise, JsValue> {
+        self.workflow(
+            camera_table,
+            firmware_id,
+            firmware_sha256,
+            Action::PrepareServiceSession,
+        )
+    }
     #[wasm_bindgen(js_name=enterDebugMode, unchecked_return_type="Promise<DebugModeResult>")]
     pub fn enter_debug_mode(
         &self,
@@ -80,18 +95,33 @@ impl Workflow {
         let mut progress = |line: &str| lines.push(line.to_owned());
         let result = js_sys::Object::new();
         match self.action {
-            Action::ArmResetGuard => {
-                let armed = service_mode::arm_reset_guard(
-                    session,
-                    &self.camera,
-                    self.limits,
-                    &mut progress,
-                )
-                .await
+            Action::ArmResetGuard | Action::PrepareServiceSession => {
+                let armed = match self.action {
+                    Action::PrepareServiceSession => {
+                        service_mode::prepare_service_session(
+                            session,
+                            &self.camera,
+                            self.limits,
+                            &mut progress,
+                        )
+                        .await
+                    }
+                    _ => {
+                        service_mode::arm_reset_guard(
+                            session,
+                            &self.camera,
+                            self.limits,
+                            &mut progress,
+                        )
+                        .await
+                    }
+                }
                 .map_err(|source| match source {
                     service_mode::ServiceModeError::Usb(source) => error(source),
                     other => workflow_error(format!("{other} (after: {})", lines.join("; "))),
                 })?;
+                property(&result, "guardBefore", u8::from(armed.guard_was_set));
+                property(&result, "debugBefore", armed.debug_flag_before);
                 property(&result, "guardWasSet", armed.guard_was_set);
                 property(&result, "debugFlagBefore", armed.debug_flag_before);
             }
@@ -103,7 +133,7 @@ impl Workflow {
                     Action::Leave => {
                         debug_mode::leave(session, &self.camera, self.limits, &mut progress).await
                     }
-                    Action::ArmResetGuard => unreachable!(),
+                    Action::ArmResetGuard | Action::PrepareServiceSession => unreachable!(),
                 }
                 .map_err(|source| match source {
                     debug_mode::DebugModeError::Usb(source)
@@ -189,6 +219,11 @@ export interface BulkReadResult {
     data: Uint8Array;
     /** Diagnostic scratch the stock setup overwrote, which may lie inside `data`. */
     overwritten: { address: number; size: number } | null;
+}
+export interface ServicePreparation {
+    guardBefore: number;
+    debugBefore: number;
+    progress: string[];
 }
 export interface ResetGuardResult {
     guardWasSet: boolean;

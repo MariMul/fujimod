@@ -17,6 +17,7 @@ import type {
   SessionHolder,
   ToolSession,
 } from './camera-model';
+import { cameraDefinition } from './camera-definition';
 import { Direction, Layer, Level, hex as dumpBytes } from './log';
 import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
 
@@ -40,6 +41,7 @@ export interface ModelSession extends Pick<
   | 'readBulk'
   | 'readConfiguration'
   | 'submitConsole'
+  | 'prepareServiceSession'
   | 'armResetGuard'
   | 'enterDebugMode'
   | 'leaveDebugMode'
@@ -220,7 +222,8 @@ function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): 
       enterDebugMode: (...args) => session.enterDebugMode(...args),
       leaveDebugMode: (...args) => session.leaveDebugMode(...args),
     },
-    prepareServiceSession: () => unbuilt('Service session preparation'),
+    prepareServiceSession: async (firmwareId) =>
+      session.prepareServiceSession(...(await cameraDefinition(firmwareId))),
     backupFlash: () => unbuilt('Flash backup'),
     dumpState: () => unbuilt('Camera state dump'),
   };

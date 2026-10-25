@@ -1,7 +1,6 @@
 //! Service mode: confirm the stock service session and arm the reset guard.
 //!
-//! Ported from x70view `tools/x70_service_exit.py --execute`, which is
-//! camera-validated on X70 1.10. The guard byte is set in configuration RAM so
+//! Camera-validated on X70 1.10. The guard byte is set in configuration RAM so
 //! the stock teardown does not restore defaults on shutdown. It is never
 //! cleared here, including after a failure. Temporary debug access (`f7`) is
 //! restored on every exit path: to 0 after success, to its original value after
@@ -96,6 +95,27 @@ pub async fn arm_reset_guard(
     limits: Limits,
     progress: &mut (dyn FnMut(&str) + Send),
 ) -> Result<GuardArmed> {
+    prepare(session, camera, limits, progress, false).await
+}
+
+/// Confirm stock service mode and leave the reset guard and debug access in
+/// configuration RAM for this boot. No stored setting is changed.
+pub async fn prepare_service_session(
+    session: &mut Session,
+    camera: &CameraDefinition,
+    limits: Limits,
+    progress: &mut (dyn FnMut(&str) + Send),
+) -> Result<GuardArmed> {
+    prepare(session, camera, limits, progress, true).await
+}
+
+async fn prepare(
+    session: &mut Session,
+    camera: &CameraDefinition,
+    limits: Limits,
+    progress: &mut (dyn FnMut(&str) + Send),
+    leave_debug_enabled: bool,
+) -> Result<GuardArmed> {
     let guard = camera.guard()?.clone();
     let debug = camera.debug()?;
     progress("Checking the camera");
@@ -135,8 +155,12 @@ pub async fn arm_reset_guard(
         progress,
     )
     .await;
-    // Restore temporary debug access whatever happened; never undo the guard.
-    let target = if outcome.is_ok() { 0 } else { flag_before };
+    // A failed preparation restores the original gate; never undo the guard.
+    let target = if outcome.is_ok() {
+        u8::from(leave_debug_enabled)
+    } else {
+        flag_before
+    };
     if access.session.state() == SessionState::Ready {
         let cleanup = async {
             if access.byte(debug.flag_offset).await? != target {
@@ -153,7 +177,11 @@ pub async fn arm_reset_guard(
     } else {
         outcome?;
     }
-    progress("Reset guard armed");
+    progress(if leave_debug_enabled {
+        "Service session prepared"
+    } else {
+        "Reset guard armed"
+    });
     Ok(GuardArmed {
         guard_was_set: guard_before == 1,
         debug_flag_before: flag_before,
@@ -219,3 +247,6 @@ async fn arm(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

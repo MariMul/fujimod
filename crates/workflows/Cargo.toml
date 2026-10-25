@@ -27,4 +27,5 @@ name = "service_capture_plan"
 required-features = ["service-capture"]
 
 [dev-dependencies]
+fujimod-catalog-firmware-identity.workspace = true
 futures-lite.workspace = true

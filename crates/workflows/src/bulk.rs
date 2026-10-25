@@ -430,4 +430,4 @@ async fn verify_pattern(access: &mut Access<'_>, capacity: u32) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

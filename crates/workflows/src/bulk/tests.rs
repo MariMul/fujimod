@@ -70,7 +70,7 @@ fn zero_base_camera() -> FirmwareBulk {
         capacity: 32,
     })
 }
-fn limits() -> Limits {
+pub(crate) fn limits() -> Limits {
     Limits {
         memory: DebugMemoryLimits {
             read: NonZeroU32::new(64).unwrap(),
@@ -94,7 +94,7 @@ fn envelope(kind: RequestKind, offset: u32, size: u32, session: u16) -> [u8; 12]
     raw[10..12].copy_from_slice(&session.to_be_bytes());
     raw
 }
-fn opened(steps: Vec<E>) -> (Session, Script) {
+pub(crate) fn opened(steps: Vec<E>) -> (Session, Script) {
     let mut all = vec![
         E::Control(envelope(RequestKind::Open, 0, 8, 0)),
         E::Read {
@@ -106,7 +106,7 @@ fn opened(steps: Vec<E>) -> (Session, Script) {
     let script = Script::new(all);
     (block_on(script.begin_session(65536, None)).unwrap(), script)
 }
-fn exchange_max(request: Vec<u8>, reply: Vec<u8>, maximum: usize) -> Vec<E> {
+pub(crate) fn exchange_max(request: Vec<u8>, reply: Vec<u8>, maximum: usize) -> Vec<E> {
     vec![
         E::Control(envelope(
             RequestKind::WriteCommand,
@@ -127,11 +127,11 @@ fn exchange_max(request: Vec<u8>, reply: Vec<u8>, maximum: usize) -> Vec<E> {
         },
     ]
 }
-fn exchange(request: Vec<u8>, reply: Vec<u8>) -> Vec<E> {
+pub(crate) fn exchange(request: Vec<u8>, reply: Vec<u8>) -> Vec<E> {
     let maximum = reply.len();
     exchange_max(request, reply, maximum)
 }
-fn info(selector: u32, text: &str) -> Vec<E> {
+pub(crate) fn info(selector: u32, text: &str) -> Vec<E> {
     let mut request = vec![0; 32];
     request[..4].copy_from_slice(&0x150000u32.to_le_bytes());
     request[16..20].copy_from_slice(&selector.to_le_bytes());
@@ -149,13 +149,13 @@ fn memory_request(function: u32, at: u32, size: u32) -> Vec<u8> {
         .flat_map(u32::to_le_bytes)
         .collect()
 }
-fn read(at: u32, bytes: &[u8]) -> Vec<E> {
+pub(crate) fn read(at: u32, bytes: &[u8]) -> Vec<E> {
     let request = memory_request(2, at, bytes.len() as u32);
     let mut reply = request.clone();
     reply.extend_from_slice(bytes);
     exchange(request, reply)
 }
-fn write(at: u32, bytes: &[u8]) -> Vec<E> {
+pub(crate) fn write(at: u32, bytes: &[u8]) -> Vec<E> {
     let mut request = memory_request(3, at, bytes.len() as u32);
     request.extend_from_slice(bytes);
     let reply = request[..36].to_vec();

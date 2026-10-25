@@ -175,6 +175,7 @@ class CameraDevice implements ModelDevice {
         output: new Uint8Array(),
         free() {},
       }),
+      prepareServiceSession: async () => ({ guardBefore: 0, debugBefore: 0, progress: [] }),
       armResetGuard: async () => {
         throw Error('unused');
       },
