@@ -152,6 +152,10 @@ export function testCameraModule(shared = false) {
       record('press', { id, stage });
       return state;
     }
+    releaseBootInputs(inputs: BootInput[]) {
+      record('release_boot_inputs', { inputs });
+      return state;
+    }
     release(id: string) {
       record('release', { id });
       return state;

@@ -377,6 +377,15 @@ impl Camera {
     ) -> Result<Ts<SessionState>, Failure> {
         self.typed(|s| s.press(id, stage))
     }
+    /// Release power-on holds directly through the declared physical contacts.
+    #[wasm_bindgen(js_name = releaseBootInputs)]
+    pub fn release_boot_inputs(
+        &mut self,
+        inputs: Vec<Ts<BootInput>>,
+    ) -> Result<Ts<SessionState>, Failure> {
+        let inputs = many(inputs)?;
+        self.typed(|s| s.release_boot_inputs(&inputs))
+    }
     pub fn release(&mut self, id: String) -> Result<Ts<SessionState>, Failure> {
         self.typed(|s| s.release(id))
     }

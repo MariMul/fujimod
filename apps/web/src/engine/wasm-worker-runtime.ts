@@ -571,8 +571,7 @@ export class WasmWorkerRuntime {
     }
   }
   private async coldBoot(held: BootInput[] = []) {
-    const s = this.require(),
-      rate = this.manifest!.ticksPerSecond;
+    const s = this.require();
     this.points = [];
     this.failed = false;
     this.nextInspection = 0n;
@@ -604,19 +603,7 @@ export class WasmWorkerRuntime {
         (this.manifest!.construction === 'session' && this.manifest!.session.preview)
       )
         s.preview();
-      for (const input of held) if (input.position === undefined) s.release(input.id);
-      if (held.some((input) => input.position === undefined)) {
-        const end = s.status().ticks + BigInt(rate * 5);
-        for (;;) {
-          this.observeCurrent();
-          const q = this.state?.inputQueue;
-          if (!q || (!q.active && !q.pending)) break;
-          if (s.status().ticks >= end)
-            throw Error('Boot contacts did not release within five guest seconds.');
-          s.runUntil(s.status().ticks + BigInt(Math.max(1, Math.round(rate / 10))));
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        }
-      }
+      if (held.some((input) => input.position === undefined)) s.releaseBootInputs(held);
     }
     this.observeCurrent();
     this.started = performance.now();

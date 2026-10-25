@@ -81,6 +81,10 @@ declare class Camera {
      */
     preview(): Preview;
     profile(limit?: number | null): Profile;
+    /**
+     * Release power-on holds directly through the declared physical contacts.
+     */
+    releaseBootInputs(inputs: BootInput[]): SessionState;
     release(id: string): SessionState;
     /**
      * Replace the card with `files`, packed contiguously into `upload`, and boot.

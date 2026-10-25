@@ -179,7 +179,11 @@ function identityText(data: Uint8Array | undefined): string | undefined {
   }
 }
 
-function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): ToolSession {
+function toolSession(
+  session: ModelSession,
+  pause: UsbCameraServices['pause'],
+  servicePrepared: () => void,
+): ToolSession {
   return {
     async deviceInfo(selector) {
       const selected = selectors.find(([name]) => name === selector);
@@ -224,8 +228,11 @@ function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): 
       enterDebugMode: (...args) => session.enterDebugMode(...args),
       leaveDebugMode: (...args) => session.leaveDebugMode(...args),
     },
-    prepareServiceSession: async (firmwareId) =>
-      session.prepareServiceSession(...(await cameraDefinition(firmwareId))),
+    prepareServiceSession: async (firmwareId) => {
+      const result = await session.prepareServiceSession(...(await cameraDefinition(firmwareId)));
+      servicePrepared();
+      return result;
+    },
     backupFlash: async (firmwareId, chunk) => {
       const [metadata, image] = await flashReader(firmwareId);
       return session.backupFlash(firmwareId, metadata, image, chunk);
@@ -340,7 +347,16 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       }
       entry.session = session;
       if (entry.removed || disposed) throw Error('Camera is no longer available');
-      outcome = { value: await operation(toolSession(session, services.pause)) };
+      outcome = {
+        value: await operation(
+          toolSession(session, services.pause, () => {
+            if (entry.removed || disposed) return;
+            entry.camera.serviceMode = true;
+            entry.camera.debugMode = 'on';
+            publish();
+          }),
+        ),
+      };
     } catch (error) {
       outcome = { error };
       if (!entry.removed) problem(entry, errorText(error), 'session');

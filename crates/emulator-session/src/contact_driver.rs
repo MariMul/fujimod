@@ -325,6 +325,14 @@ impl Driver {
         };
         Ok(state.position.clone())
     }
+    /// Neutral physical pose for a power-on hold; no running scanner is required.
+    pub fn boot_release_position(&self, id: &str) -> Result<String, String> {
+        let actuator = self.actuator(id)?;
+        if !actuator.momentary {
+            return Err("boot release requires a momentary control".into());
+        }
+        Ok(actuator.states[0].position.clone())
+    }
     pub fn busy(&self) -> bool {
         self.active.is_some() || !self.pending.is_empty()
     }

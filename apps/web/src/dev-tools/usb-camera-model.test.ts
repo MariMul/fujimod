@@ -1131,6 +1131,7 @@ test('service preparation, flash chunks and state regions use the owned workflow
       expect((await session.backupFlash('sample-1', chunk)).sha256).toBe('b'.repeat(64));
       await session.dumpState('sample-1', region);
     });
+    expect(f.model.cameras()[0]).toMatchObject({ serviceMode: true, debugMode: 'on' });
     expect(prepare).toHaveBeenCalledExactlyOnceWith('{}', 'sample-1', 'a'.repeat(64));
     expect(backup).toHaveBeenCalledWith('sample-1', '{"schema":1}', Uint8Array.of(1, 2, 3), chunk);
     expect(chunk).toHaveBeenCalledExactlyOnceWith({ offset: 4, data: Uint8Array.of(5, 6) });

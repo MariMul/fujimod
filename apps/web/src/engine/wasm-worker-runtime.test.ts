@@ -575,3 +575,26 @@ test('an unmeasured firmware keeps boot progress indeterminate', async () => {
   assert(boot.length > 1);
   assert(boot.every((asset) => asset.total === undefined));
 });
+
+test('boot holds release through native contacts when the ordinary scanner is unavailable', async () => {
+  const f = setup();
+  const release = vi.spyOn(f.module.Camera.prototype, 'release').mockImplementation(() => {
+    throw Error('physical contact scanner is not ready: menu');
+  });
+  try {
+    const boot = await f.send({
+      action: 'boot',
+      config: { ...f.config, bootInputs: [{ id: 'menu' }] },
+      dat: new ArrayBuffer(1),
+      files: [],
+      seedIdentity: [],
+    });
+    assert.equal(boot.type, 'reply');
+    assert.deepEqual(f.calls.find((c) => c.action === 'release_boot_inputs')?.options.inputs, [
+      { id: 'menu' },
+    ]);
+    assert.equal(release.mock.calls.length, 0);
+  } finally {
+    release.mockRestore();
+  }
+});
