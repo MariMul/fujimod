@@ -1433,6 +1433,7 @@ impl State {
         };
         let write = if read { None } else { Some(value.unwrap_or(0)) };
         let value = if r == 0xc230
+            || r == 0xf665
             || (r >> 14 == 3
                 && (r >> 11) & 7 == 0
                 && (r >> 7) & 15 == 12
@@ -1694,6 +1695,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         if let Some(p) = &s.armv7a[b.core]
             && s.pins[b.core].0 && p.enter_irq(cpu)? { return Ok(()); }
         let now = s.timeline.now();
+        if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
         if let Some(p) = &mut s.armv7a[b.core] {
             let entry = p.before(cpu, pc, now)?;
             if let armv7a::Entry::Hint(hint) = entry { s.hint(b.core, hint); }

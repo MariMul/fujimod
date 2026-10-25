@@ -1,6 +1,7 @@
 //! A-profile architectural counters and timers, driven by the board timeline.
 pub mod cortex_a53;
 pub mod generic_timer;
+mod instructions;
 use generic_timer::{Clock, Register, Timer};
 use serde_json::{Value, json};
 
