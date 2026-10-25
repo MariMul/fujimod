@@ -99,15 +99,23 @@ export default function Recovery() {
         <ol class="recovery-steps">
           <li>
             <h2>Format an SD card as FAT32</h2>
-            <label class="recovery-system">
-              System
-              <select
-                value={system()}
-                onChange={(event) => setSystem(event.currentTarget.value as System)}
-              >
-                <For each={SYSTEMS}>{(name) => <option value={name}>{name}</option>}</For>
-              </select>
-            </label>
+            <div class="recovery-segmented" role="radiogroup" aria-label="System">
+              <For each={SYSTEMS}>
+                {(name) => (
+                  <label>
+                    <input
+                      class="visually-hidden"
+                      type="radio"
+                      name="recovery-system"
+                      value={name}
+                      checked={system() === name}
+                      onChange={() => setSystem(name)}
+                    />
+                    <span>{name}</span>
+                  </label>
+                )}
+              </For>
+            </div>
             <ol class="recovery-sub">
               <For each={FORMAT_STEPS[system()]}>{(step) => <li>{step}</li>}</For>
             </ol>
@@ -149,13 +157,11 @@ export default function Recovery() {
                     </For>
                   </div>
                 </Show>
-                <ol class="launcher-steps">
-                  <li>Download your camera’s firmware update from Fujifilm.</li>
-                  <li>
-                    <span class="launcher-drop">Drop the downloaded .DAT file here.</span>
-                    <span class="launcher-touch">Choose the downloaded .DAT file.</span>
-                  </li>
-                </ol>
+                <p class="recovery-dat">
+                  Download your camera’s firmware update from Fujifilm.{' '}
+                  <span class="launcher-drop">Drop the downloaded .DAT file here.</span>
+                  <span class="launcher-touch">Choose the downloaded .DAT file.</span>
+                </p>
                 <div class="launcher-actions">
                   <label class="launcher-button" for="recovery-file">
                     Choose File…
