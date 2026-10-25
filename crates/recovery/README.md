@@ -54,7 +54,11 @@ X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
 complete RAM image as `ffboot.bin`. The locator follows the update's single
 or initial/trained DDR-copy helper to choose the header. Three checked
 comparisons select the stock preloaded table, header and image paths while
-retaining cold reset mode. Both families use rooted section tables and checked
+retaining cold reset mode. Its plain and progress read paths share a checked
+read-only descriptor reader. Calls to that reader fetch update-installed
+addresses from the firmware namespace appended to `ffboot.bin`, using Agate
+ROM file I/O. Other addresses delegate to the unchanged stock reader. Program
+and erase paths retain their stock code. Both families use rooted section tables and checked
 source mappings; unrecognized table or update-device layouts refuse.
 
 XP5 emits raw `marble_init.bin` with the update's setup at byte zero. Its
