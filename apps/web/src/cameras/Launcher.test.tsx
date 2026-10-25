@@ -85,22 +85,24 @@ test('first use explains where firmware comes from and lists each emulated body'
   expect(host.querySelector('#firmware-prompt')?.getAttribute('for')).toBe('firmware-file');
   expect(host.querySelector('.resume-camera')).toBeNull();
   // FujiMod bodies first, then newest announcement first.
-  expect(text(host.querySelectorAll('.launcher-camera'))).toEqual([
+  expect(text(host.querySelectorAll('.downloads-camera'))).toEqual([
     'X70EXR Processor IIFujiMod1.10Download',
     'X-T10EXR Processor II1.31Download',
     'X-M1EXR Processor II1.50Download',
   ]);
   expect(
-    [...host.querySelectorAll<HTMLAnchorElement>('.launcher-download')].map((link) => link.href),
+    [...host.querySelectorAll<HTMLAnchorElement>('.downloads-link')].map((link) => link.href),
   ).toEqual(['https://example.com/X70', 'https://example.com/X-T10', 'https://example.com/X-M1']);
-  expect(host.querySelector('.launcher-search')).toBeNull();
+  expect(host.querySelector('.downloads-search')).toBeNull();
 });
 
 test('a long camera list scrolls in place and filters by search', () => {
   const bodies = Array.from({ length: 50 }, (_, n) => support(`X-T${n + 1}`, '1.00', `t${n}`));
   const { host } = mount([], false, '', false, bodies);
   const names = () =>
-    [...host.querySelectorAll('.launcher-camera-name')].map((node) => node.firstChild?.textContent);
+    [...host.querySelectorAll('.downloads-camera-name')].map(
+      (node) => node.firstChild?.textContent,
+    );
   expect(names()).toHaveLength(50);
   expect(host.querySelector('.launcher-more')).toBeNull();
   const search = host.querySelector<HTMLInputElement>('input[type=search]')!;
@@ -112,7 +114,7 @@ test('a long camera list scrolls in place and filters by search', () => {
   search.dispatchEvent(new InputEvent('input', { bubbles: true }));
   flush();
   expect(names()).toEqual([]);
-  expect(host.querySelector('.launcher-empty')?.textContent).toContain('gfx');
+  expect(host.querySelector('.downloads-empty')?.textContent).toContain('gfx');
 });
 
 test('returning visits resume saved cameras by recent use and start new ones from stored firmware', () => {

@@ -110,3 +110,7 @@
   font-size: 13px;
   color: #c7c7cc;
 }
+.recovery .launcher {
+  width: 100%;
+  margin: 4px 0 0;
+}

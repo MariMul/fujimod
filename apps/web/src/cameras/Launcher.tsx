@@ -1,8 +1,10 @@
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import type { CameraSupport } from '../home/state';
 import bodies from '../../data/cameras.json';
 import type { CameraRecord } from './store';
+import type { Firmware } from '../catalog';
+import { FirmwareDownloads } from './FirmwareDownloads';
 import './launcher.css';
 
 const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
@@ -14,16 +16,17 @@ const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3600],
   ['minute', 60],
 ];
-/** A search field appears once the supported list scrolls. */
-export const SEARCH_THRESHOLD = 8;
 const announced = new Map(bodies.map((body) => [body.name, body.announced]));
+/** Newest announcement first, then by model name. */
+export function byAnnouncement(a: Firmware, b: Firmware) {
+  return (
+    (announced.get(b.model) ?? '').localeCompare(announced.get(a.model) ?? '') ||
+    a.model.localeCompare(b.model, 'en', { numeric: true })
+  );
+}
 /** FujiMod bodies first, then newest announcement first. */
 export function cameraOrder(a: CameraSupport, b: CameraSupport) {
-  return (
-    Number(b.mod) - Number(a.mod) ||
-    (announced.get(b.firmware.model) ?? '').localeCompare(announced.get(a.firmware.model) ?? '') ||
-    a.firmware.model.localeCompare(b.firmware.model, 'en', { numeric: true })
-  );
+  return Number(b.mod) - Number(a.mod) || byAnnouncement(a.firmware, b.firmware);
 }
 export function lastUsed(camera: CameraRecord) {
   return camera.savedAt ?? camera.createdAt;
@@ -34,7 +37,6 @@ export function usedLabel(time: number, now: number) {
     if (seconds >= size) return `Used ${relative.format(-Math.floor(seconds / size), unit)}`;
   return 'Used just now';
 }
-const searchKey = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Idle emulator: resume or create a saved camera, or add firmware for a supported body. */
 export function CameraLauncher(props: {
@@ -49,10 +51,7 @@ export function CameraLauncher(props: {
   create: (firmware: CameraRecord) => void;
   now?: number;
 }) {
-  const [query, setQuery] = createSignal('');
   const emulated = () => props.supported.filter((camera) => camera.emu).sort(cameraOrder);
-  const matches = () =>
-    emulated().filter((camera) => searchKey(camera.firmware.model).includes(searchKey(query())));
   const model = (camera: CameraRecord) =>
     props.supported.find((entry) => entry.firmware.sha256 === camera.firmwareHash)?.firmware ?? {
       model: camera.name,
@@ -141,54 +140,13 @@ export function CameraLauncher(props: {
           {props.message}
         </span>
       </div>
-      <section class="launcher-supported" aria-labelledby="supported-cameras-heading">
-        <h4 id="supported-cameras-heading">Supported cameras</h4>
-        <Show when={emulated().length > SEARCH_THRESHOLD}>
-          <label class="launcher-search">
-            <Icon name="search" size={14} />
-            <input
-              type="search"
-              placeholder="Search"
-              aria-label="Search supported cameras"
-              value={query()}
-              onInput={(event) => setQuery(event.currentTarget.value)}
-            />
-          </label>
-        </Show>
-        <ul class="launcher-list launcher-table">
-          <For each={matches()}>
-            {(camera) => (
-              <li class="launcher-camera">
-                <span class="launcher-camera-name">
-                  {camera.firmware.model}
-                  <Show when={camera.firmware.processor}>
-                    <span>{camera.firmware.processor}</span>
-                  </Show>
-                </span>
-                <span class="launcher-camera-mod">
-                  <Show when={camera.mod}>
-                    <span class="launcher-tag">FujiMod</span>
-                  </Show>
-                </span>
-                <span class="launcher-version">{camera.firmware.version}</span>
-                <a
-                  class="launcher-download"
-                  href={camera.firmware.download_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Download ${camera.firmware.model} firmware ${camera.firmware.version} from Fujifilm`}
-                >
-                  Download
-                  <Icon name="download" size={13} />
-                </a>
-              </li>
-            )}
-          </For>
-        </ul>
-        <Show when={query() && matches().length === 0}>
-          <p class="launcher-empty">No supported camera matches “{query()}”.</p>
-        </Show>
-      </section>
+      <FirmwareDownloads
+        heading="Supported cameras"
+        rows={emulated().map((camera) => ({
+          firmware: camera.firmware,
+          tag: camera.mod ? 'FujiMod' : undefined,
+        }))}
+      />
     </div>
   );
 }
