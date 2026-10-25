@@ -43,7 +43,7 @@ impl Spec {
         }
         for (name, files) in self.files {
             let mut total = 0usize;
-            if files.len() > 4096 {
+            if files.len() > fujimod_emulator_storage::fat::MAX_ENTRIES {
                 return Err("card input has too many files".into());
             }
             let files = files
@@ -51,8 +51,8 @@ impl Spec {
                 .map(|(path, source)| {
                     let bytes = asset(&source)?;
                     total = total.saturating_add(bytes.len());
-                    if total > 64 << 20 {
-                        return Err("card input exceeds 64 MiB".into());
+                    if total > fujimod_emulator_storage::fat::MAX_PRELOAD_BYTES {
+                        return Err("card input exceeds 512 MiB".into());
                     }
                     Ok((path, bytes.clone()))
                 })

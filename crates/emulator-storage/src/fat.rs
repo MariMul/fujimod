@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Complete startup cards include both boot images and an official update.
+/// Host file reads retain their separate per-request bound.
+pub const MAX_PRELOAD_BYTES: usize = 512 * 1024 * 1024;
 pub const MAX_ENTRIES: usize = 4096;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -438,13 +441,15 @@ pub fn normalize_paths(files: &[(String, Vec<u8>)]) -> Result<Vec<String>, Strin
     let mut paths = BTreeSet::new();
     let mut directories = BTreeSet::new();
     let mut normalized = Vec::new();
-    let mut bytes = 0;
+    let mut bytes = 0usize;
     for (path, payload) in files {
         let path = normalize_path(path, false)?;
         let parts: Vec<_> = path.split('/').collect();
         let parents: Vec<_> = (1..parts.len()).map(|i| parts[..i].join("/")).collect();
-        bytes += payload.len();
-        if bytes > MAX_BYTES
+        bytes = bytes
+            .checked_add(payload.len())
+            .ok_or("Preload size overflows")?;
+        if bytes > MAX_PRELOAD_BYTES
             || paths.len() >= MAX_ENTRIES
             || paths.contains(&path)
             || directories.contains(&path)
@@ -730,6 +735,27 @@ mod tests {
         let mut o = options();
         o.sectors_per_cluster = 128;
         assert!(format(&o, &[]).is_err());
+    }
+
+    #[test]
+    fn startup_card_can_place_the_update_after_a_boot_file_larger_than_64_mib() {
+        let boot_size = 65 * 1024 * 1024;
+        let card = format(
+            &options(),
+            &[
+                ("FFBOOT.BIN".into(), vec![0; boot_size]),
+                ("FWUP0008.DAT".into(), vec![0x59; 512]),
+            ],
+        )
+        .unwrap();
+        let reader = Reader::new(&card).unwrap();
+        let tree = reader.tree().unwrap();
+        assert_eq!(
+            tree.iter().find(|f| f.name == "FFBOOT.BIN").unwrap().bytes as usize,
+            boot_size
+        );
+        assert_eq!(reader.read("FWUP0008.DAT", 512).unwrap(), vec![0x59; 512]);
+        assert!(reader.read("FFBOOT.BIN", MAX_BYTES).is_err());
     }
 }
 

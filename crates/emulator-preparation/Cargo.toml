@@ -13,6 +13,7 @@ doctest = false
 [dependencies]
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-devices.workspace = true
+fujimod-emulator-storage.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-catalog-settings.workspace = true
 fujimod-settings.workspace = true
