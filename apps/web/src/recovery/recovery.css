@@ -143,13 +143,8 @@
   outline: 2px solid #0a84ff;
   outline-offset: 2px;
 }
-.recovery .launcher-main > .recovery-ok,
 .recovery .launcher-main > .recovery-error {
   margin: 14px 0 0;
-}
-.recovery-ok {
-  color: var(--accent, #3ddc6a);
-  font-weight: 600;
 }
 .recovery-error {
   color: #ff6961;
@@ -161,6 +156,10 @@
 .recovery-download {
   margin-bottom: 14px;
   border: 0;
+}
+.recovery-download:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .recovery code {
   font-size: 13px;

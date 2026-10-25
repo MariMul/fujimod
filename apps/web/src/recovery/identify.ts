@@ -1,16 +1,14 @@
 import { catalog as reference, recovery, type PhysicalControls } from 'fujimod';
 import { describeBootHold } from '../cameras/boot-options';
 import type { DownloadRow } from '../cameras/FirmwareDownloads';
+import type { IdentifiedFirmware } from '../cameras/store';
 
-/** An official release from the catalog's firmware versions. */
-export interface Release {
-  id: string;
+/** What a firmware's recovery card holds and how its camera boots from the card. */
+export interface RecoveryPlan {
   model: string;
-  version: string;
-}
-
-export interface IdentifiedFirmware {
-  firmware: Release;
+  canBuild: boolean;
+  missing: string[];
+  files: string[];
   /** How to hold the camera to boot from the SD card, when the catalog documents it. */
   sdBoot?: string[];
 }
@@ -49,28 +47,33 @@ async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/** Identify the official update `dat` by content hash and read its SD boot combination. */
+/** Identify the official update `dat` by its content hash. */
 export async function identify(dat: Uint8Array<ArrayBuffer>): Promise<IdentifiedFirmware> {
   if (!dat.length || dat.length > 256 * 1024 * 1024)
     throw Error('Choose a firmware DAT smaller than 256 MB.');
   const hash = await sha256(dat);
   const release = reference.firmwareVersions().find((entry) => entry.update_sha256 === hash);
   if (!release) throw Error(`Unrecognized firmware · SHA-256 ${hash}`);
-  const firmware = { id: release.firmware_id, model: release.product, version: release.version };
-  const status = recovery.availability(firmware.id);
-  let sd;
+  return { id: release.firmware_id, model: release.product, version: release.version, sha256: hash };
+}
+
+/** The recovery card for `firmwareId`, read from its recipe without building it. */
+export function recoveryPlan(firmwareId: string): RecoveryPlan {
+  const model =
+    reference.firmwareVersions().find((entry) => entry.firmware_id === firmwareId)?.product ??
+    firmwareId;
+  const status = recovery.availability(firmwareId);
   try {
-    if (!status.canBuild)
-      throw Error(
-        `Recovery files can't be built for the ${firmware.model} yet. Missing: ${status.missing.join(', ')}.`,
-      );
-    sd = status.sdBoot;
+    const sd = status.sdBoot;
+    const controls = controlsFor(firmwareId);
+    return {
+      model,
+      canBuild: status.canBuild,
+      missing: [...status.missing],
+      files: [...status.outputFilenames],
+      sdBoot: sd && controls ? sd.hold.map((input) => describeBootHold(controls, input)) : undefined,
+    };
   } finally {
     status.free();
   }
-  const controls = controlsFor(firmware.id);
-  return {
-    firmware,
-    sdBoot: sd && controls ? sd.hold.map((input) => describeBootHold(controls, input)) : undefined,
-  };
 }

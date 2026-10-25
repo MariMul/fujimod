@@ -441,7 +441,7 @@ export function startHome(
     try {
       const current = (await cameras.list()).find((camera) => camera.id === record.id);
       if (!current) throw Error('This camera is no longer in browser storage.');
-      const blob = await cameras.firmware(record.id);
+      const blob = await cameras.firmware(current.firmwareHash);
       await processFile(new File([blob], current.fileName), false, undefined, undefined, current);
     } catch (error) {
       storageStatus(String(error), true);
@@ -459,7 +459,7 @@ export function startHome(
       s.cameraBusy = true;
     });
     try {
-      const read = async () => new File([await cameras.firmware(source.id)], source.fileName);
+      const read = async () => new File([await cameras.firmware(source.firmwareHash)], source.fileName);
       await processFile(await read(), false, undefined, read);
     } catch (error) {
       storageStatus(String(error), true);

@@ -94,10 +94,11 @@ for (const type of [chromium, webkit]) {
       const file = new File([new Uint8Array([1, 2, 3])], 'storage-test.dat');
       const firmware = { id: 'storage-test', model: 'Storage test', version: '1', sha256: 'test' };
       const camera = await store.create(file, firmware, false);
+      const another = { ...firmware, sha256: 'test-2' };
       const add = IDBObjectStore.prototype.add;
       let writes = 0;
       IDBObjectStore.prototype.add = function (...args) {
-        if (this.name === 'firmware') {
+        if (this.name === 'library-bytes') {
           writes++;
           throw new DOMException('Injected write abort', 'AbortError');
         }
@@ -105,7 +106,7 @@ for (const type of [chromium, webkit]) {
       };
       let failed = false;
       try {
-        await store.create(file, firmware, false);
+        await store.create(file, another, false);
       } catch (error) {
         failed = error instanceof DOMException && error.name === 'AbortError';
       } finally {
@@ -142,6 +143,71 @@ for (const type of [chromium, webkit]) {
       `${type.name()}: transient read recovered; persistent error shown; write atomic and unrepeated; idle viewer fits the launcher, scrolls and opens chooser`,
     );
     await context.close();
+
+    // A version 1 database, with a firmware copy per camera, becomes one library entry.
+    const upgradeContext = await browser.newContext();
+    const upgradePage = await upgradeContext.newPage();
+    // A static asset keeps the app from opening the database first.
+    await upgradePage.goto(new URL('brand.png', base).href);
+    const upgraded = await upgradePage.evaluate(async () => {
+      await new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('fujimod-cameras', 1);
+        open.onupgradeneeded = () => {
+          open.result.createObjectStore('cameras', { keyPath: 'id' });
+          open.result.createObjectStore('firmware');
+          open.result.createObjectStore('saves');
+        };
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction(['cameras', 'firmware'], 'readwrite');
+          for (const [id, createdAt] of [
+            ['first', 1],
+            ['second', 2],
+          ] as const) {
+            tx.objectStore('cameras').add({
+              id,
+              name: 'Upgrade test · 1',
+              firmwareId: 'upgrade-test',
+              firmwareHash: 'upgrade',
+              fileName: 'upgrade.dat',
+              createdAt,
+              revision: 0,
+              modEnabled: false,
+            });
+            tx.objectStore('firmware').add(new Uint8Array([4, 5, 6]).buffer, id);
+          }
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+      });
+      const { CameraStore }: typeof import('./store') = await import('/src/' + 'cameras/store.ts');
+      const store = new CameraStore();
+      const library = await store.library();
+      const bytes = [...new Uint8Array(await (await store.firmware('upgrade')).arrayBuffer())];
+      const cameras = (await store.list()).map((camera) => camera.id);
+      const stores = await new Promise<string[]>((resolve, reject) => {
+        const open = indexedDB.open('fujimod-cameras');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          resolve([...open.result.objectStoreNames]);
+          open.result.close();
+        };
+      });
+      return { library, bytes, cameras, stores };
+    });
+    assert.deepEqual(
+      upgraded.library.map((entry) => [entry.sha256, entry.firmwareId, entry.name]),
+      [['upgrade', 'upgrade-test', 'Upgrade test · 1']],
+    );
+    assert.deepEqual(upgraded.bytes, [4, 5, 6]);
+    assert.deepEqual(upgraded.cameras.sort(), ['first', 'second']);
+    assert.deepEqual(upgraded.stores.sort(), ['cameras', 'library', 'library-bytes', 'saves']);
+    console.log(`${type.name()}: version 1 cameras share one library firmware after upgrade`);
+    await upgradeContext.close();
   } finally {
     await browser.close();
   }

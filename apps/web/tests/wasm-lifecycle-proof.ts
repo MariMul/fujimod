@@ -188,7 +188,7 @@ try {
   const latest = (await store.list()).find((c) => c.id === record.id)!;
   attach();
   const restored = await engine.boot(
-    await (await store.firmware(record.id)).arrayBuffer(),
+    await (await store.firmware(record.firmwareHash)).arrayBuffer(),
     { ...config, camera: { id: record.id, revision: latest.revision, modEnabled: false } },
     () => {},
   );

@@ -1,12 +1,12 @@
-import { For, Show, createSignal, onSettled } from 'solid-js';
+import { For, Show, createMemo, createSignal, onSettled } from 'solid-js';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { initialize } from 'fujimod';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 
-import { identify, recoveryCameras, type IdentifiedFirmware } from './identify';
-import { CameraStore, type CameraRecord } from '../cameras/store';
+import { identify, recoveryCameras, recoveryPlan } from './identify';
+import { CameraStore, type LibraryFirmware } from '../cameras/store';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
 import { recoveryCard } from './card';
@@ -21,63 +21,70 @@ function message(error: unknown) {
 }
 
 export default function Recovery() {
+  const store = new CameraStore();
   const [system, setSystem] = createSignal<System>('macOS');
-  const [identified, setIdentified] = createSignal<IdentifiedFirmware>();
-  const [card, setCard] = createSignal<{ names: string[]; zip: Blob }>();
+  const [library, setLibrary] = createSignal<LibraryFirmware[]>([]);
+  const [selected, setSelected] = createSignal<string>();
+  const [catalogReady, setCatalogReady] = createSignal(false);
   const [error, setError] = createSignal('');
-  const [busy, setBusy] = createSignal(false);
-
+  const [adding, setAdding] = createSignal(false);
+  const [building, setBuilding] = createSignal(false);
+  const [buildError, setBuildError] = createSignal('');
   const [dragging, setDragging] = createSignal(false);
-  const [saved, setSaved] = createSignal<CameraRecord[]>([]);
-  const [chosenSaved, setChosenSaved] = createSignal<string>();
   const [cameras, setCameras] = createSignal<DownloadRow[]>([]);
-  // The catalog's boot combinations come from the Wasm catalog.
-  let ready: Promise<unknown> = Promise.resolve();
-  onSettled(() => {
-    ready = initialize().then(() => setCameras(recoveryCameras()));
-    ready.catch((caught: unknown) => setError(message(caught)));
-    setSystem(detectSystem(navigator.userAgent));
-    // One row per stored firmware, from cameras saved in the emulator.
-    new CameraStore().list().then(
-      (records) =>
-        setSaved(
-          records.filter(
-            (record, index) =>
-              records.findIndex((other) => other.firmwareHash === record.firmwareHash) === index,
-          ),
-        ),
-      () => setSaved([]),
-    );
+
+  const chosen = () => library().find((firmware) => firmware.sha256 === selected());
+  // The card's files and boot buttons come from the Wasm catalog, without building the card.
+  const plan = createMemo(() => {
+    const firmware = chosen();
+    return catalogReady() && firmware ? recoveryPlan(firmware.firmwareId) : undefined;
   });
 
+  let ready: Promise<unknown> = Promise.resolve();
+  onSettled(() => {
+    ready = initialize().then(() => {
+      setCameras(recoveryCameras());
+      setCatalogReady(true);
+    });
+    ready.catch((caught: unknown) => setError(message(caught)));
+    setSystem(detectSystem(navigator.userAgent));
+    store.library().then(setLibrary, (caught: unknown) => setError(message(caught)));
+  });
+
+  function select(sha256: string) {
+    setBuildError('');
+    setSelected(sha256);
+  }
   async function chooseFile(file: File | undefined) {
     if (!file) return;
-    setChosenSaved(undefined);
-    await chooseDat(new Uint8Array(await file.arrayBuffer()));
-  }
-  async function chooseSaved(camera: CameraRecord) {
-    setChosenSaved(camera.id);
-    const blob: Blob = await new CameraStore().firmware(camera.id);
-    await chooseDat(new Uint8Array(await blob.arrayBuffer()));
-  }
-  async function chooseDat(bytes: Uint8Array<ArrayBuffer>) {
     setError('');
-    setIdentified(undefined);
-    setCard(undefined);
-    setBusy(true);
+    setAdding(true);
     try {
       await ready;
-      const result = await identify(bytes);
-      setIdentified(result);
-      const files = recoveryCard(result.firmware.id, bytes);
-      const zip = await zipBlob(
-        files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
-      );
-      setCard({ names: files.map((entry) => entry.name), zip });
+      const firmware = await identify(new Uint8Array(await file.arrayBuffer()));
+      const entry = await store.addFirmware(file, firmware);
+      setLibrary(await store.library());
+      select(entry.sha256);
     } catch (caught) {
       setError(message(caught));
     } finally {
-      setBusy(false);
+      setAdding(false);
+    }
+  }
+  async function download(firmware: LibraryFirmware) {
+    setBuildError('');
+    setBuilding(true);
+    try {
+      const bytes = new Uint8Array(await (await store.firmware(firmware.sha256)).arrayBuffer());
+      const files = recoveryCard(firmware.firmwareId, bytes);
+      const zip = await zipBlob(
+        files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
+      );
+      downloadBlob(zip, 'fujimod-recovery.zip');
+    } catch (caught) {
+      setBuildError(message(caught));
+    } finally {
+      setBuilding(false);
     }
   }
 
@@ -121,24 +128,23 @@ export default function Recovery() {
               }}
             >
               <div class="launcher-main">
-                <Show when={saved().length > 0}>
+                <Show when={library().length > 0}>
                   <div class="recovery-saved" role="radiogroup" aria-label="Firmware in this browser">
-                    <For each={saved()}>
-                      {(camera) => (
+                    <For each={library()}>
+                      {(firmware) => (
                         <label class="recovery-saved-row">
                           <input
                             class="visually-hidden"
                             type="radio"
                             name="recovery-saved"
-                            checked={chosenSaved() === camera.id}
-                            disabled={busy()}
-                            onChange={() => void chooseSaved(camera)}
+                            checked={selected() === firmware.sha256}
+                            onChange={() => select(firmware.sha256)}
                           />
                           <span class="recovery-radio" aria-hidden="true">
                             <Icon name="check" size={12} />
                           </span>
                           <span class="launcher-row-text">
-                            <strong>{camera.name}</strong>
+                            <strong>{firmware.name}</strong>
                             <span>In this browser</span>
                           </span>
                         </label>
@@ -161,19 +167,12 @@ export default function Recovery() {
                   id="recovery-file"
                   type="file"
                   accept=".dat,.DAT,application/octet-stream"
-                  disabled={busy()}
+                  disabled={adding()}
                   onChange={(event) => {
                     void chooseFile(event.currentTarget.files?.[0]);
                     event.currentTarget.value = '';
                   }}
                 />
-                <Show when={identified()}>
-                  {(result) => (
-                    <p class="recovery-ok">
-                      {result().firmware.model} · {result().firmware.version}
-                    </p>
-                  )}
-                </Show>
                 <Show when={error()}>
                   <p class="recovery-error" role="alert">
                     {error()}
@@ -184,25 +183,42 @@ export default function Recovery() {
             </div>
           </li>
 
-          <li class={{ 'recovery-pending': !card() }}>
+          <li class={{ 'recovery-pending': !plan()?.canBuild }}>
             <h2>Copy the recovery files onto the card</h2>
             <Show
-              when={card()}
+              when={plan()}
               fallback={
                 <p class="recovery-dim">Choose a firmware above to build the recovery files.</p>
               }
             >
-              {(built) => (
-                <>
+              {(card) => (
+                <Show
+                  when={card().canBuild}
+                  fallback={
+                    <p class="recovery-error">
+                      Recovery files can't be built for the {card().model} yet. Missing:{' '}
+                      {card().missing.join(', ')}.
+                    </p>
+                  }
+                >
                   <button
                     class="launcher-button recovery-download"
-                    onClick={() => downloadBlob(built().zip, 'fujimod-recovery.zip')}
+                    disabled={building()}
+                    onClick={() => {
+                      const firmware = chosen();
+                      if (firmware) void download(firmware);
+                    }}
                   >
-                    Download recovery files
+                    {building() ? 'Building…' : 'Download recovery files'}
                   </button>
+                  <Show when={buildError()}>
+                    <p class="recovery-error" role="alert">
+                      {buildError()}
+                    </p>
+                  </Show>
                   <p>
                     Unzip onto the card’s top level:{' '}
-                    <For each={built().names}>
+                    <For each={card().files}>
                       {(name, i) => (
                         <span>
                           {i() ? ', ' : ''}
@@ -213,19 +229,19 @@ export default function Recovery() {
                     .
                   </p>
                   <p>Insert the card into the camera.</p>
-                </>
+                </Show>
               )}
             </Show>
           </li>
 
-          <li class={{ 'recovery-pending': !identified() }}>
+          <li class={{ 'recovery-pending': !plan() }}>
             <h2>Unplug the camera from USB</h2>
           </li>
 
-          <li class={{ 'recovery-pending': !identified() }}>
+          <li class={{ 'recovery-pending': !plan() }}>
             <h2>Boot from the SD card</h2>
             <Show
-              when={identified()}
+              when={plan()}
               fallback={
                 <p class="recovery-dim">
                   Choose a firmware above to see instructions for your camera.
@@ -242,7 +258,7 @@ export default function Recovery() {
                     when={result().sdBoot}
                     fallback={
                       <p class="recovery-error">
-                        The {result().firmware.model}’s SD boot buttons are not in the catalog yet.
+                        The {result().model}’s SD boot buttons are not in the catalog yet.
                       </p>
                     }
                   >
@@ -258,7 +274,7 @@ export default function Recovery() {
             </Show>
           </li>
 
-          <li class={{ 'recovery-pending': !identified() }}>
+          <li class={{ 'recovery-pending': !plan() }}>
             <h2>Flash the firmware as usual</h2>
             <p>Follow the on-screen firmware update to flash the official .DAT from the card.</p>
           </li>

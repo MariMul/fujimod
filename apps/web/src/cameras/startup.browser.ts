@@ -102,7 +102,7 @@ for (const type of [chromium, webkit].filter(
       const store = new CameraStore();
       return Promise.all(
         (await store.list()).map(async (camera) => {
-          const file = await store.firmware(camera.id);
+          const file = await store.firmware(camera.firmwareHash);
           const hash = [
             ...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer())),
           ]
