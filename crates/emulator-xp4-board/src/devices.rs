@@ -164,7 +164,7 @@ impl Devices {
         Ok(())
     }
     pub fn gpio(&mut self, inputs: [u16; 16]) -> Result<(), String> {
-        let base = fujimod_emulator_xp4_io::gpio::BASE;
+        let base = 0xfff41000;
         if self.pins.is_some()
             || self
                 .windows
