@@ -1,7 +1,7 @@
 import { Miniflare } from 'miniflare';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // Test files run in parallel; each bundles the Worker into its own directory.
@@ -14,13 +14,14 @@ execFileSync(
 const worker = readFileSync(join(outdir, 'worker.js'), 'utf8');
 rmSync(outdir, { recursive: true });
 const origin = 'https://justjake.github.io';
-export function runtime(
+/** A local Worker with the D1 index schema applied, as `wrangler d1 migrations apply` does. */
+export async function runtime(
   options: {
     bindings?: Record<string, string>;
     outboundService?: (request: import('miniflare').Request) => Promise<Response>;
   } = {},
 ) {
-  return new Miniflare({
+  const mf = new Miniflare({
     workers: [
       {
         config: {
@@ -53,6 +54,7 @@ export function runtime(
               namespace: '1003',
               simple: { limit: 30, period: 60 },
             },
+            REPORTS_INDEX: { type: 'd1', name: 'reports' },
             ROOMS: { type: 'durable-object', worker: 'sharing', exportName: 'ShareRoom' },
             TURN_BUDGET: { type: 'durable-object', worker: 'sharing', exportName: 'TurnBudget' },
             CONNECTIONS: {
@@ -73,4 +75,13 @@ export function runtime(
       },
     ],
   });
+  const index = await mf.getD1Database('REPORTS_INDEX');
+  for (const migration of readdirSync(new URL('./migrations', import.meta.url)).sort())
+    for (const statement of readFileSync(new URL(`./migrations/${migration}`, import.meta.url), 'utf8')
+      .replace(/^--.*$/gm, '')
+      .split(';')
+      .map((text) => text.trim())
+      .filter(Boolean))
+      await index.prepare(statement).run();
+  return mf;
 }

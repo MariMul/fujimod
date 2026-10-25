@@ -17,6 +17,7 @@
     "issue-reports.ts",
     "error-logs.ts",
     "client-error-log.ts",
+    "bucket.ts",
     "env.ts",
     "../domain-endpoint/worker.ts"
   ]

@@ -38,7 +38,7 @@ test('a log entry names the browser session, page and error, separate from the W
 });
 
 await test('intake accepts valid records from allowed origins only', async () => {
-  const mf = runtime();
+  const mf = await runtime();
   try {
     const post = (body: string, from = origin) =>
       mf.dispatchFetch(url, {

@@ -74,7 +74,7 @@ async function until(predicate: () => boolean | Promise<boolean>) {
 }
 
 await test('real Worker routes encrypted signaling to assigned peers and revokes owner rooms', async () => {
-  const mf = runtime();
+  const mf = await runtime();
   try {
     const health = await mf.dispatchFetch('https://worker.example/health');
     assert.deepEqual(await health.json(), { service: 'fujimod-usb-sharing' });
@@ -130,7 +130,7 @@ await test('master secret stays server-side; one temporary credential per room i
       credential: 'temporary-password',
     },
   ];
-  const mf = runtime({
+  const mf = await runtime({
     bindings: {
       TURN_KEY_ID: 'key-id',
       TURN_API_TOKEN: 'MASTER-SECRET',
@@ -167,14 +167,14 @@ await test('master secret stays server-side; one temporary credential per room i
 });
 
 await test('invalid frames and partial credential configuration fail closed', async () => {
-  const mf = runtime({ bindings: { TURN_KEY_ID: 'missing-token' } });
+  const mf = await runtime({ bindings: { TURN_KEY_ID: 'missing-token' } });
   try {
     const owner = await connect(mf, room(), 'host');
     assert.match(owner.ready.message, /not configured/);
   } finally {
     await mf.dispose();
   }
-  const direct = runtime();
+  const direct = await runtime();
   try {
     const owner = await connect(direct, room(), 'host');
     const client = await connect(direct, room(), 'client');

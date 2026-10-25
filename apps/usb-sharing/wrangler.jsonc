@@ -19,6 +19,14 @@
     { "tag": "v2", "new_sqlite_classes": ["IssueReports"] },
   ],
   "r2_buckets": [{ "binding": "ISSUE_REPORTS", "bucket_name": "fujimod-issue-reports" }],
+  "d1_databases": [
+    {
+      "binding": "REPORTS_INDEX",
+      "database_name": "fujimod-reports",
+      "database_id": "73658419-4432-430f-9ac8-53fa5a87d19b",
+      "migrations_dir": "migrations",
+    },
+  ],
   "ratelimits": [
     { "name": "ISSUE_LIMIT", "namespace_id": "1002", "simple": { "limit": 5, "period": 60 } },
     { "name": "ERROR_LIMIT", "namespace_id": "1003", "simple": { "limit": 30, "period": 60 } },

@@ -1,5 +1,6 @@
 import type { Env, BudgetRecord } from './env.ts';
 import { DurableObject } from 'cloudflare:workers';
+import { putObject } from './bucket.ts';
 import { parseReportMetadata, reportEntries } from '../web/src/bug/report-link.ts';
 const json = (value: object, status = 200) =>
   Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -101,12 +102,21 @@ export class IssueReports extends DurableObject<Env> {
       const count = budget?.day === day ? budget.count : 0;
       if (count >= 50) return json({ error: 'Daily report limit reached' }, 429);
       await this.ctx.storage.put('budget', { day, count: count + 1 });
-      await this.env.ISSUE_REPORTS.put(`${id}/report.tar`, archive, {
+      const entry = {
+        kind: 'issue-report' as const,
+        id,
+        summary: description.trim().split('\n')[0].slice(0, 200),
+        metadata: { firmware: metadata.firmware, commit: metadata.commit, files: entries.length },
+      };
+      await putObject(this.env, `${id}/report.tar`, archive, entry, {
         httpMetadata: { contentType: 'application/x-tar' },
       });
-      await this.env.ISSUE_REPORTS.put(
+      await putObject(
+        this.env,
         `${id}/metadata.json`,
         JSON.stringify({ metadata, description, entries, received: new Date().toISOString() }),
+        entry,
+        { httpMetadata: { contentType: 'application/json' } },
       );
       await this.ctx.storage.put(id, { state: 'submitting' });
       try {

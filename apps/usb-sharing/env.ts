@@ -2,6 +2,7 @@ import type { IssueReports } from './issue-reports.ts';
 import type { ShareRoom, TurnBudget } from './worker.ts';
 export interface Env {
   ISSUE_REPORTS: R2Bucket;
+  REPORTS_INDEX: D1Database;
   ISSUE_LIMIT: RateLimit;
   ERROR_LIMIT: RateLimit;
   CONNECTIONS: RateLimit;

@@ -44,7 +44,7 @@ async function submission(overrides: Record<string, unknown> = {}) {
 }
 await test('explicit intake saves privately, creates one issue and deduplicates retries', async () => {
   let issues = 0;
-  const mf = runtime({
+  const mf = await runtime({
     bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async (request) => {
       assert.equal(request.url, 'https://api.github.com/repos/justjake/fujimod/issues');
@@ -76,6 +76,18 @@ await test('explicit intake saves privately, creates one issue and deduplicates 
       new Uint8Array(await (await bucket.get(`${id}/report.tar`))!.arrayBuffer()),
       tar,
     );
+    const rows = await (await mf.getD1Database('REPORTS_INDEX'))
+      .prepare('SELECT key, kind, id, bytes, summary, metadata FROM objects ORDER BY key')
+      .all<{ key: string; kind: string; id: string; bytes: number; summary: string; metadata: string }>();
+    assert.deepEqual(
+      rows.results.map(({ key, kind, summary }) => [key, kind, summary]),
+      [
+        [`${id}/metadata.json`, 'issue-report', 'Menu froze'],
+        [`${id}/report.tar`, 'issue-report', 'Menu froze'],
+      ],
+    );
+    assert.equal(rows.results[1].bytes, tar.length);
+    assert.equal(JSON.parse(rows.results[1].metadata).firmware, 'x70-110');
     assert.equal(
       (await mf.dispatchFetch(`https://worker.example/issue-reports/${id}/report.tar`)).status,
       404,
@@ -86,7 +98,7 @@ await test('explicit intake saves privately, creates one issue and deduplicates 
 });
 await test('rejects unconfigured service, invalid data and untrusted origins without submitting', async () => {
   let calls = 0;
-  const mf = runtime({
+  const mf = await runtime({
     outboundService: async () => {
       calls++;
       throw Error('Must not submit');
@@ -107,7 +119,7 @@ await test('rejects unconfigured service, invalid data and untrusted origins wit
   } finally {
     await mf.dispose();
   }
-  const configured = runtime({
+  const configured = await runtime({
     bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async () => {
       calls++;
@@ -131,7 +143,7 @@ await test('rejects unconfigured service, invalid data and untrusted origins wit
 });
 await test('uncertain GitHub response retains the archive without duplicate issues', async () => {
   let calls = 0;
-  const mf = runtime({
+  const mf = await runtime({
     bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async () => {
       calls++;
