@@ -16,7 +16,14 @@
       "version": "3.11",
       "internal_version": "1.50",
       "update_sha256": "fdee77287b64f789da8e1b552caa3ccb45f8f2409adafc9e05811932d0871296",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx-50r/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx-50r/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "gfx50s-452",
@@ -32,7 +39,14 @@
       "version": "2.01",
       "internal_version": "1.81",
       "update_sha256": "bfa394d40b7e9cdda2fd78ac1e5ebe21dbe1e41dbb1d6cc615b88d6c10295897",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x10/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x10/",
+      "boot_rom": {
+        "content": {
+          "size": 16384,
+          "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+        },
+        "address": 2147483648
+      }
     },
     {
       "firmware_id": "x100-211",
@@ -48,7 +62,14 @@
       "version": "2.12",
       "internal_version": "1.68",
       "update_sha256": "c0d4c31985aaf793e060924fbfdfbd7cf205a27986cda43c1806688e01523f89",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100f/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100f/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "x100s-121",
@@ -168,7 +189,14 @@
       "version": "2.71",
       "internal_version": "3.63",
       "update_sha256": "2cd3be7c65a3c269a1be230180d6da9634c37755389963705c35ae1081090a63",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e1/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e1/",
+      "boot_rom": {
+        "content": {
+          "size": 16384,
+          "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+        },
+        "address": 2147483648
+      }
     },
     {
       "firmware_id": "xe2-411",
@@ -192,7 +220,14 @@
       "version": "1.32",
       "internal_version": "1.82",
       "update_sha256": "28a7786ee3cd86b44d714daaa19f82e0d61710798cffd0fa142c1a960a67830d",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e3/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-e3/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "xe4-201",
@@ -216,7 +251,14 @@
       "version": "1.01",
       "internal_version": "1.88",
       "update_sha256": "776c992ad4ead288d3fe25db8e8bbb59349a74044e75b976a82b9ec5ad653a9b",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xf1/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/xf1/",
+      "boot_rom": {
+        "content": {
+          "size": 16384,
+          "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+        },
+        "address": 2147483648
+      }
     },
     {
       "firmware_id": "xf10-112",
@@ -232,7 +274,14 @@
       "version": "2.15",
       "internal_version": "1.90",
       "update_sha256": "98187635e5b3e8356fbd9ad91d2d9b45863f2b451d8ce04f3a418d06e99646d0",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h1/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h1/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "xh2-530",
@@ -296,7 +345,14 @@
       "version": "3.82",
       "internal_version": "3.64",
       "update_sha256": "709e26f6dd77e922660010628fb20937b269be871b188b8810eb2cb4d5d33236",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro1/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro1/",
+      "boot_rom": {
+        "content": {
+          "size": 16384,
+          "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+        },
+        "address": 2147483648
+      }
     },
     {
       "firmware_id": "xpro2-511",
@@ -304,7 +360,14 @@
       "version": "5.11",
       "internal_version": "2.45",
       "update_sha256": "6f9792e53a776ee116732a6df4425b0f5393ad2f53655f573924afe9c61dc54d",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro2/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-pro2/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "xpro3-200",
@@ -336,7 +399,14 @@
       "version": "1.02",
       "internal_version": "1.62",
       "update_sha256": "049e1b5e726cce2e96a780caeb6da9f0f9f8b25dc5378c251a3cac4631ad163f",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s1/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-s1/",
+      "boot_rom": {
+        "content": {
+          "size": 16384,
+          "sha256": "7dc7e332a90802d9069d54be4487df0cc731820c9942692245e9ce5a5cec31d7"
+        },
+        "address": 2147483648
+      }
     },
     {
       "firmware_id": "xs10-311",
@@ -384,7 +454,14 @@
       "version": "4.41",
       "internal_version": "2.70",
       "update_sha256": "dd02ec5a862cf0e6f03a519a600ed99435efa442848249945b13ca6d78fabb25",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t2/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t2/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "xt20-211",
@@ -392,7 +469,14 @@
       "version": "2.11",
       "internal_version": "1.46",
       "update_sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t20/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t20/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "xt200-116",

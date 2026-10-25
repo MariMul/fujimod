@@ -26,6 +26,9 @@ pub struct FirmwareVersion {
     pub update_sha256: String,
     /// Official camera firmware page with current releases and update instructions.
     pub download_url: String,
+    /// Supplied processor boot ROM associated with this firmware release.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boot_rom: Option<crate::reference::BootRomIdentity>,
 }
 
 /// Generated mappings for known updates, including bodies without emulator profiles.
@@ -116,6 +119,12 @@ impl FirmwareVersions {
         for release in &document.releases {
             fujimod_catalog_identity::validate_id(&release.firmware_id)?;
             fujimod_catalog_identity::validate_sha256(&release.update_sha256)?;
+            if let Some(rom) = &release.boot_rom {
+                rom.content.validate()?;
+                if rom.address.checked_add(rom.content.size).is_none() {
+                    return Err("boot ROM extent overflows".into());
+                }
+            }
             let public = version(&release.version).ok_or("invalid public firmware version")?;
             let internal = InternalVersion::parse(&release.internal_version)
                 .ok_or("invalid internal firmware version")?;
@@ -206,6 +215,44 @@ mod tests {
                 (internal, public)
             );
         }
+    }
+
+    #[test]
+    fn processor_rom_identities_cover_releases_without_execution_graphs() {
+        let map = FirmwareVersions::bundled().unwrap();
+        let rom = |id: &str| {
+            map.releases
+                .iter()
+                .find(|r| r.firmware_id == id)
+                .unwrap()
+                .boot_rom
+                .as_ref()
+                .unwrap()
+        };
+        assert_eq!(rom("x10-201"), rom("xpro1-382"));
+        assert_eq!(
+            (rom("x10-201").address, rom("x10-201").content.size),
+            (0x80000000, 0x4000)
+        );
+        assert_eq!(
+            (rom("xpro2-511").address, rom("xpro2-511").content.size),
+            (0xfff00000, 0x10000)
+        );
+        let mut changed = map.clone();
+        changed
+            .releases
+            .iter_mut()
+            .find(|r| r.firmware_id == "xpro2-511")
+            .unwrap()
+            .boot_rom
+            .as_mut()
+            .unwrap()
+            .address = u64::MAX;
+        assert!(
+            FirmwareVersions::decode(&serde_json::to_vec(&changed).unwrap())
+                .unwrap_err()
+                .contains("overflows")
+        );
     }
 
     #[test]
