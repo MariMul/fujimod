@@ -21,6 +21,9 @@ test('controls preserve the X70 startup inputs and service guide', () => {
   ]);
 });
 
-test('an experimental X-M5 entry is absent from the confirmed controls', () => {
-  expect(() => bootCombination(xm5 as PhysicalControls, 'sd')).toThrow('No sd boot combination');
+test('X-M5 boots from SD with Q and the front command dial pressed, USB unplugged', () => {
+  expect(bootCombination(xm5 as PhysicalControls, 'sd')).toEqual({
+    usb: false,
+    hold: [{ id: 'quick_menu_button' }, { id: 'front_command_dial.press' }],
+  });
 });
