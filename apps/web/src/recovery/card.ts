@@ -1,3 +1,5 @@
+import { recovery } from 'fujimod';
+
 /** One file of an SD recovery card. */
 export interface RecoveryFile {
   name: string;
@@ -5,6 +7,17 @@ export interface RecoveryFile {
 }
 
 /** The SD recovery card files for `firmwareId`, built from its official update `dat`. */
-export function recoveryCard(_firmwareId: string, _dat: Uint8Array): Promise<RecoveryFile[]> {
-  return Promise.reject(Error('Recovery files are not built yet.'));
+export function recoveryCard(firmwareId: string, dat: Uint8Array): RecoveryFile[] {
+  const card = recovery.build(firmwareId, dat);
+  try {
+    return card.takeFiles().map((file) => {
+      try {
+        return { name: file.name, data: new Uint8Array(file.bytes) };
+      } finally {
+        file.free();
+      }
+    });
+  } finally {
+    card.free();
+  }
 }

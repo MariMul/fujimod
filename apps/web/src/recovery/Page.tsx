@@ -63,7 +63,7 @@ export default function Recovery() {
       await ready;
       const result = await identify(bytes);
       setIdentified(result);
-      const files = await recoveryCard(result.firmware.id, bytes);
+      const files = recoveryCard(result.firmware.id, bytes);
       const zip = await zipBlob(
         files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
       );
@@ -200,13 +200,13 @@ export default function Recovery() {
               {(built) => (
                 <>
                   <button
-                    class="recovery-download"
+                    class="launcher-button recovery-download"
                     onClick={() => downloadBlob(built().zip, 'fujimod-recovery.zip')}
                   >
                     Download recovery files
                   </button>
                   <p>
-                    Unzip onto the card's top level:{' '}
+                    Unzip onto the card’s top level:{' '}
                     <For each={built().names}>
                       {(name, i) => (
                         <span>
@@ -217,9 +217,7 @@ export default function Recovery() {
                     </For>
                     .
                   </p>
-                  <p>
-                    Copy the official .DAT onto the card as well, then insert it into the camera.
-                  </p>
+                  <p>Insert the card into the camera.</p>
                 </>
               )}
             </Show>
@@ -241,10 +239,21 @@ export default function Recovery() {
                     With the camera off, hold these while switching it on, and keep holding until
                     the screen lights:
                   </p>
-                  <ul class="recovery-holds">
-                    <For each={result().sdBoot}>{(hold) => <li>{hold}</li>}</For>
-                    <li>also hold DISP/BACK, to enter firmware update</li>
-                  </ul>
+                  <Show
+                    when={result().sdBoot}
+                    fallback={
+                      <p class="recovery-error">
+                        The {result().firmware.model}’s SD boot buttons are not in the catalog yet.
+                      </p>
+                    }
+                  >
+                    {(holds) => (
+                      <ul class="recovery-holds">
+                        <For each={holds()}>{(hold) => <li>{hold}</li>}</For>
+                        <li>also hold DISP/BACK, to enter firmware update</li>
+                      </ul>
+                    )}
+                  </Show>
                 </>
               )}
             </Show>

@@ -61,7 +61,7 @@
   },
   "controls": {
     "movie_recording_button": {
-      "name": "t (movie recording) button",
+      "name": "Movie recording button",
       "location": "top",
       "manual_page": 2,
       "face": null,

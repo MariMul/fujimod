@@ -15,10 +15,14 @@ export function describeBootHold(document: PhysicalControls, input: BootHold): s
     return `hold ${action.toUpperCase()} on the ${control.name.split('/')[0]!.toLowerCase()}`;
   }
   if (input.stage === 'full') return `press the ${control.name.toLowerCase()} all the way down`;
+  if (action === 'press') return `press in and hold the ${control.name.toLowerCase()}`;
   return `hold ${control.face ?? control.name}`;
 }
 
-export function panelBootCombos(document: PhysicalControls, modes: BootMode[]): DevicePanel['combos'] {
+export function panelBootCombos(
+  document: PhysicalControls,
+  modes: BootMode[],
+): DevicePanel['combos'] {
   const labels: Record<BootMode, string> = {
     sd: 'SD card boot',
     firmware_update: 'Firmware update',

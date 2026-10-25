@@ -1,16 +1,19 @@
-import { catalog as reference, type PhysicalControls } from 'fujimod';
-import { validateCatalog, type Catalog, type Firmware } from '../catalog';
-import { bootCombination, describeBootHold } from '../cameras/boot-options';
+import { catalog as reference, recovery, type PhysicalControls } from 'fujimod';
+import { describeBootHold } from '../cameras/boot-options';
 import type { DownloadRow } from '../cameras/FirmwareDownloads';
 
-export interface IdentifiedFirmware {
-  firmware: Firmware;
-  /** How to hold the camera to boot from the SD card. */
-  sdBoot: string[];
+/** An official release from the catalog's firmware versions. */
+export interface Release {
+  id: string;
+  model: string;
+  version: string;
 }
 
-declare const __FUJIMOD_INITIAL_CATALOG__: Catalog;
-const catalog = validateCatalog(__FUJIMOD_INITIAL_CATALOG__);
+export interface IdentifiedFirmware {
+  firmware: Release;
+  /** How to hold the camera to boot from the SD card, when the catalog documents it. */
+  sdBoot?: string[];
+}
 
 function controlsFor(firmwareId: string): PhysicalControls | undefined {
   return (
@@ -50,12 +53,23 @@ export async function identify(dat: Uint8Array<ArrayBuffer>): Promise<Identified
   if (!dat.length || dat.length > 256 * 1024 * 1024)
     throw Error('Choose a firmware DAT smaller than 256 MB.');
   const hash = await sha256(dat);
-  const firmware = catalog.firmwares.find((entry) => entry.sha256 === hash);
-  if (!firmware) throw Error(`Unrecognized firmware · SHA-256 ${hash}`);
-  if (dat.length !== firmware.bytes) throw Error('Firmware size differs from the catalog.');
+  const release = reference.firmwareVersions().find((entry) => entry.update_sha256 === hash);
+  if (!release) throw Error(`Unrecognized firmware · SHA-256 ${hash}`);
+  const firmware = { id: release.firmware_id, model: release.product, version: release.version };
+  const status = recovery.availability(firmware.id);
+  let sd;
+  try {
+    if (!status.canBuild)
+      throw Error(
+        `Recovery files can't be built for the ${firmware.model} yet. Missing: ${status.missing.join(', ')}.`,
+      );
+    sd = status.sdBoot;
+  } finally {
+    status.free();
+  }
   const controls = controlsFor(firmware.id);
-  if (!controls?.boot?.sd)
-    throw Error(`SD card recovery is not available for the ${firmware.model} yet.`);
-  const sd = bootCombination(controls, 'sd');
-  return { firmware, sdBoot: sd.hold.map((input) => describeBootHold(controls, input)) };
+  return {
+    firmware,
+    sdBoot: sd && controls ? sd.hold.map((input) => describeBootHold(controls, input)) : undefined,
+  };
 }
