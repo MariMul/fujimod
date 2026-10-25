@@ -34,6 +34,22 @@ test('recovery exposes the documented power-on combinations', () => {
   }
 });
 
+test('located XP5 recovery recipes require the correct official DAT', () => {
+  for (const firmwareId of ['xm5-130', 'x100vi-131']) {
+    const status = recovery.availability(firmwareId);
+    try {
+      assert.equal(status.generation, 'xp5');
+      assert.equal(status.canBuild, true);
+      assert.deepEqual(status.missing, []);
+      assert.ok(status.outputFilenames.includes('marble_init.bin'));
+      assert.ok(status.outputFilenames.includes('ffboot.bin'));
+    } finally {
+      status.free();
+    }
+    assert.throws(() => recovery.build(firmwareId, new Uint8Array(4)), /size differs/);
+  }
+});
+
 test('missing generation facts and incorrect DAT bytes are refused', () => {
   const status = recovery.availability('unknown-update');
   try {
@@ -45,5 +61,5 @@ test('missing generation facts and incorrect DAT bytes are refused', () => {
     status.free();
   }
   assert.throws(() => recovery.build('xs10-311', new Uint8Array(4)), /size differs/);
-  assert.throws(() => recovery.build('x100vi-131', new Uint8Array(4)), /Missing recovery facts/);
+  assert.throws(() => recovery.build('gfx100rf-113', new Uint8Array(4)), /Missing recovery facts/);
 });

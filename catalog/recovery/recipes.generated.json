@@ -229,7 +229,49 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
+    "updater": {
+      "public_version": [
+        1,
+        19
+      ],
+      "version_getter": {
+        "address": 22528876,
+        "size": 88,
+        "sha256": "9376957b970a3ea51a67f841461947e456d08035e0320b5b5602ec87fcb2d95e"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 22526628
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 47835504,
+        "size": 484,
+        "sha256": "2b678cf472b99d1699f3c23a5dcac5c05ceaf54d5ad04d173aae2ea6c335a827"
+      },
+      "target_major": 40681504,
+      "target_minor": 40681508,
+      "current_major": 40681512,
+      "current_minor": 40681516,
+      "version_producer": {
+        "address": 51085568,
+        "size": 160,
+        "sha256": "94e1fe12d6022b85f8ab6063058515cd2f337e2a495346d54d71ee3ee1c47f13"
+      },
+      "producer_stop": 51085604,
+      "version_context_pointer": 74117016,
+      "version_context": 40680976,
+      "current_major_setter": {
+        "address": 51089040,
+        "size": 56,
+        "sha256": "7302daafbe7f29537749c3d4ebd928bf80bc5e706e0f47127c493fc75bee81f5"
+      },
+      "current_minor_setter": {
+        "address": 51089096,
+        "size": 56,
+        "sha256": "dbbf1c259e02f4db9476f5da38bb6efa32f3d10ebf82329bf5f48e2c5bd01cf5"
+      }
+    },
     "missing": [
       "XP5 bindings: SD0 vendor setup: two-rail host path includes an additional vendor-register transaction whose protocol is not implemented"
     ]
@@ -2092,10 +2134,50 @@
       ]
     },
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        49
+      ],
+      "version_getter": {
+        "address": 22454428,
+        "size": 88,
+        "sha256": "f916a8dd7a33de7dd8b35e47b18282280b9c6b74d6b78097a6941ac26fdaff79"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 22452088
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 47860620,
+        "size": 568,
+        "sha256": "5433bb52542ead1fd7bcce37620bbc503f71036c070524f4e25050ec4694dc13"
+      },
+      "target_major": 40440864,
+      "target_minor": 40440868,
+      "current_major": 40440872,
+      "current_minor": 40440876,
+      "version_producer": {
+        "address": 50979948,
+        "size": 160,
+        "sha256": "f667a869609c9ec5b1edc5c1755d961b42a020fa9e3a4cd8994331a9a5bc2d04"
+      },
+      "producer_stop": 50979984,
+      "version_context_pointer": 73177400,
+      "version_context": 40440336,
+      "current_major_setter": {
+        "address": 50983528,
+        "size": 56,
+        "sha256": "4403cbc81e27f22dd1185380768f5a62be34e1126791f4fc03a16b8dbd28eed5"
+      },
+      "current_minor_setter": {
+        "address": 50983584,
+        "size": 56,
+        "sha256": "9a7d996d0163044ceaf2319567093f914fefe69cd75cbb49bb6718f6ff4db042"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "x20-103",
@@ -5564,10 +5646,50 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        48
+      ],
+      "version_getter": {
+        "address": 22702764,
+        "size": 88,
+        "sha256": "85dac53fc6cf3f16ffe7e00db5136e9be42528f751b21e7e0767da668374c0e8"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 22700368
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 50079980,
+        "size": 568,
+        "sha256": "6a4b6e65fe429f0a18967ed8377f4292c12c310abbbc5c095aef06622681b49b"
+      },
+      "target_major": 42288920,
+      "target_minor": 42288924,
+      "current_major": 42288928,
+      "current_minor": 42288932,
+      "version_producer": {
+        "address": 53267804,
+        "size": 160,
+        "sha256": "f85b592b3229b2d2ae71aa0528fd0b21b3b16c90765599be03a93da31141454e"
+      },
+      "producer_stop": 53267840,
+      "version_context_pointer": 76178504,
+      "version_context": 42288392,
+      "current_major_setter": {
+        "address": 53273960,
+        "size": 56,
+        "sha256": "12e9df97c037e1d17fd787f941c03be625c2aab10bea3bf1fb0d5d2f73cb6b7a"
+      },
+      "current_minor_setter": {
+        "address": 53274016,
+        "size": 56,
+        "sha256": "3c16890c7754902760db94c2bc8b98af85231df7b35b6b426c8cb6f5cdc08ce5"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xpro3-200",
@@ -8027,6 +8149,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
   },
