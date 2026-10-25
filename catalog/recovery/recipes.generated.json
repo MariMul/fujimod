@@ -4521,6 +4521,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: extent outside DAT: offset 0x0, size 0x4, available 0x0"
     ]
   },
@@ -5025,6 +5026,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
   },
@@ -5054,6 +5056,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
   },
@@ -8046,6 +8049,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
     ]
   },
@@ -9867,6 +9871,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: setup/header: extent outside DAT: offset 0x0, size 0x4, available 0x0"
     ]
   },
@@ -10175,6 +10180,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
+      "version-independent stock updater acceptance",
       "XP5 bindings: mapped update: source regions have not been unpacked"
     ]
   }
