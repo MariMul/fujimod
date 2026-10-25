@@ -14,6 +14,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 fujimod-workspace-hack.workspace = true
 
+[build-dependencies]
+serde_json.workspace = true
+
 [dev-dependencies]
 fujimod-catalog.workspace = true
 object = { version = "0.38", default-features = false, features = ["read", "std"] }

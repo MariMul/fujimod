@@ -88,18 +88,12 @@ The generated template preserves the loader's declaration and link order.
 Runtime relocation inserts the supplied update's setup tables and updates all
 absolute references, transfer size, CRC32, workspace, and filesystem calls.
 
-The XP5 template is regenerated with GNU AArch64 GCC 9.2.1 and GNU ld:
-
-```sh
-XP5_CC=/path/to/aarch64-none-elf-gcc XP5_LD=/path/to/aarch64-none-elf-ld \
-  cargo run -p fujimod-recovery --example generate_xp5
-```
-
-The XP5 generator checks the pre-setup call graph and GCC stack reports,
-rejects unsupported relocations, and requires GCC 9.2.1. Append `-- --check`
-to compare it with the checked-in template. Both template
-generators use empty camera-data placeholders; card construction needs only
-the official DAT and the compiled catalog recipes.
+The XP5 compiled guest input is `assets/xp5-guest.generated.bin`; its companion
+`assets/xp5-guest.generated.json` gives the image size, symbol offsets, the
+pre-setup stack bound and the two relocations against stock setup routines. The
+build script turns that layout into constants and the crate loads the image with
+`include_bytes!`. The image contains empty camera-data placeholders; card
+construction needs only the official DAT and the compiled catalog recipes.
 
 Generate and check the Lupi guest with GNU GCC 4.6.4 and GNU ld:
 

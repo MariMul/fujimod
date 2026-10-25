@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 mod banks;
 pub use banks::Banks;
 mod template {
-    include!("xp5.generated.rs");
+    include!(concat!(env!("OUT_DIR"), "/xp5_guest.rs"));
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -198,9 +198,17 @@ pub fn package(
     let mut program = template::IMAGE.to_vec();
     let header_at = program.len();
     program.extend_from_slice(extent(&prefix, 0, header_size)?);
-    let resident_end = setup.banks.end(setup.low_length, (workspace - setup.base) as usize)?;
-    let end = (address + program.len() as u64)
-        .max(setup.base + if ram.is_some() { resident_end as u64 } else { 0 });
+    let resident_end = setup
+        .banks
+        .end(setup.low_length, (workspace - setup.base) as usize)?;
+    let end = (address + program.len() as u64).max(
+        setup.base
+            + if ram.is_some() {
+                resident_end as u64
+            } else {
+                0
+            },
+    );
     let end = (end + 0x1ff) & !0x1ff;
     require(
         end <= address + capacity && end <= workspace,
@@ -427,8 +435,14 @@ pub fn package(
     let offset = (address - setup.base) as usize;
     raw[offset..offset + program.len()].copy_from_slice(&program);
     if !files.is_empty() {
-        setup.banks.apply(&prefix, &mut raw, setup.low_length,
-            (setup.stack - setup.base) as usize, offset, offset + program.len())?;
+        setup.banks.apply(
+            &prefix,
+            &mut raw,
+            setup.low_length,
+            (setup.stack - setup.base) as usize,
+            offset,
+            offset + program.len(),
+        )?;
     }
     files.insert(0, File::new("marble_init.bin", raw)?);
     Ok(files)
@@ -529,7 +543,10 @@ mod tests {
                 size: 4,
                 sha256: fujimod_firmware::sha256(&data[..4]),
             }],
-            banks: Banks { copies: vec![], edits: vec![] },
+            banks: Banks {
+                copies: vec![],
+                edits: vec![],
+            },
         };
         let mut ram = data[0x40000..].to_vec();
         put64(&mut ram, 0x40, 0).unwrap();
@@ -545,7 +562,10 @@ mod tests {
             assert_eq!(files.len(), if combined { 2 } else { 1 });
             assert_eq!(files[0].name, "marble_init.bin");
             let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
-            assert_eq!(u64::from_le_bytes(raw[source..source+8].try_into().unwrap()),u64::from(!combined));
+            assert_eq!(
+                u64::from_le_bytes(raw[source..source + 8].try_into().unwrap()),
+                u64::from(!combined)
+            );
             let address = s.base + 0xc000;
             assert_eq!(
                 word(raw, 0).unwrap(),
