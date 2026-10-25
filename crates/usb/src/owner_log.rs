@@ -5,7 +5,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
-const CAPTURE: usize = 8 * 1024 * 1024;
+const CAPTURE: usize = 256;
 const QUEUE_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Clone, Debug, Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -386,6 +386,31 @@ mod tests {
         assert!(log.receiver.try_recv().is_err());
     }
     #[test]
+    fn payload_capture_is_bounded_across_chunks_without_losing_transfer_counts() {
+        for input in [false, true] {
+            for length in [255, 256, 257, 1024] {
+                let mut recorder = Recorder::default();
+                let log = recorder.watch();
+                let data: Vec<u8> = (0..length).map(|index| index as u8).collect();
+                recorder.start(
+                    "camera",
+                    SessionOwner::Local { tool: None },
+                    &envelope(if input { 0xd1 } else { 0xd0 }, length as u32),
+                );
+                for chunk in data.chunks(128) {
+                    recorder.payload(input, chunk, chunk.len(), chunk.len(), None);
+                }
+                let event = log.receiver.try_recv().unwrap();
+                assert_eq!(event.data, data[..length.min(256)]);
+                assert_eq!(event.requested, length as u32);
+                assert_eq!(event.transferred, length);
+                assert_eq!(event.truncated, length > 256);
+                assert!(event.error.is_none());
+                assert!(log.receiver.try_recv().is_err());
+            }
+        }
+    }
+    #[test]
     fn failures_keep_partial_bytes_and_remote_holder_without_duplicate_cleanup_records() {
         let mut recorder = Recorder::default();
         let log = recorder.watch();
@@ -414,6 +439,8 @@ mod tests {
         for (kind, function, offset, length_offset, text) in [
             (0xd0, 6u32, 24, 20, b"help".as_slice()),
             (0xd1, 7, 32, 28, b"hello\n".as_slice()),
+            (0xd0, 6, 24, 20, [b'x'; 233].as_slice()),
+            (0xd1, 7, 32, 28, [b'x'; 225].as_slice()),
         ] {
             let mut data = vec![0; offset + text.len()];
             data[..4].copy_from_slice(&0x200001u32.to_le_bytes());
@@ -436,8 +463,15 @@ mod tests {
                 let event = log.receiver.try_recv().unwrap();
                 assert_eq!(
                     event.console_data.as_deref(),
-                    if invalid { None } else { Some(text) }
+                    if invalid || data.len() > 256 {
+                        None
+                    } else {
+                        Some(text)
+                    }
                 );
+                assert_eq!(event.data, data[..data.len().min(256)]);
+                assert_eq!(event.transferred, data.len());
+                assert_eq!(event.truncated, data.len() > 256);
                 assert!(log.receiver.try_recv().is_err());
             }
         }
