@@ -93,8 +93,10 @@ impl Library {
         check(&core.api, unsafe {
             (core.api.uc_ctl)(raw, ffi::ctl(13, 1, 1), translation_cache_size_bytes)
         })?;
+        // Page-hook code invalidation assumes every translated page is
+        // watched. A64 has no translation filter to maintain that set yet.
         if let Some(enable) = core.api.extensions.page_hooks {
-            check(&core.api, unsafe { enable(raw, true) })?;
+            check(&core.api, unsafe { enable(raw, model != Model::ArmV8A) })?;
         }
         Ok(core)
     }

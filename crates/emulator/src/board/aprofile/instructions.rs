@@ -117,6 +117,159 @@ mod tests {
     }
 
     #[test]
+    fn mixed_cluster_sram_branch_rewrite_reaches_the_new_entry() {
+        for companion in [false, true] {
+            let base = 0xff800000u64;
+            let mut graph = factory::Graph {
+                processors: (0..4)
+                    .map(|core| factory::Processor {
+                        model: Model::ArmV8A,
+                        released: true,
+                        registers: vec![
+                            (
+                                Register::Pc,
+                                base + if core == 0 { 0x31000 } else { 0x30000 },
+                            ),
+                            (Register::Pstate, 0x3cd),
+                        ],
+                        mprofile: None,
+                        rprofile: None,
+                    })
+                    .collect(),
+                ram: vec![factory::Ram {
+                    base,
+                    size: 0x40000,
+                }],
+                dma_mappings: vec![crate::board::memory::BusMapping::ram(base, 0x40000)],
+                mappings: (0..4)
+                    .map(|core| factory::MemoryMap {
+                        core,
+                        address: base,
+                        physical: base,
+                        size: 0x40000,
+                        permissions: 7,
+                    })
+                    .collect(),
+                peripherals: vec![],
+                decoders: vec![],
+                instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
+            };
+            if companion {
+                graph.processors.push(factory::Processor {
+                    model: Model::CortexM4,
+                    released: false,
+                    registers: vec![],
+                    mprofile: Some(crate::board::mprofile::Config {
+                        clock_hz: 600_000_000,
+                        board_ticks_per_second: 1_000_000_000,
+                        vector_base: 0,
+                    }),
+                    rprofile: None,
+                });
+                graph.ram.push(factory::Ram {
+                    base: 0xfa200000,
+                    size: 0x100000,
+                });
+                graph
+                    .dma_mappings
+                    .push(crate::board::memory::BusMapping::ram(0xfa200000, 0x100000));
+                graph.mappings.push(factory::MemoryMap {
+                    core: 4,
+                    address: 0,
+                    physical: 0xfa200000,
+                    size: 0x100000,
+                    permissions: 7,
+                });
+            }
+            let mut board = graph
+                .build(
+                    factory::Options::new(factory::Engine::Unicorn),
+                    Bus::new(Mode::Strict),
+                    Some(InterruptMap {
+                        gic: Box::new(Gic::new(vec![0, 1, 2, 3], 128).unwrap()),
+                        registers: InterruptRegisters::GicV3 {
+                            distributor: 0xfa000000,
+                            redistributor: 0xfa080000,
+                            stride: 0x20000,
+                        },
+                        cores: 4,
+                    }),
+                )
+                .unwrap();
+            for core in 0..4 {
+                board
+                    .configure_aprofile(
+                        core,
+                        aprofile::Config {
+                            clock: aprofile::generic_timer::Clock {
+                                counter_hz: 1_000_000_000,
+                                ticks_per_second: 1_000_000_000,
+                            },
+                            physical_irq: 30,
+                            virtual_irq: 27,
+                            pmu_hz: 1_000_000_000,
+                            implementation: None,
+                        },
+                    )
+                    .unwrap();
+            }
+            board
+                .write_memory(0, base + 0x30000, &0xd503207fu32.to_le_bytes())
+                .unwrap();
+            board
+                .write_memory(
+                    0,
+                    base + 0x31000,
+                    &[0xd503201fu32, 0x17ffffff]
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes)
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
+            board.run_for_instructions(5000, 1000).unwrap();
+            board.write_register(0, Register::Pc, base).unwrap();
+            board.write_register(0, Register::X(0), base).unwrap();
+            board.write_register(0, Register::X(1), 0x14000014).unwrap();
+            board
+                .write_memory(0, base, &0x14006000u32.to_le_bytes())
+                .unwrap();
+            board
+                .write_memory(0, base + 0x50, &0xd2800042u32.to_le_bytes())
+                .unwrap();
+            board
+                .write_memory(0, base + 0x54, &0xd503207fu32.to_le_bytes())
+                .unwrap();
+            let code = [
+                0x91000463u32,
+                0xb9000001,
+                0xd5033f9f,
+                0xd508751f,
+                0xd5033f9f,
+                0xd5033fdf,
+                0xd61f0000,
+            ];
+            board
+                .write_memory(
+                    0,
+                    base + 0x18000,
+                    &code
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes)
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
+            board.run_for_instructions(64, 1000).unwrap();
+            assert_eq!(
+                board.read_register(0, Register::X(2)).unwrap(),
+                2,
+                "companion={companion}, pc={:#x}, x3={}",
+                board.read_register(0, Register::Pc).unwrap(),
+                board.read_register(0, Register::X(3)).unwrap()
+            );
+            assert_eq!(board.read_register(0, Register::X(3)).unwrap(), 1);
+        }
+    }
+    #[test]
     fn el1_irq_saves_interrupted_state_without_counting_the_interrupted_instruction() {
         let board = board();
         let cpu = &*board.cpus[0];
