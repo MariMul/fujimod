@@ -13,6 +13,7 @@ pub struct RollingReference {
     pub mode: u8,
     pub horizontal: u32,
     pub vertical: u32,
+    /// One scan's row count, within the receiver's programmed counter window.
     pub lines: u32,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -109,10 +110,10 @@ impl Sensor {
             return Err("sensor AGC reaches its singular code4095".into());
         }
         // The input receiver's padded vertical raster can include a long
-        // idle interval. Selected sensor drive modes declare their own reset
+        // idle interval. Selected sensor drive modes declare one scan's reset
         // reference, independent of that receiver raster's padding. Matching
-        // the entire scan tuple keeps shorter rasters on their actual counter;
-        // reusing a padded-mode reference can falsely clamp SHR to one line.
+        // the entire scan tuple keeps shorter rasters on their actual counter.
+        // Longer reset windows below can span several of those scans.
         let reference = self
             .options
             .rolling_references
@@ -124,11 +125,23 @@ impl Sensor {
             })
             .map_or(s.vertical, |r| r.lines);
         let extension = u64::from(word(2)) + 1;
-        let exposure_rows = u64::from(reference) * extension;
+        let reset = u64::from(word(5));
+        let base_rows = u64::from(reference) * extension;
+        // The reset counter can address a later scan in the receiver's
+        // programmed window. A reference describes one scan, not a ceiling
+        // on the counter: complete whole scans until the reset is inside the
+        // active frame. Keep the receiver's programmed extent as the bound.
+        // In particular, SHR2106 in an 857-row scan belongs to a three-scan
+        // frame (2571 rows), leaving 465 rows of integration.
+        let exposure_rows = if base_rows > 0 && base_rows < u64::from(s.vertical) * extension {
+            ((reset / base_rows + 1) * base_rows).min(u64::from(s.vertical) * extension)
+        } else {
+            base_rows
+        };
         if let Some((output, tick_hz)) = &self.frame_clock {
-            // The drive mode's reset counter also times its frames; receiver
-            // raster padding does not lengthen that physical scan. Unreferenced
-            // rasters keep their programmed rows.
+            // The reset window also times frame publication. Padding alone
+            // does not lengthen a scan; addressing a later reset cycle does.
+            // Unreferenced rasters keep their programmed rows.
             let frame_rows = exposure_rows;
             let clocks = u128::from(frame_rows) * u128::from(s.horizontal) * u128::from(*tick_hz);
             let period = (clocks + u128::from(self.options.pixel_clock_hz) / 2)
@@ -136,7 +149,7 @@ impl Sensor {
             *output.lock().map_err(|_| "sensor frame clock poisoned")? =
                 u64::try_from(period).map_err(|_| "sensor frame clock exceeds guest timebase")?;
         }
-        let integration = exposure_rows.saturating_sub(u64::from(word(5))).max(1);
+        let integration = exposure_rows.saturating_sub(reset).max(1);
         *self
             .exposure
             .lock()
@@ -300,6 +313,57 @@ impl Controls for Sensor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reset_counter_spans_whole_scans_inside_the_programmed_window() {
+        for (horizontal, vertical, scan, reset, frame) in [
+            (706, 9348, 857, 840, 857),
+            (706, 9348, 857, 2106, 2571),
+            (737, 8955, 820, 2280, 2460),
+            (734, 1671, 1671, 1600, 1671),
+            (750, 1760, 1760, 1700, 1760),
+            (706, 2500, 857, 2400, 2500),
+        ] {
+            let wire: ExposureHandle = Default::default();
+            let clock: fujimod_emulator_imaging::timing::FramePeriod = Default::default();
+            let mut sensor = Sensor::new(
+                Options {
+                    pixel_clock_hz: 33_000_000,
+                    shutter: None,
+                    rolling_references: vec![RollingReference {
+                        mode: 0xec, horizontal, vertical, lines: scan,
+                    }],
+                    mode_change_frames: 0,
+                },
+                wire.clone(),
+                std::sync::Arc::new(std::sync::Mutex::new(64.)),
+            ).unwrap();
+            sensor.attach_frame_clock(clock.clone(), 12_000_000).unwrap();
+            sensor.timing(horizontal, vertical, None).unwrap();
+            let command = |reset: u32| [
+                0x81, 0, 0xec, 0, 0, 0, 0, 0,
+                0x81, 5, reset as u8, 0, 0, 0, 0, 0,
+                0x81, 6, (reset >> 8) as u8, 0, 0, 0, 0, 0,
+            ];
+            sensor.command(&command(reset)).unwrap();
+            sensor.frame().unwrap();
+            assert!((wire.lock().unwrap().seconds
+                - f64::from((frame - reset) * horizontal) / 33_000_000.).abs() < 1e-12);
+            assert_eq!(*clock.lock().unwrap(),
+                (u64::from(frame) * u64::from(horizontal) * 12_000_000 + 16_500_000) / 33_000_000);
+            let saved = sensor.checkpoint().unwrap();
+            sensor.command(&command(scan - 17)).unwrap();
+            sensor.frame().unwrap();
+            sensor.frame().unwrap();
+            assert!((wire.lock().unwrap().seconds
+                - f64::from(17 * horizontal) / 33_000_000.).abs() < 1e-12);
+            sensor.restore_checkpoint(&saved).unwrap();
+            sensor.frame().unwrap();
+            assert!((wire.lock().unwrap().seconds
+                - f64::from((frame - reset) * horizontal) / 33_000_000.).abs() < 1e-12);
+        }
+    }
+
     #[test]
     fn rolling_readout_uses_prior_integration_and_current_adc_gain() {
         let wire: ExposureHandle = Default::default();
