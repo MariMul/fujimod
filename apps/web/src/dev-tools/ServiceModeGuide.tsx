@@ -1,5 +1,6 @@
+import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { For, Match, Show, Switch, createSignal } from 'solid-js';
-import { serviceModeEntry } from './service-mode-entry';
+import { serviceModeControls, serviceModeEntry } from './service-mode-entry';
 import './debug-mode/wizard.css';
 
 /** What the guide needs to know about the selected camera's connection. */
@@ -76,7 +77,11 @@ export function ServiceModeGuide(props: {
               Restart into service mode
             </h1>
             <ol class="dm-entry">
-              <For each={serviceModeEntry}>{(line) => <li>{line}</li>}</For>
+              <li>{serviceModeEntry[0]}</li>
+              <li>
+                <PowerComboKeys controls={serviceModeControls} modes={['service']} />
+              </li>
+              <li>{serviceModeEntry[1]}</li>
             </ol>
             <div class="dm-warning" role="note">
               <strong>In service mode, do not use the OFF switch.</strong>

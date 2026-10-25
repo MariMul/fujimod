@@ -1,3 +1,4 @@
+import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { For, Show, createMemo, createSignal, onSettled } from 'solid-js';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
@@ -129,7 +130,11 @@ export default function Recovery() {
             >
               <div class="launcher-main">
                 <Show when={library().length > 0}>
-                  <div class="recovery-saved" role="radiogroup" aria-label="Firmware in this browser">
+                  <div
+                    class="recovery-saved"
+                    role="radiogroup"
+                    aria-label="Firmware in this browser"
+                  >
                     <For each={library()}>
                       {(firmware) => (
                         <label class="recovery-saved-row">
@@ -262,11 +267,8 @@ export default function Recovery() {
                       </p>
                     }
                   >
-                    {(holds) => (
-                      <ul class="recovery-holds">
-                        <For each={holds()}>{(hold) => <li>{hold}</li>}</For>
-                        <li>also hold DISP/BACK, to enter firmware update</li>
-                      </ul>
+                    {(controls) => (
+                      <PowerComboKeys controls={controls()} modes={['sd', 'firmware_update']} />
                     )}
                   </Show>
                 </>

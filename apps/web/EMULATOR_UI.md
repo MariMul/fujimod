@@ -52,43 +52,15 @@ it as JSON. User layouts are stored with the saved camera.
 
 ### Default layouts
 
-`defaultLayout(inputs, body)` builds a usable panel from any body's input list.
-It replaces `inputPanel` (`ui/input-panel.ts` is deleted).
+`defaultLayout(inputs, controls)` builds a panel from supported session inputs and
+hand-authored body facts. The catalog owns every control's printed text, icon,
+and short name. Mechanisms determine D-pad and command grouping; input support
+and positions determine what is interactive. Explicit device panels retain their
+node layout.
 
-- Only supported inputs appear. Touch inputs and inputs whose id ends in
-  `_latch` (battery and cover latches) never appear.
-- Inputs are grouped by the id prefix before `.`:
-  - `up`, `down`, `left`, `right` members form a D-pad. Its center is the
-    group's `press` member, otherwise `menu_ok_button` when supported, which
-    then does not appear again as a key.
-  - `decrease` and `increase` members (or `wide` and `tele`) form a command
-    control, with `press` in the center when present.
-- Order: positional controls and the shutter in a two-column grid, then D-pads
-  and command controls, then keys in rows of four.
-- Each control gets a short face from its label (`controlFace`), checked
-  against every catalog body:
-  1. Drop an alias after ` / ` for ungrouped ids; for grouped ids the group
-     name is before ` / `.
-  2. Drop a trailing `button`, `switch` or `Switch`.
-  3. `X (meaning)` becomes face `X`; `Function (Fn7)` becomes `Fn7`.
-  4. Manual glyphs become icons: `a` and `▶` play, `b` delete, `t` and `●`
-     record, `N` flash. `Movie-record` is the record control.
-  5. A face containing `/` becomes two lines (`DISP`/`BACK`, `MENU`/`OK`,
-     `AF-L`/`AE-L`).
-  6. Any other name becomes an uppercase caption above a plain key, from the
-     caption table when the id is in it, otherwise the name's first word.
-  Faces have at most two lines of six characters and captions at most ten
-  characters. The full label is the control's accessible name.
-- Dials, rings, switches and levers take captions from one table keyed by
-  shared input id (`exposure_compensation_dial` → `EV`,
-  `shutter_speed_dial` → `SPEED`, `power_switch` and `on_off_switch` →
-  `POWER`, `mode_dial` → `MODE`, …), otherwise the label without its kind
-  word, uppercase.
-- `compatibleVariants(input)` decides which presentations an input allows
-  (relative inputs: `ticks`, `dial`; positions: `dial`, `segment`, `ticks`;
-  stages: `shutter`; buttons: `key`, `record`). It reads `relative`, positions
-  and stages before `kind`: the X-E2S command dial is a relative input of kind
-  `button`. The default layout and the editor both use it.
+The panel, power-on combinations, Recovery, and service-mode guide share the
+same drawing components. See [Control markings and mini controls](../../packages/emulator-ui/CONTROL_MARKINGS.md)
+for the catalog rules, mapping, shared faces, and checks.
 
 ### Editor
 
@@ -110,8 +82,8 @@ It replaces `inputPanel` (`ui/input-panel.ts` is deleted).
 - `ui/layout.ts`: the `DevicePanel` types, import/export and checks, plus pure
   tree functions `nodeAt(panel, path)` and `replaceAt(panel, path, node)` with
   `type NodePath = readonly number[]`.
-- `ui/default-layout.ts`: `defaultLayout`, `controlFace`, `compatibleVariants`,
-  the caption table and `groupInputs(inputs): InputGroup[]`, where an
+- `ui/default-layout.ts`: `defaultLayout`, `compatibleVariants`, and
+  `groupInputs(inputs, controls): InputGroup[]`, where an
   `InputGroup` is a pad, a command control or a single input.
 - `ui/layout-editor.ts`: `LayoutEditor` owns the edited panel and selection:
   `editing`, `selected`, `begin()`, `end()`, `select(path)`,

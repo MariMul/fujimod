@@ -22,7 +22,7 @@
           "kind": "control",
           "id": "play",
           "variant": "key",
-          "icon": "play"
+          "icon": "playback"
         },
         {
           "kind": "control",

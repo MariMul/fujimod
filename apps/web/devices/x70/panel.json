@@ -129,13 +129,13 @@
               "kind": "control",
               "id": "playback_button",
               "variant": "key",
-              "icon": "play"
+              "icon": "playback"
             },
             {
               "kind": "control",
               "id": "delete_button",
               "variant": "key",
-              "icon": "trash"
+              "icon": "delete"
             },
             {
               "kind": "control",

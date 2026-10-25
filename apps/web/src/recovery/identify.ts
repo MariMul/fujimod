@@ -1,5 +1,4 @@
 import { catalog as reference, recovery, type PhysicalControls } from 'fujimod';
-import { describeBootHold } from '../cameras/boot-options';
 import type { DownloadRow } from '../cameras/FirmwareDownloads';
 import type { IdentifiedFirmware } from '../cameras/store';
 
@@ -10,7 +9,7 @@ export interface RecoveryPlan {
   missing: string[];
   files: string[];
   /** How to hold the camera to boot from the SD card, when the catalog documents it. */
-  sdBoot?: string[];
+  sdBoot?: PhysicalControls;
 }
 
 function controlsFor(firmwareId: string): PhysicalControls | undefined {
@@ -54,7 +53,12 @@ export async function identify(dat: Uint8Array<ArrayBuffer>): Promise<Identified
   const hash = await sha256(dat);
   const release = reference.firmwareVersions().find((entry) => entry.update_sha256 === hash);
   if (!release) throw Error(`Unrecognized firmware · SHA-256 ${hash}`);
-  return { id: release.firmware_id, model: release.product, version: release.version, sha256: hash };
+  return {
+    id: release.firmware_id,
+    model: release.product,
+    version: release.version,
+    sha256: hash,
+  };
 }
 
 /** The recovery card for `firmwareId`, read from its recipe without building it. */
@@ -71,7 +75,7 @@ export function recoveryPlan(firmwareId: string): RecoveryPlan {
       canBuild: status.canBuild,
       missing: [...status.missing],
       files: [...status.outputFilenames],
-      sdBoot: sd && controls ? sd.hold.map((input) => describeBootHold(controls, input)) : undefined,
+      sdBoot: sd && controls ? controls : undefined,
     };
   } finally {
     status.free();

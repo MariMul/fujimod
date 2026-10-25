@@ -4,7 +4,11 @@ import type { ControlInput } from 'fujimod/emulator';
 import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, NodePath, PowerCombo } from './layout';
 import type { LayoutEditor } from './layout-editor';
-import { Icon } from './icons';
+import type { PhysicalControls } from 'fujimod';
+import type { JSX } from '@solidjs/web';
+import { KeyFace, ShutterFace, CommandFace, PadFace, PositionsFace } from './control-faces';
+import { marking, type Marking } from './control-part';
+import { PowerComboKeys } from './power-combo';
 import type { DetentSound } from '../feedback/detent-sound';
 import { DetentFeedback } from '../feedback/detent';
 
@@ -17,6 +21,7 @@ export class ControlSession {
     return this;
   }
   data?: DevicePanel;
+  physicalControls?: PhysicalControls;
   detent = new DetentFeedback();
   detentSounds: Record<string, DetentSound> = {};
   inputs = new Map<string, ControlInput>();
@@ -466,18 +471,38 @@ export class ControlSession {
   }
 }
 
+function nodeMarking(
+  node: Pick<ControlNode, 'face' | 'icon' | 'variant'> & { caption?: string },
+): Marking {
+  const icon = node.variant === 'record' ? 'record' : node.icon;
+  return {
+    ...(node.face ? { face: node.face } : {}),
+    ...(icon ? { icon } : {}),
+    ...(node.caption ? { shortName: node.caption } : {}),
+  };
+}
+
+function panelMarking(
+  session: ControlSession,
+  id: string,
+  node: Pick<ControlNode, 'face' | 'icon' | 'variant' | 'caption'>,
+): Marking {
+  const control = session.physicalControls?.controls[id.split('.')[0]!];
+  return control ? marking(control) : nodeMarking(node);
+}
+
 function Key(props: {
   session: ControlSession;
   id: string;
   node: Pick<ControlNode, 'face' | 'icon' | 'hint' | 'variant'>;
   class?: string;
+  children?: JSX.Element;
 }) {
   return (
     <button
       type="button"
       class={[
-        'key',
-        props.class,
+        props.children === undefined ? 'key-wrapper' : props.class,
         { rec: props.node.variant === 'record', wifi: !!props.node.hint },
         props.session.classes(props.id),
       ]}
@@ -500,26 +525,20 @@ function Key(props: {
       }}
     >
       <Show
-        when={props.node.variant === 'record'}
+        when={props.children !== undefined}
         fallback={
-          <Show
-            when={props.node.icon}
-            fallback={
-              <span class={{ two: (props.node.face?.length ?? 0) > 1 }}>
-                {props.node.face?.join('\n') ??
-                  props.session.inputs.get(props.id)?.label ??
-                  props.id}
-              </span>
+          <KeyFace
+            part={{ kind: 'key', marking: panelMarking(props.session, props.id, props.node) }}
+            size="panel"
+            hint={props.node.hint}
+            held={
+              props.session.read().holds.size > 0 &&
+              [...props.session.holds.values()].includes(props.id)
             }
-          >
-            <Icon name={props.node.icon!} />
-          </Show>
+          />
         }
       >
-        <i />
-      </Show>
-      <Show when={props.node.hint}>
-        <em>{props.node.hint}</em>
+        {props.children}
       </Show>
     </button>
   );
@@ -533,7 +552,7 @@ function Shutter(props: { session: ControlSession; id: string }) {
   };
   return (
     <div
-      class={['slide', stage(), props.session.classes(props.id)]}
+      class={['shutter-wrapper', props.session.classes(props.id)]}
       tabindex="0"
       data-id={props.id}
       role="button"
@@ -544,15 +563,22 @@ function Shutter(props: { session: ControlSession; id: string }) {
       }
       onKeyDown={(event) => props.session.shutterKey(props.id, event)}
     >
-      <span class="thumb" style={{ left: left() }}>
-        {stage() === 'idle' ? '' : stage().toUpperCase()}
-      </span>
-      <span class="end">FULL</span>
+      <ShutterFace
+        part={{
+          kind: 'shutter',
+          marking: {},
+          ...(stage() === 'half' || stage() === 'full'
+            ? { stage: stage() as 'half' | 'full' }
+            : {}),
+        }}
+        size="panel"
+        left={left()}
+      />
     </div>
   );
 }
 function Dial(props: { session: ControlSession; id: string; node: ControlNode }) {
-  let dial!: HTMLDivElement, values!: HTMLDivElement;
+  let dial!: HTMLDivElement, values!: HTMLSpanElement;
   const positions = untrack(() => props.session.inputs.get(props.id)?.positions ?? []);
   const selected = () => props.session.read().positions.get(props.id);
   let pending = false;
@@ -611,7 +637,7 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
   return (
     <div
       ref={dial}
-      class={['dial', { ticks: props.node.variant === 'ticks' }, props.session.classes(props.id)]}
+      class={['dial-wrapper', props.session.classes(props.id)]}
       tabindex="0"
       role="slider"
       aria-label={props.session.inputs.get(props.id)?.label ?? props.node.caption ?? props.id}
@@ -629,24 +655,28 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
           props.session.detent.step(props.session.detentSounds[props.id]);
       }}
     >
-      <div
-        ref={values}
-        class="vals"
-        style={{
+      <PositionsFace
+        part={{
+          kind: 'positions',
+          marking: panelMarking(props.session, props.id, props.node),
+          position: selected(),
+        }}
+        size="panel"
+        variant={props.node.variant === 'ticks' ? 'ticks' : 'dial'}
+        positions={positions.map((p) => ({
+          id: p.id,
+          label: props.node.labels?.[p.id] ?? p.label,
+        }))}
+        valuesRef={(element) => {
+          values = element;
+        }}
+        valuesStyle={{
           'background-position-x':
             props.node.variant === 'ticks'
               ? `${((props.session.read().relativeSteps.get(props.id) ?? 0) + (props.session.read().rotation?.dial === dial ? props.session.read().rotation!.fraction : 0)) * 16}px`
               : undefined,
         }}
-      >
-        <For each={positions}>
-          {(position) => (
-            <span data-value={position.id} class={{ on: position.id === selected() }}>
-              {props.node.labels?.[position.id] ?? position.label}
-            </span>
-          )}
-        </For>
-      </div>
+      />
     </div>
   );
 }
@@ -678,20 +708,6 @@ function Node(props: {
   const input = () => props.session.inputs.get(id());
   const positions = () =>
     input()?.positions ?? Object.keys(props.node.labels ?? {}).map((id) => ({ id, label: id }));
-  const keys = () =>
-    props.node.kind === 'command'
-      ? [
-          ['left', '◀', 'side l'],
-          ['center', '', 'tab'],
-          ['right', '▶', 'side r'],
-        ]
-      : [
-          ['up', '▲', 'a u'],
-          ['down', '▼', 'a d'],
-          ['left', '◀', 'a l'],
-          ['right', '▶', 'a r'],
-          ['center', props.node.face?.join('\n') ?? '', 'ok'],
-        ];
   const editing = () => props.editor?.editing() ?? false;
   const layoutPath = () => (editing() ? props.path.join('.') : undefined);
   const selected = () => (props.editor?.isSelected(props.path) ? 'true' : undefined);
@@ -707,29 +723,60 @@ function Node(props: {
       </Match>
       <Match when={props.node.kind === 'command' || props.node.kind === 'dpad'}>
         <div
-          class={props.node.kind === 'command' ? 'cmd' : 'dpad'}
+          class="control-cluster"
           data-layout-path={layoutPath()}
           data-layout-selected={selected()}
         >
           <RemoveBadge editor={props.editor} path={props.path} label={label()} />
-          <Show when={props.node.kind === 'command'}>
+          <Show when={props.node.caption}>
             <div class="cap">{props.node.caption}</div>
           </Show>
-          <div
-            class={props.node.kind === 'command' ? 'knurl' : 'dpad-keys'}
-            style={props.node.kind === 'dpad' ? { display: 'contents' } : {}}
-          >
-            <For each={keys()}>
-              {(key) => (
-                <Key
-                  session={props.session}
-                  id={props.node.bindings![key[0]]}
-                  node={{ face: key[1].split('\n') }}
-                  class={key[2]}
+          {(() => {
+            const renderKey = (action: string, className: string, content: JSX.Element) => {
+              const slot =
+                { decrease: 'left', increase: 'right', press: 'center' }[action] ?? action;
+              const bound = props.node.bindings?.[slot];
+              return bound ? (
+                <Key session={props.session} id={bound} node={{}} class={className}>
+                  {content}
+                </Key>
+              ) : (
+                <span class={className}>{content}</span>
+              );
+            };
+            return (
+              <Show
+                when={props.node.kind === 'command'}
+                fallback={
+                  <PadFace
+                    part={{
+                      kind: 'pad',
+                      marking: panelMarking(
+                        props.session,
+                        props.node.bindings?.center ?? props.node.bindings?.up ?? '',
+                        props.node,
+                      ),
+                    }}
+                    size="panel"
+                    renderKey={renderKey}
+                  />
+                }
+              >
+                <CommandFace
+                  part={{
+                    kind: 'command',
+                    marking: panelMarking(
+                      props.session,
+                      props.node.bindings?.left ?? '',
+                      props.node,
+                    ),
+                  }}
+                  size="panel"
+                  renderKey={renderKey}
                 />
-              )}
-            </For>
-          </div>
+              </Show>
+            );
+          })()}
         </div>
       </Match>
       <Match when={props.node.kind !== 'control'}>
@@ -792,34 +839,34 @@ function Node(props: {
           </Show>
           <Switch>
             <Match when={props.node.variant === 'segment'}>
-              <div
-                class="seg wide"
-                role="group"
-                aria-label={input()?.label ?? props.node.caption ?? id()}
-              >
-                <For each={positions()}>
-                  {(position) => (
-                    <button
-                      type="button"
-                      data-value={position.id}
-                      class={[
-                        '',
-                        { on: props.session.read().positions.get(id()) === position.id },
-                        props.session.classes(id()),
-                      ]}
-                      aria-pressed={
-                        props.session.read().positions.get(id()) === position.id ? 'true' : 'false'
-                      }
-                      aria-label={`${input()?.label ?? props.node.caption ?? id()} ${props.node.labels?.[position.id] ?? position.label}`}
-                      disabled={props.session.disabled(id())}
-                      aria-disabled={props.session.disabled(id()) ? 'true' : 'false'}
-                      onClick={() => props.session.position(id(), position.id)}
-                    >
-                      {props.node.labels?.[position.id] ?? position.label}
-                    </button>
-                  )}
-                </For>
-              </div>
+              <PositionsFace
+                part={{
+                  kind: 'positions',
+                  marking: panelMarking(props.session, id(), props.node),
+                  position: props.session.read().positions.get(id()),
+                }}
+                size="panel"
+                positions={positions().map((p) => ({
+                  id: p.id,
+                  label: props.node.labels?.[p.id] ?? p.label,
+                }))}
+                renderKey={(position, className, content) => (
+                  <button
+                    type="button"
+                    data-value={position}
+                    class={[className, props.session.classes(id())]}
+                    aria-pressed={
+                      props.session.read().positions.get(id()) === position ? 'true' : 'false'
+                    }
+                    aria-label={`${input()?.label ?? props.node.caption ?? id()} ${position}`}
+                    disabled={props.session.disabled(id())}
+                    aria-disabled={props.session.disabled(id()) ? 'true' : 'false'}
+                    onClick={() => props.session.position(id(), position)}
+                  >
+                    {content}
+                  </button>
+                )}
+              />
             </Match>
             <Match when={props.node.variant === 'shutter'}>
               <Shutter session={props.session} id={id()} />
@@ -863,19 +910,9 @@ function Combo(props: { session: ControlSession; item: PowerCombo }) {
         if (props.session.ready) void props.session.combo(props.item).catch(props.session.error);
       }}
     >
-      <For each={props.item.keys}>
-        {(key) => (
-          <span class={['mini', { rec: key.record }]}>
-            <Show
-              when={key.record}
-              fallback={key.icon ? <Icon name={key.icon} size={12} /> : (key.face ?? '')}
-            >
-              <i />
-            </Show>
-          </span>
-        )}
-      </For>
-      <span class="plus">+ POWER</span>
+      <Show when={props.session.physicalControls}>
+        {(controls) => <PowerComboKeys controls={controls()} modes={props.item.modes} />}
+      </Show>
       <span class="what">{props.item.label}</span>
     </button>
   );

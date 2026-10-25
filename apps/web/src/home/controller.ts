@@ -1,3 +1,5 @@
+import { catalog as reference, initialize as initializeSdk } from 'fujimod';
+import { panelBootCombos } from '../cameras/boot-options';
 import { reconcile } from 'solid-js';
 import { startSession } from '@fujimod/emulator-ui/session/controller';
 import {
@@ -371,10 +373,24 @@ export function startHome(
         // A browser may decline this request; quota errors are still surfaced on every write.
         void navigator.storage?.persist?.().catch(() => {});
       }
+      await initializeSdk();
+      if (current !== generation) return;
+      const controls = reference
+        .selections()
+        .find((selection) => selection.firmware.id === entry.id)?.physical_controls;
+      if (!controls) throw new Error(`No physical controls for ${entry.id}`);
+      const panelLayout = {
+        ...layout!,
+        combos: panelBootCombos(
+          controls,
+          Object.keys(controls.boot ?? {}) as import('fujimod').BootMode[],
+        ),
+      };
       const emulate = entry.emulate;
       await session.boot(
         bytes,
-        layout!,
+        panelLayout,
+        controls,
         () => !disposed && current === generation,
         () => {
           updateModButtons(true);
@@ -383,7 +399,7 @@ export function startHome(
           });
           const bootInputs =
             modSupported && modEnabled
-              ? (layout!.combos.find((combo) => combo.boot === 'sd')?.inputs ?? [])
+              ? (panelLayout.combos.find((combo) => combo.modes.includes('sd'))?.inputs ?? [])
               : [];
           const media = modSupported && modEnabled ? bootMedia(file) : undefined;
           return {
@@ -459,7 +475,8 @@ export function startHome(
       s.cameraBusy = true;
     });
     try {
-      const read = async () => new File([await cameras.firmware(source.firmwareHash)], source.fileName);
+      const read = async () =>
+        new File([await cameras.firmware(source.firmwareHash)], source.fileName);
       await processFile(await read(), false, undefined, read);
     } catch (error) {
       storageStatus(String(error), true);

@@ -44,7 +44,10 @@
     "./viewer/Overlays": "./src/viewer/Overlays.tsx",
     "./viewer/lcd": "./src/viewer/lcd.ts",
     "./viewer/touch": "./src/viewer/touch.ts",
-    "./viewport-controls.css": "./src/viewport-controls.css"
+    "./viewport-controls.css": "./src/viewport-controls.css",
+    "./ui/control-part": "./src/ui/control-part.ts",
+    "./ui/control-faces": "./src/ui/control-faces.tsx",
+    "./ui/power-combo": "./src/ui/power-combo.tsx"
   },
   "scripts": {
     "check": "vp check --no-fmt",

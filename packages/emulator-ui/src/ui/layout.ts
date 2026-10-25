@@ -1,4 +1,5 @@
 import { isDetentSound, type DetentSound } from '../feedback/detent-sound';
+import type { BootMode, ControlIcon } from 'fujimod';
 import type { BootInput, ControlInput } from 'fujimod/emulator';
 
 export const DEVICE_PANEL_SCHEMA = 1 as const;
@@ -24,15 +25,14 @@ export interface ControlNode {
   operation?: 'power';
   face?: string[];
   hint?: string;
-  icon?: string;
+  icon?: ControlIcon;
   labels?: Record<string, string>;
   children?: ControlNode[];
   bindings?: Record<string, string>;
 }
 export interface PowerCombo {
-  boot?: 'sd';
   label: string;
-  keys: { face?: string; icon?: string; record?: boolean }[];
+  modes: BootMode[];
   inputs: BootInput[];
 }
 export interface DevicePanel {
@@ -87,7 +87,7 @@ function isControlNode(value: unknown): value is ControlNode {
     isOptionalIdentifier(value.id) &&
     isOptionalString(value.caption) &&
     isOptionalString(value.hint) &&
-    isOptionalString(value.icon) &&
+    (value.icon === undefined || isOneOf(value.icon, ['playback', 'delete', 'record', 'flash'])) &&
     (value.variant === undefined || isOneOf(value.variant, CONTROL_VARIANTS)) &&
     (value.operation === undefined || value.operation === 'power') &&
     (value.face === undefined || isStringArray(value.face)) &&
@@ -107,22 +107,14 @@ function isBootInput(value: unknown): value is BootInput {
   );
 }
 
-function isComboKey(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    isOptionalString(value.face) &&
-    isOptionalString(value.icon) &&
-    (value.record === undefined || typeof value.record === 'boolean')
-  );
-}
-
 function isPowerCombo(value: unknown): value is PowerCombo {
   return (
     isRecord(value) &&
     typeof value.label === 'string' &&
-    (value.boot === undefined || value.boot === 'sd') &&
-    Array.isArray(value.keys) &&
-    value.keys.every(isComboKey) &&
+    Array.isArray(value.modes) &&
+    value.modes.every(
+      (mode) => mode === 'sd' || mode === 'firmware_update' || mode === 'service',
+    ) &&
     Array.isArray(value.inputs) &&
     value.inputs.every(isBootInput)
   );

@@ -16,8 +16,7 @@ const panel = {
   combos: [
     {
       label: 'SD card boot',
-      boot: 'sd',
-      keys: [{ face: 'CMD' }],
+      modes: ['sd'],
       inputs: [{ id: 'command.press' }, { id: 'missing-combo-input', stage: 'half' }],
     },
   ],

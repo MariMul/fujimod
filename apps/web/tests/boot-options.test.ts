@@ -12,11 +12,9 @@ test('controls preserve the X70 startup inputs and service guide', () => {
     [{ id: 'disp_back_button' }],
     [{ id: 'usb', position: 'on' }, { id: 'selector.up' }, { id: 'shutter_button', stage: 'full' }],
   ]);
+  expect(combos.map((combo) => combo.modes)).toEqual([['sd'], ['firmware_update'], ['service']]);
   expect(serviceModeEntry).toEqual([
-    'Connect the camera to this computer with a USB cable.',
     'Switch the camera OFF.',
-    'Hold UP on the selector and press the shutter button all the way down.',
-    'Keep holding both and switch the camera ON.',
     'Release the buttons when the green lamp lights.',
   ]);
 });

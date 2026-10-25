@@ -8,6 +8,7 @@ import solid from '@solidjs/vite-plugin';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { bugReportRoute } from './src/bug/route.ts';
+import { powerComboReview } from './scripts/power-combo-review';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
@@ -241,6 +242,7 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     isolationHeaders(),
+    powerComboReview(),
     watchWorkspacePackages(),
     solid({
       start: {

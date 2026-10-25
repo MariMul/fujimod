@@ -1,3 +1,4 @@
+import type { PhysicalControls } from 'fujimod';
 import { createSignal, reconcile } from 'solid-js';
 import type { AssetProgress } from '../engine/download-progress';
 import { WebcamInput } from './webcam';
@@ -248,6 +249,7 @@ export function startSession(
   async function boot(
     bytes: ArrayBuffer,
     layout: DevicePanel,
+    controls: PhysicalControls,
     isCurrent: () => boolean,
     prepareBoot: () => { config: EngineConfig; media?: BootMedia },
   ) {
@@ -293,10 +295,11 @@ export function startSession(
     const positions = Object.fromEntries(
       inputs.filter((input) => input.initial).map((input) => [input.id, input.initial!]),
     );
+    panel.physicalControls = controls;
     panel.render(
       inputs,
       active,
-      layout.layout.length ? layout : defaultLayout(inputs, layout.body),
+      layout.layout.length ? layout : { ...defaultLayout(inputs, controls), combos: layout.combos },
       positions,
     );
     viewer.configureTouch(inputs, active, (error) => {

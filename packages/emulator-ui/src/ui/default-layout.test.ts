@@ -1,9 +1,21 @@
+import type { PhysicalControls } from 'fujimod';
+import { marking } from './control-part';
 import type { ControlInput } from 'fujimod/emulator';
 import { expect, test } from 'vite-plus/test';
-import { compatibleVariants, controlFace, defaultLayout } from './default-layout';
+import { compatibleVariants, defaultLayout } from './default-layout';
 import type { ControlNode } from './layout';
 import catalog from './fixtures/catalog-inputs.json';
 
+const documents = import.meta.glob<PhysicalControls>('../../../../catalog/bodies/*/controls.json', {
+  eager: true,
+  import: 'default',
+});
+const physical = (id: string) => {
+  const body = id.split('-')[0] === 'xq1' || id.split('-')[0] === 'xq2' ? 'xq' : id.split('-')[0];
+  const document = Object.values(documents).find((d) => d.body_id === body);
+  if (!document) throw new Error(`No physical controls for ${id}`);
+  return document;
+};
 const bodies = catalog as Record<string, ControlInput[]>;
 
 function nodes(layout: ControlNode[]): ControlNode[] {
@@ -18,12 +30,17 @@ function boundIds(layout: ControlNode[]): string[] {
 }
 
 test('an empty input list gives an empty panel', () => {
-  expect(defaultLayout([], 'x70')).toEqual({ schema: 1, body: 'x70', combos: [], layout: [] });
+  expect(defaultLayout([], physical('x70'))).toEqual({
+    schema: 1,
+    body: 'x70',
+    combos: [],
+    layout: [],
+  });
 });
 
 for (const [body, inputs] of Object.entries(bodies)) {
   test(`${body}: only supported controls, each once, with short faces`, () => {
-    const panel = defaultLayout(inputs, body);
+    const panel = defaultLayout(inputs, physical(body));
     const ids = boundIds(panel.layout);
     const byId = new Map(inputs.map((input) => [input.id, input]));
     for (const id of ids) {
@@ -47,12 +64,12 @@ for (const [body, inputs] of Object.entries(bodies)) {
 }
 
 test('direction groups become one D-pad, centered on press or MENU/OK', () => {
-  const x20 = nodes(defaultLayout(bodies['x20-103']!, 'x20').layout).filter(
+  const x20 = nodes(defaultLayout(bodies['x20-103']!, physical('x20')).layout).filter(
     (n) => n.kind === 'dpad',
   );
   expect(x20).toHaveLength(1);
-  expect(x20[0]!.bindings!.center).toBe('selector_button.press');
-  const x70 = nodes(defaultLayout(bodies['x70-110']!, 'x70').layout).filter(
+  expect(x20[0]!.bindings!.center).toBe('selector.press');
+  const x70 = nodes(defaultLayout(bodies['x70-110']!, physical('x70')).layout).filter(
     (n) => n.kind === 'dpad',
   );
   expect(x70).toHaveLength(1);
@@ -61,7 +78,7 @@ test('direction groups become one D-pad, centered on press or MENU/OK', () => {
 });
 
 test('step groups become command controls', () => {
-  const x70 = nodes(defaultLayout(bodies['x70-110']!, 'x70').layout).find(
+  const x70 = nodes(defaultLayout(bodies['x70-110']!, physical('x70')).layout).find(
     (n) => n.kind === 'command',
   );
   expect(x70!.bindings).toEqual({
@@ -70,26 +87,19 @@ test('step groups become command controls', () => {
     center: 'command_control.press',
   });
   expect(x70!.caption).toBe('CMD');
-  const xq1 = nodes(defaultLayout(bodies['xq1-121']!, 'xq1').layout).find(
-    (n) => n.kind === 'command',
-  );
-  expect(xq1!.bindings).toEqual({ left: 'zoom_control.wide', right: 'zoom_control.tele' });
+  const xq1 = nodes(defaultLayout(bodies['xq1-121']!, physical('xq1')).layout);
+  expect(
+    xq1.some((node) => node.kind === 'command' && node.bindings?.left === 'zoom_control.wide'),
+  ).toBe(false);
 });
 
-test('manual names become faces, icons and captions', () => {
-  const x70 = new Map(bodies['x70-110']!.map((input) => [input.id, controlFace(input)]));
-  expect(x70.get('playback_button')).toEqual({ icon: 'play' });
-  expect(x70.get('delete_button')).toEqual({ icon: 'trash' });
-  expect(x70.get('movie_record_button')).toEqual({ record: true });
-  expect(x70.get('disp_back_button')).toEqual({ face: ['DISP', 'BACK'] });
-  expect(x70.get('menu_ok_button')).toEqual({ face: ['MENU', 'OK'] });
-  expect(x70.get('af_ae_lock_button')).toEqual({ face: ['AF-L', 'AE-L'] });
-  expect(x70.get('quick_menu_button')).toEqual({ face: ['Q'] });
-  expect(x70.get('control_ring_options_button')).toEqual({ caption: 'SIDE' });
-  const xe2 = new Map(bodies['xe2-411']!.map((input) => [input.id, controlFace(input)]));
-  expect(xe2.get('fn7_button')).toEqual({ face: ['Fn7'] });
-  const xq1 = new Map(bodies['xq1-121']!.map((input) => [input.id, controlFace(input)]));
-  expect(xq1.get('movie_recording_button')).toEqual({ record: true });
+test('catalog facts supply all faces without reading the input labels', () => {
+  const controls = physical('x70');
+  expect(marking(controls.controls.playback_button!)).toEqual({ icon: 'playback' });
+  expect(marking(controls.controls.movie_record_button!)).toEqual({ icon: 'record' });
+  expect(marking(controls.controls.disp_back_button!)).toEqual({ face: ['DISP', 'BACK'] });
+  const renamed = bodies['x70-110']!.map((input) => ({ ...input, label: 'Unrelated manual name' }));
+  expect(defaultLayout(renamed, controls)).toEqual(defaultLayout(bodies['x70-110']!, controls));
 });
 
 test('relative motion, positions and stages decide presentation before kind', () => {
