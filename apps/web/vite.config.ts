@@ -242,7 +242,18 @@ export default defineConfig(({ mode, command }) => ({
   plugins: [
     isolationHeaders(),
     watchWorkspacePackages(),
-    solid({ start: { middleware: './src/middleware.ts' }, ssr: true }),
+    solid({
+      start: {
+        middleware: './src/middleware.ts',
+        ...(command === 'serve'
+          ? {
+              entryServer: './src/development/entry-server.tsx',
+              entryClient: './src/development/entry-client.tsx',
+            }
+          : {}),
+      },
+      ssr: true,
+    }),
     bugReportRoute(),
     wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     simulatorReports(),
@@ -296,6 +307,7 @@ export default defineConfig(({ mode, command }) => ({
     ],
   },
   server: {
+    headers: { 'Cache-Control': 'no-store' },
     allowedHosts: ['.ts.net'],
     watch: {
       ignored: [

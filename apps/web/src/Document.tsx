@@ -1,7 +1,7 @@
 import { NoHydration, Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { getRequestEvent, HydrationScript } from '@solidjs/web';
-export default function Document(props: { children: JSX.Element }) {
+export default function Document(props: { children: JSX.Element; developmentEntry?: string }) {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
   const bug = /^\/bug(?:\/|$)/.test(path),
     tools = /^\/dev-tools(?:\/|$)/.test(path),
@@ -49,6 +49,9 @@ export default function Document(props: { children: JSX.Element }) {
           </title>
           <link rel="icon" href="data:," />
           <HydrationScript />
+          <Show when={props.developmentEntry}>
+            <script type="module" src={props.developmentEntry} async />
+          </Show>
         </NoHydration>
       </head>
       <body>{props.children}</body>

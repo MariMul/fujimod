@@ -13,7 +13,7 @@ on review branches; the Pages workflow deploys approved main builds only.
 ## Rendering and static hosting
 
 `@solidjs/vite-plugin` runs in native start mode with `ssr: true`. The plugin
-owns client/server entries and hydration; `src/App.tsx` selects the three pages
+owns production entries and hydration; `src/App.tsx` selects the pages
 and `src/Document.tsx` owns their HTML document and metadata. Browser-only emulator, USB and LCD work starts after hydration. Engine/input protocols
 remain separate from the Solid components that display their state. The
 [emulator UI package](../../packages/emulator-ui/README.md) owns the reusable
@@ -34,6 +34,17 @@ existing homepage nodes, Features and Feedback, and the report page's
 absence of development reporting hooks. The web workflow runs this after build.
 For local development, the generated document loads simulator reporting and
 browser diagnostics only on the homepage and Dev Tools; `/bug/` stays local.
+
+Development rendering uses `src/development/` entries. Each lazy page's preload
+and hydration import share a URL derived from its source content and server
+session. Safari can retain preloaded responses without revalidating `no-cache`
+([WebKit 193533](https://bugs.webkit.org/show_bug.cgi?id=193533)); reusing an
+unversioned page URL after editing its HTML structure can therefore stop
+hydration. Development HTML and modules use `no-store`; production keeps the
+generated entries and hashed build assets. `node scripts/test-development.ts`
+checks mobile Chromium and WebKit against a running development server, including
+a retained stale unversioned page response, repeated visits, and working inputs.
+Set `FUJIMOD_WEB_URL` to check another development endpoint.
 
 ## Dev Tools
 

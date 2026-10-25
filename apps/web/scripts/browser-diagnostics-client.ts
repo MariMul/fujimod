@@ -51,12 +51,17 @@ declare global {
         .filter(
           (entry): entry is PerformanceResourceTiming => entry instanceof PerformanceResourceTiming,
         )
-        // Prebundled libraries keep their version query so duplicate copies show up.
-        .filter((entry) => /\.(wasm|glb)(\?|$)|\/\.vite\/deps\//.test(entry.name))
+        // Keep page revisions as well as library versions: a stale preload can
+        // pair old page code with new HTML before the app initializes.
+        .filter((entry) =>
+          /\.(wasm|glb)(\?|$)|\/\.vite\/deps\/|\/src\/(?:home\/Page|recovery\/Page|development\/entry-client|App|Document)\.tsx(?:\?|$)/.test(
+            entry.name,
+          ),
+        )
         .map((entry) => ({
           path:
             new URL(entry.name).pathname +
-            (/\/\.vite\/deps\//.test(entry.name) ? new URL(entry.name).search : ''),
+            (/\/\.vite\/deps\/|\/src\//.test(entry.name) ? new URL(entry.name).search : ''),
           duration: Math.round(entry.duration),
           bytes: entry.decodedBodySize,
           transferred: entry.transferSize,
