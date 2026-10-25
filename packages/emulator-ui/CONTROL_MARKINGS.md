@@ -72,7 +72,9 @@ The live components in `src/ui/controls.tsx` split into a drawing part and an
 interactive wrapper. The drawing parts move to `src/ui/control-faces.tsx`:
 `KeyFace`, `ShutterFace`, `CommandFace`, `PadFace` and `PositionsFace`. Each
 takes a `ControlPart` and a `size: 'panel' | 'mini'`, and draws the held part
-in the panel's pressed style. The panel's `Key`, `Shutter`, `Dial` and
+with the panel's `glow` highlight, the one that marks a combo's controls when
+the combo is hovered. A key glows as a whole; a command control glows only at
+its center or the held side, a D-pad only at the held direction. The panel's `Key`, `Shutter`, `Dial` and
 D-pad/command nodes wrap these with `ControlSession` handlers, so a change to
 how a control looks reaches every place it appears.
 
@@ -140,4 +142,5 @@ layouts" section of `apps/web/EMULATOR_UI.md` is rewritten to point here.
   command control with its center held and `CMD` beside it, the record key,
   the DISP/BACK key, and the power switch at ON.
 - A development-only page at `/review/power-combos/` draws every body's SD
-  sequence at phone width for visual review.
+  sequence at phone width for visual review, titled with each body's model
+  name.
