@@ -2262,7 +2262,115 @@
           "size": 28,
           "sha256": "54136f3d7bf06b31aa2e2f3ccab5ecb049974d1d5c6eee2f370d51a5e8fd8c12"
         }
-      ]
+      ],
+      "banks": {
+        "copies": [
+          {
+            "source_offset": 160080,
+            "destination_offset": 158032,
+            "size": 168,
+            "sha256": "8e59ba4b8ddfaad7e36008cbad1adc22236e659f1cda46b2ff3f9b418ab5d83f"
+          }
+        ],
+        "edits": [
+          {
+            "address": 1156,
+            "old": 3505930368,
+            "new": 2952790144,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1160,
+            "old": 2432925696,
+            "new": 2435022848,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1168,
+            "old": 3505930372,
+            "new": 2952790148,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1172,
+            "old": 2433261700,
+            "new": 2435358852,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1872,
+            "old": 3505930368,
+            "new": 2952790144,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1876,
+            "old": 2433073152,
+            "new": 2435170304,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1884,
+            "old": 3505930372,
+            "new": 2952790148,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1888,
+            "old": 2433196164,
+            "new": 2435293316,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 8,
+            "old": 4042801456,
+            "new": 3489661232,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 12,
+            "old": 2433143312,
+            "new": 2435240464,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 24,
+            "old": 4042801456,
+            "new": 3489661232,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 28,
+            "old": 2433094160,
+            "new": 2435191312,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 40,
+            "old": 4042801456,
+            "new": 3489661232,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 44,
+            "old": 2433192464,
+            "new": 2435289616,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 158032,
+            "old": 3490168624,
+            "new": 4043308848,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 158048,
+            "old": 3490168624,
+            "new": 4043308848,
+            "what": "Use the card-resident setup register-bank accessors"
+          }
+        ]
+      }
     },
     "cold_start": null,
     "file_api": null,
@@ -6623,7 +6731,11 @@
           "size": 28,
           "sha256": "6858af055bcc30ba7347a928e0761ef8f8204557b02b4d6d17a62e97a087ff14"
         }
-      ]
+      ],
+      "banks": {
+        "copies": [],
+        "edits": []
+      }
     },
     "cold_start": null,
     "file_api": null,
