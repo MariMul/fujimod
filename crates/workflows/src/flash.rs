@@ -593,3 +593,6 @@ impl OrderedDigest {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "artifact-build")]
+pub mod build;

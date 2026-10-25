@@ -12,8 +12,10 @@ doctest = false
 
 [features]
 service-capture = []
+artifact-build = ["dep:fujimod-firmware"]
 
 [dependencies]
+fujimod-firmware = { workspace = true, optional = true }
 fujimod-catalog.workspace = true
 sha2.workspace = true
 fujimod-catalog-camera.workspace = true
@@ -32,3 +34,7 @@ required-features = ["service-capture"]
 nusb.workspace = true
 fujimod-catalog-firmware-identity.workspace = true
 futures-lite.workspace = true
+
+[[example]]
+name = "flash_reader_build"
+required-features = ["artifact-build"]

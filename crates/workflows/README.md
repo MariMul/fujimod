@@ -127,3 +127,10 @@ JavaScript exposes `Session.prepareServiceSession`, `backupFlash` and
 `dumpState`; each holds the session lease for the complete workflow, including
 chunk callbacks and cleanup. `flash_reader_plan` validates a built artifact
 against the bundled catalog without opening USB.
+
+The `artifact-build` feature adds `flash::build`: native, offline verification
+of compiled reader artifacts, initialized update sources, callback BSS, cache
+instructions, executable translations, and control hashes. The
+`flash_reader_build` example accepts an explicit staging recipe with source
+files and a compiler command, then writes separate binary and JSON artifacts.
+It replaces the runtime catalog only after every declared reader validates.

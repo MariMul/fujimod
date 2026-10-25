@@ -2604,6 +2604,7 @@ dependencies = [
  "fujimod-catalog-bulk",
  "fujimod-catalog-camera",
  "fujimod-catalog-firmware-identity",
+ "fujimod-firmware",
  "fujimod-usb",
  "fujimod-workspace-hack",
  "futures-lite",
