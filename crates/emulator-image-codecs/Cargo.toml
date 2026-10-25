@@ -26,5 +26,8 @@ apple-cf = { version = "0.11", default-features = false, features = ["cm", "cv",
 futures-lite = "2"
 videotoolbox = { version = "0.21", features = ["async"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+openh264 = "=0.9.3"
+
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

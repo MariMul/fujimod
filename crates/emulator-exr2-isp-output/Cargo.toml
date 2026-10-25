@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-exr2-isp-output"
-description = "EXR II combination, output channels, still processor, scaler, warp and video encoder"
+description = "EXR II combination, output channels, still processor, scaler, warp and AVC codec"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

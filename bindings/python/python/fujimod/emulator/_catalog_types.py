@@ -205,6 +205,10 @@ class ApplicationTimingVariant3(TypedDict, total=False):
     part_id: Required[str]
 
 
+class AvcCodecOptions(TypedDict, total=False):
+    backend: Required[VideoEncoderBackend]
+
+
 class BankByteValue(TypedDict, total=False):
     input: Required[int]
     output: Required[int]
@@ -674,6 +678,7 @@ type ConstructionModel = (
     | ConstructionModelVariant38
     | ConstructionModelVariant39
     | ConstructionModelVariant40
+    | ConstructionModelVariant41
 )
 
 
@@ -802,18 +807,18 @@ class ConstructionModelVariant26(TypedDict, total=False):
 
 class ConstructionModelVariant27(TypedDict, total=False):
     irq: Required[ConstructionCore]
-    kind: Required[Literal["video-encoder"]]
-    options: Required[VideoEncoderOptions]
+    kind: Required[Literal["avc-codec"]]
+    options: Required[AvcCodecOptions]
 
 
 class ConstructionModelVariant28(TypedDict, total=False):
-    bank: Required[str]
-    kind: Required[Literal["parameters"]]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["image-transfer"]]
 
 
 class ConstructionModelVariant29(TypedDict, total=False):
-    kind: Required[Literal["phase-detection"]]
-    routes: Required[str]
+    bank: Required[str]
+    kind: Required[Literal["parameters"]]
 
 
 class ConstructionModelVariant3(TypedDict, total=False):
@@ -821,54 +826,53 @@ class ConstructionModelVariant3(TypedDict, total=False):
 
 
 class ConstructionModelVariant30(TypedDict, total=False):
+    kind: Required[Literal["phase-detection"]]
+    routes: Required[str]
+
+
+class ConstructionModelVariant31(TypedDict, total=False):
     gpio: Required[str]
     kind: Required[Literal["power"]]
 
 
-class ConstructionModelVariant31(TypedDict, total=False):
+class ConstructionModelVariant32(TypedDict, total=False):
     kind: Required[Literal["reset"]]
 
 
-class ConstructionModelVariant32(TypedDict, total=False):
+class ConstructionModelVariant33(TypedDict, total=False):
     kind: Required[Literal["scanout"]]
 
 
-class ConstructionModelVariant33(TypedDict, total=False):
+class ConstructionModelVariant34(TypedDict, total=False):
     kind: Required[Literal["sdhci-clocks"]]
     words: Required[list[list[int]]]
 
 
-class ConstructionModelVariant34(TypedDict, total=False):
+class ConstructionModelVariant35(TypedDict, total=False):
     irq: Required[ConstructionIrqs]
     kind: Required[Literal["sdio-host"]]
     module: Required[ConstructionModule]
 
 
-class ConstructionModelVariant35(TypedDict, total=False):
+class ConstructionModelVariant36(TypedDict, total=False):
     kind: Required[Literal["serial-audio"]]
     sinks: Required[list[ConstructionEmpty]]
 
 
-class ConstructionModelVariant36(TypedDict, total=False):
+class ConstructionModelVariant37(TypedDict, total=False):
     kind: Required[Literal["serial-dma"]]
 
 
-class ConstructionModelVariant37(TypedDict, total=False):
+class ConstructionModelVariant38(TypedDict, total=False):
     kind: Required[Literal["spi-controller"]]
     routes: Required[list[ConstructionRoutes]]
 
 
-class ConstructionModelVariant38(TypedDict, total=False):
+class ConstructionModelVariant39(TypedDict, total=False):
     frames: Required[str]
     images: Required[str]
     kind: Required[Literal["statistics"]]
     routes: Required[str]
-
-
-class ConstructionModelVariant39(TypedDict, total=False):
-    cable: Required[str]
-    endpoints: NotRequired[str | None]
-    kind: Required[Literal["usb"]]
 
 
 class ConstructionModelVariant4(TypedDict, total=False):
@@ -876,6 +880,12 @@ class ConstructionModelVariant4(TypedDict, total=False):
 
 
 class ConstructionModelVariant40(TypedDict, total=False):
+    cable: Required[str]
+    endpoints: NotRequired[str | None]
+    kind: Required[Literal["usb"]]
+
+
+class ConstructionModelVariant41(TypedDict, total=False):
     controllers: Required[list[str]]
     kind: Required[Literal["vector-gpu"]]
 
@@ -1305,7 +1315,8 @@ type DeviceKind = Literal[
     "LensHomingFixture",
     "AFExtractionControl",
     "ApproximateJPEGEncodeControl",
-    "MovieEncoderControl",
+    "AvcCodecControl",
+    "ImageTransferControl",
     "BankedLensController",
     "BootControls",
     "ControlBus",
@@ -4959,10 +4970,6 @@ class UpdateRange(TypedDict, total=False):
 
 
 type VideoEncoderBackend = Literal["videotoolbox", "software"]
-
-
-class VideoEncoderOptions(TypedDict, total=False):
-    backend: Required[VideoEncoderBackend]
 
 
 type VideoLayout = Literal["yycbcr422"]

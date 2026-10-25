@@ -76,7 +76,8 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "scanout" => serde_json::from_str::<Value>("{\"kind\":\"scanout\",\"options\":{\"ram_bytes\":536870912,\"packing\":\"yycbcr\",\"matrix\":\"bt601-full\",\"graphics_profile\":\"mode1-abgr8888-straight\",\"backdrop_profile\":\"declared-black-canvas-unmeasured\",\"rectangle_profile\":\"exr2-signed-ycbcr-rectangle-overlay-unmeasured\",\"max_pixels\":8847360,\"reset_ticks\":2}}").map_err(|e| e.to_string())?,
         "display_timing" => serde_json::from_str::<Value>("{\"kind\":\"display-timing\",\"options\":{\"mode\":\"configured_clocked\",\"frame_ticks\":400000,\"stop_ticks\":2},\"clock\":\"clocks\",\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
         "display_formatter" => serde_json::from_str::<Value>("{\"kind\":\"formatter\",\"options\":{\"latch_delay\":2}}").map_err(|e| e.to_string())?,
-        "video_encoder" => json!({"kind":"video-encoder", "options":{"backend":"software"}, "irq":{"core":0,"line":75}}),
+        "image_transfer" => json!({"kind":"image-transfer", "irq":{"core":0,"line":73}}),
+        "avc_codec" => json!({"kind":"avc-codec", "options":{"backend":"software"}, "irq":{"core":0,"line":75}}),
         "image_combination" => serde_json::from_str::<Value>("{\"kind\":\"image-combination\",\"options\":{\"reset_ticks\":16,\"arithmetic\":\"packed_image_unmeasured\",\"clock\":{\"kind\":\"throughput\",\"bytes_per_tick\":256}},\"irq\":{\"core\":0,\"line\":68}}").map_err(|e| e.to_string())?,
         "encoder_control_ring" => serde_json::from_str::<Value>("{\"kind\":\"encoder\",\"options\":{\"pins\":[{\"port\":3,\"pin\":6},{\"port\":3,\"pin\":7}],\"phase_ticks\":120000,\"rest_phase\":0},\"gpio\":\"serial_gpio\",\"counter\":null}").map_err(|e| e.to_string())?,
         _ => return Err(format!("unknown X70 implementation node {name}")),
@@ -357,8 +358,13 @@ const NODE_RULES: &[NodeRule] = &[
         dependencies: &[],
     },
     NodeRule {
-        name: "video_encoder",
-        blocks: &["video-encoder-input", "video-encoder-control"],
+        name: "image_transfer",
+        blocks: &["image-transfer"],
+        dependencies: &["irq0", "irq1"],
+    },
+    NodeRule {
+        name: "avc_codec",
+        blocks: &["avc-codec-input", "avc-codec-control"],
         dependencies: &["irq0", "irq1"],
     },
     NodeRule {
@@ -669,7 +675,7 @@ fn apply_interrupts(
             recipe["readback_irq"] = json!({"core":core(selection,"core0")?,"line":irq(selection,"image-input","readback")?["Core"]["line"]});
         }
         "prefilter" | "raw_statistics" | "still_processor" | "image_scaler" | "warp"
-        | "jpeg_encoder" | "jpeg_decoder" | "video_encoder" => {
+        | "jpeg_encoder" | "jpeg_decoder" | "avc_codec" | "image_transfer" => {
             let source = match name {
                 "prefilter" => "prefilter",
                 "raw_statistics" => "raw-statistics",
@@ -678,7 +684,8 @@ fn apply_interrupts(
                 "warp" => "warp",
                 "jpeg_encoder" => "jpeg-encoder",
                 "jpeg_decoder" => "jpeg-decoder",
-                "video_encoder" => "video-encoder-control",
+                "avc_codec" => "avc-codec-control",
+                "image_transfer" => "image-transfer",
                 _ => unreachable!(),
             };
             let route = irq(selection, source, "complete")?;
@@ -2024,7 +2031,7 @@ pub(super) fn assemble(
                 recipe["options"]["readback_ticks"] = json!(ticks);
             }
         }
-        if rule.name == "video_encoder" {
+        if rule.name == "avc_codec" {
             use fujimod_catalog_construction::VideoEncoderBackend;
             // A prepared browser graph is portable across hosts. Native runs
             // may request hardware encoding explicitly.

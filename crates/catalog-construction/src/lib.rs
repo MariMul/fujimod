@@ -551,7 +551,7 @@ pub struct HardwareSelection {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct VideoEncoderOptions {
+pub struct AvcCodecOptions {
     pub backend: VideoEncoderBackend,
 }
 
@@ -764,12 +764,18 @@ pub enum ConstructionModel {
         /// routes.
         routes: String,
     },
-    /// H.264 image compression and addressed bitstream DMA.
-    #[serde(rename = "video-encoder")]
-    VideoEncoder {
+    /// H.264 compression, decoding and addressed DMA.
+    #[serde(rename = "avc-codec")]
+    AvcCodec {
         /// Compression implementation selected by the run configuration.
-        options: VideoEncoderOptions,
+        options: AvcCodecOptions,
         /// Bitstream completion interrupt.
+        irq: Core,
+    },
+    /// Addressed image transfer registers.
+    #[serde(rename = "image-transfer")]
+    ImageTransfer {
+        /// Completion interrupt.
         irq: Core,
     },
     /// parameters hardware.

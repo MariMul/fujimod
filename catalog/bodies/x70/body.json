@@ -978,8 +978,16 @@
               "refs": {}
             },
             {
-              "name": "movieencoder",
-              "kind": "MovieEncoderControl",
+              "name": "imagetransfer",
+              "kind": "ImageTransferControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1054,7 +1062,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1096,7 +1105,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1890,8 +1900,16 @@
               "refs": {}
             },
             {
-              "name": "movieencoder",
-              "kind": "MovieEncoderControl",
+              "name": "imagetransfer",
+              "kind": "ImageTransferControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1966,7 +1984,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -2008,7 +2027,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -4702,8 +4722,16 @@
               "refs": {}
             },
             {
-              "name": "movieencoder",
-              "kind": "MovieEncoderControl",
+              "name": "imagetransfer",
+              "kind": "ImageTransferControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
               "boot_entries": [
                 "loader"
               ],
@@ -4778,7 +4806,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -4820,7 +4849,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"

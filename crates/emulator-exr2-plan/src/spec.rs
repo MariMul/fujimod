@@ -436,7 +436,10 @@ pub enum Model {
         irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
         stream: String,
     },
-    VideoEncoder {
+    ImageTransfer {
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
+    },
+    AvcCodec {
         options: serde_json::Value,
         irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
@@ -525,7 +528,8 @@ impl Model {
             Model::StillProcessor { .. } => "still-processor",
             Model::Scaler { .. } => "scaler",
             Model::Warp { .. } => "warp",
-            Model::VideoEncoder { .. } => "video-encoder",
+            Model::AvcCodec { .. } => "avc-codec",
+            Model::ImageTransfer { .. } => "image-transfer",
             Model::JpegEncoder { .. } => "jpeg-encoder",
             Model::JpegDecoder { .. } => "jpeg-decoder",
             Model::Block11000 { .. } => "block11000",

@@ -1,6 +1,6 @@
-# AVC encoder
+# AVC codec
 
-`VideoEncoder` consumes aligned register writes and packed Y0,Y1,Cb,Cr
+`AvcCodec` consumes aligned register writes and packed Y0,Y1,Cb,Cr
 input DMA. It averages adjacent chroma rows to planar 8-bit 4:2:0. The
 required `options.backend` selects exactly one compression implementation:
 
@@ -47,7 +47,7 @@ skipped frames refuse.
 The target-rate, quantizer and GOP mappings define the software compression
 approximation; they do not reproduce silicon rate control or identical
 compressed bytes. The supported register mode is checked before input is
-read. Crop/field modes, alternate-stream `4000` starts, overlapping/unmapped DMA,
+read. Crop/field encoding modes, overlapping/unmapped DMA,
 invalid geometry and frames larger than a ring bank refuse. Other coefficient
 or program uploads do not authorize an encoding mode.
 
@@ -79,8 +79,35 @@ cross ring boundaries, check exact deadlines and DMA-before-IRQ order, and
 refuse invalid modes and spans without publishing a completion.
 
 The local hardware regression is explicitly selected with
-`cargo test -p fujimod-emulator-exr2-isp --features videotoolbox-tests --lib tests::video`.
+`cargo test -p fujimod-emulator-exr2-isp-output --features videotoolbox-tests --lib tests::avc`.
 Ordinary CI runs the software tests. The `h264_fingerprint` example and
 `scripts/ci/test-h264-wasm.ts` compare all 256 SHA bits of a generated eight-frame
 software stream between native and Wasm; its optional native output can also
 be decoded by an independent AVC decoder.
+
+## Alternate decoding
+
+`C00=4000` consumes one Baseline progressive I/P picture from the addressed
+Annex B stream banks. Dimensions and cropping come from a bounded SPS, with
+at most 1920×1088 coded samples, one slice per picture and no slice groups.
+The native host codec is OpenH264 with error concealment disabled. Unsupported
+targets, syntax, modes and malformed streams refuse before output DMA.
+
+`400..40C` select frame destinations, `F1C=3` selects three rotating slots,
+and `F14/F18=F7F9/D8FF` select the supported syntax fields. Input banks may
+alias for a preview; output slots may alias. Input/output overlap refuses.
+Decoded 4:2:0 chroma repeats on adjacent rows in packed Y0,Y1,Cb,Cr output.
+
+At the virtual deadline, frame DMA completes before `C20` publishes mode 2,
+`C24` publishes frame bit 11 and `FC0` selects the completed slot. Exhausting
+input bank 0/1 publishes refill bit 9/10; an initial picture does not issue a
+refill. `4AC` and the bank selector track consumed Annex B boundaries.
+Pause and finish issue their separate bit 14/13 notices. W1C and level IRQ75
+behavior is shared with encoding.
+
+Checkpoints retain binary compressed GOP history and pending output, then
+reconstruct the host decoder without replaying guest effects. The completed
+input receipt, compressed diagnostic buffer, output hash and frame counter
+publish atomically with DMA. Each output carries its input hash; a subsequent
+pending picture cannot relabel earlier pixels. Replay is bounded to 120 frames
+and 16 MiB per GOP. Native decoding is available; Wasm decode starts refuse.

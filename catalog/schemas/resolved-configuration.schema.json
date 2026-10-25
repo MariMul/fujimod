@@ -823,6 +823,19 @@
         }
       ]
     },
+    "AvcCodecOptions": {
+      "additionalProperties": false,
+      "description": "Compression backend selection; register and DMA behavior is shared.",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/VideoEncoderBackend"
+        }
+      },
+      "required": [
+        "backend"
+      ],
+      "type": "object"
+    },
     "BankByteValue": {
       "additionalProperties": false,
       "description": "One input/output pair in a bank-byte decoding table.",
@@ -3499,24 +3512,43 @@
         },
         {
           "additionalProperties": false,
-          "description": "H.264 image compression and addressed bitstream DMA.",
+          "description": "H.264 compression, decoding and addressed DMA.",
           "properties": {
             "irq": {
               "$ref": "#/$defs/ConstructionCore",
               "description": "Bitstream completion interrupt."
             },
             "kind": {
-              "const": "video-encoder",
+              "const": "avc-codec",
               "type": "string"
             },
             "options": {
-              "$ref": "#/$defs/VideoEncoderOptions",
+              "$ref": "#/$defs/AvcCodecOptions",
               "description": "Compression implementation selected by the run configuration."
             }
           },
           "required": [
             "kind",
             "options",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Addressed image transfer registers.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "image-transfer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
             "irq"
           ],
           "type": "object"
@@ -5812,8 +5844,13 @@
           "type": "string"
         },
         {
-          "const": "MovieEncoderControl",
-          "description": "H.264 initialization and sequence-start controller.",
+          "const": "AvcCodecControl",
+          "description": "H.264 compression, decoding and addressed DMA controller.",
+          "type": "string"
+        },
+        {
+          "const": "ImageTransferControl",
+          "description": "Addressed image transfer controller.",
           "type": "string"
         },
         {
@@ -23206,19 +23243,6 @@
         "software"
       ],
       "type": "string"
-    },
-    "VideoEncoderOptions": {
-      "additionalProperties": false,
-      "description": "Compression backend selection; register and DMA behavior is shared.",
-      "properties": {
-        "backend": {
-          "$ref": "#/$defs/VideoEncoderBackend"
-        }
-      },
-      "required": [
-        "backend"
-      ],
-      "type": "object"
     },
     "VideoLayout": {
       "description": "Video-plane pixel packing declared by a display controller.",

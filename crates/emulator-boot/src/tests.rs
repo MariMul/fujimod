@@ -595,7 +595,7 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
 
     let prepared = prepare("x70-110-rec", &["x70-110-browser-camera".into()]).unwrap();
     assert_eq!(
-        model(&prepared, "video_encoder")["options"]["backend"],
+        model(&prepared, "avc_codec")["options"]["backend"],
         "software"
     );
     assert_eq!(
@@ -790,7 +790,7 @@ fn video_encoder_backend_is_selected_in_the_prepared_graph() {
     use fujimod_catalog_construction::VideoEncoderBackend;
     let base = prepare("x70-110-rec", &[]).unwrap();
     assert_eq!(
-        model(&base, "video_encoder")["options"]["backend"],
+        model(&base, "avc_codec")["options"]["backend"],
         "software"
     );
     for (backend, name) in [
@@ -806,16 +806,16 @@ fn video_encoder_backend_is_selected_in_the_prepared_graph() {
             .factory_options
             .video_encoder_backend = Some(backend);
         let run = prepared(resolved).unwrap();
-        assert_eq!(model(&run, "video_encoder")["options"]["backend"], name);
+        assert_eq!(model(&run, "avc_codec")["options"]["backend"], name);
         assert_eq!(
-            model(&run, "video_encoder")["irq"],
+            model(&run, "avc_codec")["irq"],
             json!({"core":0,"line":75})
         );
         assert_eq!(
             run.plan
                 .nodes
                 .iter()
-                .find(|n| n.name == "video_encoder")
+                .find(|n| n.name == "avc_codec")
                 .unwrap()
                 .windows
                 .len(),
@@ -905,7 +905,7 @@ fn browser_graphs_select_portable_encoding_on_every_host() {
         }
         let run = prepared(resolved).unwrap();
         assert_eq!(
-            model(&run, "video_encoder")["options"]["backend"],
+            model(&run, "avc_codec")["options"]["backend"],
             "software"
         );
     }

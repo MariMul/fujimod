@@ -1,17 +1,19 @@
-//! Register-driven FFF60000 AVC encoder. Packed YYCbCr DMA is compressed by
-//! the selected host codec, then committed to the two programmed bitstream banks
-//! before status/IRQ publication. The declared clock is 64 luma samples/tick
-//! (setup/stop: two ticks), independent of host encoder speed.
-use fujimod_emulator_imaging::exr2_isp::dma::physical;
-use fujimod_emulator_imaging::exr2_isp::{due, word};
+//! Register-driven FFF60000 AVC codec. Encoding consumes packed YYCbCr;
+//! alternate decoding consumes Annex B stream banks and publishes packed frames.
+//! DMA precedes status/IRQ publication. The declared clock is 64 luma samples
+//! per tick (setup/stop: two ticks), independent of host codec speed.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_image_codecs::h264::{self, Codec, Config};
+use fujimod_emulator_imaging::exr2_isp::dma::physical;
+use fujimod_emulator_imaging::exr2_isp::{due, word};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+mod decode;
+use decode::{DecodeInput, DecodeOutput, DecodeRuntime, DecodeState};
 
+pub use fujimod_catalog_construction::AvcCodecOptions as Options;
 use fujimod_catalog_construction::VideoEncoderBackend as Backend;
-pub use fujimod_catalog_construction::VideoEncoderOptions as Options;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Pending {
@@ -21,6 +23,9 @@ struct Pending {
     bank: u32,
     bits: u32,
     flags: u32,
+    mode: u32,
+    decoded: Option<DecodeOutput>,
+    decode_input: Option<DecodeInput>,
 }
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -36,21 +41,24 @@ struct State {
     output_bytes: u64,
     history_lengths: Vec<usize>,
     payload_length: usize,
+    mode: u32,
+    decode: DecodeState,
 }
-pub struct VideoEncoder {
+pub struct AvcCodec {
     state: State,
     irq: Irq,
     payload: Arc<[u8]>,
     history: Vec<Arc<[u8]>>,
     codec: Option<Codec>,
+    decode_runtime: DecodeRuntime,
 }
-impl VideoEncoder {
+impl AvcCodec {
     pub fn new(options: Options, irq: Irq) -> Result<Self, String> {
         h264::validate_backend(options.backend)?;
         Ok(Self {
             state: State {
                 backend: options.backend,
-                r: vec![0; 0xf00 / 4],
+                r: vec![0; 0x1000 / 4],
                 pending: None,
                 finish_requested: false,
                 irq_level: false,
@@ -61,11 +69,14 @@ impl VideoEncoder {
                 output_bytes: 0,
                 history_lengths: Vec::new(),
                 payload_length: 0,
+                mode: 1,
+                decode: DecodeState::default(),
             },
             irq,
             payload: Arc::from([]),
             history: Vec::new(),
             codec: None,
+            decode_runtime: DecodeRuntime::default(),
         })
     }
     fn r(&self, offset: usize) -> u32 {
@@ -75,7 +86,7 @@ impl VideoEncoder {
         self.state.r[offset / 4] = value;
     }
     fn valid(o: usize) -> bool {
-        matches!(o,0x400..=0x408|0x440|0x444|0x490..=0x4a4|0x4ac..=0x4b8|0x4c4|0x4c8|0x4fc|0xb00|0xb04|0xb08|0xb6c|0xb74..=0xb80|0xbd0..=0xbe0|0xc00|0xc20|0xc24|0xc80..=0xc9c|0xca8|0xcbc|0xd00..=0xd28|0xd44..=0xd7c|0xd88|0xd8c|0xdc8|0xdcc|0xde0|0xe00..=0xe24|0xe30..=0xe50|0xe58..=0xef0)
+        matches!(o,0x400..=0x40c|0x440|0x444|0x490..=0x4a4|0x4ac..=0x4b8|0x4c4|0x4c8|0x4fc|0xb00|0xb04|0xb08|0xb6c|0xb74..=0xb80|0xbd0..=0xbe0|0xc00|0xc20|0xc24|0xc80..=0xc9c|0xca8|0xcbc|0xd00..=0xd28|0xd44..=0xd7c|0xd88|0xd8c|0xdc8|0xdcc|0xde0|0xe00..=0xe24|0xe30..=0xe50|0xe58..=0xef0|0xf00..=0xf1c|0xfc0)
     }
     fn configuration(&self) -> Result<Config, String> {
         // Admit the progressive packed-input path. Scaling, cropped/field
@@ -111,7 +122,7 @@ impl VideoEncoder {
                 0x400..=0x408 | 0x490..=0x4a4 | 0x4ac | 0xbd0..=0xbe0 |
                 0xc20 | 0xc24 | 0xca8 | 0xd88 | 0xd8c |
                 0xe00..=0xe14 | 0xe20 | 0xe24 | 0xe30 | 0xe34 | 0xe38 |
-                0xe44 | 0xe48 | 0xe94 | 0xea0)
+                0xe44 | 0xe48 | 0xe94 | 0xea0 | 0xf00..=0xfc0)
             {
                 return Err(format!("H.264 unsupported register {offset:#x}={value:#x}"));
             }
@@ -147,14 +158,21 @@ impl VideoEncoder {
             bank: (self.r(0x4a4) >> 5) & 1,
             bits: 0,
             flags,
+            mode: self.state.mode,
+            decoded: None,
+            decode_input: None,
         });
         Ok(())
     }
     fn encode(&mut self, cx: &Cx<'_>) -> Result<(), String> {
+        if self.state.mode != 1 {
+            return Err("AVC mode change requires initialization".into());
+        }
         if self.state.pending.is_some() {
             return Err("H.264 frame submitted while busy".into());
         }
         let config = self.configuration()?;
+        self.state.mode = 1;
         if self.state.config.is_some_and(|c| c != config) {
             return Err("H.264 sequence configuration changed without initialization".into());
         }
@@ -238,6 +256,9 @@ impl VideoEncoder {
             bank: bank as u32,
             bits,
             flags,
+            mode: 1,
+            decoded: None,
+            decode_input: None,
         });
         self.state.parameter_sets = parameter_sets;
         self.state.bank_available = available;
@@ -266,15 +287,26 @@ impl VideoEncoder {
                 self.set(0xc24, 0);
                 self.set(0x4a4, self.r(0x4a4) & !32);
                 self.state.bank_available = [self.r(0x4a4) & 4 != 0, self.r(0x4a4) & 8 != 0];
+                self.state.mode = 1;
+                self.state.decode.sequence = None;
+                self.state.decode.parameter_bytes = 0;
+                self.state.decode.history_lengths.clear();
+                self.state.decode.next_slot = 0;
+                self.decode_runtime.parameters = Arc::from([]);
+                self.decode_runtime.history.clear();
+                self.decode_runtime.codec = None;
+                self.decode_runtime.pending_input = Arc::from([]);
+                self.state.decode.pending_input_bytes = 0;
                 Ok(())
             }
             0x8000 => self.encode(cx),
+            0x4000 => self.decode_frame(cx),
             0x2000 => {
                 if self.state.pending.is_some() {
                     self.state.finish_requested = true;
                     Ok(())
                 } else {
-                    self.notice(cx.now(), 1 << 15)
+                    self.notice(cx.now(), 1 << if self.state.mode == 2 { 13 } else { 15 })
                 }
             }
             0x1000 => self.notice(cx.now(), 1 << 14),
@@ -300,11 +332,11 @@ impl VideoEncoder {
             );
         }
         if s.parameter_sets.len() > 88
-            || s.r.len() != 0xf00 / 4
+            || s.r.len() != 0x1000 / 4
             || s.irq_level != (s.r[0xc24 / 4] != 0)
-            || saved.blobs().len() != s.history_lengths.len() + 1
+            || saved.blobs().len() != s.history_lengths.len() + s.decode.history_lengths.len() + 4
             || saved.blobs()[0].len() != s.payload_length
-            || saved.blobs()[1..]
+            || saved.blobs()[1..1 + s.history_lengths.len()]
                 .iter()
                 .zip(&s.history_lengths)
                 .any(|(b, n)| b.len() != *n)
@@ -313,6 +345,23 @@ impl VideoEncoder {
         {
             return Err("H.264 checkpoint sizes differ".into());
         }
+        let decode_offset = 1 + s.history_lengths.len();
+        if !(1..=2).contains(&s.mode)
+            || s.decode.parameter_bytes > 128
+            || s.decode.input_bytes > 2 * 1024 * 1024
+            || s.decode.pending_input_bytes > 2 * 1024 * 1024
+            || s.decode.history_lengths.len() > 120
+            || s.decode.history_lengths.iter().sum::<usize>() > 16 * 1024 * 1024
+            || saved.blobs()[decode_offset].len() != s.decode.parameter_bytes
+            || saved.blobs()[decode_offset + 1].len() != s.decode.input_bytes
+            || saved.blobs()[decode_offset + 2].len() != s.decode.pending_input_bytes
+            || saved.blobs()[decode_offset + 3..]
+                .iter()
+                .zip(&s.decode.history_lengths)
+                .any(|(b, n)| b.len() != *n)
+        {
+            return Err("AVC checkpoint decode sizes differ".into());
+        }
         if let Some(pending) = &s.pending {
             let total = pending
                 .writes
@@ -320,13 +369,42 @@ impl VideoEncoder {
                 .try_fold(0usize, |n, (_, size)| n.checked_add(*size));
             if pending.writes.len() > 2
                 || pending.bank > 1
-                || pending.flags & !((1 << 9) | (1 << 12) | (1 << 14) | (1 << 15)) != 0
+                || !(1..=2).contains(&pending.mode)
+                || pending.flags & !0xfe00 != 0
                 || !pending.writes.is_empty() && total != Some(s.payload_length)
             {
                 return Err("H.264 checkpoint pending DMA differs".into());
             }
             for (address, size) in &pending.writes {
                 physical(*address, *size)?;
+            }
+            if let Some(output) = &pending.decoded
+                && (pending.mode != 2
+                    || output.packing != "yycbcr"
+                    || output.width < 16
+                    || output.width > 1920
+                    || output.height < 16
+                    || output.height > 1088
+                    || output.stride != output.width * 2
+                    || output.bytes != output.stride * output.height
+                    || output.completed_tick != pending.deadline
+                    || output.slot >= 3
+                    || pending.writes
+                        != [(physical(output.destination, output.bytes)?, output.bytes)]
+                    || fujimod_emulator_devices::fingerprint::bytes(&saved.blobs()[0])["sha256"]
+                        .as_str()
+                        != Some(&output.sha256)
+                    || fujimod_emulator_devices::fingerprint::bytes(
+                        &saved.blobs()[decode_offset + 2],
+                    )["sha256"]
+                        .as_str()
+                        != Some(&output.input_sha256)
+                    || pending
+                        .decode_input
+                        .as_ref()
+                        .is_none_or(|input| input.sha256 != output.input_sha256))
+            {
+                return Err("AVC checkpoint decoded output differs".into());
             }
         }
         if let Some(c) = s.config {
@@ -340,9 +418,9 @@ impl VideoEncoder {
         Ok(s)
     }
 }
-impl Device for VideoEncoder {
+impl Device for AvcCodec {
     fn name(&self) -> &'static str {
-        "exr2-isp-video-encoder"
+        "exr2-isp-avc-codec"
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         if self.state.backend == Backend::Videotoolbox && !self.history.is_empty() {
@@ -352,6 +430,10 @@ impl Device for VideoEncoder {
         }
         let mut blobs = vec![self.payload.clone()];
         blobs.extend(self.history.iter().cloned());
+        blobs.push(self.decode_runtime.parameters.clone());
+        blobs.push(self.decode_runtime.input.clone());
+        blobs.push(self.decode_runtime.pending_input.clone());
+        blobs.extend(self.decode_runtime.history.iter().cloned());
         Ok(Checkpoint::encode(self.name(), &self.state)?.with_blobs(blobs))
     }
     fn validate_checkpoint(&self, s: &Checkpoint) -> Result<(), String> {
@@ -360,7 +442,13 @@ impl Device for VideoEncoder {
     fn restore_checkpoint(&mut self, s: &Checkpoint) -> Result<(), String> {
         self.state = self.decoded(s)?;
         self.payload = s.blobs()[0].clone();
-        self.history = s.blobs()[1..].to_vec();
+        let offset = 1 + self.state.history_lengths.len();
+        self.history = s.blobs()[1..offset].to_vec();
+        self.decode_runtime.parameters = s.blobs()[offset].clone();
+        self.decode_runtime.input = s.blobs()[offset + 1].clone();
+        self.decode_runtime.pending_input = s.blobs()[offset + 2].clone();
+        self.decode_runtime.history = s.blobs()[offset + 3..].to_vec();
+        self.decode_runtime.codec = None;
         self.codec = None;
         Ok(())
     }
@@ -370,11 +458,15 @@ impl Device for VideoEncoder {
         }
         Ok(
             serde_json::json!({"state":self.state,"payload":fujimod_emulator_devices::fingerprint::bytes(&self.payload),
-            "history":self.history.iter().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)).collect::<Vec<_>>()}),
+            "history":self.history.iter().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)).collect::<Vec<_>>(),
+            "decode_input":fujimod_emulator_devices::fingerprint::bytes(&self.decode_runtime.input),
+            "decode_pending_input":fujimod_emulator_devices::fingerprint::bytes(&self.decode_runtime.pending_input),
+            "decode_parameters":fujimod_emulator_devices::fingerprint::bytes(&self.decode_runtime.parameters),
+            "decode_history":self.decode_runtime.history.iter().map(|b|fujimod_emulator_devices::fingerprint::bytes(b)).collect::<Vec<_>>()}),
         )
     }
     fn read(&mut self, cx: &mut Cx<'_>, a: u64, s: u8) -> u64 {
-        let Some(o) = word(cx, a, s, 0xfff60000, 0xf00) else {
+        let Some(o) = word(cx, a, s, 0xfff60000, 0x1000) else {
             return 0;
         };
         if !Self::valid(o) {
@@ -384,7 +476,7 @@ impl Device for VideoEncoder {
         self.r(o) as u64
     }
     fn write(&mut self, cx: &mut Cx<'_>, a: u64, s: u8, v: u64) {
-        let Some(o) = word(cx, a, s, 0xfff60000, 0xf00) else {
+        let Some(o) = word(cx, a, s, 0xfff60000, 0x1000) else {
             return;
         };
         if !Self::valid(o) || v > u32::MAX as u64 {
@@ -443,12 +535,26 @@ impl Device for VideoEncoder {
                 offset += length;
             }
             if !p.writes.is_empty() {
-                self.state.frames += 1;
-                self.state.output_bytes += u64::from(p.bits.div_ceil(8));
                 self.set(0x4ac, p.cursor);
                 self.set(0x4a4, (self.r(0x4a4) & !32) | (p.bank << 5));
-                self.set(0xd88, p.bits & 65535);
-                self.set(0xd8c, p.bits >> 16);
+                if let Some(output) = p.decoded {
+                    self.state.decode.last_input = p.decode_input;
+                    self.decode_runtime.input =
+                        std::mem::replace(&mut self.decode_runtime.pending_input, Arc::from([]));
+                    self.state.decode.input_bytes = self.decode_runtime.input.len();
+                    self.state.decode.pending_input_bytes = 0;
+                    self.state.decode.frames += 1;
+                    self.state.decode.next_slot = (output.slot + 1) % 3;
+                    self.set(0xfc0, output.slot);
+                    self.set(0xf08, output.width as u32);
+                    self.set(0xf0c, output.height as u32);
+                    self.state.decode.last_output = Some(output);
+                } else {
+                    self.state.frames += 1;
+                    self.state.output_bytes += u64::from(p.bits.div_ceil(8));
+                    self.set(0xd88, p.bits & 65535);
+                    self.set(0xd8c, p.bits >> 16);
+                }
             }
             if p.flags & (1 << 15) != 0 {
                 self.codec = None;
@@ -457,11 +563,13 @@ impl Device for VideoEncoder {
                 self.state.config = None;
                 self.state.parameter_sets.clear();
             }
-            self.set(0xc20, 4);
+            self.set(0xc20, p.mode << 2);
             self.set(0xc24, self.r(0xc24) | p.flags);
             if self.state.finish_requested {
                 self.state.finish_requested = false;
-                if let Err(e) = self.notice(cx.now(), 1 << 15) {
+                if let Err(e) =
+                    self.notice(cx.now(), 1 << if self.state.mode == 2 { 13 } else { 15 })
+                {
                     cx.fail(e);
                     return;
                 }
@@ -476,6 +584,12 @@ impl Device for VideoEncoder {
     }
     fn save(&self) -> serde_json::Value {
         serde_json::json!({"backend":self.state.backend,"frames":self.state.frames,"output_bytes":self.state.output_bytes,
-            "registers":self.state.r,"pending":self.state.pending,"gop_frames":self.history.len()})
+            "registers":self.state.r,"pending":self.state.pending,"gop_frames":self.history.len(),"decode":self.state.decode})
+    }
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        match name {
+            "decode-input" => Ok(&self.decode_runtime.input),
+            _ => Err(format!("AVC codec has no diagnostic buffer {name}")),
+        }
     }
 }

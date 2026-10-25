@@ -1,7 +1,7 @@
-use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use crate::*;
-use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
+use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_image_codecs::h264;
 use openh264::{decoder::Decoder, formats::YUVSource};
 
@@ -9,7 +9,7 @@ const SOURCE: usize = 0x10000;
 const FIRST: usize = 0x20000;
 const SECOND: usize = 0x30000;
 const SIZE: usize = 0x10000;
-fn configured(h: &mut TestHost) -> VideoEncoder {
+fn configured(h: &mut TestHost) -> AvcCodec {
     configured_backend(
         h,
         fujimod_catalog_construction::VideoEncoderBackend::Software,
@@ -18,8 +18,8 @@ fn configured(h: &mut TestHost) -> VideoEncoder {
 fn configured_backend(
     h: &mut TestHost,
     backend: fujimod_catalog_construction::VideoEncoderBackend,
-) -> VideoEncoder {
-    let mut d = VideoEncoder::new(video::Options { backend }, Irq { core: 0, line: 75 }).unwrap();
+) -> AvcCodec {
+    let mut d = AvcCodec::new(avc::Options { backend }, Irq { core: 0, line: 75 }).unwrap();
     for (o, v) in [
         (0xe00, 64),
         (0xe04, 0x2000 | 32),
@@ -52,7 +52,7 @@ fn input(h: &mut TestHost, bright: bool) {
         }
     }
 }
-fn frame(d: &mut VideoEncoder, h: &mut TestHost) -> Vec<u8> {
+fn frame(d: &mut AvcCodec, h: &mut TestHost) -> Vec<u8> {
     let start = read(d, h, 0xfff604ac) as usize;
     let bank = (read(d, h, 0xfff604a4) >> 5) & 1;
     let before = h.ram.clone();
@@ -309,8 +309,8 @@ fn start_latches_input_and_destinations_and_queues_finish() {
 
 #[test]
 fn backend_selection_is_explicit() {
-    assert!(serde_json::from_str::<video::Options>("{}").is_err());
-    assert!(serde_json::from_str::<video::Options>(r#"{"backend":"automatic"}"#).is_err());
+    assert!(serde_json::from_str::<avc::Options>("{}").is_err());
+    assert!(serde_json::from_str::<avc::Options>(r#"{"backend":"automatic"}"#).is_err());
 }
 
 #[test]
