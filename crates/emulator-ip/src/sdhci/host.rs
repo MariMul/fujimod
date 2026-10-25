@@ -422,16 +422,25 @@ impl SdHost {
                 }
             }
             41 if app => {
-                request.state = State::Ready;
-                response =
-                    if rom || self.options.protocol == Protocol::Sdhc && argument == 0x40100000 {
-                        0xc0ff8000
-                    } else {
-                        0xc0100000
-                    };
+                // Physical Layer 7.10 section 4.2.3.1: a zero voltage window
+                // queries OCR without initializing; bits 31:24 are ignored.
+                let voltage = if rom || self.options.protocol == Protocol::Sdhc {
+                    0x00ff8000
+                } else {
+                    0x00100000
+                };
+                let inquiry = argument & 0x00ffffff == 0;
+                response = voltage;
+                if !inquiry {
+                    request.state = State::Ready;
+                    // SDHC, immediately ready, with no 1.8 V switch accepted.
+                    response |= 0xc0000000;
+                }
                 self.state != State::Idle
-                    || !(argument == if rom { 0x40100000 } else { 0x41100000 }
-                        || self.options.protocol == Protocol::Sdhc && argument == 0x40100000)
+                    || (!inquiry
+                        && (argument & !0x51ffff00 != 0
+                            || argument & 0x40000000 == 0
+                            || argument & voltage == 0))
             }
             2 => {
                 request.state = State::Identification;
@@ -770,11 +779,11 @@ impl SdHost {
         }
         let r = self.request.as_mut().ok_or("SD PIO without request")?;
         let is_write = r.transfer == Transfer::PioWrite;
-        if r.phase != Phase::Ready
-            || is_write != write.is_some()
-            || r.command != 17 && self.regs.get(0x30) & if is_write { 0x10 } else { 0x20 } != 0
-        {
-            return Err("SD PIO requires ready buffer and W1C ACK".into());
+        // Present State's buffer enable controls access. Buffer Ready is a
+        // latched interrupt notification, independent of FIFO availability
+        // (Host Controller 4.20 section 2.2.9).
+        if r.phase != Phase::Ready || is_write != write.is_some() {
+            return Err("SD PIO requires a ready buffer in the transfer direction".into());
         }
         let value = if let Some(value) = write {
             self.fifo.write(value)?;
@@ -859,11 +868,9 @@ impl SdHost {
         let ready = if self.options.protocol == Protocol::Rom {
             self.rom_fifo_ready
         } else {
-            self.request.as_ref().is_some_and(|r| {
-                r.phase == Phase::Ready
-                    && r.transfer == Transfer::PioRead
-                    && (r.command == 17 || self.regs.get(0x30) & 0x20 == 0)
-            })
+            self.request
+                .as_ref()
+                .is_some_and(|r| r.phase == Phase::Ready && r.transfer == Transfer::PioRead)
         };
         self.fifo.publish(ready);
     }
@@ -875,6 +882,9 @@ impl SdHost {
                     (4, 4)
                         | (8, 4)
                         | (16, 4)
+                        | (20, 4)
+                        | (24, 4)
+                        | (28, 4)
                         | (0x28, 4)
                         | (0x30, 4)
                         | (0x34, 4)
@@ -1334,6 +1344,44 @@ mod tests {
         }
     }
     #[test]
+    fn ocr_inquiry_keeps_idle_until_a_supported_voltage_is_selected() {
+        let mut m = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        for argument in [0, 0xff000000] {
+            command(&mut m, &mut h, 0x371a0000, 0);
+            due(&mut m, &mut h);
+            command(&mut m, &mut h, 0x29020000, argument);
+            due(&mut m, &mut h);
+            assert_eq!(m.state, State::Idle);
+            assert_eq!(read(&mut m, &mut h, 0x10, 4), 0x00ff8000);
+        }
+        command(&mut m, &mut h, 0x371a0000, 0);
+        due(&mut m, &mut h);
+        for argument in [0x51000100, 0x11100000, 0x71ff8000] {
+            assert!(m.plan(0x29020000, argument).is_err());
+        }
+        command(&mut m, &mut h, 0x29020000, 0x51ff8000);
+        due(&mut m, &mut h);
+        assert_eq!(m.state, State::Ready);
+        assert_eq!(read(&mut m, &mut h, 0x10, 4), 0xc0ff8000);
+        command(&mut m, &mut h, 0x02090000, 0);
+        due(&mut m, &mut h);
+        let mut cid = Vec::new();
+        for offset in [0x10, 0x14, 0x18, 0x1c] {
+            let value = read(&mut m, &mut h, offset, 4);
+            let halves =
+                read(&mut m, &mut h, offset, 2) | read(&mut m, &mut h, offset + 2, 2) << 16;
+            assert_eq!(value, halves);
+            cid.extend_from_slice(&(value as u32).to_le_bytes());
+        }
+        assert_eq!(
+            cid,
+            (u128::from_be_bytes(*b"\xfeMCVIRT0\x10\x12\x34\x56\x78\x01\xaa\xff") >> 8)
+                .to_le_bytes()
+        );
+    }
+    #[test]
     fn combined_single_read_uses_current_transfer_mode_not_previous_command() {
         let mut m = host(Protocol::Sdhc);
         m.state = State::Transfer;
@@ -1709,11 +1757,8 @@ mod tests {
             else {
                 panic!("PIO FIFO did not publish a consuming word");
             };
-            if protocol != Protocol::Rom {
-                assert_eq!(consume(), None, "buffer-ready status requires W1C ACK");
-                write(&mut normal, &mut a, 0x30, 2, 0x21);
-                write(&mut fast, &mut b, 0x30, 2, 0x21);
-            }
+            // Neither callback nor published FIFO access requires clearing the
+            // Buffer Read Ready interrupt before consuming available data.
             for word in 0..127u32 {
                 assert_eq!(read(&mut normal, &mut a, 0x20, 4), u64::from(word));
                 assert_eq!(consume(), Some(word));
@@ -1767,14 +1812,14 @@ mod tests {
         write(&mut m, &mut h, 4, 2, 512);
         write(&mut m, &mut h, 6, 2, 1);
         command(&mut m, &mut h, 0x193a0026, 4);
-        due(&mut m, &mut h);
         let mut cx = h.cx();
         m.write(&mut cx, BASE + 0x20, 4, 0xaa);
         assert!(cx.refusal().is_some());
-        write(&mut m, &mut h, 0x30, 2, 0x11);
+        due(&mut m, &mut h);
         for _ in 0..128 {
             write(&mut m, &mut h, 0x20, 4, 0x12345678);
         }
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x10, 0x10);
         assert_eq!(m.card.sector(4).unwrap(), [0; 512]);
         due(&mut m, &mut h);
         assert_eq!(&m.card.sector(4).unwrap()[..4], &[0x78, 0x56, 0x34, 0x12]);
