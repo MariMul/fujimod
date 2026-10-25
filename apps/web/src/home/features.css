@@ -1,6 +1,6 @@
 .catalog {
   /* Icon optical size as a multiple of the adjacent text's capital height (scripts/icon-metrics.ts). */
-  --icon-size: 1.35cap;
+  --icon-size: 1.62cap;
   max-width: 880px;
   margin: 0 auto 40px;
   scroll-margin-top: 20px;
@@ -172,7 +172,7 @@
   color: var(--dim);
 }
 .catalog-premiere {
-  --icon-size: 1.25cap;
+  --icon-size: 1.5cap;
   display: flex;
   align-items: center;
   gap: 0.45em;
@@ -187,7 +187,7 @@
 }
 /* INSPIRED BY and THANKS: icon in a hanging column, so wrapped lines align with the text. */
 .catalog-credits {
-  --icon-size: 1.25cap;
+  --icon-size: 1.5cap;
   --credit-indent: calc(1.556 * var(--icon-size) + 0.45em);
   list-style: none;
   padding: 0;
