@@ -132,6 +132,158 @@ fn read_commands(r: &Routine, command: u64, geometry: u64, page: u32) -> bool {
     geometry_call && command_call
 }
 
+fn instruction_address(r: &Routine, position: usize) -> Option<u64> {
+    let mut remaining = position as u64 * 4;
+    r.header.ranges.iter().find_map(|&(lo, hi)| {
+        if remaining < hi - lo {
+            Some(lo + remaining)
+        } else {
+            remaining -= hi - lo;
+            None
+        }
+    })
+}
+
+fn free_handle_required(r: &Routine) -> bool {
+    let optimized = r.code.windows(3).any(|w| {
+        w[0].mnemonic == "ldr"
+            && w[0].operands == "r3, [r2, r0, lsl #2]"
+            && w[1].mnemonic == "cmp"
+            && w[1].operands == "r3, #0"
+            && w[2].mnemonic == "mvnne"
+            && w[2].operands == "r0, #0x13"
+    }) && r.has("str", "r3, [r2, r0, lsl #2]");
+    let stack_arguments = r.has("str", "r0, [fp, #-0x10]") && r.has("str", "r2, [fp, #-0x18]");
+    let unoptimized = stack_arguments
+        && r.code.windows(7).any(|w| {
+            if !w[..6]
+                .iter()
+                .zip([
+                    ("ldr", "r3, [fp, #-0x10]"),
+                    ("lsl", "r3, r3, #2"),
+                    ("ldr", "r2, [fp, #-0x18]"),
+                    ("add", "r3, r2, r3"),
+                    ("ldr", "r3, [r3]"),
+                    ("cmp", "r3, #0"),
+                ])
+                .all(|(i, (mnemonic, operands))| i.mnemonic == mnemonic && i.operands == operands)
+                || w[6].mnemonic != "bne"
+            {
+                return false;
+            }
+            let target = number(w[6].operands.trim_start_matches('#')).ok();
+            r.code.iter().enumerate().any(|(p, i)| {
+                instruction_address(r, p) == target
+                    && i.mnemonic == "mvn"
+                    && i.operands == "r3, #0x13"
+            })
+        })
+        && r.has("str", "r3, [r2]");
+    optimized || unoptimized
+}
+
+fn literal_word<L: Lookup>(
+    locator: &Locator<'_, L>,
+    r: &Routine,
+    position: usize,
+) -> Result<(u64, u64)> {
+    let offset = r.code[position]
+        .operands
+        .strip_prefix("r2, [pc, #")
+        .and_then(|s| s.strip_suffix(']'))
+        .ok_or("DMA handle argument is not a PC-relative literal")?;
+    let address = instruction_address(r, position)
+        .ok_or("DMA handle literal instruction is outside its ranges")?
+        + 8;
+    let address = if let Some(offset) = offset.strip_prefix('-') {
+        address.checked_sub(number(offset)?)
+    } else {
+        address.checked_add(number(offset)?)
+    }
+    .ok_or("DMA handle literal address overflows")?;
+    let bytes = locator
+        .index
+        .read(locator.firmware, &locator.unit, address, 4)
+        .map_err(|e| e.to_string())?
+        .ok_or("unmapped DMA handle literal")?;
+    Ok((
+        address,
+        u64::from(u32::from_le_bytes(
+            bytes.try_into().map_err(|_| "short DMA handle literal")?,
+        )),
+    ))
+}
+
+/// The aligned read path leases receive channel 1. Its allocator requires a
+/// zero handle; the high-level block driver's lifecycle flag is not consulted.
+fn receive_dma<L: Lookup>(
+    locator: &Locator<'_, L>,
+    reader: &Routine,
+) -> Result<(Routine, Routine, u64, u64)> {
+    let acquire = locator.named("nand_acquire_dma_channel", |r| {
+        r.has("cmp", "r0, #1")
+            && r.has("add", "r2, r5, #4")
+            && r.has("ldr", "r2, [r3, r2, lsl #2]")
+            && r.has("str", "r2, [r6]")
+    })?;
+    if !reader.code.windows(3).any(|w| {
+        w[0].mnemonic == "mov"
+            && w[0].operands == "r0, #1"
+            && w[1].mnemonic == "sub"
+            && w[1].operands.starts_with("r1, fp, #")
+            && w[2].mnemonic == "bl"
+            && number(w[2].operands.trim_start_matches('#')).ok()
+                == Some(acquire.header.key.address)
+    }) {
+        return Err("NAND reader does not acquire receive DMA channel 1".into());
+    }
+    let bases = acquire
+        .code
+        .windows(4)
+        .filter_map(|w| {
+            if w[0].mnemonic != "movw"
+                || w[1].mnemonic != "movt"
+                || w[2].mnemonic != "add"
+                || w[2].operands != "r2, r5, #4"
+                || w[3].mnemonic != "ldr"
+                || w[3].operands != "r2, [r3, r2, lsl #2]"
+            {
+                return None;
+            }
+            Some(
+                number(w[0].operands.strip_prefix("r3, #")?).ok()?
+                    | number(w[1].operands.strip_prefix("r3, #")?).ok()? << 16,
+            )
+        })
+        .collect();
+    let base = one(bases, "NAND DMA state base")?;
+    let (position, target) = one(
+        acquire
+            .code
+            .windows(3)
+            .enumerate()
+            .filter_map(|(p, w)| {
+                (w[0].mnemonic == "mov"
+                    && w[0].operands == "r1, #2"
+                    && w[1].mnemonic == "ldr"
+                    && w[1].operands.starts_with("r2, [pc, #")
+                    && w[2].mnemonic == "bl")
+                    .then(|| Some((p + 1, number(w[2].operands.trim_start_matches('#')).ok()?)))?
+            })
+            .collect(),
+        "NAND DMA handle allocator",
+    )?;
+    let (literal_address, handle_array) = literal_word(locator, &acquire, position)?;
+    if handle_array != base + 16 {
+        return Err("NAND DMA allocation and returned handle arrays differ".into());
+    }
+    let allocator = locator.routine(target)?;
+    if !free_handle_required(&allocator) {
+        return Err("NAND DMA allocator does not require an unleased handle".into());
+    }
+    Ok((acquire, allocator, base + 20, literal_address))
+}
+
 /// Locate a corrected 512-byte or 2 KiB physical-page read ABI. The update origin is decoded
 /// by the container reader. No execution transport is claimed by this fact.
 /// Call under the located driver lock, with a zero-initialized progress word.
@@ -186,6 +338,7 @@ pub fn exr2_flash<L: Lookup>(
     let (geometry_address, selected, table, blocks, page, pages) =
         one(geometry, "selected NAND geometry")?;
     let reader = locator.named("nand_read_transfer", |r| read_contract(r, page, pages))?;
+    let (dma, handle_allocator, receive_handle, handle_literal) = receive_dma(&locator, &reader)?;
     let transfer_geometry = locator.named("nand_set_geometry", |r| {
         r.has("ldr", "r2, [r0]") && r.has("str", "r2, [r3, #-0xfff]")
     })?;
@@ -276,12 +429,16 @@ pub fn exr2_flash<L: Lookup>(
         (&unlock, "NAND driver unlock"),
         (&initializer, "NAND geometry initialization"),
         (&getter, "NAND page geometry query"),
+        (&dma, "NAND receive DMA acquisition"),
+        (&handle_allocator, "NAND DMA handle allocation"),
     ] {
         ranges.push(r.span(name));
     }
     if page == 512 {
         ranges.push(transfer_geometry.span("NAND page transfer geometry"));
     }
+    ranges
+        .push(json!({"name":"NAND DMA handle table reference","address":handle_literal,"size":4}));
     ranges.push(
         json!({"name":"selected NAND geometry record","address":table+selected*24,"size":24}),
     );
@@ -291,7 +448,7 @@ pub fn exr2_flash<L: Lookup>(
         "update_image":{"dat_offset":image_origin,"xor":255},
         "reader":{"symbol":"nand_read_transfer","alignment":page,"nand":{"page_bytes":page,"pages_per_block":pages,"destination_alignment":32,"controller_mode":0,"event_mode":0,"timeout_ms":2000,"max_pages_per_call":1,"lock":lock.header.key.address,"unlock":unlock.header.key.address}},
         "transport":null,"code_ranges":ranges,
-        "state_checks":[{"name":"NAND driver initialized","address":flag,"size":4,"value":1},{"name":"selected NAND geometry","address":geometry_address,"size":4,"value":selected}],
+        "state_checks":[{"name":"NAND receive DMA channel available","address":receive_handle,"size":4,"value":0},{"name":"selected NAND geometry","address":geometry_address,"size":4,"value":selected}],
         "control":{"offset":control_offset,"size":32768}
     }))
 }
@@ -351,6 +508,9 @@ mod tests {
             ("uxtb", "r3, sl"),
             ("bl", "#0x300"),
         ];
+        synthetic_routine(&instructions)
+    }
+    fn synthetic_routine(instructions: &[(&str, &str)]) -> Routine {
         Routine {
             header: crate::FunctionHeader {
                 key: crate::FunctionKey {
@@ -367,13 +527,44 @@ mod tests {
                 calls: vec![],
             },
             code: instructions
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|(mnemonic, operands)| super::super::flash::Instruction {
                     mnemonic: mnemonic.into(),
                     operands: operands.into(),
                 })
                 .collect(),
         }
+    }
+    #[test]
+    fn dma_precondition_requires_rejection_of_a_leased_handle() {
+        let optimized = [
+            ("ldr", "r3, [r2, r0, lsl #2]"),
+            ("cmp", "r3, #0"),
+            ("mvnne", "r0, #0x13"),
+            ("str", "r3, [r2, r0, lsl #2]"),
+        ];
+        let mut r = synthetic_routine(&optimized);
+        assert!(free_handle_required(&r));
+        r.code[2].mnemonic = "mvneq".into();
+        assert!(!free_handle_required(&r));
+        let unoptimized = [
+            ("str", "r0, [fp, #-0x10]"),
+            ("str", "r2, [fp, #-0x18]"),
+            ("ldr", "r3, [fp, #-0x10]"),
+            ("lsl", "r3, r3, #2"),
+            ("ldr", "r2, [fp, #-0x18]"),
+            ("add", "r3, r2, r3"),
+            ("ldr", "r3, [r3]"),
+            ("cmp", "r3, #0"),
+            ("bne", "#0x128"),
+            ("str", "r3, [r2]"),
+            ("mvn", "r3, #0x13"),
+        ];
+        let mut r = synthetic_routine(&unoptimized);
+        assert!(free_handle_required(&r));
+        r.code[8].operands = "#0x124".into();
+        assert!(!free_handle_required(&r));
     }
     #[test]
     fn small_page_reader_rejects_scaled_counts_and_missing_correction() {

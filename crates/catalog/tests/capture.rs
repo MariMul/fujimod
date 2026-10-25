@@ -99,7 +99,7 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
         flash.validate().unwrap();
         assert_eq!(flash.device.kind, "raw-nand");
         assert_eq!((flash.window.address, flash.window.size), (0, 0x4000000));
-        assert_eq!(flash.code_ranges.len(), 13);
+        assert_eq!(flash.code_ranges.len(), 16);
         let nand = flash.reader.nand.as_ref().unwrap();
         assert_eq!(
             (

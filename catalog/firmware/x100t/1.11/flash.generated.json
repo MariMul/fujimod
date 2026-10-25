@@ -87,6 +87,21 @@
       "size": 72
     },
     {
+      "name": "NAND receive DMA acquisition",
+      "address": 10158976,
+      "size": 188
+    },
+    {
+      "name": "NAND DMA handle allocation",
+      "address": 9570884,
+      "size": 168
+    },
+    {
+      "name": "NAND DMA handle table reference",
+      "address": 10159164,
+      "size": 4
+    },
+    {
       "name": "selected NAND geometry record",
       "address": 11960716,
       "size": 24
@@ -94,10 +109,10 @@
   ],
   "state_checks": [
     {
-      "name": "NAND driver initialized",
-      "address": 12937344,
+      "name": "NAND receive DMA channel available",
+      "address": 13237868,
       "size": 4,
-      "value": 1
+      "value": 0
     },
     {
       "name": "selected NAND geometry",
