@@ -2141,6 +2141,7 @@ dependencies = [
  "fujimod-emulator-parts-io",
  "fujimod-emulator-sensor-input",
  "fujimod-emulator-session",
+ "fujimod-emulator-storage",
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-imaging",
  "fujimod-emulator-xp5-io",

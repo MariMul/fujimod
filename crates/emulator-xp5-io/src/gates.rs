@@ -50,7 +50,7 @@ impl Gates {
         } else {
             (0x300..=0x334).contains(&o)
                 || (0x900..=0x944).contains(&o)
-                || matches!(o, 0x600 | 0x604 | 0x608 | 0x700)
+                || matches!(o, 0x150 | 0x154 | 0x600 | 0x604 | 0x608 | 0x700)
         }
     }
     fn status(&self, o: u64) -> Option<u64> {

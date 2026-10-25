@@ -14,12 +14,14 @@ pub mod imaging;
 pub mod lz;
 pub mod renderer;
 pub mod serial;
+pub mod sd;
 
 pub struct Companion {
     pub pins: mailbox::Pins,
     pub channel: mailbox::Channel,
 }
 pub struct Resources {
+    pub sd: BTreeMap<u64, sd::Media>,
     pub controls: Arc<dyn Controls>,
     pub pins: fujimod_emulator_devices::xp5::pins::SharedPins,
     pub clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks,
@@ -37,6 +39,11 @@ fn register_with_resources(
     let clocks = &resources.clocks;
     let companion = resources.companion.as_ref().map(|c| c.pins.companion);
     match window.kind.as_str() {
+        "sd-interface" => {
+            if window.size != 8 || !window.options.is_empty() {return Err("Invalid SD interface window".into());}
+            bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::new(window.base)?))?;
+        }
+        "sdhci" => sd::register(bus, window, &mut resources.sd)?,
         "boot-control" => {
             if window.base != 0xff90e000 || window.size != 4 {
                 return Err("invalid boot-control source window".into());

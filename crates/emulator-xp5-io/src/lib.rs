@@ -8,6 +8,7 @@ pub mod i2c;
 pub mod input_capture;
 pub mod mailbox;
 pub mod output_link;
+pub mod sd_interface;
 pub mod spi;
 pub mod temperature;
 pub mod timer;

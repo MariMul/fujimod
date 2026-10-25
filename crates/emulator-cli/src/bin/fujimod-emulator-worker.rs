@@ -271,6 +271,8 @@ enum Devices {
         controls: ControlInput,
         companion: Option<Companion>,
         storage: Option<String>,
+        #[serde(default)]
+        sd: Vec<xp5_board::sd::MediaInputs>,
         displays: Vec<Scanout>,
     },
 }
@@ -419,11 +421,13 @@ impl Worker {
         let storage_id = match &config.devices {
             Devices::Xp5 { storage, .. } => storage.as_deref(),
         };
+        let sd_ids: Vec<_> = match &config.devices { Devices::Xp5 { sd, .. } => sd.iter().flat_map(|media| media.files.iter().map(|(_, id)| id.as_str())).collect() };
         let used: BTreeSet<_> = config
             .images
             .iter()
             .map(|image| image.asset.as_str())
             .chain(storage_id)
+            .chain(sd_ids.iter().copied())
             .collect();
         if used != assets.keys().map(String::as_str).collect() {
             return Err("worker image/storage references differ from declared assets".into());
@@ -448,6 +452,7 @@ impl Worker {
             .map(|image| Ok((image.address, load(&image.asset)?)))
             .collect::<Result<Vec<_>, String>>()?;
         let storage_image = storage_id.map(load).transpose()?;
+        let sd_assets = sd_ids.into_iter().map(|id| Ok((id.to_owned(), load(id)?))).collect::<Result<BTreeMap<_,_>,String>>()?;
         let mode = config.mode.runtime();
         let mut graph = DeviceGraph::new();
         let mut unmodeled_devices = vec![];
@@ -457,6 +462,7 @@ impl Worker {
                 controls,
                 companion,
                 storage: _,
+                sd,
                 displays,
             } => {
                 let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
@@ -478,6 +484,7 @@ impl Worker {
                     );
                 }
                 let mut resources = xp5_board::Resources {
+                    sd: xp5_board::sd::resolve(sd, &sd_assets)?,
                     controls: input.clone(),
                     pins,
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
@@ -504,6 +511,7 @@ impl Worker {
                         Ok(())
                     }
                 })?;
+                if !resources.sd.is_empty() { return Err("unused SD media configuration".into()); }
                 if !resources.displays.is_empty() {
                     return Err("unused scanout configuration".into());
                 }

@@ -470,6 +470,7 @@ pub fn windows(
 
 /// An XP5 device bus assembled from the selected SoC profile.
 pub struct DeviceAssembly {
+    pub contacts: BTreeMap<String, fujimod_emulator_devices::parts::card_contacts::Contacts>,
     pub bus: Bus,
     pub inputs: crate::session::Inputs,
     pub nodes: BTreeMap<String, usize>,
@@ -485,6 +486,7 @@ pub fn assemble_devices(
     mut resources: xp5_board::Resources,
     mode: Mode,
 ) -> Result<DeviceAssembly, String> {
+    let contacts = resources.sd.iter().map(|(base, media)| (format!("{base:#x}"), media.contacts.clone())).collect();
     let input_driver: Arc<dyn DriveInput> = resources.pins.clone();
     let controls = Arc::new(ResistorKeys::new(input_driver, controls_options)?);
     controls.start(Duration::ZERO);
@@ -498,6 +500,7 @@ pub fn assemble_devices(
         ))
     };
     xp5_board::register_all(&mut graph, &windows, &mut resources, &mut unknown)?;
+    if !resources.sd.is_empty() { return Err("XP5 profile has unused card media".into()); }
     if !resources.displays.is_empty() {
         return Err("XP5 profile has unused display configurations".into());
     }
@@ -533,6 +536,7 @@ pub fn assemble_devices(
     }
     let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
+        contacts,
         bus,
         inputs: crate::session::Inputs::new(
             resources.pins,
@@ -636,7 +640,7 @@ pub fn open(
         contact_driver: None,
         resources: Default::default(),
         nodes: assembly.nodes,
-        contacts: BTreeMap::new(),
+        contacts: assembly.contacts,
         recording_frames: Default::default(),
     };
     Ok((session, assembly.inputs))

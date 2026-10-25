@@ -29,6 +29,8 @@ pub enum Definition {
         windows: Vec<DeviceWindow>,
         controls: Options,
         storage: Option<String>,
+        #[serde(default)]
+        sd: Vec<board::sd::MediaInputs>,
         companion: Option<Companion>,
         displays: Vec<Display>,
         interrupts: Option<Interrupts>,
@@ -162,6 +164,7 @@ impl Definition {
             windows,
             controls,
             storage,
+            sd,
             companion,
             displays,
             interrupts,
@@ -187,6 +190,7 @@ impl Definition {
             })
             .transpose()?;
         let resources = board::Resources {
+            sd: board::sd::resolve(sd, assets)?,
             controls: input,
             pins,
             storage,
