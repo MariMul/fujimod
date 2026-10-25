@@ -135,7 +135,7 @@
       ],
       "credits": {
         "premiere": false,
-        "inspired": [],
+        "inspired": [["Ricoh GRIII"]],
         "thanks": []
       }
     },
@@ -286,7 +286,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgu9bq5/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/old_school_gearhead/",
+              "text": ["u/old_school_gearhead"]
+            }
+          ]
+        ]
       }
     },
     {
@@ -406,7 +418,15 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            "suggested by ",
+            {
+              "href": "https://www.reddit.com/user/-ayiv-/",
+              "text": ["u/-ayiv-"]
+            }
+          ]
+        ]
       }
     },
     {
@@ -456,7 +476,7 @@
       "controls": [],
       "credits": {
         "premiere": false,
-        "inspired": [],
+        "inspired": [["Ricoh GRIII"]],
         "thanks": []
       }
     },
@@ -473,7 +493,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
+              "text": ["u/Visible-Marzipan5763"]
+            }
+          ]
+        ]
       }
     },
     {
@@ -501,7 +533,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgskdyo/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/ArvinAbadilla/",
+              "text": ["u/ArvinAbadilla"]
+            }
+          ]
+        ]
       }
     },
     {
@@ -597,7 +641,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgumwwa/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Mister_Mints/",
+              "text": ["u/Mister_Mints"]
+            }
+          ]
+        ]
       }
     },
     {
@@ -659,7 +715,42 @@
         "inspired": [],
         "thanks": []
       },
-      "choice_credits": {}
+      "choice_credits": {
+        "65:24": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgrajab/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/Jinjer/",
+                "text": ["u/Jinjer"]
+              }
+            ]
+          ]
+        },
+        "4:3": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgrhabd/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/YatoAkito/",
+                "text": ["u/YatoAkito"]
+              }
+            ]
+          ]
+        }
+      }
     },
     "shape_surround_item": {
       "title": "SURROUND VIEW",
@@ -675,7 +766,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgu9bq5/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/old_school_gearhead/",
+              "text": ["u/old_school_gearhead"]
+            }
+          ]
+        ]
       },
       "choice_credits": {}
     },
@@ -725,7 +828,93 @@
         "inspired": [],
         "thanks": []
       },
-      "choice_credits": {}
+      "choice_credits": {
+        "GOLDEN RATIO": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgr9ple/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/Puzzleheaded-Tea9962/",
+                "text": ["u/Puzzleheaded-Tea9962"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - BOTTOM LEFT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - BOTTOM RIGHT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - TOP LEFT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        },
+        "GOLDEN SPIRAL - TOP RIGHT": {
+          "premiere": false,
+          "inspired": [],
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/phb9mxi/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/AdGroundbreaking2874/",
+                "text": ["u/AdGroundbreaking2874"]
+              }
+            ]
+          ]
+        }
+      }
     },
     "film_simulation": {
       "title": "FILM SIMULATION",
@@ -772,14 +961,26 @@
       "changes": "Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.",
       "credits": {
         "premiere": false,
-        "inspired": [],
+        "inspired": [["Ricoh GRIII"]],
         "thanks": []
       },
       "choice_credits": {
         "RAW HIGHLIGHT": {
           "premiere": false,
           "inspired": [],
-          "thanks": []
+          "thanks": [
+            [
+              {
+                "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/ph5js9v/",
+                "text": ["suggested"]
+              },
+              " by ",
+              {
+                "href": "https://www.reddit.com/user/Dry_Safe_6021/",
+                "text": ["u/Dry_Safe_6021"]
+              }
+            ]
+          ]
         }
       }
     },
@@ -810,7 +1011,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
+              "text": ["u/Visible-Marzipan5763"]
+            }
+          ]
+        ]
       },
       "choice_credits": {}
     },
@@ -841,7 +1054,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgu87sm/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/yourasian/",
+              "text": ["u/yourasian"]
+            }
+          ]
+        ]
       },
       "choice_credits": {}
     },
@@ -1039,7 +1264,7 @@
       "changes": null,
       "credits": {
         "premiere": false,
-        "inspired": [],
+        "inspired": [["Ricoh GRIII"]],
         "thanks": []
       },
       "choice_credits": {}
@@ -1088,7 +1313,19 @@
       "credits": {
         "premiere": false,
         "inspired": [],
-        "thanks": []
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgumwwa/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Mister_Mints/",
+              "text": ["u/Mister_Mints"]
+            }
+          ]
+        ]
       },
       "choice_credits": {}
     }
