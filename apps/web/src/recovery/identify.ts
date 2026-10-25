@@ -22,7 +22,7 @@ function controlsFor(firmwareId: string): PhysicalControls | undefined {
   );
 }
 
-/** Every camera with an official release in the catalog, newest release each, by name. */
+/** Every camera with an official release in the catalog, newest release each, by name, GFX last. */
 export function recoveryCameras(): DownloadRow[] {
   const newest = new Map<string, DownloadRow>();
   for (const release of reference.firmwareVersions()) {
@@ -38,8 +38,9 @@ export function recoveryCameras(): DownloadRow[] {
       url: release.download_url,
     });
   }
-  return [...newest.values()].sort((a, b) =>
-    a.model.localeCompare(b.model, 'en', { numeric: true }),
+  const gfx = (row: DownloadRow) => (row.model.startsWith('GFX') ? 1 : 0);
+  return [...newest.values()].sort(
+    (a, b) => gfx(a) - gfx(b) || a.model.localeCompare(b.model, 'en', { numeric: true }),
   );
 }
 

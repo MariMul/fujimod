@@ -9,6 +9,9 @@
   color: var(--dim);
   text-decoration: none;
 }
+.site-nav a[aria-current] {
+  color: #eee;
+}
 .site-nav a:hover {
   color: #eee;
 }

@@ -3,12 +3,14 @@ import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { initialize } from 'fujimod';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
+import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 
 import { identify, recoveryCameras, type IdentifiedFirmware } from './identify';
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
 import { recoveryCard } from './card';
+import { SiteHeader } from '../ui/site-header';
 import { SYSTEMS, FORMAT_STEPS, detectSystem, type System } from './format-guide';
 import '../home/site.css';
 import '../navigation.css';
@@ -27,6 +29,7 @@ export default function Recovery() {
 
   const [dragging, setDragging] = createSignal(false);
   const [saved, setSaved] = createSignal<CameraRecord[]>([]);
+  const [chosenSaved, setChosenSaved] = createSignal<string>();
   const [cameras, setCameras] = createSignal<DownloadRow[]>([]);
   // The catalog's boot combinations come from the Wasm catalog.
   let ready: Promise<unknown> = Promise.resolve();
@@ -48,9 +51,12 @@ export default function Recovery() {
   });
 
   async function chooseFile(file: File | undefined) {
-    if (file) await chooseDat(new Uint8Array(await file.arrayBuffer()));
+    if (!file) return;
+    setChosenSaved(undefined);
+    await chooseDat(new Uint8Array(await file.arrayBuffer()));
   }
   async function chooseSaved(camera: CameraRecord) {
+    setChosenSaved(camera.id);
     const blob: Blob = await new CameraStore().firmware(camera.id);
     await chooseDat(new Uint8Array(await blob.arrayBuffer()));
   }
@@ -77,18 +83,7 @@ export default function Recovery() {
 
   return (
     <div class="shell recovery">
-      <header>
-        <a href="../" aria-label="Fujimod">
-          <img src="../brand.png" alt="Fujimod" width="110" height="28" />
-        </a>
-        <nav class="site-nav" aria-label="Pages">
-          <a href="../">Emulator</a>
-          <a href="../dev-tools/">Dev Tools</a>
-          <a href="./" aria-current="page">
-            Recovery
-          </a>
-        </nav>
-      </header>
+      <SiteHeader root="../" current="recovery" />
       <main>
         <h1>Recovery</h1>
         <p class="recovery-lead">
@@ -99,23 +94,12 @@ export default function Recovery() {
         <ol class="recovery-steps">
           <li>
             <h2>Format an SD card as FAT32</h2>
-            <div class="recovery-segmented" role="radiogroup" aria-label="System">
-              <For each={SYSTEMS}>
-                {(name) => (
-                  <label>
-                    <input
-                      class="visually-hidden"
-                      type="radio"
-                      name="recovery-system"
-                      value={name}
-                      checked={system() === name}
-                      onChange={() => setSystem(name)}
-                    />
-                    <span>{name}</span>
-                  </label>
-                )}
-              </For>
-            </div>
+            <SegmentedControl
+              label="System"
+              options={SYSTEMS.map((name) => ({ value: name, label: name }))}
+              value={system()}
+              onSelect={setSystem}
+            />
             <ol class="recovery-sub">
               <For each={FORMAT_STEPS[system()]}>{(step) => <li>{step}</li>}</For>
             </ol>
@@ -138,21 +122,26 @@ export default function Recovery() {
             >
               <div class="launcher-main">
                 <Show when={saved().length > 0}>
-                  <div class="launcher-list" role="list" aria-label="Firmware in this browser">
+                  <div class="recovery-saved" role="radiogroup" aria-label="Firmware in this browser">
                     <For each={saved()}>
                       {(camera) => (
-                        <button
-                          class="launcher-row"
-                          role="listitem"
-                          disabled={busy()}
-                          onClick={() => void chooseSaved(camera)}
-                        >
+                        <label class="recovery-saved-row">
+                          <input
+                            class="visually-hidden"
+                            type="radio"
+                            name="recovery-saved"
+                            checked={chosenSaved() === camera.id}
+                            disabled={busy()}
+                            onChange={() => void chooseSaved(camera)}
+                          />
+                          <span class="recovery-radio" aria-hidden="true">
+                            <Icon name="check" size={12} />
+                          </span>
                           <span class="launcher-row-text">
                             <strong>{camera.name}</strong>
                             <span>In this browser</span>
                           </span>
-                          <Icon name="forward" size={16} />
-                        </button>
+                        </label>
                       )}
                     </For>
                   </div>
@@ -237,7 +226,11 @@ export default function Recovery() {
             <h2>Boot from the SD card</h2>
             <Show
               when={identified()}
-              fallback={<p class="recovery-dim">Choose a firmware above.</p>}
+              fallback={
+                <p class="recovery-dim">
+                  Choose a firmware above to see instructions for your camera.
+                </p>
+              }
             >
               {(result) => (
                 <>

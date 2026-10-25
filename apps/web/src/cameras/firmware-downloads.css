@@ -100,16 +100,7 @@
   color: rgb(235 235 245 / 55%);
 }
 .downloads {
-  container-type: inline-size;
   min-width: 0;
-}
-@container (max-width: 400px) {
-  .downloads-link {
-    width: 32px;
-    padding: 0;
-    justify-content: center;
-    font-size: 0;
-  }
 }
 @media (max-height: 520px) and (pointer: coarse) {
   .downloads-table {

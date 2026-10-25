@@ -7,6 +7,7 @@ import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { CameraTable } from '../ui/cameras';
 import { byModel, type FirmwareProgress } from '../ui/camera-progress';
 import { PersonalNote } from '../ui/personal-note';
+import { SiteHeader } from '../ui/site-header';
 import { FeatureCatalog } from './Features';
 import { FirmwareChoice, createFirmwareChoice } from '../ui/firmware-actions';
 import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
@@ -61,18 +62,7 @@ export default function Home() {
   return (
     <>
       <div class="shell">
-        <header>
-          <a href="./" aria-label="Fujimod">
-            <img src="brand.png" alt="Fujimod" width="110" height="28" />
-          </a>
-          <nav class="site-nav" aria-label="Pages">
-            <a href="dev-tools/">Dev Tools</a>
-            <a href="recovery/">Recovery</a>
-          </nav>
-          <div class="meta build-info">
-            <a href="https://github.com/justjake/fujimod">github.com/justjake/fujimod</a>
-          </div>
-        </header>
+        <SiteHeader root="" />
         <main>
           <PersonalNote />
           <FeatureCatalog />

@@ -1,68 +1,68 @@
-.recovery.shell {
-  max-width: 760px;
-}
 .recovery main {
-  margin-top: 8px;
+  max-width: var(--content-width);
 }
 .recovery h1 {
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .recovery-lead {
+  margin: 0 0 32px;
   color: var(--dim);
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1.45;
-  margin: 0 0 44px;
 }
+/* The badge's left edge aligns with the title and the rail runs through its center. */
 .recovery-steps {
-  display: grid;
-  gap: 44px;
+  --badge: 26px;
+  --indent: calc(var(--badge) + 18px);
   margin: 0;
   padding: 0;
   list-style: none;
   counter-reset: step;
 }
-/* Badge beside the heading; the step's content hangs under the heading text. */
 .recovery-steps > li {
   counter-increment: step;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  column-gap: 14px;
-  align-items: start;
+  position: relative;
+  padding: 0 0 36px var(--indent);
+}
+.recovery-steps > li:last-child {
+  padding-bottom: 0;
 }
 .recovery-steps > li::before {
   content: counter(step);
-  grid-row: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--badge);
+  height: var(--badge);
   border-radius: 50%;
   background: rgb(118 118 128 / 30%);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.recovery-steps > li > * {
-  grid-column: 2;
+.recovery-steps > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--badge) + 6px);
+  bottom: 6px;
+  left: calc(var(--badge) / 2 - 0.5px);
+  width: 1px;
+  background: rgb(84 84 88 / 65%);
 }
 .recovery-steps h2 {
-  grid-row: 1;
-  align-self: center;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-  margin: 0;
-}
-.recovery-steps > li > h2 + * {
-  margin-top: 14px;
+  line-height: var(--badge);
+  margin: 0 0 10px;
 }
 .recovery-steps p {
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.45;
   margin: 0 0 12px;
 }
 .recovery-steps p:last-child {
@@ -71,36 +71,8 @@
 .recovery-pending {
   opacity: 0.45;
 }
-.recovery-segmented {
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  padding: 2px;
-  border-radius: 9px;
-  background: rgb(118 118 128 / 24%);
-  justify-self: start;
-}
-.recovery-segmented label {
-  display: block;
-  cursor: pointer;
-}
-.recovery-segmented span {
-  display: block;
-  min-width: 72px;
-  padding: 6px 14px;
-  border-radius: 7px;
-  font-size: 13px;
-  font-weight: 500;
-  text-align: center;
-  color: rgb(235 235 245 / 70%);
-}
-.recovery-segmented input:checked + span {
-  background: #636366;
-  color: #fff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
-}
-.recovery-segmented input:focus-visible + span {
-  outline: 2px solid #0a84ff;
+.recovery .segmented {
+  max-width: 340px;
 }
 .recovery-sub {
   display: grid;
@@ -114,19 +86,62 @@
   color: var(--dim);
   font-variant-numeric: tabular-nums;
 }
+.recovery-saved,
 .recovery-holds {
   display: grid;
-  gap: 1px;
   margin: 0;
   padding: 0;
   list-style: none;
   border-radius: 12px;
+  background: rgb(44 44 46 / 80%);
   overflow: hidden;
 }
+.recovery-saved {
+  margin-bottom: 18px;
+}
+.recovery-saved-row,
 .recovery-holds li {
-  padding: 11px 14px;
-  background: rgb(44 44 46 / 80%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 9px 14px;
   font-size: 15px;
+}
+.recovery-saved-row {
+  cursor: pointer;
+}
+.recovery-saved-row:not(:first-child),
+.recovery-holds li:not(:first-child) {
+  box-shadow: inset 0 0.5px rgb(84 84 88 / 65%);
+}
+.recovery-saved-row:hover {
+  background: rgb(255 255 255 / 6%);
+}
+.recovery-saved-row:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}
+.recovery-radio {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 1.5px solid rgb(235 235 245 / 30%);
+  border-radius: 50%;
+  color: transparent;
+}
+.recovery-saved-row input:checked + .recovery-radio {
+  border-color: #0a84ff;
+  background: #0a84ff;
+  color: #fff;
+}
+.recovery-saved-row input:focus-visible + .recovery-radio {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
 }
 .recovery .launcher-main > .recovery-ok,
 .recovery .launcher-main > .recovery-error {
@@ -144,7 +159,6 @@
   color: var(--dim);
 }
 .recovery-download {
-  justify-self: start;
   margin-bottom: 14px;
   border: 0;
 }
@@ -159,43 +173,18 @@
   grid-template-columns: 1fr;
   gap: 28px;
   width: 100%;
-  margin: 14px 0 0;
+  margin: 0;
   padding: 24px;
   border-radius: 18px;
 }
 .recovery .downloads-table {
   margin-bottom: 0;
 }
-/* Phones: steps use the full width; the badge stays beside the heading. */
 @media (max-width: 720px) {
-  .recovery.shell {
-    padding-inline: 20px;
-  }
-  .recovery h1 {
-    margin-top: 4px;
-  }
-  .recovery-lead {
-    margin-bottom: 36px;
-  }
-  .recovery-steps {
-    gap: 40px;
-  }
-  .recovery-steps > li {
-    column-gap: 12px;
-  }
-  .recovery-steps > li > :not(h2) {
-    grid-column: 1 / -1;
-  }
-  .recovery-steps p,
-  .recovery-sub,
-  .recovery-holds li {
-    font-size: 17px;
-  }
   .recovery .launcher {
     padding: 0;
   }
-  .recovery-segmented {
-    display: grid;
-    justify-self: stretch;
+  .recovery .downloads-table {
+    max-height: 226px;
   }
 }

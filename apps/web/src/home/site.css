@@ -1,6 +1,8 @@
 @import '@fujimod/emulator-ui/style.css';
 
 .shell {
+  /* Width of a single column of content, such as the camera launcher. */
+  --content-width: 820px;
   max-width: 1240px;
   margin: auto;
   padding: 0 28px 48px;
@@ -92,6 +94,11 @@ footer {
   }
   .shell {
     padding: 0 14px 36px;
+  }
+}
+@media (max-width: 520px) {
+  header .meta {
+    display: none;
   }
 }
 #idle-cameras {

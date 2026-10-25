@@ -5,7 +5,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 40px;
-  width: min(820px, 100% - 32px);
+  width: min(var(--content-width), 100% - 32px);
   margin: 32px 0;
   padding: 32px;
   border: 1px solid rgb(84 84 88 / 45%);
