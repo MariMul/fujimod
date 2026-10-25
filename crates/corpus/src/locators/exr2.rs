@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 type Result<T> = std::result::Result<T, String>;
 
-fn wide_constants(r: &Routine) -> Vec<u64> {
+pub(super) fn wide_constants(r: &Routine) -> Vec<u64> {
     r.code
         .windows(2)
         .filter_map(|p| {
@@ -285,7 +285,7 @@ fn receive_dma<L: Lookup>(
 }
 
 /// Locate a corrected 512-byte or 2 KiB physical-page read ABI. The update origin is decoded
-/// by the container reader. No execution transport is claimed by this fact.
+/// by the container reader. The transport uses an owned heap allocation.
 /// Call under the located driver lock, with a zero-initialized progress word.
 pub fn exr2_flash<L: Lookup>(
     index: &L,
@@ -447,7 +447,7 @@ pub fn exr2_flash<L: Lookup>(
         "window":{"address":0,"size":u64::from(blocks)*u64::from(page)*u64::from(pages)},
         "update_image":{"dat_offset":image_origin,"xor":255},
         "reader":{"symbol":"nand_read_transfer","alignment":page,"nand":{"page_bytes":page,"pages_per_block":pages,"destination_alignment":32,"controller_mode":0,"event_mode":0,"timeout_ms":2000,"max_pages_per_call":1,"lock":lock.header.key.address,"unlock":unlock.header.key.address}},
-        "transport":null,"code_ranges":ranges,
+        "transport":"exr2-query-heap","code_ranges":ranges,
         "state_checks":[{"name":"NAND receive DMA channel available","address":receive_handle,"size":4,"value":0},{"name":"selected NAND geometry","address":geometry_address,"size":4,"value":selected}],
         "control":{"offset":control_offset,"size":32768}
     }))

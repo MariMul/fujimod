@@ -75,7 +75,7 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
         flash.validate().unwrap();
         assert_eq!(flash.device.kind, "raw-nand");
         assert!(flash.device.jedec_id.is_none());
-        assert!(flash.transport.is_none());
+        assert_eq!(flash.transport.as_deref(), Some("exr2-query-heap"));
         assert_eq!((flash.window.address, flash.window.size), (0, 0x8000000));
         let nand = flash.reader.nand.as_ref().unwrap();
         assert_eq!(
@@ -110,7 +110,7 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
             ),
             (512, 32, 0, 1)
         );
-        assert!(flash.transport.is_none());
+        assert_eq!(flash.transport.as_deref(), Some("exr2-query-heap"));
         for (page, pages) in [(512, 64), (2048, 32), (1024, 32)] {
             let mut invalid = flash.clone();
             let nand = invalid.reader.nand.as_mut().unwrap();
@@ -119,5 +119,25 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
             invalid.reader.alignment = page;
             assert!(invalid.validate().is_err());
         }
+    }
+}
+
+#[test]
+fn bounded_boot_code_capture_is_specific_to_its_firmware() {
+    let catalog = ReferenceCatalog::bundled().unwrap();
+    let state = catalog
+        .resolve_firmware("x100v-301")
+        .unwrap()
+        .state
+        .unwrap();
+    let rom = state.regions.iter().find(|r| r.name == "boot-rom").unwrap();
+    assert_eq!(
+        (rom.address, rom.size, rom.constant),
+        (0xfff00000, 0x8000, false)
+    );
+    state.validate().unwrap();
+    for id in ["xt4-212", "xs10-311"] {
+        let state = catalog.resolve_firmware(id).unwrap().state.unwrap();
+        assert!(!state.regions.iter().any(|r| r.name == "boot-rom"));
     }
 }

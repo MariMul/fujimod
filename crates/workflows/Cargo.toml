@@ -12,10 +12,11 @@ doctest = false
 
 [features]
 service-capture = []
-artifact-build = ["dep:fujimod-firmware"]
+artifact-build = ["dep:fujimod-firmware", "dep:fujimod-corpus"]
 
 [dependencies]
 fujimod-firmware = { workspace = true, optional = true }
+fujimod-corpus = { path = "../corpus", optional = true }
 fujimod-catalog.workspace = true
 sha2.workspace = true
 fujimod-catalog-camera.workspace = true

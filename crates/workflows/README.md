@@ -114,7 +114,9 @@ bulk reader. Constant regions must agree across two reads; all-zero and all-FF
 constants are omitted as masked. Each delivered region carries a SHA-256.
 
 `flash::backup` uses the catalog flash contract and a separately built
-flash-reader payload. The supported transport is `xp5-cmd-callback`. It verifies
+flash-reader payload. `xp5-cmd-callback` uses a temporary command callback and
+zero executable reservation. `exr2-query-heap` uses a stock query callback and
+an allocation returned by stock `malloc`. Both verify
 the stock reader and transport instructions, translation state, driver state,
 payload upload, request/result ABI and update-backed control before delivering
 backup chunks. Camera-only chunks are delivered first; the returned SHA-256
@@ -122,6 +124,14 @@ covers flash-offset order. Cleanup verifies ownership and restores the callback,
 executable reservation, source, scratch and original debug gate. Unknown
 completion sends no further commands. A sink error stops capture and runs the
 same cleanup.
+
+The EXR II payload reads corrected physical NAND main-area pages, one stock
+page-reader call at a time, under the located driver lock. It supports 512-byte
+and 2 KiB page contracts. It does not initialize or shut down the high-level
+driver and sends no FTL, journal, program or erase request. It preserves the
+located DMA and geometry state, restores query outputs after every callback,
+and frees the allocation and restores the compiled bootstrap only after known
+completion and verified ownership.
 
 JavaScript exposes `Session.prepareServiceSession`, `backupFlash` and
 `dumpState`; each holds the session lease for the complete workflow, including
@@ -134,3 +144,7 @@ instructions, executable translations, and control hashes. The
 `flash_reader_build` example accepts an explicit staging recipe with source
 files and a compiler command, then writes separate binary and JSON artifacts.
 It replaces the runtime catalog only after every declared reader validates.
+EXR II preparation also requires an explicit function index, checks its
+allocator/configuration candidates against initialized update bytes, locates
+CPU0 cache helpers by immutable fingerprints, and rejects absolute references
+into the compiled entrypoints' link image.

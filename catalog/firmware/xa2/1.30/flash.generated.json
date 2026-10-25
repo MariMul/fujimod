@@ -29,7 +29,7 @@
       "unlock": 7144164
     }
   },
-  "transport": null,
+  "transport": "exr2-query-heap",
   "code_ranges": [
     {
       "name": "nand_read_transfer",

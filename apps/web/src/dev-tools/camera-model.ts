@@ -132,7 +132,7 @@ export interface ServicePreparation {
 }
 export interface FlashBackup {
   /** Device kind and part, from the firmware's flash fact. */
-  device: { kind: string; part: string };
+  device: { kind: string; part?: string };
   size: number;
   sha256: string;
 }

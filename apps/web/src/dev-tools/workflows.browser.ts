@@ -5,10 +5,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import type { CameraModel } from './camera-model';
 import type { CameraStore } from '../cameras/store';
 import type { Catalog } from '../catalog';
+import type { WasmWorkerEvent } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 
 declare global {
   interface Window {
     __fujimodCameraModel?: CameraModel;
+    __workflowWorker?: Worker;
   }
 }
 const url = process.env.FUJIMOD_WEB_URL || 'http://127.0.0.1:5201/';
@@ -23,8 +25,12 @@ try {
     if (frame === page.mainFrame()) console.log('Page', frame.url());
   });
   const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('pageerror', (error) => {
+    errors.push(error.message);
+    console.error(error.stack);
+  });
   page.on('console', (message) => {
+    if (message.text().startsWith('Flash backup: ')) console.log(message.text());
     if (message.type() === 'error') {
       errors.push(message.text());
       console.error(message.text());
@@ -35,6 +41,7 @@ try {
     globalThis.Worker = class extends NativeWorker {
       constructor(...args: ConstructorParameters<typeof Worker>) {
         super(...args);
+        if (String(args[0]).includes('/wasm-worker.ts')) window.__workflowWorker = this;
         this.addEventListener('message', (event: MessageEvent<{ type?: string }>) => {
           if (event.data?.type === 'error') console.error(JSON.stringify(event.data));
         });
@@ -47,7 +54,7 @@ try {
   });
   await page.waitForFunction(() => Boolean(window.__fujimodCameraModel));
   await page.waitForLoadState('networkidle');
-  await page.evaluate(async (firmwareId) => {
+  const savedId = await page.evaluate(async (firmwareId) => {
     const module = (await import(
       /* @vite-ignore */ new URL('/src/cameras/store.ts', location.href).href
     )) as { CameraStore: typeof CameraStore };
@@ -95,41 +102,98 @@ try {
     });
   }, firmwareId);
   console.log('Check flash backup');
-  const backup = await page.evaluate(async (firmwareId) => {
-    const model = window.__fujimodCameraModel!;
-    const catalog = (await (await fetch('/runtime/catalog.json')).json()) as Catalog;
-    const available = Boolean(catalog.firmwares.find((f) => f.id === firmwareId)?.flash_reader);
-    const pieces: { offset: number; size: number }[] = [];
-    try {
-      const result = await model.withSession(
-        model.cameras()[0].id,
-        'flash verification',
-        (session) =>
-          session.backupFlash(firmwareId, (piece) => {
-            pieces.push({ offset: piece.offset, size: piece.data.length });
-          }),
-      );
-      let end = 0;
-      for (const piece of pieces.sort((a, b) => a.offset - b.offset)) {
-        if (piece.offset !== end) throw Error('Flash chunks do not cover a contiguous range');
-        end += piece.size;
+  const backup = await page.evaluate(
+    async ({ firmwareId, savedId }) => {
+      const model = window.__fujimodCameraModel!;
+      const catalog = (await (await fetch('/runtime/catalog.json')).json()) as Catalog;
+      const available = Boolean(catalog.firmwares.find((f) => f.id === firmwareId)?.flash_reader);
+      const pieces: { offset: number; data: Uint8Array }[] = [];
+      let delivered = 0;
+      const digest = async (bytes: ArrayBuffer | Uint8Array<ArrayBuffer>) =>
+        Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>
+          byte.toString(16).padStart(2, '0'),
+        ).join('');
+      let serial = -1;
+      const durable = async () => {
+        const worker = window.__workflowWorker;
+        if (!worker) throw Error('Simulation worker was not observed');
+        const request = serial--;
+        await new Promise<void>((resolve, reject) => {
+          const reply = (event: MessageEvent<WasmWorkerEvent>) => {
+            if (
+              (event.data.type === 'reply' || event.data.type === 'error') &&
+              event.data.serial === request
+            ) {
+              worker.removeEventListener('message', reply);
+              if (event.data.type === 'error') reject(Error(event.data.error));
+              else resolve();
+            }
+          };
+          worker.addEventListener('message', reply);
+          worker.postMessage({ type: 'rpc', serial: request, request: { action: 'save' } });
+        });
+        const module = (await import(
+          /* @vite-ignore */ new URL('/src/cameras/store.ts', location.href).href
+        )) as { CameraStore: typeof CameraStore };
+        const save = await new module.CameraStore().saved(savedId);
+        if (!save) throw Error('Durable state was not saved');
+        return digest(save.durable);
+      };
+      const durableBefore = await durable();
+      try {
+        const result = await model.withSession(
+          model.cameras()[0].id,
+          'flash verification',
+          (session) =>
+            session.backupFlash(firmwareId, (piece) => {
+              pieces.push({ offset: piece.offset, data: piece.data.slice() });
+              delivered += piece.data.length;
+              if (delivered % (16 * 1024 * 1024) === 0)
+                console.log(`Flash backup: ${delivered / 1048576} MiB delivered`);
+            }),
+        );
+        let end = 0;
+        const image = new Uint8Array(result.size);
+        for (const piece of pieces.sort((a, b) => a.offset - b.offset)) {
+          if (piece.offset !== end) throw Error('Flash chunks do not cover a contiguous range');
+          image.set(piece.data, piece.offset);
+          end += piece.data.length;
+        }
+        if (end !== result.size) throw Error('Flash chunks do not cover the whole device');
+        const independentSha256 = await digest(image);
+        if (independentSha256 !== result.sha256) throw Error('Independent flash digest differs');
+        await model.withSession(model.cameras()[0].id, 'cleanup verification', async (session) => {
+          const prepared = await session.prepareServiceSession(firmwareId);
+          if (prepared.guardBefore !== 1 || prepared.debugBefore !== 1)
+            throw Error('Service flags changed during flash backup');
+        });
+        const durableAfter = await durable();
+        if (durableAfter !== durableBefore)
+          throw Error('Persistent storage changed during flash backup');
+        return {
+          status: 'complete',
+          independentSha256,
+          durableBefore,
+          durableAfter,
+          chunks: pieces.length,
+          ...result,
+        };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        if (available || pieces.length || !reason.includes('no built flash reader')) throw error;
+        return { status: 'unavailable', reason };
       }
-      if (end !== result.size) throw Error('Flash chunks do not cover the whole device');
-      return { status: 'complete', ...result };
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      if (available || pieces.length || !reason.includes('no built flash reader')) throw error;
-      return { status: 'unavailable', reason };
-    }
-  }, firmwareId);
+    },
+    { firmwareId, savedId },
+  );
   console.log(`Flash backup: ${backup.status}`);
   if (process.env.FUJIMOD_TEST_STATE === '0') {
-    assert.deepEqual(errors, []);
-    console.log(`PASS ${firmwareId}: service prepared; flash backup ${backup.status}`);
     await writeFile(
       new URL(`${firmwareId}-service.json`, output),
       JSON.stringify({ preparation, backup }, null, 2),
     );
+    assert.deepEqual(errors, []);
+    console.log(`PASS ${firmwareId}: service prepared; flash backup ${backup.status}`);
     await page.evaluate(() =>
       window.__fujimodCameraModel!.remove(window.__fujimodCameraModel!.cameras()[0].id),
     );

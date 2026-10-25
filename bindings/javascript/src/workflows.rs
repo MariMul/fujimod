@@ -300,7 +300,7 @@ impl Session {
             .firmware
             .update
             .as_ref()
-            .is_none_or(|update| payload.firmware_sha256 != update.sha256)
+            .is_none_or(|update| payload.firmware_sha256() != update.sha256)
         {
             return Err(workflow_error("Flash payload firmware hash differs"));
         }
@@ -399,7 +399,7 @@ export interface CapturedStateRegion {
     data: Uint8Array;
 }
 export interface FlashBackupResult {
-    device: { kind: string; part: string };
+    device: { kind: string; part?: string };
     size: number;
     sha256: string;
 }

@@ -24,6 +24,8 @@ pub struct Selection {
     pub command: Vec<String>,
     /// Browser catalog display and update-download metadata.
     pub display: Value,
+    #[serde(default)]
+    pub index: Option<PathBuf>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -88,7 +90,10 @@ struct Source {
 fn sources(map: &Value, inverted: &[u8]) -> Result<Vec<Source>> {
     let units = list(&map["facts"]["load_map"]["value"], "units")?;
     let mut result = Vec::new();
-    for unit in units.iter().filter(|u| u["role"] == "resident") {
+    for unit in units
+        .iter()
+        .filter(|u| u["role"] == "resident" || u["role"] == "kernel")
+    {
         let source = get(unit, "source")?;
         let packed = extent(inverted, num(source, "dat_offset")?, num(source, "size")?)?;
         let mut bytes = match text(source, "compression")? {
@@ -173,6 +178,13 @@ fn symbol(manifest: &Value, name: &str, size: Option<u64>, base: u64, count: u64
 /// Verify source identities, executable mappings, symbols and the initial
 /// update-backed control without constructing a CPU or opening a device.
 pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artifact, Vec<u8>)> {
+    if selected
+        .flash
+        .as_ref()
+        .is_some_and(|f| f.transport.as_deref() == Some("exr2-query-heap"))
+    {
+        return prepare_exr2(input, selected);
+    }
     let flash = selected.flash.as_ref().ok_or("no catalog flash fact")?;
     let bulk = selected.bulk.as_ref().ok_or("no catalog bulk fact")?;
     check(
@@ -356,7 +368,7 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    let payload = Payload {
+    let payload = super::xp5::Payload {
         schema: 1,
         firmware_id: selected.firmware.id.clone(),
         firmware_sha256: update_identity.sha256.clone(),
@@ -413,7 +425,7 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     payload.validate(flash, bulk, &image)?;
     Ok((
         Artifact {
-            payload,
+            payload: Payload::Xp5Command(payload),
             image: "flash-reader.bin".into(),
         },
         image,
@@ -422,6 +434,183 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
 
 /// Build every declared selection and stage metadata and binary images. The
 /// runtime catalog is replaced only after all payloads validate successfully.
+fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Artifact, Vec<u8>)> {
+    let flash = selected.flash.as_ref().ok_or("no flash fact")?;
+    let bulk = selected.bulk.as_ref().ok_or("no bulk fact")?;
+    check(selected.soc.id == "exr2", "NAND execution requires EXR II")?;
+    let identity = selected
+        .firmware
+        .update
+        .as_ref()
+        .ok_or("no update identity")?;
+    let update = fs::read(&input.update)?;
+    check(
+        update.len() as u64 == identity.size && sha256(&update) == identity.sha256,
+        "update identity differs",
+    )?;
+    let inverted = invert(&update);
+    let map = document(&input.load_map)?;
+    check(
+        map["format_version"] == 2
+            && map["firmware_id"] == selected.firmware.id
+            && map["firmware_sha256"] == identity.sha256,
+        "load-map identity differs",
+    )?;
+    let units = sources(&map, &inverted)?;
+    let manifest = document(&input.manifest)?;
+    check(
+        manifest["target"] == selected.firmware.id
+            && manifest["firmware_sha256"] == identity.sha256
+            && manifest["mode"] == "runtime"
+            && list(&manifest, "words")?.is_empty()
+            && list(&manifest, "overrides")?.is_empty()
+            && list(&manifest, "inits")?.is_empty(),
+        "unsupported NAND payload build",
+    )?;
+    let regions = list(&manifest, "regions")?;
+    check(regions.len() == 1, "NAND build requires one region")?;
+    let region = &regions[0];
+    let filename = text(region, "file")?;
+    check(
+        Path::new(filename).components().count() == 1
+            && !matches!(filename, "." | "..")
+            && !Path::new(filename).is_absolute(),
+        "payload image must be beside the manifest",
+    )?;
+    let compiled = fs::read(
+        input
+            .manifest
+            .parent()
+            .ok_or("manifest directory")?
+            .join(filename),
+    )?;
+    check(
+        compiled.len() as u64 == num(region, "size")?
+            && sha256(&compiled) == text(region, "sha256")?,
+        "compiled NAND image differs",
+    )?;
+    let base = num(region, "address")?;
+    let mut image = Vec::new();
+    let mut sizes = Vec::new();
+    for name in ["flash_reader_call", "flash_reader"] {
+        let item = one(list(&manifest, "symbols")?, "name", name)?;
+        let at = num(item, "address")?;
+        let size = num(item, "size")?;
+        check(
+            at >= base && size > 0 && at.is_multiple_of(4) && size.is_multiple_of(4),
+            "invalid NAND entry extent",
+        )?;
+        let bytes = extent(&compiled, at - base, size)?;
+        // Runtime builds use word relocations. No code body may carry a pointer
+        // into its link image: all runtime data and calls arrive as arguments.
+        check(
+            !bytes.as_chunks::<4>().0.iter().any(|b| {
+                let v = u32::from_le_bytes(*b) as u64;
+                v >= base && v < base + compiled.len() as u64
+            }),
+            "NAND entry has an absolute self reference",
+        )?;
+        image.extend(bytes);
+        sizes.push(size);
+        if name == "flash_reader_call" {
+            check(size <= 32, "bootstrap exceeds borrowed slot")?;
+            image.resize(32, 0);
+        }
+    }
+    let index = fujimod_corpus::Store::open(
+        input
+            .index
+            .as_ref()
+            .ok_or("NAND build requires an explicit function index")?,
+    )?;
+    let execution = fujimod_corpus::locators::exr2_execution(&index, &selected.firmware.id)?;
+    let mut ranges = list(&execution, "code_ranges")?.clone();
+    use fujimod_corpus::Lookup;
+    for range in &ranges {
+        let at = num(range, "address")?;
+        let size = num(range, "size")?;
+        check(
+            index
+                .read(&selected.firmware.id, "main", at, size.try_into()?)?
+                .as_deref()
+                == Some(source(&units, at, size)?),
+            "execution locator index differs from update source",
+        )?;
+    }
+    // The EXR II CPU0 kernel's cache and barrier entrypoints are qualified as
+    // complete immutable spans, including the shared cache helpers' literals.
+    let kernel = units
+        .iter()
+        .find(|u| u.address == 0x40000)
+        .ok_or("missing CPU0 kernel")?;
+    let mut primitives = Vec::new();
+    for (size, hash) in [
+        (
+            0x214,
+            "10aad5ca7b798181283de15647d4cae836a2feaf0ce7363f23b430a0855d316c",
+        ),
+        (
+            0x28,
+            "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890",
+        ),
+    ] {
+        let matches: Vec<_> = kernel
+            .bytes
+            .windows(size)
+            .enumerate()
+            .step_by(4)
+            .filter(|(_, b)| sha256(b) == hash)
+            .map(|(i, _)| kernel.address + i as u64)
+            .collect();
+        check(
+            matches.len() == 1,
+            "missing or ambiguous EXR II kernel execution primitive",
+        )?;
+        let address = matches[0];
+        ranges.push(json!({"address":address,"size":size}));
+        primitives.push(address);
+    }
+    for range in &flash.code_ranges {
+        ranges.push(json!({"address":range.address,"size":range.size}));
+    }
+    let update_size = (inverted.len() as u64)
+        .checked_sub(flash.update_image.dat_offset)
+        .ok_or("invalid NAND update origin")?
+        .min(flash.window.size);
+    check(flash.update_image.xor == 255, "unsupported NAND update XOR")?;
+    let control = extent(
+        &inverted,
+        flash.update_image.dat_offset + flash.control.offset,
+        flash.control.size,
+    )?;
+    let payload = super::exr2::Payload {
+        schema: 1,
+        firmware_id: selected.firmware.id.clone(),
+        firmware_sha256: identity.sha256.clone(),
+        sha256: sha256(&image),
+        bootstrap_size: sizes[0] as u32,
+        reader_offset: 32,
+        allocate: num(&execution, "allocate")?.try_into()?,
+        release: num(&execution, "release")?.try_into()?,
+        configuration: serde_json::from_value(execution["configuration"].clone())?,
+        cache_clean: (primitives[0] + 0x18).try_into()?,
+        instruction_invalidate: (primitives[0] + 0xfc).try_into()?,
+        barrier: primitives[1].try_into()?,
+        instruction_barrier: primitives[0].try_into()?,
+        checks: code_checks(&units, &ranges)?,
+        control_sha256: sha256(control),
+        update_size,
+    };
+    payload.validate(flash, bulk, &image)?;
+    Ok((
+        Artifact {
+            payload: Payload::Exr2Query(payload),
+            image: "flash-reader.bin".into(),
+        },
+        image,
+    ))
+}
+
 pub fn stage(recipe: &Stage) -> Result<()> {
     let catalog = ReferenceCatalog::load(&recipe.catalog)?;
     let path = recipe.runtime.join("catalog.json");
@@ -450,7 +639,7 @@ pub fn stage(recipe: &Stage) -> Result<()> {
             entries.last_mut().unwrap()
         };
         check(
-            entry["sha256"] == artifact.payload.firmware_sha256,
+            entry["sha256"] == artifact.payload.firmware_sha256(),
             "runtime identity differs",
         )?;
         entry["body"] = json!(selected.body.id);

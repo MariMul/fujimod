@@ -1,6 +1,8 @@
 //! Located storage and readable processor-state facts from mapped firmware.
 //! Names nominate candidates; decoded instructions and mapped tables verify them.
 mod exr2;
+mod exr2_execution;
+pub use exr2_execution::exr2_execution;
 mod flash;
 mod update;
 pub use update::flash_update;

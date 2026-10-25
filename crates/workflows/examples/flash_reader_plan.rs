@@ -15,14 +15,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if artifact.image.contains(['/', '\\']) {
         return Err("image must be beside metadata".into());
     }
-    let selection = ReferenceCatalog::bundled()?.resolve_firmware(&artifact.payload.firmware_id)?;
+    let selection =
+        ReferenceCatalog::bundled()?.resolve_firmware(artifact.payload.firmware_id())?;
     let flash = selection.flash.ok_or("catalog has no flash fact")?;
     let bulk = selection.bulk.ok_or("catalog has no bulk fact")?;
     if selection
         .firmware
         .update
         .as_ref()
-        .is_none_or(|u| u.sha256 != artifact.payload.firmware_sha256)
+        .is_none_or(|u| u.sha256 != artifact.payload.firmware_sha256())
     {
         return Err("firmware hash differs".into());
     }
@@ -37,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         flash.firmware_id,
         image.len(),
         flash.window.size,
-        artifact.payload.buffer_capacity
+        artifact.payload.buffer_capacity()
     );
     Ok(())
 }
