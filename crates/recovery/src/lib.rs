@@ -16,6 +16,12 @@ pub use xp5::{
     SourceProof as Xp5SourceProof,
 };
 
+/// Optional diagnostics for XP5 startup construction. Zero preserves normal entry.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct StartupOptions {
+    pub success_hold_seconds: u32,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Generation {
@@ -214,6 +220,13 @@ impl Recipe {
     }
     /// Prepare XP5 flash and resume the update's original internal startup.
     pub fn build_stage_one(&self, source: &[u8]) -> Result<Vec<File>> {
+        self.build_stage_one_with_options(source, StartupOptions::default())
+    }
+    pub fn build_stage_one_with_options(
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+    ) -> Result<Vec<File>> {
         require(
             matches!(self.generation, Generation::Xp5),
             "Stage one requires XP5",
@@ -229,7 +242,12 @@ impl Recipe {
                 self.missing.join(", ")
             ))
         })?;
-        xp5::package(&fujimod_firmware::invert(source), setup, None)
+        xp5::package(
+            &fujimod_firmware::invert(source),
+            setup,
+            None,
+            options.success_hold_seconds,
+        )
     }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
     /// verbatim to its required root filename, including signed containers.
@@ -249,6 +267,17 @@ impl Recipe {
     }
     /// Construct established startup files independently of updater readiness.
     pub fn build_startup(&self, source: &[u8]) -> Result<Vec<File>> {
+        self.build_startup_with_options(source, StartupOptions::default())
+    }
+    pub fn build_startup_with_options(
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+    ) -> Result<Vec<File>> {
+        require(
+            options.success_hold_seconds == 0 || matches!(self.generation, Generation::Xp5),
+            "Success hold requires XP5",
+        )?;
         require(
             source.len() == self.source_size,
             "Update size differs from recipe",
@@ -311,7 +340,12 @@ impl Recipe {
                             "Missing XP5 post-setup SD loader and handoff facts".into(),
                         )
                     })?;
-                    xp5::package(&inverted, setup, Some(image::transform(&inverted, plan)?))?
+                    xp5::package(
+                        &inverted,
+                        setup,
+                        Some(image::transform(&inverted, plan)?),
+                        options.success_hold_seconds,
+                    )?
                 }
             };
         require(

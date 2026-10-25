@@ -11,10 +11,14 @@ struct xp5_flash_configuration {
     uint32_t green, red, pin, count;
     uint32_t pins[12];
     const uint32_t *header;
+    uint64_t success_hold_units;
 };
-_Static_assert(sizeof(struct xp5_flash_configuration)==192 && offsetof(struct xp5_flash_configuration,header)==184,"flash configuration ABI");
+_Static_assert(sizeof(struct xp5_flash_configuration)==200 && offsetof(struct xp5_flash_configuration,header)==184
+    && offsetof(struct xp5_flash_configuration,success_hold_units)==192,"flash configuration ABI");
 volatile struct xp5_flash_configuration xp5_flash_configuration = {.abi = 1};
 volatile uint64_t xp5_flash_progress[4];
+/* The located setup timer initializes its counter and accepts microseconds. */
+extern void boot_setup_delay(uint32_t units);
 static void write32(uintptr_t address, uint32_t value) { *(volatile uint32_t *)address = value; }
 static void lamp_pin(uintptr_t pio, uint32_t port, uint32_t pin, int high)
 {
@@ -74,6 +78,17 @@ void xp5_flash_prepare(void)
     /* Preserve the complete input header in the XP5 boot-service area. */
     for (unsigned n=0;n<0x800/4;n++) write32(b->setup+0x3a800+4u*n,b->header[n]);
     if (xp5_flash_header(b->header,b->count,(uint32_t)b->flash.poll_limit)) fail(2);
+    uint64_t hold=b->success_hold_units;
+    if (hold) {
+        show(1,0);
+        while (hold) {
+            /* Keep each counter interval below its 32-bit wrap period. */
+            uint32_t units=hold>1000000?1000000:(uint32_t)hold;
+            boot_setup_delay(units);
+            hold-=units;
+        }
+        show(0,0);
+    }
     if (*(volatile uint32_t *)b->setup != b->branch_word) fail(2);
     write32(b->setup,(uint32_t)b->original_word);
     __asm__ volatile("dsb sy\n\tic iallu\n\tdsb sy\n\tisb" : : : "memory");

@@ -173,7 +173,12 @@ impl Setup {
 }
 /// Both modes enter the same flash-preparation guest. Only a complete payload
 /// enables the two post-DDR SD hooks; stage one retains the stock continuation.
-pub fn package(inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>) -> Result<Vec<File>> {
+pub fn package(
+    inverted: &[u8],
+    setup: &Setup,
+    ram: Option<Vec<u8>>,
+    success_hold_seconds: u32,
+) -> Result<Vec<File>> {
     let prefix = setup.verify(inverted)?;
     let copied_end = setup.base + setup.low_length as u64;
     // XP5 raw-entry SRAM reserves its upper workspace for the boot service.
@@ -201,10 +206,10 @@ pub fn package(inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>) -> Result<V
         "XP5 prelude exceeds private stack",
     )?;
     let cfg = template::XP5_FLASH_CONFIGURATION;
-    let mut empty = vec![0; 192];
+    let mut empty = vec![0; 200];
     empty[0] = 1;
     require(
-        extent(&program, cfg, 192)? == empty,
+        extent(&program, cfg, 200)? == empty,
         "XP5 flash configuration template changed",
     )?;
     let flash = &setup.flash;
@@ -274,6 +279,11 @@ pub fn package(inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>) -> Result<V
         put(&mut program, cfg + 140 + n * 8, pin.value)?;
     }
     put64(&mut program, cfg + 184, address + header_at as u64)?;
+    put64(
+        &mut program,
+        cfg + 192,
+        u64::from(success_hold_seconds) * 1_000_000,
+    )?;
     let restore = template::XP5_FLASH_SETUP_BRANCH;
     require(
         word(&program, restore)? == 0x14000000,
@@ -516,7 +526,7 @@ mod tests {
         let (data, s, ram) = fixture();
         for payload in [None, Some(ram.clone())] {
             let combined = payload.is_some();
-            let files = package(&data, &s, payload).unwrap();
+            let files = package(&data, &s, payload, 0).unwrap();
             let raw = &files[0].bytes;
             assert_eq!(files.len(), if combined { 2 } else { 1 });
             assert_eq!(files[0].name, "marble_init.bin");
@@ -555,35 +565,53 @@ mod tests {
         }
     }
     #[test]
+    fn success_hold_is_optional_and_changes_only_its_configuration() {
+        let (data, s, ram) = fixture();
+        assert_eq!(crate::StartupOptions::default().success_hold_seconds, 0);
+        for payload in [None, Some(ram)] {
+            let normal = package(&data, &s, payload.clone(), 0).unwrap();
+            let held = package(&data, &s, payload, 3).unwrap();
+            let at = 0xc000 + template::XP5_FLASH_CONFIGURATION + 192;
+            assert_eq!(&normal[0].bytes[at..at + 8], &[0; 8]);
+            let mut expected = normal[0].bytes.clone();
+            put64(&mut expected, at, 3_000_000).unwrap();
+            assert_eq!(expected, held[0].bytes);
+            if normal.len() == 2 {
+                assert_eq!(normal[1].bytes, held[1].bytes);
+            }
+        }
+    }
+
+    #[test]
     fn changed_source_and_incomplete_bindings_refuse() {
         let (data, s, ram) = fixture();
         let mut changed = data.clone();
         changed[0x1000] ^= 1;
-        assert!(package(&changed, &s, None).is_err());
+        assert!(package(&changed, &s, None, 0).is_err());
         let mut changed = s.clone();
         changed.flash.pins.clear();
-        assert!(package(&data, &changed, None).is_err());
+        assert!(package(&data, &changed, None, 0).is_err());
         let mut changed = s.clone();
         changed.initializer.sha256 = "0".repeat(64);
-        assert!(package(&data, &changed, None).is_err());
+        assert!(package(&data, &changed, None, 0).is_err());
         let mut changed = s.clone();
         changed.board.operations[0].kind = 3;
-        assert!(package(&data, &changed, Some(ram.clone())).is_err());
+        assert!(package(&data, &changed, Some(ram.clone()), 0).is_err());
         let mut changed = s.clone();
         changed.gate_offset = 0x940;
-        assert!(package(&data, &changed, Some(ram)).is_err());
+        assert!(package(&data, &changed, Some(ram), 0).is_err());
         let mut changed = s.clone();
         changed.stack = s.base + 0x38000;
-        assert!(package(&data, &changed, None).is_err());
+        assert!(package(&data, &changed, None, 0).is_err());
     }
     #[test]
     fn oversized_header_and_changed_payload_refuse() {
         let (mut data, mut s, mut ram) = fixture();
         ram[0x20] ^= 1;
-        assert!(package(&data, &s, Some(ram)).is_err());
+        assert!(package(&data, &s, Some(ram), 0).is_err());
         put(&mut data, 0x14, 254).unwrap();
         s.prefix = source(&data[..0x40000]);
         s.proofs[0].source = s.prefix.clone();
-        assert!(package(&data, &s, None).is_err());
+        assert!(package(&data, &s, None, 0).is_err());
     }
 }

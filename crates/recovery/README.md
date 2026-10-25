@@ -58,6 +58,13 @@ no filesystem, USB, camera, or network access.
 The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
 `startup FIRMWARE DAT NEW_DIRECTORY`, and `stage-one FIRMWARE DAT NEW_DIRECTORY`.
 
+`startup` and `stage-one` accept `--success-hold-seconds N` (default `0`).
+After sampling and header operations succeed, a nonzero value holds steady
+green using the located setup timer before continuing. The guest divides the
+wait into one-second intervals; the timer initializes its counter on each call.
+Zero leaves the normal entry behavior unchanged. The library exposes the same
+setting through `StartupOptions` and the corresponding `_with_options` methods.
+
 The guest loader sources are in `guest/`. Its checked-in generated Rust
 template contains the compiled loader and relocations, with no update or ROM
 data. To regenerate it, set `FFINIT_CC` to GNU GCC 4.6.4 and `FFINIT_LD` to GNU
