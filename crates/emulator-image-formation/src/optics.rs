@@ -367,7 +367,9 @@ impl Projection {
             illumination,
         ));
         frame.filtered = Some(super::exposure::Filtered::projected(pixels.clone()));
-        if dimensions[0] * dimensions[1] <= CACHE_PIXELS && linear.len() <= CACHE_PIXELS {
+        // The scene is retained independently. Bound these sampled projection
+        // buffers by their own size, including sparse readouts of large scenes.
+        if linear.len() <= CACHE_PIXELS {
             *prepared = Some(Prepared {
                 scene,
                 coordinates,

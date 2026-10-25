@@ -4,13 +4,16 @@ use fujimod_emulator_imaging::exposure::{Calibration, Exposure};
 use fujimod_emulator_imaging::scene::Frame;
 
 fn exposure(frame: Arc<Frame>, seconds: f64) -> ExposedFrame {
+    exposure_at_aperture(frame, seconds, 4.)
+}
+fn exposure_at_aperture(frame: Arc<Frame>, seconds: f64, aperture_squared: f64) -> ExposedFrame {
     ExposedFrame::from_frame(
         frame,
         Exposure {
             seconds,
             analog_gain: 1.3,
         },
-        4.,
+        aperture_squared,
         Calibration {
             full_scale: 16380,
             reference_white: [193, 257, 311],
@@ -209,6 +212,69 @@ fn scene_prefix_and_readout_memos_use_complete_physical_keys() {
         p.scene.lock().unwrap().as_ref().unwrap()
     ));
     assert_ne!(e.filtered.as_ref().unwrap().materialize().len(), 0);
+}
+#[test]
+fn large_scene_sparse_cache_matches_fresh_projection_and_invalidates() {
+    let [width, height] = [2050, 2048];
+    assert!(width * height > CACHE_PIXELS);
+    let rgb: Arc<[u8]> = (0..width * height * 3)
+        .map(|i| ((i * 37 + i / (width * 3) * 19) % 256) as u8)
+        .collect();
+    let source = Arc::new(Frame::new(width, height, FramePixels::Rgb24(rgb.clone())).unwrap());
+    let mut brighter = Frame::new(width, height, FramePixels::Rgb24(rgb)).unwrap();
+    brighter.white_luminance *= 1.2;
+    let brighter = Arc::new(brighter);
+    let replacement = Arc::new(
+        Frame::new(
+            width,
+            height,
+            FramePixels::Rgb24(vec![173; width * height * 3].into()),
+        )
+        .unwrap(),
+    );
+    let p = projection(Illumination::CosineFourth);
+    let grid = [6240, 4160];
+    let window = [500, 400, 24, 16];
+    let mut old_pixels = None;
+    for (index, (source, seconds, aperture, shift, grid, window)) in [
+        (source.clone(), 0.0003, 4., 0.2, grid, window),
+        (source.clone(), 0.0003, 4., 0.2, grid, window),
+        (source.clone(), 0.0005, 4., 0.2, grid, window),
+        (source.clone(), 0.0005, 4., 0.6, grid, window),
+        (source.clone(), 0.0005, 9., 0.6, grid, window),
+        (source.clone(), 0.0005, 9., 0.6, grid, [2000, 1000, 24, 16]),
+        (source, 0.0005, 9., 0.6, [4000, 3000], [2000, 1000, 24, 16]),
+        (brighter, 0.0005, 9., 0.6, grid, window),
+        (replacement, 0.0005, 9., 0.6, grid, window),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut actual = exposure_at_aperture(source, seconds, aperture);
+        let mut expected = actual.clone();
+        p.prepare_readout(&mut actual, shift, grid, window).unwrap();
+        // A separate projection has no prepared arithmetic to reuse.
+        let fresh = projection(Illumination::CosineFourth);
+        fresh
+            .prepare_readout(&mut expected, shift, grid, window)
+            .unwrap();
+        let prepared = p.prepared.lock().unwrap();
+        let prepared = prepared.as_ref().expect("sparse cache must be admitted");
+        assert!(prepared.linear.len() <= CACHE_PIXELS);
+        if let Some(old) = old_pixels {
+            assert_eq!(Arc::ptr_eq(&old, &prepared.pixels), index == 1);
+        }
+        old_pixels = Some(prepared.pixels.clone());
+        for &y in &prepared.coordinates.ys {
+            for &x in &prepared.coordinates.xs {
+                assert_eq!(actual.sample_source(x, y), expected.sample_source(x, y));
+            }
+        }
+        // The cached sparse law also answers unsampled coordinates identically.
+        for (x, y) in [(0, 0), (width / 2, height / 2), (width - 1, height - 1)] {
+            assert_eq!(actual.sample_source(x, y), expected.sample_source(x, y));
+        }
+    }
 }
 #[test]
 fn sparse_projection_checkpoint_is_canonical_and_observational() {
