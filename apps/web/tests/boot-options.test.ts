@@ -3,7 +3,7 @@ import type { PhysicalControls } from 'fujimod';
 import x70 from '../../../catalog/bodies/x70/controls.json';
 import xm5 from '../../../catalog/bodies/xm5/controls.json';
 import { bootCombination, panelBootCombos } from '../src/cameras/boot-options';
-import { serviceModeEntry } from '../src/dev-tools/debug-mode/procedures';
+import { serviceModeEntry } from '../src/dev-tools/service-mode-entry';
 
 test('controls preserve the X70 startup inputs and service guide', () => {
   const combos = panelBootCombos(x70 as PhysicalControls, ['sd', 'firmware_update', 'service']);

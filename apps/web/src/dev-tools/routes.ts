@@ -1,6 +1,5 @@
 /** Dev Tools' guided tools, each opened at `/dev-tools/<tool>/`. */
 export const Wizard = {
-  Enable: 'enable',
   Disable: 'disable',
   Service: 'service',
   StateCaptures: 'state-captures',

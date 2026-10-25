@@ -200,32 +200,26 @@ test('the diagnostic bundle records partial configuration reads as incomplete', 
   expect(text).toContain('"bytes": 4');
 });
 
-test('the debug-mode tool shows the flag and offers only the action that applies', () => {
+test('the Write tool shows the debug flag and disables debug mode when it applies', () => {
   const test = createTestCameraModel({});
   test.add(testCamera('X100V', { debugMode: undefined }));
   const host = mount(test.model);
   flush();
+  const disable = () => host.querySelector<HTMLButtonElement>('.wb-tool.wb-write button')!;
   expect(host.querySelector('.wb-tool.wb-write .wb-writes')!.textContent).toBe(
     'Changes a camera setting',
   );
   expect(host.querySelector('.wb-debug-state')!.textContent).toBe('Debug mode: Reading…');
-  expect(button(host, 'Enable debug mode')).toBeUndefined();
   test.update('X100V', (camera) => ({ ...camera, debugMode: 'off' }));
   flush();
   expect(host.querySelector('.wb-debug-state')!.textContent).toBe('Debug mode: Off');
-  expect(button(host, 'Enable debug mode').disabled).toBe(false);
-  expect(button(host, 'Disable debug mode')).toBeUndefined();
-  test.update('X100V', (camera) => ({ ...camera, debugMode: 'unknown' }));
-  flush();
-  expect(button(host, 'Enable debug mode')).toBeTruthy();
-  expect(button(host, 'Disable debug mode')).toBeTruthy();
+  expect(disable().disabled).toBe(true);
   test.update('X100V', (camera) => ({ ...camera, debugMode: 'on', transport: 'remote' }));
   flush();
-  expect(button(host, 'Enable debug mode')).toBeUndefined();
-  expect(button(host, 'Disable debug mode').disabled).toBe(true);
+  expect(disable().disabled).toBe(true);
   test.update('X100V', (camera) => ({ ...camera, transport: 'usb' }));
   flush();
-  button(host, 'Disable debug mode').click();
+  disable().click();
   flush();
   expect(host.textContent).toContain('Turns the Debug Mode setting off');
 });

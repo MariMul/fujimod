@@ -14,10 +14,12 @@ for (const browserType of [chromium, webkit]) {
       if (message.type() === 'warning' && /hydration/i.test(message.text()))
         errors.push(message.text());
     });
-    await page.goto(new URL('dev-tools/enable/', base).href);
+    await page.goto(new URL('dev-tools/service/', base).href);
     await page.getByRole('button', { name: 'Begin', exact: true }).click();
-    await page.getByRole('button', { name: 'X70 · 1.10 Supported', exact: true }).click();
-    const allow = page.getByRole('button', { name: 'Allow camera access', exact: true });
+    const allow = page.getByRole('button', {
+      name: 'Allow camera access',
+      exact: true,
+    });
     assert.equal(await allow.isDisabled(), true);
     await page.locator('.dm-check input').check();
     assert.equal(await allow.isEnabled(), true);
@@ -31,11 +33,14 @@ for (const browserType of [chromium, webkit]) {
     assert.ok(firmware?.camera_table);
     const response: APIResponse = await page.request.get(new URL(firmware.camera_table, base).href);
     assert.equal(response.ok(), true);
-    const table = (await response.json()) as { firmware_id: string; firmware_sha256: string };
+    const table = (await response.json()) as {
+      firmware_id: string;
+      firmware_sha256: string;
+    };
     assert.equal(table.firmware_id, firmware.id);
     assert.equal(table.firmware_sha256, firmware.sha256);
     assert.deepEqual(errors, []);
-    console.log(`${browserType.name()}: wizard deep link, inputs and camera asset passed`);
+    console.log(`${browserType.name()}: service guide deep link, inputs and camera asset passed`);
   } finally {
     await browser.close();
   }

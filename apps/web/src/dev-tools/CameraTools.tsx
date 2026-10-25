@@ -4,7 +4,12 @@ import { zipFiles } from '@fujimod/emulator-ui/archive';
 
 /** Readings collected on one camera, for the diagnostic bundle. */
 export interface Readings {
-  configuration?: { capacity: number; pageBytes: number; data: Uint8Array; complete: boolean };
+  configuration?: {
+    capacity: number;
+    pageBytes: number;
+    data: Uint8Array;
+    complete: boolean;
+  };
   errors: { tool: string; time: string; message: string }[];
 }
 export const emptyReadings = (): Readings => ({ errors: [] });
@@ -33,7 +38,11 @@ export function diagnosticBundle(camera: Camera, readings: Readings): Blob {
   const manifest = {
     schema: 'fujimod-diagnostics-2',
     createdAt: new Date().toISOString(),
-    camera: { name: camera.name, transport: camera.transport, identity: camera.identity ?? {} },
+    camera: {
+      name: camera.name,
+      transport: camera.transport,
+      identity: camera.identity ?? {},
+    },
     configuration,
     errors: readings.errors,
   };
@@ -134,8 +143,7 @@ export function CameraTools(props: {
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  const hasReadings = () =>
-    Boolean(props.readings.configuration || props.readings.errors.length);
+  const hasReadings = () => Boolean(props.readings.configuration || props.readings.errors.length);
   return (
     <div class="wb-tools-body">
       <section class="wb-section" aria-labelledby="wb-read">
@@ -145,14 +153,9 @@ export function CameraTools(props: {
         <button class="wb-btn" disabled={!available()} onClick={dumpConfiguration}>
           {running() === 'Dump configuration' ? 'Dumping configuration…' : 'Dump configuration'}
         </button>
-        <div class="wb-pair wb-flush">
-          <button class="wb-btn" onClick={() => props.onWizard(Wizard.StateCaptures)}>
-            State captures
-          </button>
-          <button class="wb-btn" onClick={() => props.onWizard(Wizard.MapControls)}>
-            Map controls
-          </button>
-        </div>
+        <button class="wb-btn" onClick={() => props.onWizard(Wizard.MapControls)}>
+          Capture buttons
+        </button>
       </section>
 
       <section class="wb-section" aria-labelledby="wb-console">
@@ -205,27 +208,16 @@ export function CameraTools(props: {
                     : 'Reading…'}
             </strong>
           </div>
-          <div class={{ 'wb-pair': true, 'wb-single': props.camera.debugMode !== 'unknown' }}>
-            <Show when={props.camera.debugMode === 'off' || props.camera.debugMode === 'unknown'}>
-              <button
-                class="wb-btn"
-                disabled={!available() || props.camera.transport !== 'usb'}
-                aria-label="Enable debug mode"
-                onClick={() => props.onWizard(Wizard.Enable)}
-              >
-                Enable
-              </button>
-            </Show>
-            <Show when={props.camera.debugMode === 'on' || props.camera.debugMode === 'unknown'}>
-              <button
-                class="wb-btn"
-                disabled={!available() || props.camera.transport !== 'usb'}
-                aria-label="Disable debug mode"
-                onClick={() => props.onWizard(Wizard.Disable)}
-              >
-                Disable
-              </button>
-            </Show>
+          <div class="wb-pair wb-single">
+            <button
+              class="wb-btn"
+              disabled={
+                !available() || props.camera.transport !== 'usb' || props.camera.debugMode === 'off'
+              }
+              onClick={() => props.onWizard(Wizard.Disable)}
+            >
+              Disable debug mode
+            </button>
           </div>
         </div>
       </section>

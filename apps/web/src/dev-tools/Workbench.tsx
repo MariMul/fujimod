@@ -17,7 +17,9 @@ import { Wizard, toolAt, toolPath } from './routes';
 import { ConsoleLog } from './ConsoleLog';
 import { ToolDeck, type SavedCamera } from './ToolDeck';
 import { CameraStore } from '../cameras/store';
-import { DebugModeWizard, WizardConnection } from './debug-mode/Wizard';
+import { GuideConnection, ServiceModeGuide } from './ServiceModeGuide';
+import { GettingStarted, type PathResults } from './GettingStarted';
+import { bulkSelection } from './captures/capture';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
@@ -100,16 +102,15 @@ export function Workbench(props: {
       setConnecting(false);
     }
   }
-  const wizardConnection = () => {
-    if (!props.usbSupported) return WizardConnection.Unsupported;
-    if (connecting()) return WizardConnection.Choosing;
+  const guideConnection = () => {
+    if (!props.usbSupported) return GuideConnection.Unsupported;
+    if (connecting()) return GuideConnection.Choosing;
     const current = camera();
     return current?.present && current.transport === 'usb'
-      ? WizardConnection.Connected
-      : WizardConnection.Disconnected;
+      ? GuideConnection.Connected
+      : GuideConnection.Disconnected;
   };
-  // Depend on the camera's id only: a session changes the camera's fields, and new
-  // operations would restart the wizard's reset-guard step.
+  // Depend on the camera's id only: a session changes the camera's fields.
   const usbCamera = createMemo(() => {
     const current = camera();
     return current?.transport === 'usb' ? current.id : undefined;
@@ -121,6 +122,22 @@ export function Workbench(props: {
       props.model.withSession(id, tool, (session) => operation(session.debug)),
     );
   });
+  const leave = () =>
+    operations() && {
+      leave(progress: (line: string) => void) {
+        const debug = operations();
+        const firmwareId = bulkSelection(camera()?.identity)?.firmware.id;
+        if (!debug || !firmwareId) throw Error('This firmware has no located bulk reader yet.');
+        return debug.leave(firmwareId, progress);
+      },
+    };
+  const [paths, setPaths] = createSignal<ReadonlyMap<string, PathResults>>(new Map());
+  const cameraPath = () => paths().get(selected() ?? '') ?? {};
+  function updatePath(update: (current: PathResults) => PathResults) {
+    const id = selected();
+    if (!id) return;
+    setPaths((map) => new Map(map).set(id, update(map.get(id) ?? {})));
+  }
   const cameraReadings = () => readings().get(selected() ?? '') ?? emptyReadings();
   function updateReadings(update: (current: Readings) => Readings) {
     const id = selected();
@@ -186,25 +203,16 @@ export function Workbench(props: {
             </Show>
             <Switch>
               <Match when={wizard() === Wizard.Service}>
-                <DebugModeWizard
-                  purpose="service"
-                  connection={wizardConnection()}
+                <ServiceModeGuide
+                  connection={guideConnection()}
                   onConnect={() => void connect()}
-                  onClose={closeWizard}
-                />
-              </Match>
-              <Match when={wizard() === Wizard.Enable}>
-                <DebugModeWizard
-                  connection={wizardConnection()}
-                  onConnect={() => void connect()}
-                  operations={operations()}
                   onClose={closeWizard}
                 />
               </Match>
               <Match when={wizard() === Wizard.Disable}>
                 <LeaveDebugMode
-                  connected={wizardConnection() === WizardConnection.Connected}
-                  operation={operations()}
+                  connected={guideConnection() === GuideConnection.Connected}
+                  operation={leave()}
                   onClose={closeWizard}
                 />
               </Match>
@@ -232,6 +240,14 @@ export function Workbench(props: {
                 {(current) => (
                   <>
                     <CameraDetails camera={current()} model={props.model} />
+                    <GettingStarted
+                      camera={current()}
+                      model={props.model}
+                      results={cameraPath()}
+                      onResults={updatePath}
+                      debug={operations()}
+                      onWizard={setWizard}
+                    />
                     <CameraTools
                       camera={current()}
                       model={props.model}
