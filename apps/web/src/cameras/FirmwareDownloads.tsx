@@ -1,6 +1,5 @@
 import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
-import type { Firmware } from '../catalog';
 import './firmware-downloads.css';
 
 /** A search field appears once the list scrolls. */
@@ -8,7 +7,12 @@ export const SEARCH_THRESHOLD = 8;
 const searchKey = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export interface DownloadRow {
-  firmware: Firmware;
+  model: string;
+  processor?: string;
+  /** The catalog's firmware version, when the catalog has this body. */
+  version?: string;
+  /** Fujifilm's firmware download for this body. */
+  url: string;
   tag?: string;
 }
 
@@ -16,7 +20,7 @@ export interface DownloadRow {
 export function FirmwareDownloads(props: { heading: string; rows: readonly DownloadRow[] }) {
   const [query, setQuery] = createSignal('');
   const matches = () =>
-    props.rows.filter((row) => searchKey(row.firmware.model).includes(searchKey(query())));
+    props.rows.filter((row) => searchKey(row.model).includes(searchKey(query())));
   return (
     <section class="downloads" aria-labelledby="downloads-heading">
       <h4 id="downloads-heading">{props.heading}</h4>
@@ -37,9 +41,9 @@ export function FirmwareDownloads(props: { heading: string; rows: readonly Downl
           {(row) => (
             <li class="downloads-camera">
               <span class="downloads-camera-name">
-                {row.firmware.model}
-                <Show when={row.firmware.processor}>
-                  <span>{row.firmware.processor}</span>
+                {row.model}
+                <Show when={row.processor}>
+                  <span>{row.processor}</span>
                 </Show>
               </span>
               <span class="downloads-camera-tag">
@@ -47,13 +51,13 @@ export function FirmwareDownloads(props: { heading: string; rows: readonly Downl
                   <span class="downloads-tag">{row.tag}</span>
                 </Show>
               </span>
-              <span class="downloads-version">{row.firmware.version}</span>
+              <span class="downloads-version">{row.version}</span>
               <a
                 class="downloads-link"
-                href={row.firmware.download_url}
+                href={row.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Download ${row.firmware.model} firmware ${row.firmware.version} from Fujifilm`}
+                aria-label={`Download ${row.model} firmware from Fujifilm`}
               >
                 Download
                 <Icon name="download" size={13} />

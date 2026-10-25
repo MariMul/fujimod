@@ -142,9 +142,12 @@ export function CameraLauncher(props: {
       </div>
       <FirmwareDownloads
         heading="Supported cameras"
-        rows={emulated().map((camera) => ({
-          firmware: camera.firmware,
-          tag: camera.mod ? 'FujiMod' : undefined,
+        rows={emulated().map(({ firmware, mod }) => ({
+          model: firmware.model,
+          processor: firmware.processor,
+          version: firmware.version,
+          url: firmware.download_url,
+          tag: mod ? 'FujiMod' : undefined,
         }))}
       />
     </div>

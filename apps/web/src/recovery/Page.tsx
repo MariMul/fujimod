@@ -3,10 +3,10 @@ import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { initialize } from 'fujimod';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
-import type { Firmware } from '../catalog';
-import { identify, officialFirmwares, type IdentifiedFirmware } from './identify';
+
+import { identify, recoveryCameras, type IdentifiedFirmware } from './identify';
 import { CameraStore, type CameraRecord } from '../cameras/store';
-import { FirmwareDownloads } from '../cameras/FirmwareDownloads';
+import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
 import { recoveryCard } from './card';
 import { SYSTEMS, FORMAT_STEPS, detectSystem, type System } from './format-guide';
@@ -27,11 +27,11 @@ export default function Recovery() {
 
   const [dragging, setDragging] = createSignal(false);
   const [saved, setSaved] = createSignal<CameraRecord[]>([]);
-  const [firmwares, setFirmwares] = createSignal<Firmware[]>([]);
+  const [cameras, setCameras] = createSignal<DownloadRow[]>([]);
   // The catalog's boot combinations come from the Wasm catalog.
   let ready: Promise<unknown> = Promise.resolve();
   onSettled(() => {
-    ready = initialize().then(() => setFirmwares(officialFirmwares()));
+    ready = initialize().then(() => setCameras(recoveryCameras()));
     ready.catch((caught: unknown) => setError(message(caught)));
     setSystem(detectSystem(navigator.userAgent));
     // One row per stored firmware, from cameras saved in the emulator.
@@ -185,10 +185,7 @@ export default function Recovery() {
                   </p>
                 </Show>
               </div>
-              <FirmwareDownloads
-                heading="Official firmware"
-                rows={firmwares().map((firmware) => ({ firmware }))}
-              />
+              <FirmwareDownloads heading="Official firmware" rows={cameras()} />
             </div>
           </li>
 

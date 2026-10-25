@@ -1,7 +1,7 @@
 import { catalog as reference, type PhysicalControls } from 'fujimod';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { bootCombination, describeBootHold } from '../cameras/boot-options';
-import { byAnnouncement } from '../cameras/Launcher';
+import type { DownloadRow } from '../cameras/FirmwareDownloads';
 
 export interface IdentifiedFirmware {
   firmware: Firmware;
@@ -19,9 +19,25 @@ function controlsFor(firmwareId: string): PhysicalControls | undefined {
   );
 }
 
-/** Every catalog firmware, newest body first. */
-export function officialFirmwares(): Firmware[] {
-  return [...catalog.firmwares].sort(byAnnouncement);
+/** Every camera with an official release in the catalog, newest release each, by name. */
+export function recoveryCameras(): DownloadRow[] {
+  const newest = new Map<string, DownloadRow>();
+  for (const release of reference.firmwareVersions()) {
+    const known = newest.get(release.product);
+    if (
+      known?.version &&
+      known.version.localeCompare(release.version, 'en', { numeric: true }) >= 0
+    )
+      continue;
+    newest.set(release.product, {
+      model: release.product,
+      version: release.version,
+      url: release.download_url,
+    });
+  }
+  return [...newest.values()].sort((a, b) =>
+    a.model.localeCompare(b.model, 'en', { numeric: true }),
+  );
 }
 
 async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
