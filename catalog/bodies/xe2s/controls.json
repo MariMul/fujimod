@@ -44,6 +44,18 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "fn7_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "ae_lock_button": {
       "name": "AE-L (exposure lock) button",
@@ -541,13 +553,21 @@
       "manual_page": 44,
       "face": "Fn7",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
       "assignable": true,
       "default_function": "Starts movie recording by default; function-button roles are assignable. In playback, the button provides Wi-Fi functions.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
+      },
+      "pushable": true,
       "positions": []
     },
     "focus_mode_selector": {

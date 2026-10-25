@@ -28,7 +28,14 @@ fn confirmed_combinations_load_from_controls() {
             .unwrap();
         let xm5 = fujimod_catalog_controls::PhysicalControls::decode_document(&xm5, "xm5")
             .unwrap();
-        assert!(xm5.boot.is_empty());
+        assert_eq!(
+            xm5.boot[&BootMode::Sd]
+                .hold
+                .iter()
+                .map(|input| input.id.as_str())
+                .collect::<Vec<_>>(),
+            ["quick_menu_button", "front_command_dial.press"]
+        );
     }
 }
 

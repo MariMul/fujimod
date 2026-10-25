@@ -57,6 +57,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "secondary_monitor_backlight_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "shutter_speed_dial_lock_release": {
       "name": "Dial lock release",

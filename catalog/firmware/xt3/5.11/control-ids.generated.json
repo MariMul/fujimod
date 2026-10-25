@@ -4460,6 +4460,17 @@
       "electrical": null
     },
     {
+      "id": "debug-32",
+      "event": 32,
+      "debug_key": "FUNCTION",
+      "target": {
+        "kind": "control",
+        "control_id": "fn1_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
       "id": "debug-35",
       "event": 35,
       "debug_key": "CMD_PUSH",

@@ -49,6 +49,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "fn1_button": {
       "name": "Fn1 button",

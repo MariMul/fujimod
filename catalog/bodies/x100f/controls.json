@@ -49,6 +49,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "metering_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "metering_button": {
       "name": "Metering button / Function button (Fn1)",

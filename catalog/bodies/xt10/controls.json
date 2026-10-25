@@ -60,6 +60,18 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "delete_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "ae_lock_button": {
       "name": "AE-L (exposure lock) button",

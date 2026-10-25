@@ -28,6 +28,18 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",

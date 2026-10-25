@@ -49,6 +49,19 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "ae_lock_button": {
       "name": "AE-L (exposure lock) button",
@@ -463,8 +476,14 @@
       "default_function": "Face/eye detection setting.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
+      },
+      "pushable": true,
       "positions": []
     },
     "fn2_button": {

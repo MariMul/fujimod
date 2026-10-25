@@ -4073,7 +4073,8 @@
       "event": 39,
       "debug_key": "FUNCTION",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn7_button"
       },
       "scanner": {
         "index": 21,
@@ -4099,7 +4100,8 @@
       "event": 42,
       "debug_key": "CMD_PUSH",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "command_dial"
       },
       "scanner": {
         "index": 22,

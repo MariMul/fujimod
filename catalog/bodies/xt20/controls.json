@@ -40,6 +40,19 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "delete_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",

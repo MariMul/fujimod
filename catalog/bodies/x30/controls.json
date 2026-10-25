@@ -44,6 +44,18 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "view_mode_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "af_ae_lock_button": {
       "name": "[AEL/AFL] (autoexposure/autofocus lock) button",
@@ -104,13 +116,27 @@
       "manual_page": 16,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-10"
+      ],
       "assignable": false,
       "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        },
+        "endless": null
+      },
+      "pushable": true,
       "positions": []
     },
     "control_ring": {
@@ -651,7 +677,9 @@
       "manual_page": 19,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
       "assignable": false,
       "default_function": "Cycles through the viewfinder and monitor display modes.",
       "role": null,
@@ -660,7 +688,7 @@
         "kind": "button",
         "press": {
           "kind": "debug_key",
-          "name": "EVF_LCD"
+          "name": "VIEW"
         }
       },
       "pushable": true,
