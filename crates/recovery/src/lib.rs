@@ -1,12 +1,12 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
 pub mod image;
-mod lupi;
-mod lupi_loader;
-mod lupi_firmware;
-mod lupi_load_maps;
+mod exr;
+mod exr_loader;
+mod exr_firmware;
+mod exr_load_maps;
 pub mod rom_sd;
-pub use lupi::Lupi;
+pub use exr::Exr;
 mod xp4;
 mod xp5;
 use image::{File, Packaging, Plan, Result, require};
@@ -115,7 +115,7 @@ pub struct Recipe {
     pub generation: Generation,
     pub plan: Option<Plan>,
     pub packaging: Option<Packaging>,
-    pub lupi: Option<Lupi>,
+    pub exr: Option<Exr>,
     pub setup: Option<Setup>,
     pub xp5: Option<Xp5Setup>,
     pub cold_start: Option<ColdStart>,
@@ -316,11 +316,11 @@ impl Recipe {
                     let header = self
                         .packaging
                         .as_ref()
-                        .ok_or_else(|| image::Error::Invalid("Missing Lupi header".into()))?;
-                    let api = self.lupi.as_ref().ok_or_else(|| {
-                        image::Error::Invalid("Missing Lupi filesystem ABI".into())
+                        .ok_or_else(|| image::Error::Invalid("Missing EXR header".into()))?;
+                    let api = self.exr.as_ref().ok_or_else(|| {
+                        image::Error::Invalid("Missing EXR filesystem ABI".into())
                     })?;
-                    lupi::package(
+                    exr::package(
                         api,
                         header,
                         &inverted,

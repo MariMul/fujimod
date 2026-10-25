@@ -6,17 +6,17 @@ use serde::{Deserialize, Serialize};
 pub(super) mod sd_loader;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Lupi {
+pub struct Exr {
     pub open: u32,
     pub read: u32,
     pub filesystem: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub firmware_transport: Option<crate::lupi_firmware::Transport>,
+    pub firmware_transport: Option<crate::exr_firmware::Transport>,
 }
-pub fn stage(api: &Lupi, ram: &[u8]) -> Result<Vec<u8>> {
+pub fn stage(api: &Exr, ram: &[u8]) -> Result<Vec<u8>> {
     require(
         !ram.is_empty() && ram.len() < 0x40000000,
-        "Invalid Lupi RAM extent",
+        "Invalid EXR RAM extent",
     )?;
     require(
         api.open & 3 == 0
@@ -24,7 +24,7 @@ pub fn stage(api: &Lupi, ram: &[u8]) -> Result<Vec<u8>> {
             && (0x80000000..0x80002000).contains(&api.open)
             && (0x80000000..0x80002000).contains(&api.read)
             && api.filesystem == 0xfff00000,
-        "Lupi filesystem ABI differs",
+        "EXR filesystem ABI differs",
     )?;
     let loader = &sd_loader::LAYOUT.stage;
     let mut bytes = loader.bytes().to_vec();
@@ -42,12 +42,12 @@ pub fn stage(api: &Lupi, ram: &[u8]) -> Result<Vec<u8>> {
     }
     require(
         bytes.len() < 0x10000,
-        "Lupi first read truncates sizes above 65535",
+        "EXR first read truncates sizes above 65535",
     )?;
     Ok(bytes)
 }
 pub fn package(
-    api: &Lupi,
+    api: &Exr,
     header: &Packaging,
     inverted: &[u8],
     plan: &Plan,
@@ -55,13 +55,13 @@ pub fn package(
 ) -> Result<Vec<File>> {
     require(
         plan.entry == 0 && header.entry == 0 && header.load_address == 0,
-        "Lupi handoff differs",
+        "EXR handoff differs",
     )?;
     let system = header.header(inverted)?;
-    require(system.len() == 512, "Lupi requires a 512-byte FFSYS header")?;
+    require(system.len() == 512, "EXR requires a 512-byte FFSYS header")?;
     require(
         header.header_filename == "ffsys.bin" && header.image_filename == "ffboot.bin",
-        "Lupi ROM filenames differ",
+        "EXR ROM filenames differ",
     )?;
     let storage = api
         .firmware_transport
@@ -85,7 +85,7 @@ mod tests {
     use super::*;
     #[test]
     fn stage_configuration_uses_full_payload_size_and_crc_and_u16_boot_extent() {
-        let api = Lupi {
+        let api = Exr {
             open: 0x80001a74,
             read: 0x80001b38,
             filesystem: 0xfff00000,
@@ -101,6 +101,6 @@ mod tests {
             xp4::crc32(&payload)
         );
         assert!(stage(&api, &[]).is_err());
-        assert!(stage(&Lupi { read: 0, ..api }, &payload).is_err());
+        assert!(stage(&Exr { read: 0, ..api }, &payload).is_err());
     }
 }

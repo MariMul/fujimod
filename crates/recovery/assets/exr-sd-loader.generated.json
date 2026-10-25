@@ -15,10 +15,10 @@
     "offset": 388,
     "size": 1224,
     "symbols": {
-      "lupi_firmware_config": 680,
-      "lupi_firmware_indexed": 72,
-      "lupi_firmware_indexed3": 644,
-      "lupi_firmware_indexed4": 624
+      "exr_firmware_config": 680,
+      "exr_firmware_indexed": 72,
+      "exr_firmware_indexed3": 644,
+      "exr_firmware_indexed4": 624
     }
   }
 }

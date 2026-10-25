@@ -1,5 +1,5 @@
 //! Checked installation of the ROM-file-backed 16 KiB firmware namespace.
-use super::lupi::sd_loader;
+use super::exr::sd_loader;
 use crate::{
     Proof,
     image::{self, Plan, Result, extent, hash, put, require},
@@ -18,7 +18,7 @@ pub struct Transport {
 impl Transport {
     pub(super) fn install(
         &self,
-        api: &super::lupi::Lupi,
+        api: &super::exr::Exr,
         inverted: &[u8],
         plan: &Plan,
         ram: &mut [u8],
@@ -30,14 +30,14 @@ impl Transport {
                 && loader.address == BASE
                 && slot.size == 0x1000
                 && loader.bytes().len() <= slot.size,
-            "Lupi firmware reader reservation differs",
+            "EXR firmware reader reservation differs",
         )?;
         hash(extent(ram, slot.address, slot.size)?, &slot.sha256)?;
         require(
             extent(ram, slot.address, slot.size)?
                 .iter()
                 .all(|byte| *byte == 255),
-            "Lupi loader reservation is not padding",
+            "EXR loader reservation is not padding",
         )?;
         hash(
             extent(ram, self.indexed_reader.address, self.indexed_reader.size)?,
@@ -45,7 +45,7 @@ impl Transport {
         )?;
         require(
             self.indexed_reader.size >= 4 && self.indexed_reader.address & 3 == 0,
-            "Invalid Lupi indexed reader proof",
+            "Invalid EXR indexed reader proof",
         )?;
         require(
             !self.suppressed_loader_calls.is_empty()
@@ -69,7 +69,7 @@ impl Transport {
                             && image::word(ram, *at).ok() == Some(0xe3a00000)
                     })
                 }),
-            "Lupi checked loader suppressions differ",
+            "EXR checked loader suppressions differ",
         )?;
         require(
             plan.regions.iter().any(|region| {
@@ -77,19 +77,19 @@ impl Transport {
             }) && plan.bss.iter().all(|region| {
                 region.address + region.size <= BASE || region.address >= BASE + slot.size
             }),
-            "Lupi firmware reader overlaps loader BSS or escapes loaded text",
+            "EXR firmware reader overlaps loader BSS or escapes loaded text",
         )?;
         let source = inverted
             .get(self.dat_offset..)
-            .ok_or_else(|| image::Error::Invalid("Lupi firmware DAT bias escapes source".into()))?;
+            .ok_or_else(|| image::Error::Invalid("EXR firmware DAT bias escapes source".into()))?;
         require(
             !source.is_empty() && source.len() <= 0x4000000,
-            "Lupi firmware namespace exceeds its 16 KiB index",
+            "EXR firmware namespace exceeds its 16 KiB index",
         )?;
         let capacity = (source.len() + 0x3fff) & !0x3fff;
         let offset = (ram.len() + 3) & !3;
         let file_size = offset.checked_add(source.len()).ok_or_else(|| {
-            image::Error::Invalid("Lupi OS image size overflows".into())
+            image::Error::Invalid("EXR OS image size overflows".into())
         })?;
         let mut program = loader.bytes().to_vec();
         for (index, value) in [
@@ -106,19 +106,19 @@ impl Transport {
         {
             put(
                 &mut program,
-                loader.symbols["lupi_firmware_config"] + index * 4,
+                loader.symbols["exr_firmware_config"] + index * 4,
                 u32::try_from(value).map_err(|_| {
-                    image::Error::Invalid("Lupi firmware config exceeds ARM32".into())
+                    image::Error::Invalid("EXR firmware config exceeds ARM32".into())
                 })?,
             )?;
         }
         let symbol = match self.indexed_arguments {
-            3 => "lupi_firmware_indexed3",
-            4 => "lupi_firmware_indexed4",
-            5 => "lupi_firmware_indexed",
+            3 => "exr_firmware_indexed3",
+            4 => "exr_firmware_indexed4",
+            5 => "exr_firmware_indexed",
             _ => {
                 return Err(image::Error::Invalid(
-                    "Lupi indexed reader ABI differs".into(),
+                    "EXR indexed reader ABI differs".into(),
                 ));
             }
         };
@@ -126,7 +126,7 @@ impl Transport {
         let delta = target as i64 - self.indexed_reader.address as i64 - 8;
         require(
             delta % 4 == 0 && (-0x2000000..0x2000000).contains(&delta),
-            "Lupi indexed hook exceeds ARM branch range",
+            "EXR indexed hook exceeds ARM branch range",
         )?;
         ram[BASE..BASE + program.len()].copy_from_slice(&program);
         put(

@@ -1,4 +1,4 @@
-//! Lupi system-control latches at FFF98000. Reset values are declared inputs.
+//! EXR system-control latches at FFF98000. Reset values are declared inputs.
 //! The mode and timing words retain programmed configuration; this model
 //! does not infer a PLL frequency, lock transition, or DDR training result.
 use crate::{Cx, Device};
@@ -11,17 +11,17 @@ pub mod clocks;
 pub struct MemoryInterface;
 impl Device for MemoryInterface {
     fn name(&self) -> &'static str {
-        "lupi-memory-interface"
+        "exr-memory-interface"
     }
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(serde_json::Value::Null)
     }
     fn read(&mut self, cx: &mut Cx<'_>, _address: u64, _size: u8) -> u64 {
-        cx.fail("Lupi memory-interface training/calibration is unmodeled; needs register semantics or a reference bus trace covering commands, status, timing and failure cases");
+        cx.fail("EXR memory-interface training/calibration is unmodeled; needs register semantics or a reference bus trace covering commands, status, timing and failure cases");
         0
     }
     fn write(&mut self, cx: &mut Cx<'_>, _address: u64, _size: u8, _value: u64) {
-        cx.fail("Lupi memory-interface training/calibration is unmodeled; needs register semantics or a reference bus trace covering commands, status, timing and failure cases");
+        cx.fail("EXR memory-interface training/calibration is unmodeled; needs register semantics or a reference bus trace covering commands, status, timing and failure cases");
     }
 }
 
@@ -69,7 +69,7 @@ impl SystemControl {
                 .enumerate()
                 .any(|(i, s)| wiring.selections[..i].iter().any(|p| p.word == s.word))
         {
-            return Err("Lupi control needs unique memory selections including reset".into());
+            return Err("EXR control needs unique memory selections including reset".into());
         }
         Ok(Self {
             wiring,
@@ -92,7 +92,7 @@ impl SystemControl {
 impl Device for SystemControl {
     crate::checkpoint_fields!(state: State);
     fn name(&self) -> &'static str {
-        "lupi-system-control"
+        "exr-system-control"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match Self::index(address, size) {
@@ -109,12 +109,12 @@ impl Device for SystemControl {
             return;
         };
         let Ok(word) = u32::try_from(value) else {
-            cx.fail("Lupi word exceeds 32 bits");
+            cx.fail("EXR word exceeds 32 bits");
             return;
         };
         if index == 1 {
             let Some(selection) = self.wiring.selections.iter().find(|s| s.word == word) else {
-                cx.fail("unsupported Lupi memory selection");
+                cx.fail("unsupported EXR memory selection");
                 return;
             };
             if let Err(error) = cx.select_memory(self.wiring.decoder, selection.choice) {
@@ -141,7 +141,7 @@ impl Device for SystemControl {
             .iter()
             .any(|s| s.word == state.registers[1])
         {
-            return Err("unsupported restored Lupi memory selection".into());
+            return Err("unsupported restored EXR memory selection".into());
         }
         self.state = state;
         Ok(())

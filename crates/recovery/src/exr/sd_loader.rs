@@ -1,14 +1,14 @@
-//! Compiled Lupi SD loader and firmware-reader layout.
+//! Compiled EXR SD loader and firmware-reader layout.
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::LazyLock};
 
-const IMAGE: &[u8] = include_bytes!("../../assets/lupi-sd-loader.generated.bin");
+const IMAGE: &[u8] = include_bytes!("../../assets/exr-sd-loader.generated.bin");
 pub(crate) static LAYOUT: LazyLock<Layout> = LazyLock::new(|| {
     let layout: Layout =
-        serde_json::from_str(include_str!("../../assets/lupi-sd-loader.generated.json"))
-            .expect("checked Lupi SD loader layout");
-    assert_eq!(layout.schema, 1, "Lupi SD loader layout schema");
-    assert_eq!(layout.image_bytes, IMAGE.len(), "Lupi SD loader image size");
+        serde_json::from_str(include_str!("../../assets/exr-sd-loader.generated.json"))
+            .expect("checked EXR SD loader layout");
+    assert_eq!(layout.schema, 1, "EXR SD loader layout schema");
+    assert_eq!(layout.image_bytes, IMAGE.len(), "EXR SD loader image size");
     assert_eq!(layout.stage.offset, 0);
     assert_eq!(layout.stage.size, layout.firmware.offset);
     assert_eq!(layout.firmware.offset + layout.firmware.size, IMAGE.len());

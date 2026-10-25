@@ -1,4 +1,4 @@
-//! Lupi five-word and raw-chain load maps checked through their stock loaders.
+//! EXR five-word and raw-chain load maps checked through their stock loaders.
 use crate::{
     image::{self, Bss, Edit, HeaderWord, Packaging, Part, Plan, Region, Result, require, word},
     rom_sd::{Located, address, call, edit, sequence, source},
@@ -11,7 +11,7 @@ fn scalar(code: &[u8], at: usize, register: u32) -> Result<usize> {
     let instruction = word(code, at)?;
     require(
         instruction & 0xfffff000 == 0xe59f0000 | (register << 12),
-        "Expected literal-loaded Lupi address",
+        "Expected literal-loaded EXR address",
     )?;
     Ok(word(code, at + 8 + (instruction as usize & 0xfff))? as usize)
 }
@@ -21,18 +21,18 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
     let loader = (0..data.len().saturating_sub(32))
         .step_by(4)
         .find(|at| data.get(*at..*at + 32) == Some(vectors.as_slice()))
-        .ok_or_else(|| image::Error::Invalid("No older Lupi vector-bearing loader".into()))?;
+        .ok_or_else(|| image::Error::Invalid("No older EXR vector-bearing loader".into()))?;
     let headers: Vec<_> = (0..loader)
         .step_by(4)
         .filter(|at| sequence(data, *at, &[0x00ffaa55, 0x01234567, 0x89abcdef]))
         .collect();
-    require(!headers.is_empty(), "No older Lupi boot header bank")?;
+    require(!headers.is_empty(), "No older EXR boot header bank")?;
     let bias = headers[0];
     require(
         headers.iter().enumerate().all(|(i, at)| {
             *at == bias + i * 512 && data.get(*at..*at + 512) == data.get(bias..bias + 512)
         }) && headers.last().unwrap() + 512 == loader,
-        "Older Lupi boot header replicas differ",
+        "Older EXR boot header replicas differ",
     )?;
     let kernels: Vec<_> = (loader + 32..data.len().min(loader + 0x100000).saturating_sub(32))
         .step_by(4)
@@ -43,7 +43,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
                 && matches!(word(data, *at + 4).ok(), Some(0x40000 | 0xd0000))
         })
         .collect();
-    require(kernels.len() == 2, "No unique older Lupi raw kernel pair")?;
+    require(kernels.len() == 2, "No unique older EXR raw kernel pair")?;
     let first = kernels[0];
     let (loader_source, code) = source(data, loader, first - loader, false)?;
     let mut wrappers = vec![];
@@ -76,7 +76,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
             && wrappers
                 .iter()
                 .all(|r| r.1 == wrappers[0].1 && r.2 == wrappers[0].2),
-        "No unique five-word table selected by older Lupi loaders",
+        "No unique five-word table selected by older EXR loaders",
     )?;
     let (_, offset, table_address) = wrappers[0];
     let mut regions = vec![
@@ -96,7 +96,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
         let size = word(data, *at + 8)? as usize;
         require(
             size >= 32 && size < 0x10000,
-            "Older Lupi raw kernel extent differs",
+            "Older EXR raw kernel extent differs",
         )?;
         regions.push(Region {
             name: format!("kernel-{index}"),
@@ -114,12 +114,12 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
     };
     require(
         padding.iter().all(|value| *value == 255),
-        "Older Lupi table has additional or malformed rows",
+        "Older EXR table has additional or malformed rows",
     )?;
     for index in 0..8 {
         let row: [u32; 5] =
             std::array::from_fn(|i| word(data, offset + index * 20 + i * 4).unwrap());
-        require(row[4] <= 1, "Older Lupi row compression differs")?;
+        require(row[4] <= 1, "Older EXR row compression differs")?;
         if rows.contains(&row) {
             continue;
         }
@@ -138,7 +138,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
         }
         require(
             destination != 0 && packed != 0,
-            "Older Lupi load row has no destination/extent",
+            "Older EXR load row has no destination/extent",
         )?;
         let (spec, decoded) = source(
             data,
@@ -151,12 +151,12 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
                 decoded.len() == size as usize
                     && sequence(&decoded, 0, &[0, destination as u32, size])
                     && word(&decoded, 28)? == 0xaaaaffff,
-                "Older Lupi decoded header/extent differs",
+                "Older EXR decoded header/extent differs",
             )?;
         } else {
             require(
                 size == 0,
-                "Older Lupi raw resource row has an unexplained decoded extent",
+                "Older EXR raw resource row has an unexplained decoded extent",
             )?;
         }
         regions.push(Region {
@@ -167,7 +167,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
     }
     require(
         regions.len() == 8 && bss.len() == 2,
-        "Older Lupi five-word map is incomplete",
+        "Older EXR five-word map is incomplete",
     )?;
     let mut edits = vec![];
     for (wrapper, _, _) in &wrappers {
@@ -177,7 +177,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
             .collect();
         require(
             callers.len() == 1,
-            "Older Lupi table wrapper callers differ",
+            "Older EXR table wrapper callers differ",
         )?;
         edits.push(edit(
             &code,
@@ -207,7 +207,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
     }
     require(
         kernel_calls.len() == 2,
-        "Older Lupi kernel calls are not uniquely checked",
+        "Older EXR kernel calls are not uniquely checked",
     )?;
     for at in kernel_calls {
         edits.push(edit(
@@ -231,7 +231,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
     }
     require(
         streams.len() == 2,
-        "Older Lupi resident-stream loads are not uniquely checked",
+        "Older EXR resident-stream loads are not uniquely checked",
     )?;
     for at in streams {
         edits.push(edit(
@@ -283,7 +283,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
             entry: 0,
             load_address: 0,
         },
-        missing: vec!["five-word Lupi stock updater acceptance".into()],
+        missing: vec!["five-word EXR stock updater acceptance".into()],
     })
 }
 
@@ -291,11 +291,11 @@ fn five_word_nand_edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
     let lo = (table_call.saturating_sub(0x400)..table_call)
         .rev()
         .find(|at| at % 4 == 0 && word(code, *at).is_ok_and(|w| w & 0xffffc800 == 0xe92d4800))
-        .ok_or_else(|| image::Error::Invalid("No older Lupi cold-start frame".into()))?;
+        .ok_or_else(|| image::Error::Invalid("No older EXR cold-start frame".into()))?;
     let hi = (table_call..(table_call + 0x200).min(code.len()))
         .step_by(4)
         .find(|at| word(code, *at).is_ok_and(|w| w & 0xffff8000 == 0xe8bd8000))
-        .ok_or_else(|| image::Error::Invalid("No older Lupi cold-start return".into()))?;
+        .ok_or_else(|| image::Error::Invalid("No older EXR cold-start return".into()))?;
     let mut initializes = vec![];
     let mut scans = vec![];
     let mut probes = vec![];
@@ -343,19 +343,19 @@ fn five_word_nand_edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
     }
     require(
         initializes.len() == 1 && scans.len() == 1 && probes.len() == 1 && closes.len() == 1,
-        "Older Lupi NAND lifecycle is not uniquely checked in its cold-start frame",
+        "Older EXR NAND lifecycle is not uniquely checked in its cold-start frame",
     )?;
     [
-        (initializes[0], "skip five-word Lupi NAND initialization"),
+        (initializes[0], "skip five-word EXR NAND initialization"),
         (
             scans[0],
-            "retain empty five-word Lupi bad-block list without OOB scan",
+            "retain empty five-word EXR bad-block list without OOB scan",
         ),
         (
             probes[0],
-            "skip five-word Lupi installed-image header probe",
+            "skip five-word EXR installed-image header probe",
         ),
-        (closes[0], "skip five-word Lupi NAND shutdown"),
+        (closes[0], "skip five-word EXR NAND shutdown"),
     ]
     .into_iter()
     .map(|(at, what)| edit(code, at, 0xe3a00000, what))
@@ -398,7 +398,7 @@ fn locate_raw(
     }
     require(
         chains.len() == 1,
-        "No unique older Lupi raw application header chain",
+        "No unique older EXR raw application header chain",
     )?;
     let (main, extension) = chains[0];
     let main_flash = main - bias;
@@ -419,7 +419,7 @@ fn locate_raw(
         ])
     {
         let size = word(data, at + 8)? as usize;
-        require(size >= 32, "Older Lupi raw image is truncated")?;
+        require(size >= 32, "Older EXR raw image is truncated")?;
         regions.push(Region {
             name,
             address: word(data, at + 4)? as usize,
@@ -449,14 +449,14 @@ fn locate_raw(
     }
     require(
         kernel_calls.len() == 2 && resident_calls.len() == 2,
-        "Older raw Lupi loader image calls differ",
+        "Older raw EXR loader image calls differ",
     )?;
     for at in kernel_calls.iter().chain(&resident_calls) {
         edits.push(edit(
             &code,
             *at,
             0xe3a00000,
-            "retain preloaded raw Lupi kernel/application",
+            "retain preloaded raw EXR kernel/application",
         )?);
     }
     let mut lifecycle = vec![];
@@ -486,27 +486,27 @@ fn locate_raw(
                 &[0xe92d4800, 0xe28db004, 0xe24dd008, 0xe3a03000, 0xe50b300c],
             ) && sequence(&code, setup + 0x24, &[0xe5813000, 0xe24b000c])
                 && call(&code, setup + 0x2c).is_ok(),
-            "Older raw Lupi empty bad-block list setup differs",
+            "Older raw EXR empty bad-block list setup differs",
         )?;
         lifecycle.push(at);
         for (site, what) in [
-            (at, "skip raw Lupi NAND initialization"),
+            (at, "skip raw EXR NAND initialization"),
             (
                 setup + 0x2c,
-                "retain empty raw Lupi bad-block list without OOB scan",
+                "retain empty raw EXR bad-block list without OOB scan",
             ),
             (
                 at + 0x50,
-                "retain normal preloaded raw Lupi application policy without NAND probes",
+                "retain normal preloaded raw EXR application policy without NAND probes",
             ),
-            (at + 0x78, "skip raw Lupi NAND shutdown"),
+            (at + 0x78, "skip raw EXR NAND shutdown"),
         ] {
             edits.push(edit(&code, site, 0xe3a00000, what)?);
         }
     }
     require(
         lifecycle.len() == 2,
-        "Older raw Lupi NAND lifecycle is not checked for both cores",
+        "Older raw EXR NAND lifecycle is not checked for both cores",
     )?;
     let size = regions
         .iter()
@@ -549,6 +549,6 @@ fn locate_raw(
             entry: 0,
             load_address: 0,
         },
-        missing: vec!["raw Lupi stock updater acceptance".into()],
+        missing: vec!["raw EXR stock updater acceptance".into()],
     })
 }

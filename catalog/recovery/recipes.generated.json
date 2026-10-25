@@ -7,7 +7,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -274,7 +274,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -499,7 +499,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -633,25 +633,25 @@
           "address": 19244,
           "old": 3942646183,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND initialization"
+          "what": "skip five-word EXR NAND initialization"
         },
         {
           "address": 20912,
           "old": 3942646512,
           "new": 3818913792,
-          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+          "what": "retain empty five-word EXR bad-block list without OOB scan"
         },
         {
           "address": 19324,
           "old": 3959422922,
           "new": 3818913792,
-          "what": "skip five-word Lupi installed-image header probe"
+          "what": "skip five-word EXR installed-image header probe"
         },
         {
           "address": 19364,
           "old": 3942646148,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND shutdown"
+          "what": "skip five-word EXR NAND shutdown"
         },
         {
           "address": 84856,
@@ -663,25 +663,25 @@
           "address": 84780,
           "old": 3942646183,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND initialization"
+          "what": "skip five-word EXR NAND initialization"
         },
         {
           "address": 86448,
           "old": 3942646512,
           "new": 3818913792,
-          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+          "what": "retain empty five-word EXR bad-block list without OOB scan"
         },
         {
           "address": 84860,
           "old": 3959422922,
           "new": 3818913792,
-          "what": "skip five-word Lupi installed-image header probe"
+          "what": "skip five-word EXR installed-image header probe"
         },
         {
           "address": 84900,
           "old": 3942646148,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND shutdown"
+          "what": "skip five-word EXR NAND shutdown"
         },
         {
           "address": 18936,
@@ -744,7 +744,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": {
+    "exr": {
       "open": 2147490420,
       "read": 2147490616,
       "filesystem": 4293918720,
@@ -787,7 +787,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "five-word Lupi stock updater acceptance",
+      "five-word EXR stock updater acceptance",
       "version-independent stock updater acceptance"
     ]
   },
@@ -863,73 +863,73 @@
           "address": 133784,
           "old": 3942646283,
           "new": 3818913792,
-          "what": "retain preloaded raw Lupi kernel/application"
+          "what": "retain preloaded raw EXR kernel/application"
         },
         {
           "address": 199320,
           "old": 3942646283,
           "new": 3818913792,
-          "what": "retain preloaded raw Lupi kernel/application"
+          "what": "retain preloaded raw EXR kernel/application"
         },
         {
           "address": 133936,
           "old": 3942646211,
           "new": 3818913792,
-          "what": "retain preloaded raw Lupi kernel/application"
+          "what": "retain preloaded raw EXR kernel/application"
         },
         {
           "address": 199472,
           "old": 3942646211,
           "new": 3818913792,
-          "what": "retain preloaded raw Lupi kernel/application"
+          "what": "retain preloaded raw EXR kernel/application"
         },
         {
           "address": 134564,
           "old": 3942646142,
           "new": 3818913792,
-          "what": "skip raw Lupi NAND initialization"
+          "what": "skip raw EXR NAND initialization"
         },
         {
           "address": 136068,
           "old": 3942646455,
           "new": 3818913792,
-          "what": "retain empty raw Lupi bad-block list without OOB scan"
+          "what": "retain empty raw EXR bad-block list without OOB scan"
         },
         {
           "address": 134644,
           "old": 3959422817,
           "new": 3818913792,
-          "what": "retain normal preloaded raw Lupi application policy without NAND probes"
+          "what": "retain normal preloaded raw EXR application policy without NAND probes"
         },
         {
           "address": 134684,
           "old": 3942646107,
           "new": 3818913792,
-          "what": "skip raw Lupi NAND shutdown"
+          "what": "skip raw EXR NAND shutdown"
         },
         {
           "address": 200100,
           "old": 3942646142,
           "new": 3818913792,
-          "what": "skip raw Lupi NAND initialization"
+          "what": "skip raw EXR NAND initialization"
         },
         {
           "address": 201604,
           "old": 3942646455,
           "new": 3818913792,
-          "what": "retain empty raw Lupi bad-block list without OOB scan"
+          "what": "retain empty raw EXR bad-block list without OOB scan"
         },
         {
           "address": 200180,
           "old": 3959422817,
           "new": 3818913792,
-          "what": "retain normal preloaded raw Lupi application policy without NAND probes"
+          "what": "retain normal preloaded raw EXR application policy without NAND probes"
         },
         {
           "address": 200220,
           "old": 3942646107,
           "new": 3818913792,
-          "what": "skip raw Lupi NAND shutdown"
+          "what": "skip raw EXR NAND shutdown"
         }
       ]
     },
@@ -968,7 +968,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": {
+    "exr": {
       "open": 2147490420,
       "read": 2147490616,
       "filesystem": 4293918720,
@@ -1009,7 +1009,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "raw Lupi stock updater acceptance",
+      "raw EXR stock updater acceptance",
       "version-independent stock updater acceptance"
     ]
   },
@@ -1226,7 +1226,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -1488,7 +1488,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -1698,7 +1698,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -1929,7 +1929,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29312,
@@ -2182,7 +2182,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": {
       "prefix": {
@@ -3124,7 +3124,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -3334,7 +3334,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -3553,7 +3553,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -3824,7 +3824,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4090,7 +4090,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4348,7 +4348,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": {
+    "exr": {
       "open": 2147490420,
       "read": 2147490616,
       "filesystem": 4293918720
@@ -4562,7 +4562,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4827,7 +4827,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -4902,7 +4902,7 @@
     "generation": "xpp",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -5078,7 +5078,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 31648,
@@ -5198,7 +5198,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -5425,7 +5425,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": {
+    "exr": {
       "open": 2147490420,
       "read": 2147490616,
       "filesystem": 4293918720,
@@ -5678,7 +5678,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -5754,7 +5754,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -5784,7 +5784,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6004,7 +6004,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6223,7 +6223,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6489,7 +6489,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -6709,7 +6709,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": {
       "prefix": {
@@ -7567,7 +7567,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": {
+    "exr": {
       "open": 2147490420,
       "read": 2147490616,
       "filesystem": 4293918720
@@ -7796,7 +7796,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -8018,7 +8018,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29440,
@@ -8328,7 +8328,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -8538,7 +8538,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -8672,25 +8672,25 @@
           "address": 19328,
           "old": 3942646212,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND initialization"
+          "what": "skip five-word EXR NAND initialization"
         },
         {
           "address": 21112,
           "old": 3942646533,
           "new": 3818913792,
-          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+          "what": "retain empty five-word EXR bad-block list without OOB scan"
         },
         {
           "address": 19456,
           "old": 3959422906,
           "new": 3818913792,
-          "what": "skip five-word Lupi installed-image header probe"
+          "what": "skip five-word EXR installed-image header probe"
         },
         {
           "address": 19540,
           "old": 3942646154,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND shutdown"
+          "what": "skip five-word EXR NAND shutdown"
         },
         {
           "address": 84972,
@@ -8702,25 +8702,25 @@
           "address": 84864,
           "old": 3942646212,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND initialization"
+          "what": "skip five-word EXR NAND initialization"
         },
         {
           "address": 86648,
           "old": 3942646533,
           "new": 3818913792,
-          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+          "what": "retain empty five-word EXR bad-block list without OOB scan"
         },
         {
           "address": 84992,
           "old": 3959422906,
           "new": 3818913792,
-          "what": "skip five-word Lupi installed-image header probe"
+          "what": "skip five-word EXR installed-image header probe"
         },
         {
           "address": 85076,
           "old": 3942646154,
           "new": 3818913792,
-          "what": "skip five-word Lupi NAND shutdown"
+          "what": "skip five-word EXR NAND shutdown"
         },
         {
           "address": 18956,
@@ -8783,7 +8783,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": {
+    "exr": {
       "open": 2147490420,
       "read": 2147490616,
       "filesystem": 4293918720,
@@ -8842,7 +8842,7 @@
     },
     "updater": null,
     "missing": [
-      "five-word Lupi stock updater acceptance",
+      "five-word EXR stock updater acceptance",
       "version-independent stock updater acceptance"
     ]
   },
@@ -9010,7 +9010,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 31648,
@@ -9136,7 +9136,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -9347,7 +9347,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -9617,7 +9617,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -9897,7 +9897,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -10178,7 +10178,7 @@
       "entry": 0,
       "load_address": 0
     },
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -10410,7 +10410,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29440,
@@ -10686,7 +10686,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 29344,
@@ -10962,7 +10962,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 33408,
@@ -11226,7 +11226,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": {
       "prefix": {
@@ -11984,7 +11984,7 @@
       ]
     },
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": {
       "dat_offset": 628,
       "active_size": 31776,
@@ -12104,7 +12104,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -12134,7 +12134,7 @@
     "generation": "xp5",
     "plan": null,
     "packaging": null,
-    "lupi": null,
+    "exr": null,
     "setup": null,
     "xp5": null,
     "cold_start": null,

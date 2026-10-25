@@ -1,4 +1,4 @@
-//! Lupi clock mux/PLL latches. PLL +34 enable/lock use virtual settling time.
+//! EXR clock mux/PLL latches. PLL +34 enable/lock use virtual settling time.
 //! Frequencies and analog lock timing are unmeasured declared inputs.
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ pub struct Clocks {
 impl Clocks {
     pub fn new(options: Options) -> Result<Self, String> {
         if options.settle_ticks == 0 {
-            return Err("Lupi PLL needs positive settling time".into());
+            return Err("EXR PLL needs positive settling time".into());
         }
         let mut registers = vec![0; 0x88 / 4];
         registers[0x80 / 4] = u32::from(options.reset_ready) << 16;
@@ -47,7 +47,7 @@ impl Clocks {
 impl Device for Clocks {
     crate::checkpoint_fields!(state: State);
     fn name(&self) -> &'static str {
-        "lupi-clock-control"
+        "exr-clock-control"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match Self::index(address, size) {
@@ -64,17 +64,17 @@ impl Device for Clocks {
             return;
         };
         let Ok(word) = u32::try_from(value) else {
-            cx.fail("Lupi clock word exceeds 32 bits");
+            cx.fail("EXR clock word exceeds 32 bits");
             return;
         };
         if index == 0x80 / 4 {
-            cx.fail("Lupi clock readiness is read-only");
+            cx.fail("EXR clock readiness is read-only");
             return;
         }
         if index == PLL {
             let due = if word & ENABLE != 0 {
                 let Some(due) = cx.now().checked_add(self.options.settle_ticks) else {
-                    cx.fail("Lupi PLL deadline overflow");
+                    cx.fail("EXR PLL deadline overflow");
                     return;
                 };
                 Some(due)
@@ -111,7 +111,7 @@ impl Device for Clocks {
             || state.registers[0x80 / 4] != u32::from(self.options.reset_ready) << 16
             || state.due.is_some() && state.registers[PLL] & (ENABLE | LOCKED) != ENABLE
         {
-            return Err("invalid Lupi clock checkpoint".into());
+            return Err("invalid EXR clock checkpoint".into());
         }
         self.state = state;
         Ok(())

@@ -16,7 +16,7 @@ pub mod gic;
 pub mod graph;
 pub mod graphics;
 pub mod keyed_io;
-pub mod lupi;
+pub mod exr;
 pub mod lz_osd;
 pub mod map;
 pub mod parts;

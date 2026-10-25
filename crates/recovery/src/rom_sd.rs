@@ -1,4 +1,4 @@
-//! Lupi and Agate startup contracts located from the supplied update.
+//! EXR and Agate startup contracts located from the supplied update.
 //! Selection is by processor and checked instruction/table grammar.
 use crate::image::{
     self, Bss, Compression, Edit, HeaderWord, Packaging, Part, Plan, Region, Source,
@@ -356,7 +356,7 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
     }
     require(
         wrappers.len() == 1,
-        "No unique Lupi section table read wrapper",
+        "No unique EXR section table read wrapper",
     )?;
     let callers: Vec<_> = (0..code.len().saturating_sub(4))
         .step_by(4)
@@ -364,7 +364,7 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
         .collect();
     require(
         callers.len() == 1,
-        "Lupi table reader has ambiguous callers",
+        "EXR table reader has ambiguous callers",
     )?;
     let mut pairs = vec![];
     for at in (0..code.len().saturating_sub(56)).step_by(4) {
@@ -388,7 +388,7 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
     }
     require(
         pairs.len() == 1,
-        "No unique Lupi raw-kernel pair and resident stream load",
+        "No unique EXR raw-kernel pair and resident stream load",
     )?;
     let mut result = vec![edit(
         code,
@@ -405,7 +405,7 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
         )?);
     }
     if nand_free {
-        result.extend(crate::lupi_loader::edits(code, callers[0])?);
+        result.extend(crate::exr_loader::edits(code, callers[0])?);
     }
     Ok(result)
 }
@@ -414,7 +414,7 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
 pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
     let table = match table(data) {
         Ok(table) => table,
-        Err(_) if processor == Processor::Exr => return crate::lupi_load_maps::locate(data),
+        Err(_) if processor == Processor::Exr => return crate::exr_load_maps::locate(data),
         Err(error) => return Err(error),
     };
     let vector: Vec<_> = (0..8).flat_map(|_| 0xe59ff018u32.to_le_bytes()).collect();

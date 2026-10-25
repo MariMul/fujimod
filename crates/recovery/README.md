@@ -36,7 +36,7 @@ FFINIT with the update's DDR setup and relocated tables, the Topaz filesystem
 ABI, and a cold preloaded RAM image. Reset mode remains cold; three checked
 comparisons select the preloaded table, images, and worker bypass.
 
-EXR and EXR Pro use Lupi's 512-byte `ffsys.bin` header and a small
+EXR and EXR Pro use EXR's 512-byte `ffsys.bin` header and a small
 `ffboot.bin`. That SD loader copies itself to SRAM and uses the ROM's u16 read
 ABI to load `ffuser.bin` in chunks, checking file length, actual counts and
 CRC32 before entering the stock RAM image. The extra file avoids the ROM's
@@ -118,8 +118,8 @@ build script turns that layout into constants and the crate loads the image with
 `include_bytes!`. The image contains empty camera-data placeholders; card
 construction needs only the official DAT and the compiled catalog recipes.
 
-The Lupi compiled SD loader is `assets/lupi-sd-loader.generated.bin`; its
-companion `assets/lupi-sd-loader.generated.json` gives the startup loader and
+The EXR compiled SD loader is `assets/exr-sd-loader.generated.bin`; its
+companion `assets/exr-sd-loader.generated.json` gives the startup loader and
 firmware-reader segments, configuration offsets, symbols, and SRAM/stack
 bounds. The crate loads these inputs with `include_bytes!` and `include_str!`.
 Card construction fills the empty configuration fields with the ROM file API,

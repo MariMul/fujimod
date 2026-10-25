@@ -1,4 +1,4 @@
-//! Checked NAND removal from the rooted Lupi loader's preloaded path.
+//! Checked NAND removal from the rooted EXR loader's preloaded path.
 use crate::image::{self, Edit, Result, require, word};
 use crate::rom_sd::{address, call, edit, sequence};
 
@@ -8,7 +8,7 @@ use crate::rom_sd::{address, call, edit, sequence};
 pub(super) fn edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
     let scan_call = table_call
         .checked_sub(0x2c)
-        .ok_or_else(|| image::Error::Invalid("Lupi table call has no cold-start prefix".into()))?;
+        .ok_or_else(|| image::Error::Invalid("EXR table call has no cold-start prefix".into()))?;
     let setup = call(code, scan_call)?;
     require(
         sequence(code, setup, &[0xe92d4800, 0xe28db004, 0xe24dd008])
@@ -17,7 +17,7 @@ pub(super) fn edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
             && sequence(code, setup + 28, &[0xe5831000, 0xe3a03000, 0xe50b300c])
             && sequence(code, setup + 44, &[0xe50b2008, 0xe5813000, 0xe24b000c])
             && sequence(code, setup + 60, &[0xe24bd004, 0xe8bd8800]),
-        "Lupi empty bad-block list initialization differs",
+        "EXR empty bad-block list initialization differs",
     )?;
     let scan = call(code, setup + 56)?;
     require(
@@ -33,7 +33,7 @@ pub(super) fn edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
                 &[0xe3a03000, 0xe50b3014, 0xe3a03f7d, 0xe50b3010],
             )
             && call(code, scan + 0x64).is_ok(),
-        "Lupi bad-block scanner differs",
+        "EXR bad-block scanner differs",
     )?;
     let init_call = table_call - 0x58;
     let init = call(code, init_call)?;
@@ -56,7 +56,7 @@ pub(super) fn edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
                 &[0xe3500000, 0x13a00001, 0x18bd8810, 0xe1d301be, 0xe30a3aaa],
             )
             && sequence(code, table_call + 0x20, &[0xe3500001]),
-        "Lupi NAND lifecycle or installed-image probe differs",
+        "EXR NAND lifecycle or installed-image probe differs",
     )?;
     [
         (init_call, "skip NAND initialization on card startup"),

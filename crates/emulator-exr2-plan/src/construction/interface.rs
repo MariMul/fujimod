@@ -12,35 +12,35 @@ pub fn register_interface_models(constructors: &mut Constructors) {
     constructors.add("exr2-pulse", pulse_unit);
     constructors.add("block86000", block86000);
     constructors.add("hdmi-sink", hdmi_sink);
-    constructors.add("lupi-system-control", lupi_system_control);
-    constructors.add("lupi-clocks", lupi_clocks);
-    constructors.add("lupi-memory-interface", lupi_memory_interface);
+    constructors.add("exr-system-control", exr_system_control);
+    constructors.add("exr-clocks", exr_clocks);
+    constructors.add("exr-memory-interface", exr_memory_interface);
 }
 
-fn lupi_memory_interface(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    if !matches!(model, Model::LupiMemoryInterface) {
+fn exr_memory_interface(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    if !matches!(model, Model::ExrMemoryInterface) {
         return Err("constructor called for another model kind".into());
     }
     Ok(Built::Device(Box::new(
-        fujimod_emulator_devices::lupi::MemoryInterface,
+        fujimod_emulator_devices::exr::MemoryInterface,
     )))
 }
 
-fn lupi_clocks(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    let Model::LupiClocks { options } = model else {
+fn exr_clocks(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::ExrClocks { options } = model else {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device(Box::new(
-        fujimod_emulator_devices::lupi::clocks::Clocks::new(decode(options)?)?,
+        fujimod_emulator_devices::exr::clocks::Clocks::new(decode(options)?)?,
     )))
 }
 
-fn lupi_system_control(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
-    let Model::LupiSystemControl { options, wiring } = model else {
+fn exr_system_control(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Model::ExrSystemControl { options, wiring } = model else {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device(Box::new(
-        fujimod_emulator_devices::lupi::SystemControl::new(decode(options)?, decode(wiring)?)?,
+        fujimod_emulator_devices::exr::SystemControl::new(decode(options)?, decode(wiring)?)?,
     )))
 }
 

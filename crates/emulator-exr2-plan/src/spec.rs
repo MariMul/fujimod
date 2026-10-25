@@ -262,12 +262,12 @@ pub enum Model {
         options: serde_json::Value,
         wiring: serde_json::Value,
     },
-    LupiSystemControl {
+    ExrSystemControl {
         options: serde_json::Value,
         wiring: serde_json::Value,
     },
-    LupiClocks { options: serde_json::Value },
-    LupiMemoryInterface,
+    ExrClocks { options: serde_json::Value },
+    ExrMemoryInterface,
     Clocks {
         options: clock::Options,
     },
@@ -499,9 +499,9 @@ impl Model {
             Model::DramPhy { .. } => "dram-phy",
             Model::Reset { .. } => "reset",
             Model::Block98000 { .. } => "block-98000",
-            Model::LupiSystemControl { .. } => "lupi-system-control",
-            Model::LupiClocks { .. } => "lupi-clocks",
-            Model::LupiMemoryInterface => "lupi-memory-interface",
+            Model::ExrSystemControl { .. } => "exr-system-control",
+            Model::ExrClocks { .. } => "exr-clocks",
+            Model::ExrMemoryInterface => "exr-memory-interface",
             Model::Clocks { .. } => "clocks",
             Model::InterruptController { .. } => "exr2-interrupt-controller",
             Model::CoreRelease { .. } => "core-release",

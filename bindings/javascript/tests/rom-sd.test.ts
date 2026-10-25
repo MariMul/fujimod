@@ -20,7 +20,7 @@ test('Agate recovery is available without a complete emulator board', () => {
   assert.throws(() => recovery.build('xpro2-511', new Uint8Array(4)), /size differs/);
 });
 
-test('Lupi exposes its third file and the unresolved updater contract', () => {
+test('EXR exposes its third file and the unresolved updater contract', () => {
   for (const [id, generation] of [['xf1-101', 'exr'], ['xpro1-382', 'exrpro']] as const) {
     const status = recovery.availability(id);
     try {
