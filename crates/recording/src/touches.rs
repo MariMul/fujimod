@@ -1,15 +1,19 @@
 //! Touch indicators as the iOS Simulator shows them: a translucent circle at
 //! the finger while it is down, following it, fading after it lifts.
-use crate::{CONTROLS, Result, badges};
+use crate::{
+    CONTROLS, Result,
+    canvas::{self, Canvas},
+};
 use serde::Deserialize;
 use std::{str::FromStr, sync::OnceLock};
+use tiny_skia::PathBuilder;
 
 #[derive(Deserialize)]
 struct Style {
-    radius: i32,
+    radius: f64,
     fill: String,
     border: String,
-    border_width: i32,
+    border_width: f32,
     release_ms: u32,
 }
 #[derive(Deserialize)]
@@ -76,7 +80,7 @@ pub(crate) fn marks(
         ((f64::from(canvas.0) - w) / 2.).floor(),
         ((f64::from(canvas.1) - h) / 2.).floor(),
     );
-    let radius = f64::from(style().radius) * scale;
+    let radius = style().radius * scale;
     touches
         .iter()
         .map(|t| {
@@ -87,42 +91,19 @@ pub(crate) fn marks(
         })
         .collect()
 }
-/// Each pixel takes the exact share of its area under the ring and under the
-/// fill (coverage from its center's distance to the edge, as a shader does for
-/// round shapes), so edges are anti-aliased at any center and radius.
-pub(crate) fn draw_on(canvas: &mut badges::Canvas, marks: &[Mark]) {
+/// A filled disc inside a ring, as an SVG circle with a stroke along its
+/// inside edge: both anti-aliased, at any center and radius.
+pub(crate) fn draw_on(canvas: &mut Canvas, marks: &[Mark]) {
     let style = style();
-    let fill = badges::color(&style.fill, 255);
-    let border = badges::color(&style.border, 255);
-    let coverage = |edge: f64, distance: f64| (edge - distance + 0.5).clamp(0., 1.);
     for &(cx, cy, radius, alpha) in marks {
-        let inner = (radius - f64::from(style.border_width)).max(0.);
-        let opacity = f64::from(alpha) / 255.;
-        let (x0, x1) = (
-            (cx - radius - 1.).floor() as i32,
-            (cx + radius + 1.).ceil() as i32,
-        );
-        let (y0, y1) = (
-            (cy - radius - 1.).floor() as i32,
-            (cy + radius + 1.).ceil() as i32,
-        );
-        for y in y0..=y1 {
-            for x in x0..=x1 {
-                let distance = (f64::from(x) + 0.5 - cx).hypot(f64::from(y) + 0.5 - cy);
-                let outer = coverage(radius, distance);
-                if outer == 0. {
-                    continue;
-                }
-                let filled = coverage(inner, distance);
-                // Straight-alpha layers sharing the pixel by area.
-                let fill_a = filled * f64::from(fill[3]) / 255.;
-                let ring_a = (outer - filled) * f64::from(border[3]) / 255.;
-                let total = fill_a + ring_a;
-                let rgb = |i: usize| {
-                    (f64::from(fill[i]) * fill_a + f64::from(border[i]) * ring_a) / total
-                };
-                canvas.blend(x, y, [rgb(0), rgb(1), rgb(2)], total * opacity);
-            }
+        let opacity = f32::from(alpha) / 255.;
+        let (cx, cy, radius) = (cx as f32, cy as f32, radius as f32);
+        let ring = style.border_width.min(radius);
+        if let Some(disc) = PathBuilder::from_circle(cx, cy, radius - ring) {
+            canvas.fill(&disc, canvas::color(&style.fill, opacity));
+        }
+        if let Some(edge) = PathBuilder::from_circle(cx, cy, radius - ring / 2.) {
+            canvas.stroke(&edge, canvas::color(&style.border, opacity), ring);
         }
     }
 }

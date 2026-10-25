@@ -233,10 +233,10 @@
     }
   },
   "badge": {
-    "foreground": "#e7f5df",
-    "background": "#153b25ed",
-    "border": "#57bd7c",
-    "border_width": 1,
+    "foreground": "#000000",
+    "background": "#ffffffe6",
+    "border": "#000000",
+    "border_width": 1.5,
     "radius": 8,
     "font_size": 14,
     "icon_size": 18,

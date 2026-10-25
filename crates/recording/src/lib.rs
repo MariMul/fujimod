@@ -3,7 +3,9 @@
 //! access or guest clock and cannot drive execution or a camera transport.
 mod badges;
 pub mod cache;
+mod canvas;
 pub mod frame;
+mod text;
 mod timeline;
 mod touches;
 mod video;

@@ -287,16 +287,12 @@ fn touches_follow_the_finger_and_fade_after_lift() {
 
 #[test]
 fn touch_edges_are_anti_aliased() {
-    // A white ring on black: the edge blends through partial coverage, and a
+    // A light ring on black: the edge blends through partial coverage, and a
     // half-pixel shift of the center changes the pixels, not a whole step.
     let draw = |cx: f64| {
-        let mut canvas = crate::badges::Canvas {
-            pixels: vec![0; 64 * 64 * 3],
-            width: 64,
-            height: 64,
-        };
+        let mut canvas = crate::canvas::Canvas::from_rgb(&[0; 64 * 64 * 3], 64, 64);
         touches::draw_on(&mut canvas, &[(cx, 32., 20., 255)]);
-        canvas.pixels
+        canvas.rgb()
     };
     let pixels = draw(32.);
     let row: Vec<u8> = (0..64).map(|x| pixels[(32 * 64 + x) * 3]).collect();

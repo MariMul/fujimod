@@ -1,5 +1,6 @@
 use crate::{
     Frame, Result, badges,
+    canvas::Canvas,
     touches::{self, Mark, Touch, TouchPhase},
     video::Encoders,
 };
@@ -309,16 +310,12 @@ impl Recorder {
         let fitted = self.fitted.as_ref().unwrap();
         if changed || labels != self.labels || marks != self.marks {
             let start = Instant::now();
-            let mut canvas = badges::Canvas {
-                pixels: fitted.pixels().to_vec(),
-                width: fitted.width() as i32,
-                height: fitted.height() as i32,
-            };
+            let mut canvas = Canvas::from_rgb(fitted.pixels(), fitted.width(), fitted.height());
             // Both videos show touches; only the annotated one shows badges.
             touches::draw_on(&mut canvas, &marks);
-            self.touched = canvas.pixels.clone();
+            self.touched = canvas.rgb();
             badges::draw_on(&mut canvas, &labels);
-            self.annotated = canvas.pixels;
+            self.annotated = canvas.rgb();
             self.metrics.annotation_seconds += start.elapsed().as_secs_f64();
             self.metrics.annotated_frames += 1;
             self.labels = labels;
