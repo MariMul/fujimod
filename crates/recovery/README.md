@@ -62,19 +62,26 @@ and erase paths retain their stock code. Both families use rooted section tables
 source mappings; unrecognized table or update-device layouts refuse.
 
 XP5 emits raw `marble_init.bin` with the update's setup at byte zero. Its
-entry loader preserves registers and stack, initializes serial NOR access,
-scans read timing, copies the complete source header into the boot-service
-area, applies header operations, and restores the setup entry. Device bases,
-flash pins, SD routing/power/clock operations, and status-lamp fields are
-catalog inputs with checked source spans. The loader makes no ROM calls.
+entry loader preserves registers and stack, applies the checked header carried
+on the card, and restores the setup entry. Device bases, flash pins, SD
+routing/power/clock operations, and status-lamp fields are catalog inputs with
+checked source spans. The loader makes no ROM calls.
 
-Startup and recovery use this same entry loader, then load FAT32 `FFBOOT.BIN`
-after stock DDR setup and check its exact length and CRC32 before publishing
-the setup gate. The gate applies to cores executing that bootstrap. Stock
-setup and later startup retain internal-flash dependencies. Missing device or
+Startup and recovery use this same entry loader, then load FAT32 `ffboot.bin`
+after stock DDR setup and check its exact length and CRC32 before continuing
+stock startup. Stock setup retains internal-storage reads that are deferred
+for a later decision: X100VI prefix/register tables at `0xf0011e00`,
+`0xf0012090`, `0xf00124e0/24f0` and DDR tables near
+`0xf001c8ec..0xf001cf7c`; serial-storage parameters (X100VI `0xf0027100`, X-M5 `0xf0017040`); PHY IMEM/DMEM at
+`0xf0080000+0x10000` and `0xf0090000+0x10000` or
+`0xf00a0000+0x6120` and `0xf00a6120+0x10000`; the DDR layout
+marker at `0xf7fffffc` and retained-state ranges at `0xf7ce0000` and
+`0xf7fe0000`; and the reset-image DMA copy from `0xf0040000` (X100VI
+`0x14000` bytes, X-M5 `0x19000` bytes). Missing device or
 setup facts produce specific construction refusals. `Recipe::build_stage_one`
-uses the same loader and preserves the original internal-flash continuation;
-it produces only `marble_init.bin`.
+uses the same loader with internal-flash initialization, read-timing sampling,
+and the original internal-flash continuation; it produces only
+`marble_init.bin`.
 
 `availability(firmware_id)` returns `can_build`, the exact missing facts, output
 file names, and the catalog's SD-boot and firmware-update button combinations.

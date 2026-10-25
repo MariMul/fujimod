@@ -574,6 +574,7 @@ mod tests {
             let mut restored = raw[..s.low_length].to_vec();
             put(&mut restored, 0, word(&data, 0x800).unwrap()).unwrap();
             if combined {
+                assert_eq!(files[1].name, "ffboot.bin");
                 assert_eq!(files[1].bytes, ram);
                 for at in [0x124, 0x128] {
                     put(&mut restored, at, word(&data, at + 0x800).unwrap()).unwrap();
