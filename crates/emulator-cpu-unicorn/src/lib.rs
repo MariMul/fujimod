@@ -629,6 +629,42 @@ impl Cpu for Core {
         self.invalidate_memory_regions();
         Ok(())
     }
+    unsafe fn replace_physical(
+        &self,
+        address: u64,
+        _physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        if self.model != Model::CortexA7
+            || address & 0xfff != 0
+            || bytes == 0
+            || !bytes.is_multiple_of(4096)
+            || permissions & !7 != 0
+            || address
+                .checked_add(bytes as u64)
+                .is_none_or(|end| end > 1 << 32)
+        {
+            return Err("Unsupported physical window replacement".into());
+        }
+        let replace = self
+            .api
+            .extensions
+            .replace_backing
+            .ok_or("CPU backend has no physical window replacement")?;
+        self.check(unsafe {
+            replace(
+                self.raw,
+                address,
+                bytes as u64,
+                permissions,
+                backing.as_ptr().cast(),
+            )
+        })?;
+        self.invalidate_memory_regions();
+        Ok(())
+    }
     fn map_zeroed(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
         self.check(unsafe { (self.api.uc_mem_map)(self.raw, address, bytes as u64, permissions) })?;
         self.invalidate_memory_regions();

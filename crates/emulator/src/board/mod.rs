@@ -1,5 +1,6 @@
 //! Board execution and device scheduling above the CPU backend boundary.
 pub mod aprofile;
+pub mod armv7a;
 pub mod bus;
 pub mod continuation;
 pub mod decoder;
@@ -88,6 +89,7 @@ struct State {
     outputs: std::collections::BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Profile>>,
     aprofile: Vec<Option<aprofile::Profile>>,
+    armv7a: Vec<Option<armv7a::Profile>>,
     implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: std::collections::BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
@@ -299,6 +301,7 @@ impl Board {
             outputs: Default::default(),
             mprofile: (0..n).map(|_| None).collect(),
             aprofile: (0..n).map(|_| None).collect(),
+            armv7a: (0..n).map(|_| None).collect(),
             implementation_cluster: Default::default(),
             unmodeled_system: Default::default(),
             processor_deadlines: vec![None; n],
@@ -916,7 +919,7 @@ impl Board {
         self.track_all_devices(&s.bus);
         let mut value = json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
             "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
-            "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
+            "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"armv7a":s.armv7a,"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
         value["bus"] = bus;
         value["discovery_callee_stubs"] = self.discovery_callee_stubs();
         value
@@ -1329,8 +1332,10 @@ impl State {
             for core in 0..g.cores {
                 let pins = g.gic.pins(core)?;
                 if pins != self.pins[core] {
-                    cpus[core].set_interrupt(Interrupt::Irq, pins.0)?;
-                    cpus[core].set_interrupt(Interrupt::Fiq, pins.1)?;
+                    if cpus[core].features().architectural_exits {
+                        cpus[core].set_interrupt(Interrupt::Irq, pins.0)?;
+                        cpus[core].set_interrupt(Interrupt::Fiq, pins.1)?;
+                    }
                     self.pins[core] = pins;
                     changed = true;
                 }
@@ -1527,10 +1532,13 @@ impl Host for Services<'_> {
             // An MMIO callback is inside the selecting instruction. A raw
             // stop can leave its PC unchanged and replay it on resume.
             let cpu = &self.cpus[core];
-            cpu.tighten_instruction_limit(
-                cpu.instruction_progress()
-                    .ok_or("memory decoder requires instruction progress")?,
-            )
+            if let Some(progress)=cpu.instruction_progress() {
+                cpu.tighten_instruction_limit(progress)
+            }else{
+                // The all-instruction hook stops before the next instruction,
+                // after this MMIO instruction has retired and advanced its PC.
+                Ok(())
+            }
         } else {
             self.decoders.apply(self.cpus, self.memory)
         }
@@ -1654,6 +1662,10 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         let mut s = b.state.borrow_mut();
         s.sync(cpu, b.core)?;
         s.due(&cpus)?;
+        if s.decoders.pending() {
+            cpu.stop()?;
+            return Ok(());
+        }
         if s.push_pins(&cpus)? {
             cpu.stop()?;
             return Ok(());
@@ -1678,6 +1690,13 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             // Restart before counting or executing its stale translation.
             cpu.stop()?;
             return Ok(());
+        }
+        if let Some(p) = &s.armv7a[b.core]
+            && s.pins[b.core].0 && p.enter_irq(cpu)? { return Ok(()); }
+        let now = s.timeline.now();
+        if let Some(p) = &mut s.armv7a[b.core] {
+            let entry = p.before(cpu, pc, now)?;
+            if let armv7a::Entry::Hint(hint) = entry { s.hint(b.core, hint); }
         }
         if let Some(p) = &mut s.mprofile[b.core] {
             let entry = p.before(cpu, pc)?;

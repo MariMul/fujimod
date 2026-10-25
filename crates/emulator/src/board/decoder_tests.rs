@@ -170,6 +170,9 @@ fn board_with_event(
     private_peer: bool,
     timed_selection: Option<(u64, usize)>,
 ) -> (Board, Readings) {
+    board_from_graph(graph(private_peer), timed_selection)
+}
+fn board_from_graph(graph: Graph, timed_selection: Option<(u64, usize)>) -> (Board, Readings) {
     let reads = Arc::new(Mutex::new(vec![]));
     let control = boot::Block98000::new(
         boot::Options {
@@ -196,7 +199,7 @@ fn board_with_event(
         }),
     )
     .unwrap();
-    let board = graph(private_peer)
+    let board = graph
         .build(
             Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
@@ -342,4 +345,120 @@ fn decoder_choices_require_existing_unique_windows_and_valid_backing() {
         }
         assert!(g.validate().is_err(), "case {case}");
     }
+}
+
+#[test]
+fn a7_remap_changes_both_cpu_aliases_and_dma_at_one_boundary() {
+    for pause in [1, 2, 3] {
+        let mut graph = graph(false);
+        for cpu in &mut graph.processors {
+            cpu.model = Model::CortexA7;
+            cpu.rprofile = None;
+        }
+        let (mut b, reads) = board_from_graph(graph, None);
+        for core in 0..2 {
+            b.configure_armv7a(
+                core,
+                armv7a::Config {
+                    mpidr: 0x80000000 | core as u32,
+                    configuration_base: 0xffff0000,
+                    cycles_per_tick: 1,
+                },
+            )
+            .unwrap();
+        }
+        b.run_for_instructions(pause, 1).unwrap();
+        b.run_until(10, 1).unwrap();
+        assert_eq!(b.instruction_counts(), [3, 2]);
+        assert_eq!(b.read_register(0, arm::CORE[2]).unwrap(), 42);
+        assert_eq!(b.read_register(1, arm::CORE[3]).unwrap(), 42);
+        assert_eq!(*reads.lock().unwrap(), [(1, 0xe3a0202a)]);
+        for core in 0..2 {
+            assert_eq!(word(&b, core, 0x20), 0x12345678);
+            assert_eq!(word(&b, core, 0x80000004), 0xe3a0200b);
+        }
+    }
+}
+
+#[test]
+fn a7_remap_keeps_unrelated_mmu_translation_until_guest_disables_the_mmu() {
+    let mut graph = graph(false);
+    for ram in &mut graph.ram {
+        ram.size = 0x8000;
+    }
+    for map in &mut graph.mappings {
+        map.size = 0x8000;
+    }
+    for map in &mut graph.dma_mappings {
+        map.size = 0x8000;
+    }
+    for choice in &mut graph.decoders[0].choices {
+        for map in &mut choice.processors {
+            map.size = 0x8000;
+        }
+        for map in &mut choice.dma {
+            map.size = 0x8000;
+        }
+    }
+    for (core, cpu) in graph.processors.iter_mut().enumerate() {
+        cpu.model = Model::CortexA7;
+        cpu.rprofile = None;
+        cpu.registers[0].1 = 0x80000000 + core as u64 * 0x100;
+    }
+    let (mut b, _) = board_from_graph(graph, None);
+    for core in 0..2 {
+        b.configure_armv7a(
+            core,
+            armv7a::Config {
+                mpidr: 0x80000000 | core as u32,
+                configuration_base: 0xffff0000,
+                cycles_per_tick: 1,
+            },
+        )
+        .unwrap();
+    }
+    let words = [
+        0xe5810000u32,
+        0xee110f10,
+        0xe3c00001,
+        0xee010f10,
+        0xe3a0202a,
+        0xe320f003,
+    ];
+    b.write_physical(
+        0x80000000,
+        &words
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    // Section entries: code and peripheral translation. The level-one table
+    // itself is in the physical window that the selecting store replaces.
+    for (index, entry) in [(0x800, 0x80000c02u32), (0xfff, 0xfff00c02)] {
+        b.write_physical(0x80004000 + index * 4, &entry.to_le_bytes())
+            .unwrap();
+    }
+    let cp = |crn, crm, opc2| arm::Coprocessor {
+        cp: 15,
+        opc1: 0,
+        crn,
+        crm,
+        opc2,
+        secure: 0,
+        wide: false,
+    };
+    let cpu = b.cpu(0).unwrap();
+    cpu.coprocessor(cp(2, 0, 0), Some(0x4000)).unwrap();
+    cpu.coprocessor(cp(3, 0, 0), Some(3)).unwrap();
+    let sctlr = cpu.coprocessor(cp(1, 0, 0), None).unwrap();
+    cpu.coprocessor(cp(1, 0, 0), Some(sctlr | 1)).unwrap();
+    b.run_for_instructions(100, 1).unwrap();
+    assert_eq!(b.state()["memory_decoders"]["choices"], json!([1]));
+    assert_eq!(b.read_register(0, arm::CORE[2]).unwrap(), 42);
+    assert_eq!(
+        b.cpu(0).unwrap().coprocessor(cp(1, 0, 0), None).unwrap() & 1,
+        0
+    );
+    assert_eq!(word(&b, 0, 0x4000), 0);
 }

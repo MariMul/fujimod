@@ -34,6 +34,7 @@ pub struct MemRegion {
 /// Acceleration exports added by the pinned Unicorn source build.
 /// Missing exports require the explicit slow-Unicorn opt-in before loading.
 pub struct Extensions {
+    pub replace_backing: Option<unsafe extern "C" fn(Engine, u64, u64, u32, *mut c_void) -> Error>,
     pub write_hook_pc_sync: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub page_hooks: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub observe_backings:
@@ -181,6 +182,13 @@ api! {
 mod linked {
     use super::*;
     unsafe extern "C" {
+        fn uc_embedder_replace_backing(
+            engine: Engine,
+            address: u64,
+            size: u64,
+            permissions: u32,
+            backing: *mut c_void,
+        ) -> Error;
         fn uc_embedder_set_write_hook_pc_sync(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_page_hooks(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_observe_backings(
@@ -206,6 +214,7 @@ mod linked {
     }
     pub fn extensions() -> Extensions {
         Extensions {
+            replace_backing: Some(uc_embedder_replace_backing),
             write_hook_pc_sync: Some(uc_embedder_set_write_hook_pc_sync),
             page_hooks: Some(uc_embedder_set_page_hooks),
             observe_backings: Some(uc_embedder_observe_backings),
