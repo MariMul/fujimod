@@ -78,13 +78,16 @@
   line-height: 1.5;
 }
 /* Every icon is cropped to its ink and sized to one optical size (--w, --h from the metrics),
-   centered in a fixed column so labels line up, and centered on the capitals inline. */
+   centered in a fixed column so labels line up. Vertically it is centered on the capitals,
+   then lifted by a quarter of its overhang: half of the height beyond the capitals sits
+   above them and half below the baseline, so tall icons do not look low. */
 .catalog-icon {
   --icon-column: 1.556;
   width: calc(var(--w) * var(--icon-size));
   height: calc(var(--h) * var(--icon-size));
   margin-inline: calc((var(--icon-column) - var(--w)) / 2 * var(--icon-size));
   vertical-align: calc((1cap - var(--h) * var(--icon-size)) / 2);
+  translate: 0 calc((1cap - var(--h) * var(--icon-size)) / 4);
   flex: none;
   overflow: visible;
   color: #eee;

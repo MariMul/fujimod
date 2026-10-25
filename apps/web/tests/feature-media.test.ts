@@ -24,10 +24,10 @@ test('cards show their newest recording', () => {
 
 test('deployment stages media for the cards the homepage shows', () => {
   assert.deepEqual(
-    [...featureMediaFiles(manifest, `const media = featureMedia();\nmedia('shape_aspect_item')`)],
+    [...featureMediaFiles(manifest, ['shape_aspect_item', 'image_size'])],
     ['1'.repeat(24) + '.mp4', '2'.repeat(24) + '.webp'],
   );
-  assert.deepEqual([...featureMediaFiles(manifest, 'const media = featureMedia();')], []);
+  assert.deepEqual([...featureMediaFiles(manifest, ['image_size'])], []);
   assert.throws(
     () =>
       validateFeatureMedia({

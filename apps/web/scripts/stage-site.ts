@@ -12,10 +12,9 @@ export interface SiteInputs {
   media: string;
 }
 /** Files of the media for cards the homepage still shows; recordings of removed cards stay behind. */
-export function featureMediaFiles(media: FeatureMedia, featureSource: string) {
-  const cards = Object.keys(media.cards).filter(
-    (card) => featureSource.includes(`'${card}'`) || featureSource.includes(`"${card}"`),
-  );
+export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<string>) {
+  const shown = new Set(shownCards);
+  const cards = Object.keys(media.cards).filter((card) => shown.has(card));
   return new Set(cards.flatMap((card) => [media.cards[card].video, media.cards[card].still]));
 }
 
@@ -149,10 +148,10 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
     const media = validateFeatureMedia(
       JSON.parse(await readFile(join(inputs.media, 'media.json'), 'utf8')),
     );
-    const names = featureMediaFiles(
-      media,
-      await readFile(new URL('../src/home/Features.tsx', import.meta.url), 'utf8'),
+    const homepage: { cards: Record<string, unknown> } = JSON.parse(
+      await readFile(new URL('../src/home/features.generated.json', import.meta.url), 'utf8'),
     );
+    const names = featureMediaFiles(media, Object.keys(homepage.cards));
     for (const name of names) await copy(join(inputs.media, name), 'artifacts/docs/' + name);
     await copy(join(inputs.media, 'media.json'), 'artifacts/docs/media.json');
     await mkdir(target, { recursive: true });
