@@ -34,7 +34,7 @@ fn screenshots_need_no_encoder_and_keep_pixels() {
     let mut recorder = Recorder::new(output.0.clone(), 15, false).unwrap();
     let frame = frame(37);
     recorder.frame(frame.clone(), 0.).unwrap();
-    recorder.input("menu_ok", true, 0.1).unwrap();
+    recorder.input("menu_ok_button", true, 0.1).unwrap();
     recorder.still(frame.clone(), 1.5).unwrap();
     let digest = recorder.screenshot(&frame, "screenshots/001.png").unwrap();
     recorder.finish().unwrap();
@@ -154,9 +154,9 @@ fn optional_video_shares_rendering_and_annotates_only_changed_frames() {
     let image = frame(40);
     r.frame(image.clone(), 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();
-    r.input("menu_ok", true, 0.).unwrap();
+    r.input("menu_ok_button", true, 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();
-    r.input("menu_ok", false, 0.).unwrap();
+    r.input("menu_ok_button", false, 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();
     r.finish().unwrap();
     assert_eq!(r.metrics.changed_frames, 1);
@@ -183,21 +183,28 @@ fn optional_video_shares_rendering_and_annotates_only_changed_frames() {
 fn badge_history_keeps_five_presses_and_fades_each_release_independently() {
     let output = Output::new();
     let mut r = Recorder::new(output.0.clone(), 15, false).unwrap();
-    r.input("down", true, 0.).unwrap();
-    r.input("down", false, 0.).unwrap();
+    r.input("selector.down", true, 0.).unwrap();
+    r.input("selector.down", false, 0.).unwrap();
     r.frames = 2;
-    r.input("down", true, 0.).unwrap();
-    r.input("down", false, 0.).unwrap();
+    r.input("selector.down", true, 0.).unwrap();
+    r.input("selector.down", false, 0.).unwrap();
     r.frames = 71;
     assert_eq!(
         r.current_labels(),
-        vec![("down".into(), 170), ("down".into(), 255)]
+        vec![("selector.down".into(), 170), ("selector.down".into(), 255)]
     );
     r.frames = 75;
-    assert_eq!(r.current_labels(), vec![("down".into(), 85)]);
+    assert_eq!(r.current_labels(), vec![("selector.down".into(), 85)]);
     r.frames = 77;
     assert!(r.current_labels().is_empty());
-    let names = ["up", "down", "left", "right", "q", "menu_ok"];
+    let names = [
+        "selector.up",
+        "selector.down",
+        "selector.left",
+        "selector.right",
+        "quick_menu_button",
+        "menu_ok_button",
+    ];
     for name in names {
         r.input(name, true, 0.).unwrap();
         r.input(name, false, 0.).unwrap();
@@ -219,7 +226,7 @@ fn previous_frames_keep_their_input_state_and_final_observation_is_visible() {
     let output = Output::new();
     let mut r = Recorder::new(output.0.clone(), 10, true).unwrap();
     r.frame(frame(40), 0.).unwrap();
-    r.input("right", true, 0.5).unwrap();
+    r.input("selector.right", true, 0.5).unwrap();
     r.frame(frame(40), 1.).unwrap();
     r.frame(frame(90), 1.).unwrap();
     r.finish().unwrap();

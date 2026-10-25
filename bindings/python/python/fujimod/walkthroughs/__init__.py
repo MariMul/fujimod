@@ -67,7 +67,7 @@ class Scenario(Protocol):
 
 
 class Input(TypedDict):
-    """A recorded input. A control edge names its presentation; a touch is one
+    """A recorded input. A control edge names its catalog control ID; a touch is one
     finger's phase at a screen position. ``pressed`` is True for a press or a
     touch start (either can anchor coverage), False for a release or a lift
     and None while a finger moves."""

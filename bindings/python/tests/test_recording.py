@@ -76,7 +76,7 @@ class RecordingTests(unittest.TestCase):
     def test_badges_do_not_change_clean_frames_or_native_resolution(self) -> None:
         frame = Frame.rgb(320, 240, bytes([40]) * 320 * 240 * 3)
         before = frame.png()
-        annotated = frame.annotated([("right", 255)])
+        annotated = frame.annotated([("selector.right", 255)])
         self.assertEqual(frame.png(), before)
         self.assertNotEqual(annotated.png(), before)
         self.assertEqual((annotated.width, annotated.height), (320, 240))

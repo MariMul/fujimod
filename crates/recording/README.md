@@ -13,7 +13,9 @@ processes consume that same rendering. Screenshots retain native resolution and
 never include input badges. Badges and touch circles are anti-aliased vector
 paths drawn with tiny-skia; badge text is Inter SemiBold (`assets/fonts`, SIL
 Open Font License) outlined through ab_glyph with the font's advances and
-kerning. Control icons, colors and geometry come from `assets/controls.json`.
+kerning. Catalog control IDs, icons, colors and geometry come from
+[`catalog/input-presentation.json`](../../catalog/input-presentation.json),
+shared with the web overlay.
 
 Screenshots are the default. Creating a screenshot recorder never starts or
 checks ffmpeg. Only `video=true` requires that executable. Timestamped input and
@@ -24,7 +26,8 @@ Touches (`Recorder::touch`, phases start, move and end, in the recorded frames'
 coordinates) appear in both videos, never in screenshots, as the iOS Simulator
 shows them: a translucent circle at the finger while it is down, following moves and
 fading out after the lift. Its geometry is the `touch` entry of
-`assets/controls.json`. The final observation is retained and finalization is idempotent. Dropping a
+[`catalog/input-presentation.json`](../../catalog/input-presentation.json).
+The final observation is retained and finalization is idempotent. Dropping a
 recorder reaps its child encoders, including on failure.
 
 `cache::CaptureCache` is an observational rendering memo. A source provides its

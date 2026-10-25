@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const read = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 test('X70 panel presentation uses semantic body-control IDs', () => {
   const panel = read('../devices/x70/panel.json');
-  const { controls, icons } = read('../../../packages/emulator-ui/src/feedback/presentation.json');
+  const { controls, icons } = read('../../../catalog/input-presentation.json');
   const ids = new Set<string>();
   const visit = (nodes: import('@fujimod/emulator-ui/ui/layout').ControlNode[]) => {
     for (const node of nodes) {

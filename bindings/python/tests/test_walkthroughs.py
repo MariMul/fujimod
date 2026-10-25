@@ -46,10 +46,10 @@ class Camera:
         return self.frame
 
     def press(self) -> None:
-        index = self.guide.input("right", True, 0)
+        index = self.guide.input("selector.right", True, 0)
         self.guide.frame(self.frame, 0.2)
         self.guide.interaction("menu", "mod/item", input_index=index)
-        self.guide.input("right", False, 0.2)
+        self.guide.input("selector.right", False, 0.2)
 
 
 class WalkthroughTests(unittest.TestCase):
@@ -211,7 +211,7 @@ class WalkthroughTests(unittest.TestCase):
 
     def test_timestamp_cadence_preserves_short_samples(self) -> None:
         camera, guide = self.guide()
-        guide.input("right", True, 0)
+        guide.input("selector.right", True, 0)
         for n in range(101):
             guide.frame(camera.frame, n / 100)
         self.assertEqual(guide.recording.frames, 15)
@@ -255,11 +255,11 @@ class WalkthroughTests(unittest.TestCase):
     def test_input_release_and_fixture_input_cannot_earn_coverage(self) -> None:
         camera, guide = self.guide()
         guide._recording = True
-        release = guide.input("right", False, 0)
+        release = guide.input("selector.right", False, 0)
         with self.assertRaises(ValueError):
             guide.interaction("menu", "m/item", input_index=release)
         with guide.fixture("Setup"):
-            setup = guide.input("right", True, 0)
+            setup = guide.input("selector.right", True, 0)
         with self.assertRaises(ValueError):
             guide.interaction("menu", "m/item", input_index=setup)
 
