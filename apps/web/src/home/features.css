@@ -215,8 +215,13 @@
   color: var(--faint);
 }
 .catalog-tile .catalog-credits b,
+.catalog-tile .catalog-credits a,
 .catalog-tile .catalog-credits .catalog-icon {
   color: var(--dim);
+}
+.catalog-tile .catalog-credits a:hover,
+.catalog-tile .catalog-credits a:focus-visible {
+  color: var(--blue);
 }
 .catalog-credits a {
   color: inherit;
