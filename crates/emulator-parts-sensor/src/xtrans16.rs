@@ -126,9 +126,12 @@ impl Sensor {
         let extension = u64::from(word(2)) + 1;
         let exposure_rows = u64::from(reference) * extension;
         if let Some((output, tick_hz)) = &self.frame_clock {
-            // Reset references bound integration, not the scan's blanking
-            // interval. Frame edges follow the complete programmed raster.
-            let frame_rows = u64::from(s.vertical) * extension;
+            // A drive mode's reference lines are its frame: the X70's idle
+            // mode 236 (706 x 9348 receiver raster, 856 lines) runs 54.54 fps
+            // on the camera (firmware FPS overlay), 856 x 706 clocks at 33 MHz;
+            // the padded receiver raster would give 5 fps. Unreferenced
+            // rasters keep their programmed rows.
+            let frame_rows = exposure_rows;
             let clocks = u128::from(frame_rows) * u128::from(s.horizontal) * u128::from(*tick_hz);
             let period = (clocks + u128::from(self.options.pixel_clock_hz) / 2)
                 / u128::from(self.options.pixel_clock_hz);
@@ -337,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    fn physical_scan_clock_preserves_vertical_blanking_and_raster_extension() {
+    fn frame_clock_follows_mode_reference_lines_and_raster_extension() {
         let period: fujimod_emulator_imaging::timing::FramePeriod = Default::default();
         let exposure: ExposureHandle = Default::default();
         let mut s = Sensor::new(
@@ -372,10 +375,12 @@ mod tests {
         *period.lock().unwrap() = saved_period;
         assert_eq!(*period.lock().unwrap(), 120109);
         s.timing(706, 9348, None).unwrap();
-        let scan_period = *period.lock().unwrap();
-        s.command(&[0x81, 0, 0xec, 0, 0, 0, 0, 0]).unwrap();
+        // Before the drive mode selects the reference, the padded receiver
+        // raster times frames; mode 0xec's 856 lines then give 54.6 fps
+        // (camera: 54.54 fps idle in drive mode MV).
         assert_eq!(*period.lock().unwrap(), 2_399_887);
-        assert_eq!(*period.lock().unwrap(), scan_period);
+        s.command(&[0x81, 0, 0xec, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(*period.lock().unwrap(), 219_759);
         assert!((exposure.lock().unwrap().seconds - 856. * 706. / 33_000_000.).abs() < 1e-12);
         // A reset reference belongs to the complete declared scan tuple.
         // Another raster retains its own counter extent and frame cadence.
