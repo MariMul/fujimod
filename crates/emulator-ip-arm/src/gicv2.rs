@@ -335,6 +335,87 @@ impl Gic {
     }
 }
 
+impl fujimod_emulator_devices::gic::InterruptController for Gic {
+    fn pins(&self, core: usize) -> Result<(bool, bool), String> {
+        if core >= self.cores {
+            return Err("GICv2 output targets absent processor".into());
+        }
+        Ok((self.next_irq(core).is_some(), false))
+    }
+    fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
+        if !(32..self.lines).contains(&id) {
+            return Err("GICv2 SPI outside configured lines".into());
+        }
+        self.set_line(id, high);
+        Ok(())
+    }
+    fn set_ppi(&mut self, _core: usize, _id: usize, _high: bool) -> Result<(), String> {
+        Err("GICv2 private level inputs are not modeled".into())
+    }
+    fn system(&mut self, _core: usize, _register: u16, _value: Option<u64>) -> Result<u64, String> {
+        Err("GICv2 uses its MMIO CPU interface".into())
+    }
+    fn distributor(
+        &mut self,
+        core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        self.transfer(core, true, offset, size, value)
+    }
+    fn cpu_interface(
+        &mut self,
+        core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        self.transfer(core, false, offset, size, value)
+    }
+    fn redistributor(
+        &mut self,
+        _core: usize,
+        _offset: u64,
+        _size: u8,
+        _value: Option<u64>,
+    ) -> Result<u64, String> {
+        Err("GICv2 has no redistributors".into())
+    }
+    fn save(&self) -> serde_json::Value {
+        Gic::save(self)
+    }
+    fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
+        Gic::restore(self, state)
+    }
+    fn boxed_clone(&self) -> Box<dyn fujimod_emulator_devices::gic::InterruptController> {
+        Box::new(self.clone())
+    }
+}
+impl Gic {
+    fn transfer(
+        &mut self,
+        core: usize,
+        distributor: bool,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        let offset = u32::try_from(offset).map_err(|_| "GICv2 register offset overflow")?;
+        let word =
+            u32::try_from(value.unwrap_or(0)).map_err(|_| "GICv2 register value overflow")?;
+        self.access(
+            core,
+            distributor,
+            offset,
+            u32::from(size),
+            value.is_some(),
+            word,
+        )
+        .map(u64::from)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

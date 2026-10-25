@@ -103,9 +103,11 @@ fn main() -> Result<(), String> {
                         Bus::new(Mode::Strict),
                         Some(InterruptMap {
                             gic: Box::new(gic),
-                            distributor: 0xfa000000,
-                            redistributor: 0xfa080000,
-                            stride: 0x20000,
+                            registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                                distributor: 0xfa000000,
+                                redistributor: 0xfa080000,
+                                stride: 0x20000,
+                            },
                             cores: 1,
                         }),
                     )?;
@@ -810,9 +812,11 @@ fn main() -> Result<(), String> {
             bus,
             Some(InterruptMap {
                 gic: Box::new(gic),
-                distributor: 0xfa000000,
-                redistributor: 0xfa080000,
-                stride: 0x20000,
+                registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                    distributor: 0xfa000000,
+                    redistributor: 0xfa080000,
+                    stride: 0x20000,
+                },
                 cores: 1,
             }),
         )?;
@@ -995,9 +999,11 @@ fn main() -> Result<(), String> {
             bus,
             Some(InterruptMap {
                 gic: Box::new(gic),
-                distributor: 0xfa000000,
-                redistributor: 0xfa080000,
-                stride: 0x20000,
+                registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                    distributor: 0xfa000000,
+                    redistributor: 0xfa080000,
+                    stride: 0x20000,
+                },
                 cores: 1,
             }),
         )?;

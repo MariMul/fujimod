@@ -206,9 +206,11 @@ pub fn startup_from_profile(
             }
             Some(InterruptMap {
                 gic: Box::new(gic),
-                distributor: block_base(distributor_block_id)?,
-                redistributor: block_base(redistributor_block_id)?,
-                stride: *redistributor_stride,
+                registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                    distributor: block_base(distributor_block_id)?,
+                    redistributor: block_base(redistributor_block_id)?,
+                    stride: *redistributor_stride,
+                },
                 cores: affinity_values.len(),
             })
         }
@@ -235,7 +237,11 @@ pub fn startup_from_profile(
             .and_then(|clock| clock.frequency_hz)
             .ok_or_else(|| format!("SoC clock {id} has no declared frequency"))
     };
-    let distributor = interrupts.as_ref().map(|gic| gic.distributor).unwrap_or(0);
+    let distributor = match interrupts.as_ref().map(|gic| &gic.registers) {
+        Some(fujimod_emulator::board::InterruptRegisters::GicV3 { distributor, .. }) => *distributor,
+        None => 0,
+        _ => return Err("XP5 requires GICv3 interrupt registers".into()),
+    };
     let timer_config = aprofile::Config {
         clock: generic_timer::Clock {
             counter_hz: clock_frequency(counter_clock_id)?,

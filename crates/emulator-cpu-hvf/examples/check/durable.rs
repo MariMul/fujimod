@@ -42,9 +42,11 @@ fn board() -> Result<Board, String> {
         Some(InterruptMap {
             cores: 1,
             gic: Box::new(Gic::new(vec![0], 128)?),
-            distributor: 0x8000000,
-            redistributor: 0x80a0000,
-            stride: 0x20000,
+            registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                distributor: 0x8000000,
+                redistributor: 0x80a0000,
+                stride: 0x20000,
+            },
         }),
     )
 }

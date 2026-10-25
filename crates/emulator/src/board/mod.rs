@@ -31,20 +31,14 @@ use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
 use fujimod_emulator_cpu::{
     Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run,
 };
-use fujimod_emulator_devices::gic::InterruptController;
 use fujimod_emulator_devices::{Host, Record};
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::rc::{Rc, Weak};
 
-pub struct InterruptMap {
-    pub gic: Box<dyn InterruptController>,
-    pub distributor: u64,
-    pub redistributor: u64,
-    pub stride: u64,
-    pub cores: usize,
-}
+mod interrupts;
+pub use interrupts::{InterruptMap, InterruptRegisters};
 struct CoreInterruptMap {
     device: usize,
     inputs: Box<dyn fujimod_emulator_devices::bus::CoreInterrupts>,
@@ -254,25 +248,8 @@ impl Board {
         if cpus.is_empty() || cpus.len() != released.len() || !released.iter().any(|r| *r) {
             return Err("invalid released processor set".into());
         }
-        if interrupts
-            .as_ref()
-            .is_some_and(|g| g.cores > cpus.len() || g.stride < 0x20000 || g.stride % 0x10000 != 0)
-        {
-            return Err("invalid GIC processor map".into());
-        }
         if let Some(g) = &interrupts {
-            if g.cores == 0
-                || g.distributor.checked_add(0x10000).is_none()
-                || g.stride
-                    .checked_mul(g.cores as u64)
-                    .and_then(|n| g.redistributor.checked_add(n))
-                    .is_none()
-            {
-                return Err("invalid GIC address geometry".into());
-            }
-            for core in 0..g.cores {
-                g.gic.pins(core)?;
-            }
+            g.validate(cpus.len())?;
         }
         let n = cpus.len();
         let reset_contexts = cpus
@@ -1413,25 +1390,12 @@ impl State {
                 return Ok(result);
             }
         }
-        if let Some(g) = &mut self.interrupts {
-            if address >= g.distributor && address < g.distributor + 0x10000 {
-                let result = g.gic.distributor(address - g.distributor, size, value)?;
-                self.push_pins(cpus)?;
-                self.tighten(&*cpus[core], core)?;
-                return Ok(result);
-            }
-            if address >= g.redistributor && address < g.redistributor + g.stride * g.cores as u64 {
-                let offset = address - g.redistributor;
-                let result = g.gic.redistributor(
-                    (offset / g.stride) as usize,
-                    offset % g.stride,
-                    size,
-                    value,
-                )?;
-                self.push_pins(cpus)?;
-                self.tighten(&*cpus[core], core)?;
-                return Ok(result);
-            }
+        if let Some(g) = &mut self.interrupts
+            && let Some(result) = g.access(core, address, size, value) {
+            let result = result?;
+            self.push_pins(cpus)?;
+            self.tighten(&*cpus[core], core)?;
+            return Ok(result);
         }
         self.memory_access = value.is_some();
         let result = self.with_host(cpus, |bus, host| {

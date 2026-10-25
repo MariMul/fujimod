@@ -192,9 +192,11 @@ impl Gic {
         }
         Ok(InterruptMap {
             gic: Box::new(gic),
-            distributor: self.distributor,
-            redistributor: self.redistributor,
-            stride: self.stride,
+            registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                distributor: self.distributor,
+                redistributor: self.redistributor,
+                stride: self.stride,
+            },
             cores: self.affinities.len(),
         })
     }

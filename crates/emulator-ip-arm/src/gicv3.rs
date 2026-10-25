@@ -771,7 +771,13 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
     fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String> {
         Gic::system(self, core, register, value)
     }
-    fn distributor(&mut self, offset: u64, size: u8, value: Option<u64>) -> Result<u64, String> {
+    fn distributor(
+        &mut self,
+        _core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
         Gic::distributor(self, offset, size, value)
     }
     fn redistributor(

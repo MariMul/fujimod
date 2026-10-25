@@ -236,10 +236,15 @@ impl Session {
             .map(|g| {
                 Ok::<_, String>(InterruptMap {
                     cores: g.affinities.len(),
-                    gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(g.affinities, g.lines)?),
-                    distributor: g.distributor,
-                    redistributor: g.redistributor,
-                    stride: g.stride,
+                    gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(
+                        g.affinities,
+                        g.lines,
+                    )?),
+                    registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                        distributor: g.distributor,
+                        redistributor: g.redistributor,
+                        stride: g.stride,
+                    },
                 })
             })
             .transpose()?;
