@@ -13,6 +13,10 @@ pub struct Definition {
     pub cores: usize,
     pub discovery: bool,
     #[serde(default)]
+    pub memory_regions: Vec<super::memory::Region>,
+    #[serde(default)]
+    pub initial_registers: Vec<Vec<(Register, u64)>>,
+    #[serde(default)]
     pub labels: Vec<u32>,
     #[serde(default)]
     pub cbar: Option<u32>,

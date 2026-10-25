@@ -622,6 +622,10 @@ impl Cpu for Core {
                 backing.as_ptr().cast(),
             )
         })?;
+        // The pointer-mapping API records permissions without setting QEMU's
+        // read-only backing flag. Apply them through the protection API too,
+        // so CPU-managed translation cannot write through a ROM mapping.
+        self.protect(address, bytes, permissions)?;
         self.invalidate_memory_regions();
         Ok(())
     }

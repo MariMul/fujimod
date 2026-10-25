@@ -1,6 +1,7 @@
 //! ARM application-profile cluster alongside the shared R-profile runtime.
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
+pub mod memory;
 mod client;
 mod definition;
 pub use definition::Definition;
@@ -85,6 +86,7 @@ struct Cluster {
     // Destroy processors before their RAM backing and callback contexts.
     cpus: Vec<Box<dyn Cpu>>,
     ram: Backing,
+    memory: Vec<memory::Window>,
     hooks: Vec<Box<Hook>>,
     labels: Vec<u32>,
     cbar: Option<u32>,
@@ -913,6 +915,8 @@ impl Session {
             ram_size,
             cores,
             discovery,
+            memory_regions,
+            initial_registers,
             labels,
             cbar,
             timer_base,
@@ -988,6 +992,10 @@ impl Session {
             return Err("Invalid ARMv7-A peripheral reset inputs".to_owned());
         }
         let ram = Backing::zeros(ram_size);
+        let memory = memory::allocate(memory_regions, ram_size)?;
+        if !initial_registers.is_empty() && initial_registers.len() != cores {
+            return Err("Initial ARM32 register sets must name every processor".into());
+        }
         let translation_cache_size_bytes =
             fujimod_emulator::board::factory::translation_cache_size_bytes(cores)?;
         let library = Library::linked()?;
@@ -1182,7 +1190,8 @@ impl Session {
             .transpose()?;
         let mut inner = Box::new(Cluster {
             cpus,
-            ram: Backing::zeros(ram_size),
+            ram,
+            memory,
             hooks: Vec::new(),
             labels,
             cbar,
@@ -1231,6 +1240,16 @@ impl Session {
                     NonNull::new(inner.ram.as_ptr()).unwrap(),
                 )
             }?;
+            for window in &inner.memory {
+                unsafe {
+                    inner.cpus[core].map_backing(
+                        window.base,
+                        window.data.len(),
+                        window.permissions,
+                        NonNull::new(window.data.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
             inner.hooks.push(Box::new(Hook {
                 cluster: &*inner,
                 core,
@@ -1264,6 +1283,13 @@ impl Session {
                 unsafe { inner.cpus[core].install_hook(hook) }?;
             }
             inner.write_reg(core, arm::CPSR, 0xd3)?;
+            if let Some(registers) = initial_registers.get(core) {
+                for &(register, value) in registers {
+                    let value =
+                        u32::try_from(value).map_err(|_| "ARM32 reset register overflows")?;
+                    inner.cpus[core].write_register(register, &value.to_le_bytes())?;
+                }
+            }
         }
         if let Some(base) = cbar {
             inner.map_page(u64::from(base) + 0x1000)?;
@@ -1485,19 +1511,14 @@ impl Session {
         self.inner.cp(core, crn, crm, opc1, opc2)
     }
     pub fn validate_read(&self, address: usize, size: usize) -> Result<(), String> {
-        if address
-            .checked_add(size)
-            .is_none_or(|end| end > self.inner.ram.len())
-        {
-            return Err("Host read outside physical RAM".into());
-        }
+        self.inner.memory_pointer(address as u64, size, 1)?;
         Ok(())
     }
     pub fn read(&self, address: usize, out: &mut [u8]) -> Result<(), String> {
         self.validate_read(address, out.len())?;
         unsafe {
             std::ptr::copy_nonoverlapping(
-                self.inner.ram.as_ptr().add(address),
+                self.inner.memory_pointer(address as u64, out.len(), 1)?,
                 out.as_mut_ptr(),
                 out.len(),
             );
@@ -1505,16 +1526,11 @@ impl Session {
         Ok(())
     }
     pub fn write(&self, address: usize, data: &[u8]) -> Result<(), String> {
-        if address
-            .checked_add(data.len())
-            .is_none_or(|end| end > self.inner.ram.len())
-        {
-            return Err("Host write outside physical RAM".to_owned());
-        }
+        let target = self.inner.memory_pointer(address as u64, data.len(), 0)?;
         unsafe {
             std::ptr::copy_nonoverlapping(
                 data.as_ptr(),
-                self.inner.ram.as_ptr().add(address),
+                target,
                 data.len(),
             );
         }
@@ -1532,11 +1548,8 @@ impl Session {
             let va = address + bytes.len() as u32;
             let chunk = (size - bytes.len()).min(4096 - (va as usize & 4095));
             let pa = self.inner.cpus[core].translate(u64::from(va), Access::Read)?;
-            if pa + chunk as u64 > self.inner.ram.len() as u64 {
-                return Err("Passive virtual read outside RAM".to_owned());
-            }
             bytes.extend_from_slice(unsafe {
-                std::slice::from_raw_parts(self.inner.ram.as_ptr().add(pa as usize), chunk)
+                std::slice::from_raw_parts(self.inner.memory_pointer(pa, chunk, 1)?, chunk)
             });
         }
         Ok(bytes)

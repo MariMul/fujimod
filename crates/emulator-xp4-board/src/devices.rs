@@ -84,15 +84,10 @@ impl Host for PhysicalHost<'_> {
         Err("Per-core interrupt input is not wired for ARMv7-A".into())
     }
     fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
-        if address
-            .checked_add(out.len() as u64)
-            .is_none_or(|end| end > self.cluster.ram.len() as u64)
-        {
-            return Err("DMA read outside physical RAM".into());
-        }
+        let source = self.cluster.memory_pointer(address, out.len(), 1)?;
         unsafe {
             std::ptr::copy_nonoverlapping(
-                self.cluster.ram.as_ptr().add(address as usize),
+                source,
                 out.as_mut_ptr(),
                 out.len(),
             );
@@ -100,16 +95,11 @@ impl Host for PhysicalHost<'_> {
         Ok(())
     }
     fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        if address
-            .checked_add(bytes.len() as u64)
-            .is_none_or(|end| end > self.cluster.ram.len() as u64)
-        {
-            return Err("DMA write outside physical RAM".into());
-        }
+        let target = self.cluster.memory_pointer(address, bytes.len(), 2)?;
         unsafe {
             std::ptr::copy_nonoverlapping(
                 bytes.as_ptr(),
-                self.cluster.ram.as_ptr().add(address as usize),
+                target,
                 bytes.len(),
             );
             let state = &mut *self.cluster.state.get();
