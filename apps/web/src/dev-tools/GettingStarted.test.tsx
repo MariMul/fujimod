@@ -35,6 +35,7 @@ function mount(session: Partial<ToolSession>, serial = 'SERIAL1') {
   const enter = vi.fn(async (_firmware: string, progress: (line: string) => void) =>
     progress('Debug mode enabled'),
   );
+  const files: { name: string; blob: Blob; meta?: Record<string, unknown> }[] = [];
   const host = document.createElement('div');
   document.body.append(host);
   cleanup = render(
@@ -44,6 +45,7 @@ function mount(session: Partial<ToolSession>, serial = 'SERIAL1') {
         model={test.model}
         results={results()}
         onResults={(update) => setResults(update)}
+        onFile={(name, blob, meta) => files.push({ name, blob, meta })}
         debug={{ enter, leave: vi.fn() }}
         onWizard={() => {}}
       />
@@ -51,7 +53,7 @@ function mount(session: Partial<ToolSession>, serial = 'SERIAL1') {
     host,
   );
   flush();
-  return { host, enter, results, test };
+  return { host, enter, results, test, files };
 }
 const prepared = { guardBefore: 0, debugBefore: 0, progress: [] };
 
@@ -75,7 +77,7 @@ test('debug mode stays locked until the flash backup is skipped, and the serial 
   expect(button(other.host, 'Enable debug mode')!.disabled).toBe(true);
 });
 
-test('the flash backup prepares the session, assembles chunks by offset and offers the download', async () => {
+test('the flash backup prepares the session, assembles chunks by offset and adds flash.bin', async () => {
   const calls: string[] = [];
   const p = mount({
     async prepareServiceSession(firmware) {
@@ -97,14 +99,11 @@ test('the flash backup prepares the session, assembles chunks by offset and offe
   await vi.waitFor(() => expect(p.results().backup).toBeTruthy());
   expect(calls).toEqual(['prepare xm5-130', 'flash xm5-130']);
   expect(p.results().prepared?.debugBefore).toBe(1);
-  const backup = p.results().backup;
-  if (typeof backup !== 'object') throw Error('no backup');
-  const tar = new Uint8Array(await backup.archive.arrayBuffer());
-  const flashHeader = [...tar].findIndex((_, index) =>
-    new TextDecoder().decode(tar.subarray(index, index + 9)).startsWith('flash.bin'),
-  );
-  expect([...tar.subarray(flashHeader + 512, flashHeader + 520)]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-  expect(button(p.host, 'Download flash backup (0.00 MiB)')).toBeTruthy();
+  expect(p.files.map((file) => file.name)).toEqual(['flash.bin']);
+  expect([...new Uint8Array(await p.files[0]!.blob.arrayBuffer())]).toEqual([
+    1, 2, 3, 4, 5, 6, 7, 8,
+  ]);
+  expect(p.files[0]!.meta).toMatchObject({ firmware: 'xm5-130', flash: { size: 8 } });
   expect(button(p.host, 'Enable debug mode')!.disabled).toBe(false);
 });
 
@@ -122,10 +121,11 @@ test('a flash backup with a gap is refused and unlocks nothing', async () => {
     expect(p.host.textContent).toContain('gap at 0x00000000');
   });
   expect(p.results().backup).toBeUndefined();
+  expect(p.files).toEqual([]);
   expect(button(p.host, 'Enable debug mode')!.disabled).toBe(true);
 });
 
-test('the state dump stores each region and its manifest', async () => {
+test('the state dump adds each region as its own file', async () => {
   const p = mount({
     prepareServiceSession: async () => prepared,
     async dumpState(_firmware, region) {
@@ -142,7 +142,8 @@ test('the state dump stores each region and its manifest', async () => {
   button(p.host, 'Dump camera state')!.click();
   await vi.waitFor(() => expect(p.results().state).toBeTruthy());
   expect(p.results().state!.regions.map((region) => region.name)).toEqual(['boot-rom']);
-  expect(button(p.host, 'Download camera state')).toBeTruthy();
+  expect(p.files.map((file) => file.name)).toEqual(['state-boot-rom.bin']);
+  expect(p.files[0]!.meta).toMatchObject({ address: 0x80000000, constant: true, sha256: 'cd' });
 });
 
 test('a failed step shows the camera’s refusal', async () => {

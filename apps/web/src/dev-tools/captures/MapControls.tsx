@@ -1,14 +1,9 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import type { Camera, CameraModel } from '../camera-model';
-import {
-  bulkSelection,
-  captureArchive,
-  captureRanges,
-  contiguous,
-  type CaptureSet,
-} from './capture';
+import { bulkSelection, captureRanges, contiguous, type CaptureSet } from './capture';
 import { controlDiff, type ControlDiff } from './mapping';
-import { CapturePanel, download, emptySet, message } from './CapturePanel';
+import { CapturePanel, emptySet, message } from './CapturePanel';
+import { slug, type AddFile } from '../../files/shelf';
 import './captures.css';
 
 const STEPS = ['released', 'held', 'released', 'held'] as const;
@@ -20,6 +15,7 @@ export function MapControls(props: {
   model: CameraModel;
   set?: CaptureSet;
   onSet: (set: CaptureSet) => void;
+  onFile: AddFile;
   onConnect: () => void;
   onClose: () => void;
 }) {
@@ -70,23 +66,48 @@ export function MapControls(props: {
       }
       const [range] = current.ranges;
       const diff = controlDiff(range.address, [taken[0], taken[1], taken[2], taken[3]]);
+      const mapping = {
+        control: control(),
+        name: name(),
+        note: note().trim(),
+        time: new Date().toISOString(),
+        scope: current.name,
+        address: range.address,
+        size: range.size,
+        diff,
+      };
+      const facts = {
+        firmware: firmwareId,
+        control: mapping.control ?? null,
+        name: mapping.name,
+        note: mapping.note,
+        time: mapping.time,
+        scope: mapping.scope,
+        address: mapping.address,
+        size: mapping.size,
+      };
+      const base = `mapping-${slug(mapping.name)}`;
+      props.onFile(
+        `${base}-candidates.bin`,
+        new Blob([new Uint8Array(diff.candidates.buffer as ArrayBuffer)]),
+        {
+          ...facts,
+          format: 'u32le address',
+          count: diff.candidates.length,
+        },
+      );
+      props.onFile(
+        `${base}-changed.bin`,
+        new Blob([new Uint8Array(diff.changed.buffer as ArrayBuffer)]),
+        {
+          ...facts,
+          format: 'u32le address, released, held, released, held',
+          count: diff.changed.length / 5,
+          omitted: diff.omitted,
+        },
+      );
       const previous = set();
-      props.onSet({
-        ...previous,
-        mappings: [
-          ...previous.mappings,
-          {
-            control: control(),
-            name: name(),
-            note: note().trim(),
-            time: new Date().toISOString(),
-            scope: current.name,
-            address: range.address,
-            size: range.size,
-            diff,
-          },
-        ],
-      });
+      props.onSet({ ...previous, mappings: [...previous.mappings, mapping] });
       setResult({ name: name(), base: range.address, diff });
       setCaptures([]);
       setControl(undefined);
@@ -221,15 +242,6 @@ export function MapControls(props: {
         <p class="wb-status" role="alert">
           {failure()}
         </p>
-      </Show>
-      <Show when={props.set && (props.set.states.length || props.set.mappings.length)}>
-        <button
-          class="wb-btn"
-          disabled={running()}
-          onClick={() => download(captureArchive(props.camera!, props.set!))}
-        >
-          Download captures
-        </button>
       </Show>
     </CapturePanel>
   );

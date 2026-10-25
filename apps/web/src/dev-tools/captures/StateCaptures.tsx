@@ -1,15 +1,9 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import type { Camera, CameraModel } from '../camera-model';
-import {
-  MIB,
-  bulkSelection,
-  captureArchive,
-  captureRanges,
-  scopeBytes,
-  type CaptureSet,
-} from './capture';
+import { MIB, bulkSelection, captureRanges, stateScope, type CaptureSet } from './capture';
+import { slug, type AddFile } from '../../files/shelf';
 import { CAPTURE_STATES, type CaptureState } from './states';
-import { CapturePanel, download, emptySet, message } from './CapturePanel';
+import { CapturePanel, emptySet, message } from './CapturePanel';
 import './captures.css';
 
 /** Capture RAM in states the person sets with the camera's own controls. */
@@ -18,13 +12,12 @@ export function StateCaptures(props: {
   model: CameraModel;
   set?: CaptureSet;
   onSet: (set: CaptureSet) => void;
+  onFile: AddFile;
   onConnect: () => void;
   onClose: () => void;
 }) {
   const selection = createMemo(() => bulkSelection(props.camera?.identity));
-  const scopes = () => selection()?.bulk?.scopes ?? [];
-  const [scopeName, setScopeName] = createSignal('quick');
-  const scope = () => scopes().find((entry) => entry.name === scopeName()) ?? scopes()[0];
+  const scope = () => stateScope(selection()?.bulk?.scopes ?? []);
   const [running, setRunning] = createSignal<string>();
   const [progress, setProgress] = createSignal({ done: 0, total: 1 });
   const [failure, setFailure] = createSignal('');
@@ -44,6 +37,7 @@ export function StateCaptures(props: {
     const camera = props.camera;
     const firmwareId = selection()?.firmware.id;
     const text = label(state);
+    const file = props.onFile;
     if (!current || !camera || !firmwareId || !text || !available()) return;
     setRunning(state.id);
     setFailure('');
@@ -51,20 +45,27 @@ export function StateCaptures(props: {
       const read = await props.model.withSession(camera.id, 'State capture', (session) =>
         captureRanges(session, firmwareId, current, (done, total) => setProgress({ done, total })),
       );
+      const capture = {
+        state: state.id,
+        label: state.named ? `${state.name}: ${text}` : text,
+        scope: current.name,
+        time: new Date().toISOString(),
+        ...read,
+      };
+      for (const range of capture.ranges)
+        file(`capture-${slug(capture.label)}-${slug(range.name)}.bin`, new Blob(range.parts), {
+          firmware: firmwareId,
+          state: capture.state,
+          label: capture.label,
+          scope: capture.scope,
+          time: capture.time,
+          address: range.address,
+          size: range.size,
+          pieces: range.pieces,
+          overwritten: capture.overwritten,
+        });
       const previous = set();
-      props.onSet({
-        ...previous,
-        states: [
-          ...previous.states,
-          {
-            state: state.id,
-            label: state.named ? `${state.name}: ${text}` : text,
-            scope: current.name,
-            time: new Date().toISOString(),
-            ...read,
-          },
-        ],
-      });
+      props.onSet({ ...previous, states: [...previous.states, capture] });
       if (state.named) setNames((all) => ({ ...all, [state.id]: '' }));
     } catch (error) {
       setFailure(message(error));
@@ -79,6 +80,12 @@ export function StateCaptures(props: {
     const states = [...previous.states];
     states[index] = { ...states[index], photo };
     props.onSet({ ...previous, states });
+    const extension = photo.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    props.onFile(`capture-${slug(states[index].label)}.${extension}`, photo, {
+      state: state.id,
+      label: states[index].label,
+      time: states[index].time,
+    });
   }
   const count = (state: CaptureState) =>
     set().states.filter((entry) => entry.state === state.id).length;
@@ -91,22 +98,6 @@ export function StateCaptures(props: {
       onConnect={props.onConnect}
       onClose={props.onClose}
     >
-      <div class="cap-scopes" role="radiogroup" aria-label="Scope">
-        <For each={scopes()}>
-          {(entry) => (
-            <button
-              class="cap-scope"
-              role="radio"
-              aria-checked={entry.name === scope()?.name ? 'true' : 'false'}
-              disabled={Boolean(running())}
-              onClick={() => setScopeName(entry.name)}
-            >
-              <span>{entry.name === 'quick' ? 'Quick' : 'Full'}</span>
-              <span class="cap-dim">{Math.ceil(scopeBytes(entry) / MIB)} MiB</span>
-            </button>
-          )}
-        </For>
-      </div>
       <ul class="cap-list">
         <For each={CAPTURE_STATES}>
           {(state) => (
@@ -165,15 +156,6 @@ export function StateCaptures(props: {
         <p class="wb-status" role="alert">
           {failure()}
         </p>
-      </Show>
-      <Show when={props.set && (props.set.states.length || props.set.mappings.length)}>
-        <button
-          class="wb-btn wb-primary"
-          disabled={Boolean(running())}
-          onClick={() => download(captureArchive(props.camera!, props.set!))}
-        >
-          Download captures
-        </button>
       </Show>
     </CapturePanel>
   );

@@ -31,6 +31,7 @@
     "./ui/controls": "./src/ui/controls.tsx",
     "./ui/download": "./src/ui/download.ts",
     "./ui/fault": "./src/ui/fault.tsx",
+    "./ui/file-list": "./src/ui/file-list.tsx",
     "./ui/feedback.css": "./src/ui/feedback.css",
     "./ui/icons": "./src/ui/icons.tsx",
     "./ui/default-layout": "./src/ui/default-layout.ts",

@@ -122,12 +122,13 @@ try {
   await page.locator('input[type=file]').setInputFiles(`${directory}/report.tar`);
   await page.getByText('Report ready', { exact: true }).waitFor();
   console.log(engine.name(), 'opened and validated TAR');
-  await page.getByRole('textbox').fill('The menu stopped responding after a mod callback.');
   assert.deepEqual(sent, []);
-  const button = page.getByRole('button', { name: 'Download a copy', exact: true });
-  await button.waitFor();
+  const button = page.getByRole('button', { name: 'Download all', exact: true });
   await page.waitForFunction(
-    () => !document.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled,
+    () =>
+      ![...document.querySelectorAll<HTMLButtonElement>('.bug-actions button')].some(
+        (node) => node.disabled,
+      ),
   );
   const downloadPromise = page.waitForEvent('download');
   await button.click();
@@ -139,8 +140,13 @@ try {
     await readFile(`${directory}/report.tar`),
   );
   assert.deepEqual(sent, []);
-  await page.getByRole('button', { name: 'Upload this information', exact: true }).click();
-  await page.getByText('Report saved:', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Contribute', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Contribute' });
+  await dialog.getByText('Your message will be posted publicly on GitHub.').waitFor();
+  await dialog.getByRole('textbox').fill('The menu stopped responding after a mod callback.');
+  assert.deepEqual(sent, []);
+  await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
+  await dialog.getByText('Uploaded', { exact: false }).waitFor();
   const captured = await page.evaluate(() => window.__reportUpload);
   assert.equal(
     captured.digest,

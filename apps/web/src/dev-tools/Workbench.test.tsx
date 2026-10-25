@@ -5,7 +5,6 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { initialize } from 'fujimod';
 import { Workbench } from './Workbench';
-import { diagnosticBundle, emptyReadings } from './CameraTools';
 import { createTestCameraModel, testCamera } from './test-camera-model';
 import { Direction, Layer, Level } from './log';
 
@@ -154,7 +153,7 @@ test('sharing is an Off/On control on the camera card and never disables the too
   expect(button(host, 'Dump configuration').disabled).toBe(false);
 });
 
-test('Dump configuration reads every page into one binary configuration file', async () => {
+test('Dump configuration adds configuration.bin to the Files pane', async () => {
   const pages: [number, number][] = [];
   const test = createTestCameraModel({
     session: () => ({
@@ -168,36 +167,77 @@ test('Dump configuration reads every page into one binary configuration file', a
   test.add(testCamera('X100V'));
   const host = mount(test.model);
   flush();
-  expect(host.querySelector('[aria-labelledby="wb-memory"]')).toBeNull();
-  const blobs = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:bundle');
+  expect(host.querySelector('.files')!.textContent).toContain('No files yet');
+  const blobs = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:file');
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   button(host, 'Dump configuration').click();
   await vi.waitFor(() => {
     flush();
-    expect(button(host, 'Download diagnostic bundle').disabled).toBe(false);
+    expect(host.querySelector('.files .tree')!.textContent).toContain('configuration.bin');
   });
   expect(pages).toEqual([
     [0, 4],
     [4, 4],
     [8, 2],
   ]);
-  button(host, 'Download diagnostic bundle').click();
-  const zip = new Uint8Array(await (blobs.mock.calls[0][0] as Blob).arrayBuffer());
-  const text = new TextDecoder('latin1').decode(zip);
-  expect(text).toContain('manifest.json');
-  expect(text).toContain('configuration.bin');
-  // The bytes are stored as bytes, not as a JSON number array.
-  expect(text).not.toContain('[0,0,0,0');
+  button(host, 'Download configuration.bin').click();
+  await vi.waitFor(() => expect(blobs).toHaveBeenCalled());
+  const bytes = new Uint8Array(await (blobs.mock.calls[0][0] as Blob).arrayBuffer());
+  expect([...bytes]).toEqual([0, 0, 0, 0, 4, 4, 4, 4, 8, 8]);
+  button(host, 'Remove configuration.bin').click();
+  flush();
+  expect(host.querySelector('.files .tree')!.textContent).not.toContain('configuration.bin');
 });
 
-test('the diagnostic bundle records partial configuration reads as incomplete', async () => {
-  const blob = diagnosticBundle(testCamera('X100V'), {
-    ...emptyReadings(),
-    configuration: { capacity: 10, pageBytes: 4, data: new Uint8Array(4), complete: false },
+test('a partial configuration read keeps the pages read', async () => {
+  const test = createTestCameraModel({
+    session: () => ({
+      configurationGeometry: async () => ({ capacity: 10, pageBytes: 4 }),
+      readConfiguration: async (offset, length) => {
+        if (offset) throw Error('Camera stopped answering');
+        return new Uint8Array(length);
+      },
+    }),
   });
-  const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
-  expect(text).toContain('"complete": false');
-  expect(text).toContain('"bytes": 4');
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  button(host, 'Dump configuration').click();
+  await vi.waitFor(() => {
+    flush();
+    expect(host.textContent).toContain('Camera stopped answering');
+  });
+  expect(host.querySelector('.files .tree')!.textContent).toContain('configuration.bin4 B');
+});
+
+test('Contribute lists the collected files and keeps Upload in a fixed footer', async () => {
+  const test = createTestCameraModel({
+    session: () => ({
+      configurationGeometry: async () => ({ capacity: 4, pageBytes: 4 }),
+      readConfiguration: async (_offset, length) => new Uint8Array(length),
+    }),
+  });
+  test.add(testCamera('X100V'));
+  const host = mount(test.model);
+  flush();
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+  button(host, 'Dump configuration').click();
+  await vi.waitFor(() => {
+    flush();
+    expect(button(host, 'Contribute').disabled).toBe(false);
+  });
+  button(host, 'Contribute').click();
+  flush();
+  const dialog = host.querySelector<HTMLDialogElement>('dialog.contribute')!;
+  expect(dialog.open).toBe(true);
+  expect(dialog.querySelector('.tree')!.textContent).toContain('configuration.bin');
+  expect(dialog.querySelector('.tree button[aria-label^="Download"]')).toBeNull();
+  expect(dialog.textContent).toContain('Message (optional)');
+  expect(
+    [...dialog.querySelectorAll('.cd-buttons button')].map((node) => node.textContent),
+  ).toEqual(['Cancel', 'Upload']);
 });
 
 test('the Write tool shows the debug flag and disables debug mode when it applies', () => {

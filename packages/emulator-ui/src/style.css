@@ -577,45 +577,6 @@ hr {
   font-weight: 700;
   letter-spacing: 0.04em;
 }
-.tree {
-  font-size: 13px;
-}
-.tree .r {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-}
-.tree .r .tw {
-  width: 14px;
-  color: #8e8e93;
-  display: grid;
-  place-items: center;
-}
-.tree .r .n {
-  flex: 1;
-}
-.tree .r .s {
-  color: var(--dim);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-}
-.tree .r .dl {
-  color: #c7c7cc;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-}
-.tree .kids {
-  margin-left: 7px;
-  padding-left: 13px;
-  border-left: 1px solid #2c2c2e;
-}
-.tree .folder {
-  color: #c7c7cc;
-}
 /* chips + table */
 .chip {
   display: inline-flex;
@@ -936,7 +897,10 @@ a:focus-visible,
   border: 0;
   background: none;
   color: #6e6e73;
-  font: 13px -apple-system, system-ui, sans-serif;
+  font:
+    13px -apple-system,
+    system-ui,
+    sans-serif;
 }
 .control-surface.editing-layout [data-layout-path] {
   position: relative;
@@ -1111,7 +1075,10 @@ a:focus-visible,
   border: 0;
   background: none;
   color: #8e8e93;
-  font: 17px -apple-system, system-ui, sans-serif;
+  font:
+    17px -apple-system,
+    system-ui,
+    sans-serif;
   text-align: right;
   text-align-last: right;
 }
@@ -1218,30 +1185,9 @@ a:focus-visible,
     0 0 0 2px #fff,
     0 0 10px rgba(255, 255, 255, 0.35);
 }
-.tree .dl {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-}
-.tree .folder {
-  cursor: pointer;
-}
-.tree .folder button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  height: 30px;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-}
-.tree .folder .tw.closed {
-  transform: rotate(-90deg);
+/* Six 30px reference rows keep the viewer stable as card files change. */
+#card-files {
+  min-height: 180px;
 }
 #card-header .seg {
   margin-left: auto;
@@ -1251,18 +1197,6 @@ a:focus-visible,
 }
 .sd .head .seg {
   font-size: 10.5px;
-}
-.tree .r .n {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tree .r .s {
-  white-space: nowrap;
-}
-.tree .r {
-  min-width: 0;
 }
 .pill {
   font-family: inherit;
@@ -1339,10 +1273,6 @@ a:focus-visible,
   white-space: pre-line;
   font: inherit;
   line-height: inherit;
-}
-/* Six 30px reference rows keep the viewer stable as card files change. */
-.tree {
-  min-height: 180px;
 }
 #feedback-dialog {
   width: min(680px, calc(100% - 28px));

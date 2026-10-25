@@ -2,6 +2,9 @@ import { Show, For, createSignal, onSettled, untrack } from 'solid-js';
 import DevTools from '../dev-tools/Page';
 import type { CameraModel } from '../dev-tools/camera-model';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
+import { FileList } from '@fujimod/emulator-ui/ui/file-list';
+import { Icon } from '@fujimod/emulator-ui/ui/icons';
+import { ContributeDialog } from '../files/ContributeDialog';
 import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
 import { reportPlatform, type ReportPlatform } from './file-guide';
 import {
@@ -47,7 +50,7 @@ export default function BugReport(props: {
   const [remove, setRemove] = createSignal(true);
   const [receipt, setReceipt] = createSignal<UploadReceipt>();
   let uploadId = '';
-  const [description, setDescription] = createSignal('');
+  const [contributing, setContributing] = createSignal(false);
   let handedOff = false;
   onSettled(() => {
     setPlatform(reportPlatform(navigator.userAgent, navigator.maxTouchPoints));
@@ -144,14 +147,15 @@ export default function BugReport(props: {
       setBusy(false);
     }
   }
-  async function submit(event: SubmitEvent) {
-    event.preventDefault();
-    if (!archive() || !link() || busy() || receipt()) return;
+  /** The Contribute dialog's upload: the issue report, then deletion from the camera if chosen. */
+  async function contribute(message: string, progress: (fraction: number) => void) {
+    if (!archive() || !link()) throw Error('No report is loaded.');
     setBusy(true);
     setError('');
-    setStatus('Uploading report…');
+    progress(0);
     try {
-      const result = await upload(archive()!, link()!, description(), uploadId);
+      const result = await upload(archive()!, link()!, message, uploadId);
+      progress(1);
       setReceipt(result);
       const confirmation = result.issueURL
         ? 'Report uploaded and GitHub issue created.'
@@ -165,8 +169,10 @@ export default function BugReport(props: {
           setError('Your report was uploaded, but could not be deleted from the camera.');
         }
       }
-    } catch (cause) {
-      problem(cause);
+      return {
+        id: result.id,
+        link: result.issueURL ? { href: result.issueURL, label: 'View GitHub issue' } : undefined,
+      };
     } finally {
       setBusy(false);
     }
@@ -332,67 +338,63 @@ export default function BugReport(props: {
                     <p class="bug-file">
                       {reportName(value())} · {archive()!.size.toLocaleString()} bytes
                     </p>
-                    <ul class="bug-inventory">
-                      <For each={entries()}>
-                        {(entry) => (
-                          <li>
-                            <code>{entry.name}</code>
-                            <span>{entry.bytes.toLocaleString()} bytes</span>
-                          </li>
-                        )}
-                      </For>
-                    </ul>
+                    <FileList
+                      items={entries().map((entry) => ({
+                        key: entry.name,
+                        name: entry.name,
+                        bytes: entry.bytes,
+                      }))}
+                      download={(item) => {
+                        const entry = entries().find((candidate) => candidate.name === item.key);
+                        if (entry)
+                          downloadBlob(
+                            archive()!.slice(entry.offset, entry.offset + entry.bytes),
+                            entry.name.split('/').at(-1)!,
+                          );
+                      }}
+                    />
                   </Show>
-                  <form onSubmit={(event) => void submit(event)}>
-                    <label>
-                      What happened?
-                      <textarea
-                        rows="5"
-                        value={description()}
-                        disabled={!!receipt() || busy()}
-                        onInput={(event) => setDescription(event.currentTarget.value)}
-                      />
-                    </label>
-                    <label class="bug-delete">
-                      <input
-                        type="checkbox"
-                        checked={remove()}
-                        disabled={
-                          !fromUsb() || !connected() || !connection.remove || busy() || !!receipt()
-                        }
-                        onChange={(event) => setRemove(event.currentTarget.checked)}
-                      />{' '}
-                      Delete from camera after uploading
-                    </label>
+                  <div class="bug-actions">
+                    <button
+                      class="pill"
+                      type="button"
+                      disabled={!download()}
+                      onClick={() => downloadBlob(download()!.blob, download()!.name)}
+                    >
+                      Download all
+                    </button>
                     <button
                       class="pill primary"
-                      type="submit"
+                      type="button"
                       disabled={!archive() || busy() || !!receipt()}
+                      onClick={() => setContributing(true)}
                     >
-                      Upload this information
+                      <Icon name="upload" size={14} />
+                      Contribute
                     </button>
-                    <Show when={download()}>
-                      <button
-                        class="pill"
-                        type="button"
-                        onClick={() => downloadBlob(download()!.blob, download()!.name)}
-                      >
-                        Download a copy
-                      </button>
+                  </div>
+                  <ContributeDialog
+                    open={contributing()}
+                    items={entries().map((entry) => ({
+                      key: entry.name,
+                      name: entry.name,
+                      bytes: entry.bytes,
+                    }))}
+                    upload={contribute}
+                    onClose={() => setContributing(false)}
+                  >
+                    <p class="cd-public">Your message will be posted publicly on GitHub.</p>
+                    <Show when={fromUsb() && connected() && connection.remove}>
+                      <label class="cd-check">
+                        <input
+                          type="checkbox"
+                          checked={remove()}
+                          onChange={(event) => setRemove(event.currentTarget.checked)}
+                        />
+                        Delete from camera after uploading
+                      </label>
                     </Show>
-                  </form>
-                  <Show when={receipt()}>
-                    {(saved) => (
-                      <p>
-                        Report saved: <code>{saved().id}</code>.{' '}
-                        <Show when={saved().issueURL}>
-                          <a href={saved().issueURL} target="_blank" rel="noopener noreferrer">
-                            View GitHub issue
-                          </a>
-                        </Show>
-                      </p>
-                    )}
-                  </Show>
+                  </ContributeDialog>
                   <Show when={connected()}>
                     <button
                       class="pill"

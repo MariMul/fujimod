@@ -9,7 +9,7 @@ import type {
   ToolSession,
 } from './camera-model';
 import { bulkSelection } from './captures/capture';
-import { TarArchive } from './captures/tar';
+import { slug, type AddFile } from '../files/shelf';
 import { backupChoice, rememberBackup } from './backup-unlock';
 import type { DebugModeOperations } from './debug-mode/operations';
 import { Wizard } from './routes';
@@ -19,8 +19,8 @@ import './getting-started.css';
 export interface PathResults {
   /** The first preparation on this camera: the guard and debug values found before. */
   prepared?: ServicePreparation;
-  backup?: { archive: Blob; name: string; flash: FlashBackup } | 'skipped';
-  state?: { archive: Blob; name: string; regions: StateRegion[] };
+  backup?: { flash: FlashBackup } | 'skipped';
+  state?: { regions: StateRegion[] };
   debugSaved?: boolean;
 }
 
@@ -29,19 +29,8 @@ type Step = 'todo' | 'running' | 'done' | 'skipped' | 'locked';
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
-function stamp() {
-  return new Date().toISOString().replaceAll(':', '-');
-}
 function hex(value: number) {
   return `0x${value.toString(16).padStart(8, '0')}`;
-}
-function save(archive: Blob, name: string) {
-  const url = URL.createObjectURL(archive);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function mib(bytes: number) {
   return `${(bytes / (1 << 20)).toFixed(bytes < 1 << 20 ? 2 : 0)} MiB`;
@@ -53,6 +42,7 @@ export function GettingStarted(props: {
   model: CameraModel;
   results: PathResults;
   onResults: (update: (results: PathResults) => PathResults) => void;
+  onFile: AddFile;
   debug?: DebugModeOperations;
   onWizard: (wizard: Wizard) => void;
 }) {
@@ -70,13 +60,6 @@ export function GettingStarted(props: {
   const unlocked = () =>
     props.results.backup !== undefined || backupChoice(props.camera.identity?.serial) !== undefined;
   const restarted = () => props.camera.debugMode === 'on' && !props.camera.serviceMode;
-
-  const identity = () => ({
-    name: props.camera.name,
-    serial: props.camera.identity?.serial,
-    identity: props.camera.identity ?? {},
-    firmware: firmwareId(),
-  });
 
   /** Prepare the service session (idempotent) and run `operation` in the same session. */
   async function step<T>(
@@ -131,22 +114,11 @@ export function GettingStarted(props: {
       setFailure(`The flash backup covers ${mib(end)} of ${mib(flash.size)}.`);
       return;
     }
-    const archive = new TarArchive();
-    archive.add(
-      'manifest.json',
-      new TextEncoder().encode(
-        JSON.stringify({ schema: 'fujimod-flash-backup-1', camera: identity(), flash }, null, 2),
-      ),
-    );
-    archive.add(
-      'flash.bin',
-      pieces.map((piece) => piece.data),
-    );
-    const name = `fujimod-flash-${props.camera.identity?.serial ?? 'camera'}-${stamp()}.tar`;
-    props.onResults((results) => ({
-      ...results,
-      backup: { archive: archive.blob(), name, flash },
-    }));
+    props.onFile('flash.bin', new Blob(pieces.map((piece) => piece.data)), {
+      firmware: firmwareId(),
+      flash,
+    });
+    props.onResults((results) => ({ ...results, backup: { flash } }));
     rememberBackup(props.camera.identity?.serial, 'done');
   }
 
@@ -159,40 +131,22 @@ export function GettingStarted(props: {
   }
 
   async function dumpState() {
-    const archive = new TarArchive();
     const regions: StateRegion[] = [];
+    const file = props.onFile;
     const done = await step('state', 'Dump camera state', async (session, firmware) => {
       await session.dumpState(firmware, ({ data, ...region }) => {
         regions.push(region);
-        archive.add(`${region.name}.bin`, new Uint8Array(data));
+        file(`state-${slug(region.name)}.bin`, new Blob([new Uint8Array(data)]), {
+          firmware,
+          ...region,
+          prepared: props.results.prepared,
+        });
         setProgress(`${region.name} (${mib(region.size)})`);
       });
       return true;
     });
     if (!done) return;
-    archive.add(
-      'manifest.json',
-      new TextEncoder().encode(
-        JSON.stringify(
-          {
-            schema: 'fujimod-camera-state-1',
-            camera: identity(),
-            prepared: props.results.prepared,
-            regions: regions.map((region) => ({
-              ...region,
-              file: `${region.name}.bin`,
-            })),
-          },
-          null,
-          2,
-        ),
-      ),
-    );
-    const name = `fujimod-state-${props.camera.identity?.serial ?? 'camera'}-${stamp()}.tar`;
-    props.onResults((results) => ({
-      ...results,
-      state: { archive: archive.blob(), name, regions },
-    }));
+    props.onResults((results) => ({ ...results, state: { regions } }));
   }
 
   async function enableDebugMode() {
@@ -235,30 +189,21 @@ export function GettingStarted(props: {
       </h3>
       <ol class="gs-steps">
         <Item number={1} title="Back up flash" state={backupStep()}>
-          <Show
-            when={typeof props.results.backup === 'object' && props.results.backup}
-            fallback={
-              <div class="gs-row">
-                <button
-                  class="wb-btn wb-primary"
-                  disabled={!available()}
-                  onClick={() => void backUpFlash()}
-                >
-                  Back up flash
-                </button>
-                <Show when={!props.results.backup}>
-                  <button class="wb-text" disabled={Boolean(running())} onClick={skipBackup}>
-                    Skip
-                  </button>
-                </Show>
-              </div>
-            }
-          >
-            {(backup) => (
-              <button class="wb-btn" onClick={() => save(backup().archive, backup().name)}>
-                Download flash backup ({mib(backup().flash.size)})
+          <Show when={typeof props.results.backup !== 'object'}>
+            <div class="gs-row">
+              <button
+                class="wb-btn wb-primary"
+                disabled={!available()}
+                onClick={() => void backUpFlash()}
+              >
+                Back up flash
               </button>
-            )}
+              <Show when={!props.results.backup}>
+                <button class="wb-text" disabled={Boolean(running())} onClick={skipBackup}>
+                  Skip
+                </button>
+              </Show>
+            </div>
           </Show>
         </Item>
         <Item
@@ -266,19 +211,10 @@ export function GettingStarted(props: {
           title="Dump camera state"
           state={running() === 'state' ? 'running' : props.results.state ? 'done' : 'todo'}
         >
-          <Show
-            when={props.results.state}
-            fallback={
-              <button class="wb-btn" disabled={!available()} onClick={() => void dumpState()}>
-                Dump camera state
-              </button>
-            }
-          >
-            {(state) => (
-              <button class="wb-btn" onClick={() => save(state().archive, state().name)}>
-                Download camera state
-              </button>
-            )}
+          <Show when={!props.results.state}>
+            <button class="wb-btn" disabled={!available()} onClick={() => void dumpState()}>
+              Dump camera state
+            </button>
           </Show>
         </Item>
         <Item number={3} title="Enable debug mode" state={debugStep()} write>

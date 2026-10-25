@@ -80,6 +80,8 @@ export function reportName(link: ReportLink): string {
 export interface ReportEntry {
   name: string;
   bytes: number;
+  /** Where the entry's data starts in the TAR. */
+  offset: number;
 }
 export function reportEntries(bytes: Uint8Array<ArrayBuffer>, link: ReportLink): ReportEntry[] {
   if (bytes.length !== link.bytes || crc32(bytes).toString(16).padStart(8, '0') !== link.crc32)
@@ -117,7 +119,7 @@ export function reportEntries(bytes: Uint8Array<ArrayBuffer>, link: ReportLink):
     if (sum !== parseInt(checksum, 8)) throw Error('Invalid TAR checksum.');
     names.add(name);
     const size = parseInt(sizeField, 8);
-    entries.push({ name, bytes: size });
+    entries.push({ name, bytes: size, offset: offset + 512 });
     offset += 512 + Math.ceil(size / 512) * 512;
     if (offset > bytes.length) throw Error('Truncated TAR entry.');
   }

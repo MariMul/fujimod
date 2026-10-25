@@ -1,9 +1,9 @@
-import { For, Show, createSignal, createEffect, createMemo, untrack } from 'solid-js';
+import { For, createSignal, createEffect, createMemo, untrack } from 'solid-js';
 import type { Engine } from '../engine/api';
 import type { CardEntry, CardState } from 'fujimod/emulator';
-import { zipFiles } from '../archive';
+import { zipBlob } from '../archive';
 import { flags } from '../flags';
-import { Icon } from './icons';
+import { FileList, type FileListItem } from './file-list';
 import { downloadBlob } from './download';
 
 function downloadable(entry: CardEntry) {
@@ -20,62 +20,11 @@ function visibleEntries(entries: CardEntry[]): CardEntry[] {
     );
 }
 
-function CardEntryRow(props: { entry: CardEntry; download: (entry: CardEntry) => Promise<void> }) {
-  const [open, setOpen] = createSignal(true),
-    [busy, setBusy] = createSignal(false);
-  const size = () =>
-    props.entry.bytes >= 1024 ** 2
-      ? `${(props.entry.bytes / 1024 ** 2).toFixed(1)} MB`
-      : props.entry.bytes >= 1024
-        ? `${Number((props.entry.bytes / 1024).toFixed(1))} KB`
-        : `${props.entry.bytes} B`;
-  return (
-    <Show
-      when={props.entry.kind === 'directory'}
-      fallback={
-        <div class="r">
-          <span class="tw" />
-          <Icon name={/\.(jpe?g|png)$/i.test(props.entry.name) ? 'image' : 'file'} />
-          <span class="n">{props.entry.name}</span>
-          <span class="s">{size()}</span>
-          <button
-            class="dl"
-            aria-label={`Download ${props.entry.name}`}
-            disabled={busy()}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await props.download(props.entry);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Icon name="download" size={15} />
-          </button>
-        </div>
-      }
-    >
-      <div class="r folder">
-        <button
-          type="button"
-          aria-expanded={open() ? 'true' : 'false'}
-          aria-label={props.entry.name}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span class={['tw', { closed: !open() }]}>
-            <Icon name="chevron" size={13} />
-          </span>
-          <Icon name="folder" />
-          <span class="n">{props.entry.name}</span>
-        </button>
-      </div>
-      <div class="kids" hidden={!open()}>
-        <For each={props.entry.children ?? []} keyed={(entry) => entry.path}>
-          {(entry) => <CardEntryRow entry={entry()} download={props.download} />}
-        </For>
-      </div>
-    </Show>
+function listItems(entries: readonly CardEntry[]): FileListItem[] {
+  return entries.map((entry) =>
+    entry.kind === 'directory'
+      ? { key: entry.path, name: entry.name, children: listItems(entry.children ?? []) }
+      : { key: entry.path, name: entry.name, bytes: entry.bytes },
   );
 }
 
@@ -180,13 +129,17 @@ export function CardBrowser(props: {
     await perform(async () => {
       if (downloads.reduce((sum, item) => sum + item.bytes, 0) > 64 * 1024 ** 2)
         throw Error('Card download exceeds the 64 MiB browser archive limit.');
-      const files: [string, Uint8Array<ArrayBuffer>][] = [];
+      const files: { path: string; data: Blob }[] = [];
       for (const entry of downloads) {
         const bytes = await engine.readCardFile(entry.path, { revision: listing.revision });
         if (current !== generation) return;
-        files.push([entry.path.replace(/^[A-Za-z]:[\\/]/, '').replace(/^\//, ''), bytes.slice()]);
+        files.push({
+          path: entry.path.replace(/^[A-Za-z]:[\\/]/, '').replace(/^\//, ''),
+          data: new Blob([bytes.slice().buffer]),
+        });
       }
-      downloadBlob(zipFiles(files), 'sd-card.zip');
+      const zip = await zipBlob(files);
+      if (current === generation) downloadBlob(zip, 'sd-card.zip');
     });
   }
   return (
@@ -214,11 +167,14 @@ export function CardBrowser(props: {
           </For>
         </div>
       </div>
-      <div class="tree" id="card-files">
-        <For each={entries()} keyed={(entry) => entry.path}>
-          {(entry) => <CardEntryRow entry={entry()} download={download} />}
-        </For>
-      </div>
+      <FileList
+        id="card-files"
+        items={listItems(entries())}
+        download={(item) => {
+          const entry = files().find((file) => file.path === item.key);
+          return entry && download(entry);
+        }}
+      />
       <div class="row" style={{ 'margin-top': '10px' }}>
         <button
           class="pill"

@@ -11,15 +11,6 @@ export const emptySet = (firmwareId: string): CaptureSet => ({
 });
 export const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-export function download(archive: Blob) {
-  const url = URL.createObjectURL(archive);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `fujimod-captures-${new Date().toISOString().replaceAll(':', '-')}.tar`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 /** The capture tools' frame: connect first, then refuse cameras without located bulk reads. */
 export function CapturePanel(props: {
   title: string;

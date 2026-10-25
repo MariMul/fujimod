@@ -140,17 +140,23 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 420px 1fr;
 }
+/* The tools scroll above the Files pane, which stays pinned at the bottom. */
 .wb-tools {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  border-right: 1px solid var(--wb-line);
+  background: #0c0c0d;
+}
+.wb-tools-scroll {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-height: 0;
   overflow: auto;
   padding: 10px;
-  border-right: 1px solid var(--wb-line);
-  background: #0c0c0d;
 }
 .wb-tools-body {
   display: flex;
@@ -643,6 +649,8 @@
   .wb-tools {
     border-right: 0;
     border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-tools-scroll {
     overflow: visible;
   }
   .cl-row,

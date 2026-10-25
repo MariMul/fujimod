@@ -153,16 +153,15 @@ try {
       await page.getByRole('button', { name: 'Send', exact: true }).click();
       await log.getByText('Fuji console ready', { exact: false }).first().waitFor();
 
-      // The bundle is a zip of a JSON manifest plus binary files.
+      // Download all is a zip: a manifest plus a folder per camera of binary files.
+      await page.locator('.files .tree', { hasText: 'configuration.bin' }).waitFor();
       const downloaded = page.waitForEvent('download');
-      await page.getByRole('button', { name: 'Download diagnostic bundle', exact: true }).click();
+      await page.getByRole('button', { name: 'Download all', exact: true }).click();
       const bundle = await readFile((await (await downloaded).path())!);
-      assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'bundle is a zip');
+      assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'Download all is a zip');
       const text = bundle.toString('latin1');
-      for (const name of ['manifest.json', 'configuration.bin'])
-        assert.ok(text.includes(name), `bundle contains ${name}`);
-      assert.ok(!text.includes('memory-'), 'bundle contains no memory dump');
-      assert.ok(text.includes('"capacity": 4096'), 'manifest records the geometry');
+      for (const name of ['manifest.json', '/configuration.bin', '/console-log.json'])
+        assert.ok(text.includes(name), `archive contains ${name}`);
 
       // The Connection layer filters like every other layer.
       const connection = page.getByRole('group', { name: 'Log layers' }).getByRole('button', {
@@ -178,7 +177,7 @@ try {
         tools: document.querySelector('.wb-tools')!.getBoundingClientRect().width,
       }));
       assert.equal(geometry.overflow, false);
-      if (!mobile) assert.equal(Math.round(geometry.tools), 320);
+      if (!mobile) assert.equal(Math.round(geometry.tools), 420);
       await page.screenshot({
         path: new URL(mobile ? 'workbench-mobile.png' : 'workbench-desktop.png', directory)
           .pathname,

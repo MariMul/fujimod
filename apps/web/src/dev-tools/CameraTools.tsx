@@ -1,61 +1,17 @@
 import { Show, createSignal } from 'solid-js';
 import type { Camera, CameraModel, ToolSession } from './camera-model';
-import { zipFiles } from '@fujimod/emulator-ui/archive';
-
-/** Readings collected on one camera, for the diagnostic bundle. */
-export interface Readings {
-  configuration?: {
-    capacity: number;
-    pageBytes: number;
-    data: Uint8Array;
-    complete: boolean;
-  };
-  errors: { tool: string; time: string; message: string }[];
-}
-export const emptyReadings = (): Readings => ({ errors: [] });
-
+import type { AddFile } from '../files/shelf';
 import { Wizard } from './routes';
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Store-only ZIP: manifest.json plus the camera's bytes as binary files. */
-export function diagnosticBundle(camera: Camera, readings: Readings): Blob {
-  const files: [string, Uint8Array<ArrayBuffer>][] = [];
-  let configuration;
-  if (readings.configuration) {
-    const { capacity, pageBytes, data, complete } = readings.configuration;
-    files.push(['configuration.bin', new Uint8Array(data)]);
-    configuration = {
-      file: 'configuration.bin',
-      capacity,
-      pageBytes,
-      bytes: data.length,
-      complete,
-    };
-  }
-  const manifest = {
-    schema: 'fujimod-diagnostics-2',
-    createdAt: new Date().toISOString(),
-    camera: {
-      name: camera.name,
-      transport: camera.transport,
-      identity: camera.identity ?? {},
-    },
-    configuration,
-    errors: readings.errors,
-  };
-  files.unshift(['manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2))]);
-  return zipFiles(files);
-}
-
-/** The tools for the selected camera: Read, Console, Write and Export. */
+/** The tools for the selected camera: Read, Console and Write. */
 export function CameraTools(props: {
   camera: Camera;
   model: CameraModel;
-  readings: Readings;
-  onReadings: (update: (readings: Readings) => Readings) => void;
+  onFile: AddFile;
   onWizard: (wizard: Wizard) => void;
 }) {
   const [command, setCommand] = createSignal('');
@@ -63,33 +19,27 @@ export function CameraTools(props: {
   const [status, setStatus] = createSignal('');
   const available = () =>
     props.camera.present && !props.camera.uncertain && !props.camera.session && !running();
-  type Record = (update: (readings: Readings) => Readings) => void;
   /** Runs `operation` in a session held by `tool`. Reads the camera once, when the action starts. */
   async function run(
     tool: string,
-    operation: (session: ToolSession, record: Record) => Promise<void>,
+    operation: (session: ToolSession, file: AddFile) => Promise<void>,
   ) {
     if (!available()) return;
     const id = props.camera.id;
     const model = props.model;
-    const record: Record = props.onReadings;
+    const file = props.onFile;
     setRunning(tool);
     setStatus('');
     try {
-      await model.withSession(id, tool, (session) => operation(session, record));
+      await model.withSession(id, tool, (session) => operation(session, file));
     } catch (error) {
-      const text = message(error);
-      setStatus(text);
-      record((readings) => ({
-        ...readings,
-        errors: [...readings.errors, { tool, time: new Date().toISOString(), message: text }],
-      }));
+      setStatus(message(error));
     } finally {
       setRunning('');
     }
   }
   function dumpConfiguration() {
-    void run('Dump configuration', async (session, record) => {
+    void run('Dump configuration', async (session, file) => {
       const { capacity, pageBytes } = await session.configurationGeometry();
       // Host allocation budget, independent of camera identity. Never infer geometry.
       if (
@@ -112,15 +62,12 @@ export function CameraTools(props: {
         }
       } finally {
         const complete = offset >= capacity;
-        record((readings) => ({
-          ...readings,
-          configuration: {
+        if (offset > 0)
+          file('configuration.bin', new Blob([data.slice(0, Math.min(offset, capacity))]), {
             capacity,
             pageBytes,
-            data: complete ? data : data.slice(0, offset),
             complete,
-          },
-        }));
+          });
       }
     });
   }
@@ -135,15 +82,6 @@ export function CameraTools(props: {
       throw Error('The command is still running; its output continues in the log.');
     });
   }
-  function download() {
-    const url = URL.createObjectURL(diagnosticBundle(props.camera, props.readings));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `fujimod-diagnostics-${new Date().toISOString().replaceAll(':', '-')}.zip`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-  const hasReadings = () => Boolean(props.readings.configuration || props.readings.errors.length);
   return (
     <div class="wb-tools-body">
       <section class="wb-section" aria-labelledby="wb-read">
@@ -220,15 +158,6 @@ export function CameraTools(props: {
             </button>
           </div>
         </div>
-      </section>
-
-      <section class="wb-section" aria-labelledby="wb-export">
-        <h3 id="wb-export" class="wb-label">
-          Export
-        </h3>
-        <button class="wb-btn" disabled={!hasReadings()} onClick={download}>
-          Download diagnostic bundle
-        </button>
       </section>
 
       <Show when={status()}>

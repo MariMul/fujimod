@@ -18,7 +18,7 @@ const selection = {
     internal_version: '2.06',
     scopes: [
       { name: 'quick', basis: '', ranges: [{ name: 'firmware', address: 0x1000, size: 8 }] },
-      { name: 'full', basis: '', ranges: [{ name: 'ram', address: 0, size: 32 << 20 }] },
+      { name: 'full', basis: '', ranges: [{ name: 'ram', address: 0x2000, size: 16 }] },
     ],
   },
 } as unknown as ResolvedSelection;
@@ -46,6 +46,7 @@ function mount(component: typeof StateCaptures, reads: () => Uint8Array) {
   });
   test.add(testCamera('m5', { identity: { product: 'X-M5', internalVersion: '2.06' } }));
   let set: CaptureSet | undefined;
+  const files: { name: string; blob: Blob; meta?: Record<string, unknown> }[] = [];
   const host = document.createElement('div');
   document.body.append(host);
   const Component = component;
@@ -55,30 +56,39 @@ function mount(component: typeof StateCaptures, reads: () => Uint8Array) {
       model={test.model}
       set={set}
       onSet={(next) => (set = next)}
+      onFile={(name, blob, meta) => files.push({ name, blob, meta })}
       onConnect={() => {}}
       onClose={() => {}}
     />
   );
   cleanup = render(view, host);
-  return { host, calls, set: () => set };
+  return { host, calls, set: () => set, files };
 }
 
-test('a state capture reads each scope range through the camera firmware bulk path', async () => {
-  const { host, calls, set } = mount(StateCaptures, () => Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8));
+test('a state capture reads the largest scope and adds each range as a file', async () => {
+  const { host, calls, set, files } = mount(StateCaptures, () =>
+    Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16),
+  );
   flush();
   expect(host.querySelector('.cap-head')!.textContent).toContain('X-M5 1.30');
-  expect(host.querySelector('[aria-checked="true"]')!.textContent).toBe('Quick1 MiB');
+  expect(host.querySelector('[role="radiogroup"]')).toBeNull();
   const row = [...host.querySelectorAll('.cap-row')].find((node) =>
     node.textContent?.startsWith('AF-S half press'),
   )!;
   row.querySelector('button')!.click();
   await vi.waitFor(() => expect(set()?.states.length).toBe(1));
-  expect(calls).toEqual([['xm5-130', 0x1000, 8]]);
+  expect(calls).toEqual([['xm5-130', 0x2000, 16]]);
   const [capture] = set()!.states;
   expect(capture.label).toBe('AF-S half press');
   expect(capture.overwritten).toEqual([{ address: 0x9000, size: 4 }]);
   expect(capture.ranges[0].pieces[0].sha256).toMatch(/^[0-9a-f]{64}$/);
-  expect(button(host, 'Download captures')).toBeUndefined();
+  expect(files.map((file) => file.name)).toEqual(['capture-af-s-half-press-ram.bin']);
+  expect(files[0]!.blob.size).toBe(16);
+  expect(files[0]!.meta).toMatchObject({
+    address: 0x2000,
+    scope: 'full',
+    label: 'AF-S half press',
+  });
 });
 
 test('menu pages need a page name before capturing', () => {
@@ -92,7 +102,9 @@ test('menu pages need a page name before capturing', () => {
 
 test('mapping a control takes released, held, released, held captures', async () => {
   let held = false;
-  const { host, set } = mount(MapControls, () => Uint8Array.of(held ? 1 : 0, 0, 0, 0, 7, 0, 0, 0));
+  const { host, set, files } = mount(MapControls, () =>
+    Uint8Array.of(held ? 1 : 0, 0, 0, 0, 7, 0, 0, 0),
+  );
   flush();
   button(host, 'Q buttonrear').click();
   flush();
@@ -108,4 +120,9 @@ test('mapping a control takes released, held, released, held captures', async ()
   const [mapping] = set()!.mappings;
   expect(mapping.control).toBe('q_button');
   expect([...mapping.diff.candidates]).toEqual([0x1000]);
+  expect(files.map((file) => file.name)).toEqual([
+    'mapping-q-button-candidates.bin',
+    'mapping-q-button-changed.bin',
+  ]);
+  expect([...new Uint32Array(await files[0]!.blob.arrayBuffer())]).toEqual([0x1000]);
 });

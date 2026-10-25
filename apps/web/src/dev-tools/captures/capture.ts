@@ -1,8 +1,7 @@
-/** RAM captures through a firmware's catalog bulk path, and their tar archive. */
+/** RAM captures through a firmware's catalog bulk path. */
 import { catalog, type CaptureScope, type ResolvedSelection } from 'fujimod';
 import type { Camera, CameraIdentity, ToolSession } from '../camera-model';
 import type { ControlDiff } from './mapping';
-import { TarArchive } from './tar';
 
 /** Bytes requested per qualified bulk read. */
 export const PIECE_BYTES = 16 << 20;
@@ -119,82 +118,10 @@ export function contiguous(capture: Pick<StateCapture, 'ranges'>): Uint8Array<Ar
   return bytes;
 }
 
-function slug(text: string) {
-  return (
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'capture'
+/** The scope a state capture reads: everything the catalog locates. */
+export function stateScope(scopes: readonly CaptureScope[]): CaptureScope | undefined {
+  return scopes.reduce<CaptureScope | undefined>(
+    (largest, scope) => (!largest || scopeBytes(scope) > scopeBytes(largest) ? scope : largest),
+    undefined,
   );
-}
-const hex = (value: number) => `0x${value.toString(16)}`;
-
-/** Store-only tar: manifest.json, each range's bytes and photos, mapping words as binary. */
-export function captureArchive(camera: Camera, set: CaptureSet, createdAt = new Date()): Blob {
-  const files: [string, Blob | readonly Uint8Array<ArrayBuffer>[]][] = [];
-  const states = set.states.map((capture, index) => {
-    const directory = `states/${String(index + 1).padStart(3, '0')}-${slug(capture.label)}`;
-    const ranges = capture.ranges.map((range) => {
-      const file = `${directory}/${range.name}-${hex(range.address)}.bin`;
-      files.push([file, range.parts]);
-      return {
-        name: range.name,
-        address: range.address,
-        size: range.size,
-        file,
-        pieces: range.pieces,
-      };
-    });
-    let photo;
-    if (capture.photo) {
-      const extension = capture.photo.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-      photo = `${directory}/photo.${extension}`;
-      files.push([photo, capture.photo]);
-    }
-    return {
-      state: capture.state,
-      label: capture.label,
-      scope: capture.scope,
-      time: capture.time,
-      ranges,
-      overwritten: capture.overwritten,
-      photo,
-    };
-  });
-  const mappings = set.mappings.map((mapping, index) => {
-    const base = `mappings/${String(index + 1).padStart(3, '0')}-${slug(mapping.name)}`;
-    const candidates = `${base}-candidates.u32le`;
-    const changed = `${base}-changed.u32le`;
-    files.push([candidates, [new Uint8Array(mapping.diff.candidates.buffer as ArrayBuffer)]]);
-    files.push([changed, [new Uint8Array(mapping.diff.changed.buffer as ArrayBuffer)]]);
-    return {
-      control: mapping.control ?? null,
-      name: mapping.name,
-      note: mapping.note,
-      time: mapping.time,
-      scope: mapping.scope,
-      address: mapping.address,
-      size: mapping.size,
-      candidates: { file: candidates, count: mapping.diff.candidates.length },
-      changed: {
-        file: changed,
-        format: 'address, released, held, released, held',
-        count: mapping.diff.changed.length / 5,
-        omitted: mapping.diff.omitted,
-      },
-    };
-  });
-  const manifest = {
-    schema: 'fujimod-state-captures-1',
-    createdAt: createdAt.toISOString(),
-    camera: { name: camera.name, transport: camera.transport, identity: camera.identity ?? {} },
-    firmware_id: set.firmwareId,
-    states,
-    mappings,
-  };
-  const tar = new TarArchive(createdAt.getTime());
-  tar.add('manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2)));
-  for (const [name, data] of files) tar.add(name, data);
-  return tar.blob();
 }
