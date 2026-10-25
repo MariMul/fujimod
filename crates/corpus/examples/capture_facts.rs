@@ -66,9 +66,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(value)
         })();
         let rom = locators::boot_rom(&input.processor);
+        let audit = if matches!(input.processor.as_str(), "xp4" | "xppro" | "exr" | "exrpro") {
+            input.update_path.as_ref().map(|p| {
+                std::fs::read(p)
+                    .map_err(|e| e.to_string())
+                    .and_then(|bytes| {
+                        locators::boot_rom_audit(
+                            &store,
+                            &input.firmware_id,
+                            &input.processor,
+                            &fujimod_firmware::invert(&bytes),
+                        )
+                    })
+            })
+        } else {
+            None
+        };
         println!(
             "{}",
-            json!({"firmware_id":input.firmware_id,"flash":flash.as_ref().ok(),"flash_error":flash.as_ref().err(),"boot_rom":rom.as_ref().ok(),"boot_rom_error":rom.as_ref().err()})
+            json!({"firmware_id":input.firmware_id,"flash":flash.as_ref().ok(),"flash_error":flash.as_ref().err(),"boot_rom":rom.as_ref().ok(),"boot_rom_error":rom.as_ref().err(),"boot_rom_audit":audit})
         );
     }
     Ok(())

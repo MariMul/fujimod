@@ -2,8 +2,10 @@
 //! Names nominate candidates; decoded instructions and mapped tables verify them.
 mod exr2;
 mod flash;
+mod reset;
 pub use exr2::{exr2_control, exr2_flash};
 pub use flash::{flash, image_offsets};
+pub use reset::{ResetAudit, ResetCall, ResetVector, boot_rom_audit};
 use serde::{Deserialize, Serialize};
 
 /// A CPU-visible region safe for sequential state capture.
