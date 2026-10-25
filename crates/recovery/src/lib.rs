@@ -324,13 +324,7 @@ impl Recipe {
                     let api = self.file_api.as_ref().ok_or_else(|| {
                         image::Error::Invalid("Missing Topaz filesystem ABI".into())
                     })?;
-                    let plan = xp4::cold_plan(&inverted, plan, cold)?;
-                    let ram = image::transform(&inverted, &plan)?;
-                    let init = xp4::ffinit(&inverted, setup, api, &ram, api.load_address, None)?;
-                    vec![
-                        File::new("ffinit.bin", init)?,
-                        File::new("ffboot.bin", ram)?,
-                    ]
+                    xp4::package(&inverted, plan, cold, setup, api)?
                 }
                 Generation::Xp5 => {
                     let setup = self.xp5.as_ref().ok_or_else(|| {

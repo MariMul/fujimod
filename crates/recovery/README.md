@@ -74,19 +74,20 @@ second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
 
-The guest loader sources are in `guest/`. Its checked-in generated Rust
-template contains the compiled loader and relocations, with no update or ROM
-data. To regenerate it, set `FFINIT_CC` to GNU GCC 4.6.4 and `FFINIT_LD` to GNU
-ld, then run:
+The XP4 compiled guest input is `assets/xp4-guest.generated.bin`; its companion
+`assets/xp4-guest.generated.json` describes segment offsets, symbols and ARM
+relocations. The crate loads these inputs with `include_bytes!` and
+`include_str!`. They contain empty camera-data placeholders. Runtime relocation
+inserts the supplied update's setup tables and updates absolute references,
+transfer size, CRC32, workspace and filesystem calls.
 
-```sh
-cargo run -p fujimod-recovery --example generate_ffinit
-cargo run -p fujimod-recovery --example generate_ffinit -- --check
-```
-
-The generated template preserves the loader's declaration and link order.
-Runtime relocation inserts the supplied update's setup tables and updates all
-absolute references, transfer size, CRC32, workspace, and filesystem calls.
+XP4 startup recipes can bind firmware reads to an immutable namespace embedded
+in `ffboot.bin`. The supplied update provides those bytes at card construction
+time. Startup reads only `ffinit.bin` and `ffboot.bin`; the update DAT on the
+card can be replaced or removed independently. The builder checks the original
+reader and primary-loader call identities, reserves its code and backing ranges,
+and preserves the conditional primary-core initialization call. Out-of-range
+reads return errors. Per-unit storage APIs retain their stock behavior.
 
 The XP5 compiled guest input is `assets/xp5-guest.generated.bin`; its companion
 `assets/xp5-guest.generated.json` gives the image size, symbol offsets, the

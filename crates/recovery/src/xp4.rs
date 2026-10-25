@@ -2,10 +2,8 @@
 use crate::image::{self, Edit, Plan, Result, extent, hash, put, require, word};
 use serde::{Deserialize, Serialize};
 const FLASH_APERTURE_BYTES: u64 = 0x08000000;
-#[allow(dead_code)]
-mod template {
-    include!("ffinit.generated.rs");
-}
+mod guest;
+pub mod storage;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +35,31 @@ pub struct Setup {
 pub struct ColdStart {
     pub mode_flag: usize,
     pub mode_test: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_transport: Option<storage::Transport>,
+}
+
+pub fn package(
+    inverted: &[u8],
+    plan: &Plan,
+    cold: &ColdStart,
+    setup: &Setup,
+    api: &FileApi,
+) -> Result<Vec<image::File>> {
+    let plan = cold_plan(inverted, plan, cold)?;
+    let mut ram = image::transform(inverted, &plan)?;
+    if let Some(transport) = &cold.firmware_transport {
+        require(
+            transport.dat_offset == setup.dat_offset,
+            "Card firmware namespace has a different DAT bias",
+        )?;
+        transport.install(inverted, &plan, &mut ram)?;
+    }
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    Ok(vec![
+        image::File::new("ffinit.bin", init)?,
+        image::File::new("ffboot.bin", ram)?,
+    ])
 }
 
 fn mov_half(word: u32, register: u32, top: bool) -> Result<u32> {
@@ -178,6 +201,10 @@ pub fn ffinit(
     base: u32,
     workspace_override: Option<u32>,
 ) -> Result<Vec<u8>> {
+    let asset = &guest::LAYOUT.ffinit;
+    let symbols = &asset.symbols;
+    let text = asset.text.bytes();
+    let suffix_bytes = asset.suffix.bytes();
     let prefix = extent(inverted, setup.dat_offset, setup.active_size)?;
     hash(prefix, &setup.active_sha256)?;
     let flash_end = u64::from(setup.flash_aperture) + FLASH_APERTURE_BYTES;
@@ -238,7 +265,7 @@ pub fn ffinit(
         "DDR setup or stack overlaps loader",
     )?;
     let data_address = region
-        .checked_add(template::FFINIT_SETUP_DATA as u32)
+        .checked_add(symbols["ffinit_setup_data"] as u32)
         .ok_or_else(|| image::Error::Invalid("DDR placement overflow".into()))?;
     let source_data = setup
         .flash_aperture
@@ -277,7 +304,7 @@ pub fn ffinit(
         put(&mut data, at, relocated)?;
     }
     let mut output =
-        vec![0; 0x4000 + template::FFINIT_SETUP_DATA + data.len() + template::SUFFIX.len()];
+        vec![0; 0x4000 + symbols["ffinit_setup_data"] + data.len() + suffix_bytes.len()];
     let final_size = (output.len() + 3) & !3;
     // The progress structure is zero-initialized BSS following the strings.
     output.resize(final_size + 16, 0);
@@ -286,14 +313,14 @@ pub fn ffinit(
         "FFINIT overlaps ROM workspace or stack",
     )?;
     output[..code.len()].copy_from_slice(code);
-    output[0x4000..0x4000 + template::TEXT.len()].copy_from_slice(template::TEXT);
+    output[0x4000..0x4000 + text.len()].copy_from_slice(text);
     let target = &mut output[0x4000..];
     for index in 0..256 {
         let mut value = index as u32;
         for _ in 0..8 {
             value = (value >> 1) ^ if value & 1 == 1 { 0xedb88320 } else { 0 };
         }
-        put(target, template::FFINIT_CRC_TABLE + index * 4, value)?;
+        put(target, symbols["ffinit_crc_table"] + index * 4, value)?;
     }
     let workspace = payload
         .len()
@@ -316,21 +343,21 @@ pub fn ffinit(
     .into_iter()
     .enumerate()
     {
-        put(target, template::FFINIT_CONFIG + index * 4, value)?;
+        put(target, symbols["ffinit_config"] + index * 4, value)?;
     }
-    target[template::FFINIT_BOOT_HEADER..template::FFINIT_BOOT_HEADER + 0x800]
+    target[symbols["ffinit_boot_header"]..symbols["ffinit_boot_header"] + 0x800]
         .copy_from_slice(extent(prefix, 0, 0x800)?);
-    target[template::FFINIT_SETUP_DATA..template::FFINIT_SETUP_DATA + data.len()]
+    target[symbols["ffinit_setup_data"]..symbols["ffinit_setup_data"] + data.len()]
         .copy_from_slice(&data);
-    let suffix = template::FFINIT_SETUP_DATA + data.len();
-    target[suffix..suffix + template::SUFFIX.len()].copy_from_slice(template::SUFFIX);
-    for &(at, kind, value) in template::FIXUPS {
+    let suffix = symbols["ffinit_setup_data"] + data.len();
+    target[suffix..suffix + suffix_bytes.len()].copy_from_slice(suffix_bytes);
+    for &(at, kind, value) in &asset.fixups {
         let address = match value {
             -1 => stack,
             -2 => base + 4,
             offset => {
                 let offset = offset as usize;
-                let shifted = if offset >= template::FFINIT_SETUP_DATA + 4 {
+                let shifted = if offset >= symbols["ffinit_setup_data"] + 4 {
                     offset + data.len() - 4
                 } else {
                     offset
@@ -409,7 +436,7 @@ pub fn ffinit(
         "DDR setup has additional absolute flash literals or no data references",
     )?;
     require(word(&output, 0)? == 0xf1010000, "DDR entry differs")?;
-    let destination = 0x4000 + template::FFINIT_ENTRY;
+    let destination = 0x4000 + symbols["ffinit_entry"];
     put(
         &mut output,
         0,
@@ -418,7 +445,7 @@ pub fn ffinit(
     put(
         &mut output,
         0xa0,
-        region + template::FFINIT_DRAM_READY as u32,
+        region + symbols["ffinit_dram_ready"] as u32,
     )?;
     Ok(output)
 }
@@ -427,23 +454,26 @@ pub fn ffinit(
 mod tests;
 
 pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
+    let asset = &guest::LAYOUT.ffinit;
+    let symbols = &asset.symbols;
+    let text = asset.text.bytes();
     let data_size = setup.continuation_offset - setup.code_offset - setup.code_size;
     let region = base + 0x4000;
-    let progress = template::FFINIT_PROGRESS + data_size - 4;
+    let progress = symbols["ffinit_progress"] + data_size - 4;
     let symbols = serde_json::json!({
-        "ffinit_entry":region+template::FFINIT_ENTRY as u32,
-        "ffinit_dram_ready":region+template::FFINIT_DRAM_READY as u32,
-        "ffinit_prepare":region+template::FFINIT_PREPARE as u32,
-        "ffinit_load":region+template::FFINIT_LOAD as u32,
+        "ffinit_entry":region+symbols["ffinit_entry"] as u32,
+        "ffinit_dram_ready":region+symbols["ffinit_dram_ready"] as u32,
+        "ffinit_prepare":region+symbols["ffinit_prepare"] as u32,
+        "ffinit_load":region+symbols["ffinit_load"] as u32,
         "ffinit_progress":region+progress as u32,
-        "ffinit_boot_header":region+template::FFINIT_BOOT_HEADER as u32,
-        "ffinit_setup_data":region+template::FFINIT_SETUP_DATA as u32,
-        "ffinit_config":region+template::FFINIT_CONFIG as u32,
-        "ffinit_counter_start":region+template::FFINIT_COUNTER_START as u32,
-        "ffinit_counter_read":region+template::FFINIT_COUNTER_READ as u32,
-        "ffinit_counter_stop":region+template::FFINIT_COUNTER_STOP as u32,
-        "ffinit_crc32":region+template::FFINIT_CRC32 as u32,
-        "ffinit_halt":region+template::FFINIT_HALT as u32
+        "ffinit_boot_header":region+symbols["ffinit_boot_header"] as u32,
+        "ffinit_setup_data":region+symbols["ffinit_setup_data"] as u32,
+        "ffinit_config":region+symbols["ffinit_config"] as u32,
+        "ffinit_counter_start":region+symbols["ffinit_counter_start"] as u32,
+        "ffinit_counter_read":region+symbols["ffinit_counter_read"] as u32,
+        "ffinit_counter_stop":region+symbols["ffinit_counter_stop"] as u32,
+        "ffinit_crc32":region+symbols["ffinit_crc32"] as u32,
+        "ffinit_halt":region+symbols["ffinit_halt"] as u32
     });
-    serde_json::json!({"load_address":base,"code_region":region,"stack_top":(api.workspace-api.load_address+base)&!0xfff,"symbols":symbols,"sections":[{"name":".text","offset":0,"size":template::TEXT.len()}]})
+    serde_json::json!({"load_address":base,"code_region":region,"stack_top":(api.workspace-api.load_address+base)&!0xfff,"symbols":symbols,"sections":[{"name":".text","offset":0,"size":text.len()}]})
 }

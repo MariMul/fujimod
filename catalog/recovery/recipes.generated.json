@@ -1946,7 +1946,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 41068,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 22122748,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "9bb4ae3b92f30c20a4ee65cda81eac89820b5c9d95aafaff0dac6adf121c8cd1"
+        },
+        "byte_reader": {
+          "address": 17989844,
+          "size": 68,
+          "sha256": "6bc6f41556d0c2b6660bd9337fb78d8c7ba9c9e02d6e9f17c519ca73be773cb8"
+        },
+        "indexed_reader": {
+          "address": 17990516,
+          "size": 228,
+          "sha256": "17f0125e7d3fdb05beb9c23be5c23f9eb2c09b0bb755db7e83622c1d7e5e16cb"
+        },
+        "cache_maintenance": {
+          "address": 18087096,
+          "size": 40,
+          "sha256": "145525b7f6282eba8f44be72d20e5e491f114a37bd182766786be15c2975dd95"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -5067,7 +5095,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 44464,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 23828668,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "3f0a38c0f6999cfae9e32951a4c429dfd210501897a9d51eaf2ce20af5e4c04f"
+        },
+        "byte_reader": {
+          "address": 19345384,
+          "size": 68,
+          "sha256": "41763893532c947b1fbc06e0851f89a4e865cee1c5a5c2db9a6a290f0fd0dfdc"
+        },
+        "indexed_reader": {
+          "address": 19346056,
+          "size": 228,
+          "sha256": "13f1b3a1d938fab8c8d1a370c3bf4c2b90232c1cbe66f238dbab58404947626d"
+        },
+        "cache_maintenance": {
+          "address": 19445356,
+          "size": 40,
+          "sha256": "3414103537fa5def6e9980570341e1a4a2319a13e140d32f9e4f4e06b1f67925"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -7979,7 +8035,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 41708,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 23380220,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "e82c6d6a500f3e14122a01fa809144b50aade53dc278b2347b62eba9af13aa8f"
+        },
+        "byte_reader": {
+          "address": 18066056,
+          "size": 68,
+          "sha256": "ae82e5029a952bd1e7bac1e81b5d9f04a339c403113c61d8b7eff6cedfcbe87e"
+        },
+        "indexed_reader": {
+          "address": 18066728,
+          "size": 228,
+          "sha256": "422238e32f958754f01274818ed16c34b9850631d851864ee14e8227bf8ce5cd"
+        },
+        "cache_maintenance": {
+          "address": 18164716,
+          "size": 40,
+          "sha256": "9a394a476890b240ed663ce9d83adfaf33733c9f2313a5f68843b736e93f27b4"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -8943,7 +9027,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 44592,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 1073741824,
+        "backing_address": 1006632960,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 24878272,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "e82c6d6a500f3e14122a01fa809144b50aade53dc278b2347b62eba9af13aa8f"
+        },
+        "byte_reader": {
+          "address": 19458144,
+          "size": 68,
+          "sha256": "9d0659ea30198d7c56ec48a5da25560d96472faccea9f3c6a784a9d00dc199e1"
+        },
+        "indexed_reader": {
+          "address": 19458816,
+          "size": 228,
+          "sha256": "32bd731d1260b09babfe7252ecaaca29ec6307e422be114f7e8723692a3859d5"
+        },
+        "cache_maintenance": {
+          "address": 19563752,
+          "size": 40,
+          "sha256": "b57e6aab4ecf4f5717a776de25d25e6c9a2d17498bb532b398a7015b07b0a2e1"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -10315,7 +10427,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 41228,
-      "mode_test": 1472
+      "mode_test": 1472,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 22040764,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "3395e1b53bfe8e583402f2d7c13866ad17e1964085eb5b25c11ae0e2118040f4"
+        },
+        "byte_reader": {
+          "address": 17953564,
+          "size": 68,
+          "sha256": "c38dc93ec22e953b10054f9002186be82edaea35e40893d91206830f8f5e5057"
+        },
+        "indexed_reader": {
+          "address": 17954236,
+          "size": 228,
+          "sha256": "4cf5b3094143f97d52944194200003704a67dfa2728bc9f7c129dda8a0292824"
+        },
+        "cache_maintenance": {
+          "address": 18051636,
+          "size": 40,
+          "sha256": "d84501d789d0db7978fcf19fe241714080d4f23f2f857eb91e021a200e5b3365"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -10563,7 +10703,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 41804,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 21651260,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "e82c6d6a500f3e14122a01fa809144b50aade53dc278b2347b62eba9af13aa8f"
+        },
+        "byte_reader": {
+          "address": 17879888,
+          "size": 68,
+          "sha256": "7b6a58a5e4f64a855134f3c511a35279d04b8cf77c6190849a1531d39f29efe8"
+        },
+        "indexed_reader": {
+          "address": 17880560,
+          "size": 228,
+          "sha256": "c2b9b38a3ec21b3e1ae65927aa9dc5dfbc140342a459950b7057fd7afe7c411c"
+        },
+        "cache_maintenance": {
+          "address": 17974596,
+          "size": 40,
+          "sha256": "50275817e1524c91dcb73bb53481070c268cc4c2e2c4f260bbb6e9c6bbd44ca6"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -10811,7 +10979,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 44704,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 24258492,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "e82c6d6a500f3e14122a01fa809144b50aade53dc278b2347b62eba9af13aa8f"
+        },
+        "byte_reader": {
+          "address": 19346956,
+          "size": 68,
+          "sha256": "054d3a91a2e708cc5cc9a5ff1e2149590ddee984e695f9388a9768e4ad14ff70"
+        },
+        "indexed_reader": {
+          "address": 19347628,
+          "size": 228,
+          "sha256": "ea71cdf4473103766f4e4556eaa233d0f2c656d288b964c756442a3c90934c91"
+        },
+        "cache_maintenance": {
+          "address": 19446896,
+          "size": 40,
+          "sha256": "71de5194743f6e023484e31d7274f894fd9ec521c0898c886f7d62acf7589a61"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
@@ -11805,7 +12001,35 @@
     "xp5": null,
     "cold_start": {
       "mode_flag": 45152,
-      "mode_test": 1484
+      "mode_test": 1484,
+      "firmware_transport": {
+        "address_limit": 536870912,
+        "backing_address": 469762048,
+        "capacity": 67108864,
+        "dat_offset": 628,
+        "enabled_byte": 24317184,
+        "byte_limit": 50200576,
+        "primary_call": {
+          "address": 340,
+          "size": 4,
+          "sha256": "f3ae17b9ec25469c5f84d95a85cddb6c0f5b46dfe1dae794a0719b7a62b60745"
+        },
+        "byte_reader": {
+          "address": 19284492,
+          "size": 68,
+          "sha256": "7dcaf5f90191dd8030039b50adfe63e32acebd97e65930948b7515898c6ed6a0"
+        },
+        "indexed_reader": {
+          "address": 19285164,
+          "size": 228,
+          "sha256": "a253d3695dc9fff485d25f7174ed278cdca292e4359a27816c04d0b6f2c36789"
+        },
+        "cache_maintenance": {
+          "address": 19401704,
+          "size": 40,
+          "sha256": "0c8bdb135ad0d5a9a448079b56ac46bcf29e3300b4f551626f7dea6be1c937d5"
+        }
+      }
     },
     "file_api": {
       "mount": 4293927888,
