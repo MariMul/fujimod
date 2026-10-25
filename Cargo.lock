@@ -2499,7 +2499,6 @@ dependencies = [
  "fujimod-catalog",
  "fujimod-firmware",
  "fujimod-workspace-hack",
- "object",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -3591,15 +3590,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "windows-sys",
-]
-
-[[package]]
-name = "object"
-version = "0.38.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271638cd5fa9cca89c4c304675ca658efc4e64a66c716b7cfe1afb4b9611dbbc"
-dependencies = [
- "memchr",
 ]
 
 [[package]]

@@ -3,9 +3,7 @@ use crate::{
     xp4,
 };
 use serde::{Deserialize, Serialize};
-mod template {
-    include!("lupi.generated.rs");
-}
+pub(super) mod sd_loader;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Lupi {
@@ -28,7 +26,8 @@ pub fn stage(api: &Lupi, ram: &[u8]) -> Result<Vec<u8>> {
             && api.filesystem == 0xfff00000,
         "Lupi filesystem ABI differs",
     )?;
-    let mut bytes = template::BYTES.to_vec();
+    let loader = &sd_loader::LAYOUT.stage;
+    let mut bytes = loader.bytes().to_vec();
     for (i, value) in [
         api.open,
         api.read,
@@ -39,7 +38,7 @@ pub fn stage(api: &Lupi, ram: &[u8]) -> Result<Vec<u8>> {
     .into_iter()
     .enumerate()
     {
-        image::put(&mut bytes, template::CONFIG + i * 4, value)?;
+        image::put(&mut bytes, loader.config + i * 4, value)?;
     }
     require(
         bytes.len() < 0x10000,
@@ -94,9 +93,10 @@ mod tests {
         let payload = vec![0x35; 70001];
         let bytes = stage(&api, &payload).unwrap();
         assert!(bytes.len() < 0x10000);
-        assert_eq!(image::word(&bytes, template::CONFIG + 12).unwrap(), 70001);
+        let config = sd_loader::LAYOUT.stage.config;
+        assert_eq!(image::word(&bytes, config + 12).unwrap(), 70001);
         assert_eq!(
-            image::word(&bytes, template::CONFIG + 16).unwrap(),
+            image::word(&bytes, config + 16).unwrap(),
             xp4::crc32(&payload)
         );
         assert!(stage(&api, &[]).is_err());

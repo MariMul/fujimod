@@ -20,7 +20,7 @@ ABI, and a cold preloaded RAM image. Reset mode remains cold; three checked
 comparisons select the preloaded table, images, and worker bypass.
 
 EXR and EXR Pro use Lupi's 512-byte `ffsys.bin` header and a small
-`ffboot.bin`. That guest copies itself to SRAM and uses the ROM's u16 read
+`ffboot.bin`. That SD loader copies itself to SRAM and uses the ROM's u16 read
 ABI to load `ffimage.bin` in chunks, checking file length, actual counts and
 CRC32 before entering the stock RAM image. The extra file avoids the ROM's
 16-bit truncation of the initial boot-file length. Updater code proofs are
@@ -96,12 +96,12 @@ build script turns that layout into constants and the crate loads the image with
 `include_bytes!`. The image contains empty camera-data placeholders; card
 construction needs only the official DAT and the compiled catalog recipes.
 
-Generate and check the Lupi guest with GNU GCC 4.6.4 and GNU ld:
-
-```sh
-LUPI_CC=/path/to/arm-gcc LUPI_LD=/path/to/arm-ld \
-  cargo run -p fujimod-recovery --example generate_lupi -- --check
-```
+The Lupi compiled SD loader is `assets/lupi-sd-loader.generated.bin`; its
+companion `assets/lupi-sd-loader.generated.json` gives the startup loader and
+firmware-reader segments, configuration offsets, symbols, and SRAM/stack
+bounds. The crate loads these inputs with `include_bytes!` and `include_str!`.
+Card construction fills the empty configuration fields with the ROM file API,
+transfer sizes, and CRC32.
 
 `cargo run -p fujimod-recovery --example locate_rom_sd -- exr UPDATE.DAT`
 emits freshly located startup plans and header facts from the supplied update.
