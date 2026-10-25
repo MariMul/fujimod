@@ -3906,7 +3906,8 @@
       "event": 548,
       "debug_key": "FUNCTION2",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn2_button"
       },
       "scanner": {
         "index": 19,
