@@ -655,6 +655,28 @@ function CardVideo(props: { media: Media; choice?: string }) {
   );
 }
 
+/** What tiles and hover cards share: the menus above the title, the title, WORLD PREMIERE, the body, the credits. */
+function Entry(props: {
+  path: string[];
+  title: JSX.Element;
+  credits: Credits;
+  children: JSX.Element;
+}) {
+  return (
+    <>
+      <Show when={props.path.length}>
+        <div class="catalog-path">{`${props.path.join(' › ')}\u00a0›`}</div>
+      </Show>
+      {props.title}
+      <Show when={props.credits.premiere}>
+        <Premiere />
+      </Show>
+      {props.children}
+      <CreditList credits={props.credits} />
+    </>
+  );
+}
+
 function CardBody(props: { target: Target }) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
@@ -667,36 +689,34 @@ function CardBody(props: { target: Target }) {
       <Show when={media(props.target.card)}>
         {(found) => <CardVideo media={found()} choice={choice()} />}
       </Show>
-      <Show when={crumbs().length}>
-        <div class="catalog-card-path">{crumbs().join(' › ')} ›</div>
-      </Show>
-      <div class="catalog-card-title">{choice() ?? card().title}</div>
-      <Show when={credits().premiere}>
-        <Premiere />
-      </Show>
-      <Show
-        when={choice()}
-        fallback={
-          <Show when={card().changes} fallback={<p>{card().summary}</p>}>
-            <p>In FujiMod: {card().changes}</p>
-          </Show>
-        }
+      <Entry
+        path={crumbs()}
+        title={<div class="catalog-card-title">{choice() ?? card().title}</div>}
+        credits={credits()}
       >
-        <p>{card().choices[choice()!]}</p>
-      </Show>
-      <Show when={!choice() && card().related.length}>
-        <h5 class="catalog-card-heading">Related</h5>
-        <ul class="catalog-card-related">
-          <For each={card().related}>
-            {(related) => (
-              <li>
-                <b>{CARDS[related.card].title}</b>: {related.reason}
-              </li>
-            )}
-          </For>
-        </ul>
-      </Show>
-      <CreditList credits={credits()} />
+        <Show
+          when={choice()}
+          fallback={
+            <Show when={card().changes} fallback={<p>{card().summary}</p>}>
+              <p>In FujiMod: {card().changes}</p>
+            </Show>
+          }
+        >
+          <p>{card().choices[choice()!]}</p>
+        </Show>
+        <Show when={!choice() && card().related.length}>
+          <h5 class="catalog-card-heading">Related</h5>
+          <ul class="catalog-card-related">
+            <For each={card().related}>
+              {(related) => (
+                <li>
+                  <b>{CARDS[related.card].title}</b>: {related.reason}
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
+      </Entry>
     </>
   );
 }
@@ -758,268 +778,354 @@ export function FeatureCatalog() {
       <h3>Making pictures</h3>
       <div class="catalog-grid">
         <FeatureTile media={media('film_simulation')}>
-          <h4>
-            <Icon name="film" />
-            <Ref card="film_simulation">FILM SIMULATION</Ref>
-          </h4>
-          <p>
-            Simulate the effects of additional types of film. Create your own film simulations in
-            FILM EDITOR.
-          </p>
-          <div class="catalog-chips">
-            <span class="catalog-chip">
-              <Icon name="eterna" />
-              ETERNA
-            </span>
-            <span class="catalog-chip">
-              <Icon name="classic-neg" />
-              Classic Neg. (approx.)
-            </span>
-            <span class="catalog-chip">
-              <Icon name="bleach-bypass" />
-              Bleach Bypass (approx.)
-            </span>
-            <span class="catalog-chip">
-              <Icon name="nostalgic-neg" />
-              Nostalgic Neg. (approx.)
-            </span>
-            <span class="catalog-chip">
-              <Icon name="reala-ace" />
-              REALA ACE (approx.)
-            </span>
-            <span class="catalog-chip">Neutral</span>
-          </div>
-          <div class="catalog-where">SHOOTING MENU</div>
+          <Entry
+            path={['SHOOTING MENU']}
+            title={
+              <h4>
+                <Icon name="film" />
+                <Ref card="film_simulation">FILM SIMULATION</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Simulate the effects of additional types of film. Create your own film simulations in
+              FILM EDITOR.
+            </p>
+            <div class="catalog-chips">
+              <span class="catalog-chip">
+                <Icon name="eterna" />
+                ETERNA
+              </span>
+              <span class="catalog-chip">
+                <Icon name="classic-neg" />
+                Classic Neg. (approx.)
+              </span>
+              <span class="catalog-chip">
+                <Icon name="bleach-bypass" />
+                Bleach Bypass (approx.)
+              </span>
+              <span class="catalog-chip">
+                <Icon name="nostalgic-neg" />
+                Nostalgic Neg. (approx.)
+              </span>
+              <span class="catalog-chip">
+                <Icon name="reala-ace" />
+                REALA ACE (approx.)
+              </span>
+              <span class="catalog-chip">Neutral</span>
+            </div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media()}>
-          <h4>
-            <Icon name="film" />
-            <span>Card Films</span>
-          </h4>
-          <p>Load custom film simulations from the memory card.</p>
+          <Entry
+            path={[]}
+            title={
+              <h4>
+                <Icon name="film" />
+                <span>Card Films</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Load custom film simulations from the memory card.</p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('film_editor_item')}>
-          <h4>
-            <Icon name="film" />
-            <Ref card="film_editor_item">FILM EDITOR</Ref>
-          </h4>
-          <p>Create and edit your own film simulations, saved as files on the memory card.</p>
-          <div class="catalog-where">SHOOTING MENU</div>
+          <Entry
+            path={['SHOOTING MENU']}
+            title={
+              <h4>
+                <Icon name="film" />
+                <Ref card="film_editor_item">FILM EDITOR</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Create and edit your own film simulations, saved as files on the memory card.</p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('photometry')}>
-          <h4>
-            <Icon name="highlight" />
-            <Ref card="photometry">PHOTOMETRY</Ref>
-          </h4>
-          <p>Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.</p>
-          <div class="catalog-chips">
-            <span class="catalog-chip stock">MULTI</span>
-            <span class="catalog-chip stock">SPOT</span>
-            <span class="catalog-chip stock">AVERAGE</span>
-            <Ref card="photometry" choice="HIGHLIGHT" class="catalog-chip">
-              HIGHLIGHT
-            </Ref>
-            <Ref card="photometry" choice="RAW HIGHLIGHT" class="catalog-chip">
-              RAW HIGHLIGHT
-            </Ref>
-          </div>
-          <div class="catalog-where">SHOOTING MENU</div>
+          <Entry
+            path={['SHOOTING MENU']}
+            title={
+              <h4>
+                <Icon name="highlight" />
+                <Ref card="photometry">PHOTOMETRY</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.</p>
+            <div class="catalog-chips">
+              <span class="catalog-chip stock">MULTI</span>
+              <span class="catalog-chip stock">SPOT</span>
+              <span class="catalog-chip stock">AVERAGE</span>
+              <Ref card="photometry" choice="HIGHLIGHT" class="catalog-chip">
+                HIGHLIGHT
+              </Ref>
+              <Ref card="photometry" choice="RAW HIGHLIGHT" class="catalog-chip">
+                RAW HIGHLIGHT
+              </Ref>
+            </div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('raw_view')}>
-          <h4>
-            <Icon name="highlight" />
-            <Ref card="raw_view">RAW VIEW</Ref>
-          </h4>
-          <p>
-            Assign RAW VIEW to a function button to see how close the brightest areas are to losing
-            detail in the RAW file.
-          </p>
+          <Entry
+            path={[]}
+            title={
+              <h4>
+                <Icon name="highlight" />
+                <Ref card="raw_view">RAW VIEW</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Assign RAW VIEW to a function button to see how close the brightest areas are to
+              losing detail in the RAW file.
+            </p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('edit_save_custom_setting')}>
-          <h4>
-            <Icon name="recipes" />
-            <span>Unlimited Recipes</span>
-          </h4>
-          <p>
-            Store custom settings as named files on the memory card and load them into{' '}
-            <span class="nowrap">C1–C7</span>.
-          </p>
-          <div class="catalog-chips">
-            <span class="catalog-chip action">SAVE CURRENT SETTINGS</span>
-            <span class="catalog-chip action">SAVE AS NEW RECIPE</span>
-            <span class="catalog-chip action">CHOOSE FROM SD CARD</span>
-          </div>
-          <div class="catalog-where">SHOOTING MENU › EDIT/SAVE CUSTOM SETTING</div>
+          <Entry
+            path={['SHOOTING MENU', 'EDIT/SAVE CUSTOM SETTING']}
+            title={
+              <h4>
+                <Icon name="recipes" />
+                <span>Unlimited Recipes</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Store custom settings as named files on the memory card and load them into{' '}
+              <span class="nowrap">C1–C7</span>.
+            </p>
+            <div class="catalog-chips">
+              <span class="catalog-chip action">SAVE CURRENT SETTINGS</span>
+              <span class="catalog-chip action">SAVE AS NEW RECIPE</span>
+              <span class="catalog-chip action">CHOOSE FROM SD CARD</span>
+            </div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('shape_aspect_item')}>
-          <h4>
-            <Icon name="aspect" />
-            <Ref card="shape_aspect_item">ASPECT RATIO</Ref>
-          </h4>
-          <p>Choose the aspect ratio of still pictures.</p>
-          <div class="catalog-chips">
-            <Ref card="shape_aspect_item" choice="3:2" class="catalog-chip stock">
-              <Ratio width={3} height={2} />
-              3:2
-            </Ref>
-            <Ref card="shape_aspect_item" choice="16:9" class="catalog-chip stock">
-              <Ratio width={16} height={9} />
-              16:9
-            </Ref>
-            <Ref card="shape_aspect_item" choice="1:1" class="catalog-chip stock">
-              <Ratio width={1} height={1} />
-              1:1
-            </Ref>
-            <Ref card="shape_aspect_item" choice="4:3" class="catalog-chip">
-              <Ratio width={4} height={3} />
-              4:3
-            </Ref>
-            <Ref card="shape_aspect_item" choice="65:24" class="catalog-chip">
-              <Ratio width={65} height={24} />
-              65:24
-            </Ref>
-            <Ref card="shape_aspect_item" choice="17:6" class="catalog-chip">
-              <Ratio width={17} height={6} />
-              17:6
-            </Ref>
-            <Ref card="shape_aspect_item" choice="3:4" class="catalog-chip">
-              <Ratio width={3} height={4} />
-              3:4
-            </Ref>
-            <Ref card="shape_aspect_item" choice="7:6" class="catalog-chip">
-              <Ratio width={7} height={6} />
-              7:6
-            </Ref>
-            <Ref card="shape_aspect_item" choice="5:4" class="catalog-chip">
-              <Ratio width={5} height={4} />
-              5:4
-            </Ref>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
+          <Entry
+            path={['SHOOTING MENU', 'SHAPE & ASPECT']}
+            title={
+              <h4>
+                <Icon name="aspect" />
+                <Ref card="shape_aspect_item">ASPECT RATIO</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Choose the aspect ratio of still pictures.</p>
+            <div class="catalog-chips">
+              <Ref card="shape_aspect_item" choice="3:2" class="catalog-chip stock">
+                <Ratio width={3} height={2} />
+                3:2
+              </Ref>
+              <Ref card="shape_aspect_item" choice="16:9" class="catalog-chip stock">
+                <Ratio width={16} height={9} />
+                16:9
+              </Ref>
+              <Ref card="shape_aspect_item" choice="1:1" class="catalog-chip stock">
+                <Ratio width={1} height={1} />
+                1:1
+              </Ref>
+              <Ref card="shape_aspect_item" choice="4:3" class="catalog-chip">
+                <Ratio width={4} height={3} />
+                4:3
+              </Ref>
+              <Ref card="shape_aspect_item" choice="65:24" class="catalog-chip">
+                <Ratio width={65} height={24} />
+                65:24
+              </Ref>
+              <Ref card="shape_aspect_item" choice="17:6" class="catalog-chip">
+                <Ratio width={17} height={6} />
+                17:6
+              </Ref>
+              <Ref card="shape_aspect_item" choice="3:4" class="catalog-chip">
+                <Ratio width={3} height={4} />
+                3:4
+              </Ref>
+              <Ref card="shape_aspect_item" choice="7:6" class="catalog-chip">
+                <Ratio width={7} height={6} />
+                7:6
+              </Ref>
+              <Ref card="shape_aspect_item" choice="5:4" class="catalog-chip">
+                <Ratio width={5} height={4} />
+                5:4
+              </Ref>
+            </div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('shape_surround_item')}>
-          <h4>
-            <Icon name="aspect" />
-            <Ref card="shape_surround_item">SURROUND VIEW</Ref>
-          </h4>
-          <p>Choose how the area outside the frame is shown.</p>
-          <div class="catalog-chips">
-            <Ref card="shape_surround_item" choice="MASKED" class="catalog-chip">
-              MASKED
-            </Ref>
-            <Ref card="shape_surround_item" choice="DARKENED" class="catalog-chip">
-              DARKENED
-            </Ref>
-            <Ref card="shape_surround_item" choice="WHITE BORDER" class="catalog-chip">
-              WHITE BORDER
-            </Ref>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
+          <Entry
+            path={['SHOOTING MENU', 'SHAPE & ASPECT']}
+            title={
+              <h4>
+                <Icon name="aspect" />
+                <Ref card="shape_surround_item">SURROUND VIEW</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Choose how the area outside the frame is shown.</p>
+            <div class="catalog-chips">
+              <Ref card="shape_surround_item" choice="MASKED" class="catalog-chip">
+                MASKED
+              </Ref>
+              <Ref card="shape_surround_item" choice="DARKENED" class="catalog-chip">
+                DARKENED
+              </Ref>
+              <Ref card="shape_surround_item" choice="WHITE BORDER" class="catalog-chip">
+                WHITE BORDER
+              </Ref>
+            </div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('c')}>
-          <h4>
-            <Icon name="golden-ratio" />
-            <Ref card="c">FRAMING GUIDELINE</Ref>
-          </h4>
-          <p>
-            Choose a guide to display in the shooting view, including Golden Ratio and four Golden
-            Spiral focal points.
-          </p>
-          <div class="catalog-chips">
-            <span class="catalog-chip stock">GRID 9</span>
-            <span class="catalog-chip stock">GRID 24</span>
-            <span class="catalog-chip stock">HD FRAMING</span>
-            <Ref card="c" choice="GOLDEN RATIO" class="catalog-chip">
-              GOLDEN RATIO
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - BOTTOM LEFT" class="catalog-chip">
-              GOLDEN SPIRAL - BOTTOM LEFT
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - BOTTOM RIGHT" class="catalog-chip">
-              GOLDEN SPIRAL - BOTTOM RIGHT
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - TOP LEFT" class="catalog-chip">
-              GOLDEN SPIRAL - TOP LEFT
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - TOP RIGHT" class="catalog-chip">
-              GOLDEN SPIRAL - TOP RIGHT
-            </Ref>
-          </div>
-          <div class="catalog-where">SET-UP › SCREEN SET-UP</div>
+          <Entry
+            path={['SET-UP', 'SCREEN SET-UP']}
+            title={
+              <h4>
+                <Icon name="golden-ratio" />
+                <Ref card="c">FRAMING GUIDELINE</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Choose a guide to display in the shooting view, including Golden Ratio and four Golden
+              Spiral focal points.
+            </p>
+            <div class="catalog-chips">
+              <span class="catalog-chip stock">GRID 9</span>
+              <span class="catalog-chip stock">GRID 24</span>
+              <span class="catalog-chip stock">HD FRAMING</span>
+              <Ref card="c" choice="GOLDEN RATIO" class="catalog-chip">
+                GOLDEN RATIO
+              </Ref>
+              <Ref card="c" choice="GOLDEN SPIRAL - BOTTOM LEFT" class="catalog-chip">
+                GOLDEN SPIRAL - BOTTOM LEFT
+              </Ref>
+              <Ref card="c" choice="GOLDEN SPIRAL - BOTTOM RIGHT" class="catalog-chip">
+                GOLDEN SPIRAL - BOTTOM RIGHT
+              </Ref>
+              <Ref card="c" choice="GOLDEN SPIRAL - TOP LEFT" class="catalog-chip">
+                GOLDEN SPIRAL - TOP LEFT
+              </Ref>
+              <Ref card="c" choice="GOLDEN SPIRAL - TOP RIGHT" class="catalog-chip">
+                GOLDEN SPIRAL - TOP RIGHT
+              </Ref>
+            </div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('shape_desqueeze_item')}>
-          <h4>
-            <Icon name="anamorphic" />
-            <span>Anamorphic Lenses</span>
-          </h4>
-          <p>
-            Display and record pictures taken through an anamorphic adapter at their corrected
-            width.
-          </p>
-          <div class="catalog-sub">
-            <h5>
-              <Ref card="shape_desqueeze_item">DESQUEEZE</Ref>
-            </h5>
-            <div class="catalog-chips">
-              <span class="catalog-chip">1.25X</span>
-              <span class="catalog-chip">1.33X</span>
-              <span class="catalog-chip">1.50X</span>
-              <span class="catalog-chip">1.60X</span>
-              <span class="catalog-chip">1.80X</span>
-              <span class="catalog-chip">2.00X</span>
+          <Entry
+            path={['SHOOTING MENU', 'SHAPE & ASPECT']}
+            title={
+              <h4>
+                <Icon name="anamorphic" />
+                <span>Anamorphic Lenses</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Display and record pictures taken through an anamorphic adapter at their corrected
+              width.
+            </p>
+            <div class="catalog-sub">
+              <h5>
+                <Ref card="shape_desqueeze_item">DESQUEEZE</Ref>
+              </h5>
+              <div class="catalog-chips">
+                <span class="catalog-chip">1.25X</span>
+                <span class="catalog-chip">1.33X</span>
+                <span class="catalog-chip">1.50X</span>
+                <span class="catalog-chip">1.60X</span>
+                <span class="catalog-chip">1.80X</span>
+                <span class="catalog-chip">2.00X</span>
+              </div>
             </div>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('shape_jpeg_item')}>
-          <h4>
-            <Icon name="anamorphic" />
-            <span>Desqueeze JPEG</span>
-          </h4>
-          <p>
-            Display and record pictures taken through an anamorphic adapter at their corrected
-            width.
-          </p>
-          <div class="catalog-sub">
-            <h5>
-              <Ref card="shape_jpeg_item">DESQUEEZE JPEG</Ref>
-            </h5>
-            <div class="catalog-chips">
-              <span class="catalog-chip">ON</span>
-              <span class="catalog-chip">OFF</span>
+          <Entry
+            path={['SHOOTING MENU', 'SHAPE & ASPECT']}
+            title={
+              <h4>
+                <Icon name="anamorphic" />
+                <span>Desqueeze JPEG</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Display and record pictures taken through an anamorphic adapter at their corrected
+              width.
+            </p>
+            <div class="catalog-sub">
+              <h5>
+                <Ref card="shape_jpeg_item">DESQUEEZE JPEG</Ref>
+              </h5>
+              <div class="catalog-chips">
+                <span class="catalog-chip">ON</span>
+                <span class="catalog-chip">OFF</span>
+              </div>
             </div>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('snap_menu_item')}>
-          <h4>
-            <Icon name="snap" />
-            <Ref card="snap_menu_item">MF SNAP FOCUS</Ref>
-          </h4>
-          <p>
-            In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset
-            distance.
-          </p>
-          <div class="catalog-where">SHOOTING MENU</div>
+          <Entry
+            path={['SHOOTING MENU']}
+            title={
+              <h4>
+                <Icon name="snap" />
+                <Ref card="snap_menu_item">MF SNAP FOCUS</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset
+              distance.
+            </p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('date_folders_item')}>
-          <h4>
-            <Icon name="folder" />
-            <Ref card="date_folders_item">DATE FOLDERS</Ref>
-          </h4>
-          <p>{"Keep each day's pictures in their own folder, named after the date."}</p>
-          <div class="catalog-where">SET-UP › SAVE DATA SET-UP</div>
+          <Entry
+            path={['SET-UP', 'SAVE DATA SET-UP']}
+            title={
+              <h4>
+                <Icon name="folder" />
+                <Ref card="date_folders_item">DATE FOLDERS</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>{"Keep each day's pictures in their own folder, named after the date."}</p>
+          </Entry>
         </FeatureTile>
       </div>
       <h3>Making movies</h3>
       <div class="catalog-grid">
         <FeatureTile media={media('f_log_recording_item')}>
-          <h4>
-            <Icon name="movie" />
-            <Ref card="f_log_recording_item">F-Log RECORDING</Ref>
-          </h4>
-          <p>Record movies with the F-Log transfer and F-Gamut color matrix.</p>
-          <div class="catalog-where">SHOOTING MENU › MOVIE SET-UP</div>
+          <Entry
+            path={['SHOOTING MENU', 'MOVIE SET-UP']}
+            title={
+              <h4>
+                <Icon name="movie" />
+                <Ref card="f_log_recording_item">F-Log RECORDING</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Record movies with the F-Log transfer and F-Gamut color matrix.</p>
+          </Entry>
         </FeatureTile>
       </div>
       <h3>Handling and display</h3>
@@ -1039,70 +1145,114 @@ export function FeatureCatalog() {
             'bindings_row_command_control_press',
           )}
         >
-          <h4>
-            <Icon name="controls" />
-            <span>Unlocked Controls</span>
-          </h4>
-          <p>
-            Assign settings to the EV dial, shutter dial, aperture ring, command control, control
-            ring, focus selector, Auto lever and unlocked buttons.
-          </p>
+          <Entry
+            path={[]}
+            title={
+              <h4>
+                <Icon name="controls" />
+                <span>Unlocked Controls</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Assign settings to the EV dial, shutter dial, aperture ring, command control, control
+              ring, focus selector, Auto lever and unlocked buttons.
+            </p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('hdmi_rec_behavior_item')}>
-          <h4>
-            <Icon name="hdmi" />
-            <Ref card="hdmi_rec_behavior_item">HDMI OUTPUT</Ref>
-          </h4>
-          <p>Display the shooting view on an HDMI device.</p>
-          <div class="catalog-where">SET-UP</div>
+          <Entry
+            path={['SET-UP']}
+            title={
+              <h4>
+                <Icon name="hdmi" />
+                <Ref card="hdmi_rec_behavior_item">HDMI OUTPUT</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Display the shooting view on an HDMI device.</p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('menu_theme_item')}>
-          <h4>
-            <Icon name="theme" />
-            <Ref card="menu_theme_item">MENU THEME</Ref>
-          </h4>
-          <p>Choose the appearance of the menus.</p>
-          <div class="catalog-where">SET-UP</div>
+          <Entry
+            path={['SET-UP']}
+            title={
+              <h4>
+                <Icon name="theme" />
+                <Ref card="menu_theme_item">MENU THEME</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Choose the appearance of the menus.</p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('touch_screen_setting')}>
-          <h4>
-            <Icon name="touch" />
-            <span>Menu Tap</span>
-          </h4>
-          <p>Tap a menu row, tab or option to choose it. Tap outside a pop-up to close it.</p>
-          <div class="catalog-where">SET-UP › TOUCH SCREEN SETTING</div>
+          <Entry
+            path={['SET-UP', 'TOUCH SCREEN SETTING']}
+            title={
+              <h4>
+                <Icon name="touch" />
+                <span>Menu Tap</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Tap a menu row, tab or option to choose it. Tap outside a pop-up to close it.</p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media()}>
-          <h4>
-            <Icon name="autofocus" />
-            <span>Autofocus</span>
-          </h4>
-          <p>
-            In AF-S mode, when phase detection fails, the camera estimates focus and measures again
-            before using contrast detection.
-          </p>
+          <Entry
+            path={[]}
+            title={
+              <h4>
+                <Icon name="autofocus" />
+                <span>Autofocus</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              In AF-S mode, when phase detection fails, the camera estimates focus and measures
+              again before using contrast detection.
+            </p>
+          </Entry>
         </FeatureTile>
         <FeatureTile media={media('sd_volume_name_item')}>
-          <h4>
-            <Icon name="card" />
-            <Ref card="sd_volume_name_item">DATE CARD NAME</Ref>
-          </h4>
-          <p>Name memory cards after the date they are formatted.</p>
-          <div class="catalog-where">SET-UP › SAVE DATA SET-UP</div>
+          <Entry
+            path={['SET-UP', 'SAVE DATA SET-UP']}
+            title={
+              <h4>
+                <Icon name="card" />
+                <Ref card="sd_volume_name_item">DATE CARD NAME</Ref>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>Name memory cards after the date they are formatted.</p>
+          </Entry>
         </FeatureTile>
       </div>
       <h3>When something goes wrong</h3>
       <div class="catalog-grid">
         <FeatureTile media={media('bug_report_shortcut')}>
-          <h4>
-            <Icon name="bug" />
-            <span>Bug Reports</span>
-          </h4>
-          <p>
-            Hold the side Fn button and press DISP/BACK to save a diagnostic report to the memory
-            card and display a QR code.
-          </p>
-          <div class="catalog-where">SET-UP › FUJIMOD DEVTOOLS › BUG REPORT SHORTCUT</div>
+          <Entry
+            path={['SET-UP', 'FUJIMOD DEVTOOLS', 'BUG REPORT SHORTCUT']}
+            title={
+              <h4>
+                <Icon name="bug" />
+                <span>Bug Reports</span>
+              </h4>
+            }
+            credits={{ premiere: false, inspired: [], thanks: [] }}
+          >
+            <p>
+              Hold the side Fn button and press DISP/BACK to save a diagnostic report to the memory
+              card and display a QR code.
+            </p>
+          </Entry>
         </FeatureTile>
       </div>
       <div
