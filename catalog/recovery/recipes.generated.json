@@ -2979,10 +2979,51 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        80
+      ],
+      "version_getter": {
+        "address": 6944032,
+        "size": 92,
+        "sha256": "8d6fce55cd09506682f525d7feadf631479e7d232fc19e12877faf7e812bbbe6"
+      },
+      "configuration": {
+        "kind": "memory",
+        "pointer": 9882128,
+        "selector_offset": 518
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 13674216,
+        "size": 372,
+        "sha256": "259dde7d6285d62cdd2440892aaa57d0c9eec09d683db6e0e86bcd55cee74dda"
+      },
+      "target_major": 9819696,
+      "target_minor": 9819700,
+      "current_major": 9819704,
+      "current_minor": 9819708,
+      "version_producer": {
+        "address": 15496164,
+        "size": 264,
+        "sha256": "42e75243c7978dabaf653e6291db05a6d93a26670f02a5c23afad0d75c2007e1"
+      },
+      "producer_stop": 15496200,
+      "version_context_pointer": 22803800,
+      "version_context": 9819168,
+      "current_major_setter": {
+        "address": 15498968,
+        "size": 52,
+        "sha256": "e5cb6e4a22390cfabfc4c9bb98e2cd42e91aeb48ecd14c338e889d89354ae5f8"
+      },
+      "current_minor_setter": {
+        "address": 15499020,
+        "size": 52,
+        "sha256": "352f629133340afdbb663a3aa6ae566d13e6f9df729db4644532c0017cc7c907"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xa2-130",
@@ -3188,10 +3229,51 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        48
+      ],
+      "version_getter": {
+        "address": 6764968,
+        "size": 92,
+        "sha256": "803e13c161202a38f7ef96216aff4aff6f3b48418e552b9399e120d0ff40570f"
+      },
+      "configuration": {
+        "kind": "memory",
+        "pointer": 9574404,
+        "selector_offset": 518
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 13510376,
+        "size": 372,
+        "sha256": "beb83cabbe1b4fcc14b484113b1ebb9f31201bd800d2acec4a48766ebaccf117"
+      },
+      "target_major": 9533384,
+      "target_minor": 9533388,
+      "current_major": 9533392,
+      "current_minor": 9533396,
+      "version_producer": {
+        "address": 15336500,
+        "size": 264,
+        "sha256": "b8f11cb996d623da4fd4387e586865cc856a5a664ae00348f505113f675fabd6"
+      },
+      "producer_stop": 15336536,
+      "version_context_pointer": 22697592,
+      "version_context": 9532856,
+      "current_major_setter": {
+        "address": 15339304,
+        "size": 52,
+        "sha256": "0e421843362e4fcef48048104591868435999235f5fc5f0df9212d33402b80ed"
+      },
+      "current_minor_setter": {
+        "address": 15339356,
+        "size": 52,
+        "sha256": "2d7e6650b329d59a7c3c0a4394d06c01c457373cd603636d195fbcf59ee33bd8"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xe2-411",
@@ -4426,10 +4508,51 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        32
+      ],
+      "version_getter": {
+        "address": 6943940,
+        "size": 92,
+        "sha256": "c8f4ed19251e3686a9adf63649045a1b2b8e046b9147a43ed6d2551dc81a4ab2"
+      },
+      "configuration": {
+        "kind": "memory",
+        "pointer": 9872432,
+        "selector_offset": 518
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 13663796,
+        "size": 256,
+        "sha256": "4dd0c957aa4c2ba409f5f802ee6ed9ed3cd8b3ed5a28a6eb8ec1082518f813cd"
+      },
+      "target_major": 9810576,
+      "target_minor": 9810580,
+      "current_major": 9810584,
+      "current_minor": 9810588,
+      "version_producer": {
+        "address": 15484584,
+        "size": 264,
+        "sha256": "33a5548d17acecb8506a9c9584f7de2ec248a8774060f33304b2a2a514aa681a"
+      },
+      "producer_stop": 15484620,
+      "version_context_pointer": 22683036,
+      "version_context": 9810048,
+      "current_major_setter": {
+        "address": 15486648,
+        "size": 52,
+        "sha256": "64cbc5f0442671f7a0d15c5e82ac20fdf5091c189f00c01f26574fcc113ecf88"
+      },
+      "current_minor_setter": {
+        "address": 15486700,
+        "size": 52,
+        "sha256": "8e901e8fb7ee361b3907b221bd258a0f6ade2ee0a7f8b25ee3f80ef123ea1327"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xm1-150",
@@ -4635,10 +4758,51 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        1,
+        80
+      ],
+      "version_getter": {
+        "address": 6944032,
+        "size": 92,
+        "sha256": "42618df5f95ea3e5b0b3cc6600bd68e217865977a5e37925d45c340787043226"
+      },
+      "configuration": {
+        "kind": "memory",
+        "pointer": 9882192,
+        "selector_offset": 518
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 13674280,
+        "size": 372,
+        "sha256": "e6b28ea7de4752ee7143472abe64ed6b521ec9fc1124590c7536eb69873b40bf"
+      },
+      "target_major": 9819760,
+      "target_minor": 9819764,
+      "current_major": 9819768,
+      "current_minor": 9819772,
+      "version_producer": {
+        "address": 15500628,
+        "size": 264,
+        "sha256": "3f084282c1e88dbeda2f6139b695c17dc1b44181a4f7bc49ba92f1ffb794ff02"
+      },
+      "producer_stop": 15500664,
+      "version_context_pointer": 22814888,
+      "version_context": 9819232,
+      "current_major_setter": {
+        "address": 15503432,
+        "size": 52,
+        "sha256": "134d2d2ab8b3708adaf37797f314cb72b185690b85b4ab8ad5e1c26a8b32240e"
+      },
+      "current_minor_setter": {
+        "address": 15503484,
+        "size": 52,
+        "sha256": "f33e1a4dcf40f5745aba2738fe83a3da9a10df9d07a3081be8dd243f3e0e77f4"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xm5-130",
