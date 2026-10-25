@@ -461,22 +461,6 @@
       }
     },
     {
-      "id": "date_folders",
-      "group": "pictures",
-      "icon": "folder",
-      "title": "DATE FOLDERS",
-      "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "summary": "Keep each day's pictures in their own folder, named after the date.",
-      "card": "date_folders_item",
-      "media_cards": ["date_folders_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "f_log",
       "group": "movies",
       "icon": "movie",
@@ -588,11 +572,27 @@
       "id": "date_card_name",
       "group": "handling",
       "icon": "card",
-      "title": "DATE CARD NAME",
+      "title": "FORMAT CARD NAME",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
       "summary": "Name memory cards after the date they are formatted.",
       "card": "sd_volume_name_item",
       "media_cards": ["sd_volume_name_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "date_folders",
+      "group": "handling",
+      "icon": "folder",
+      "title": "DATE FOLDERS",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "summary": "Keep each day's pictures in their own folder, named after the date.",
+      "card": "date_folders_item",
+      "media_cards": ["date_folders_item"],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -1059,7 +1059,7 @@
       "choice_credits": {}
     },
     "sd_volume_name_item": {
-      "title": "DATE CARD NAME",
+      "title": "FORMAT CARD NAME",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
       "summary": "Choose whether FORMAT names the memory card after the date, such as 2026-10-22.",
       "choices": {
