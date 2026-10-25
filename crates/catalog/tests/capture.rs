@@ -125,15 +125,21 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
 #[test]
 fn bounded_boot_code_capture_is_specific_to_its_firmware() {
     let catalog = ReferenceCatalog::bundled().unwrap();
-    let state = catalog
-        .resolve_firmware("x100v-301")
-        .unwrap()
-        .state
-        .unwrap();
+    let selection = catalog.resolve_firmware("x100v-301").unwrap();
+    let identity = selection.firmware.boot_rom.unwrap();
+    assert_eq!(
+        (identity.address, identity.content.size),
+        (0xfff00000, 0x8000)
+    );
+    assert_eq!(
+        identity.content.sha256,
+        "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4"
+    );
+    let state = selection.state.unwrap();
     let rom = state.regions.iter().find(|r| r.name == "boot-rom").unwrap();
     assert_eq!(
         (rom.address, rom.size, rom.constant),
-        (0xfff00000, 0x8000, false)
+        (0xfff00000, 0x8000, true)
     );
     state.validate().unwrap();
     for id in ["xt4-212", "xs10-311"] {

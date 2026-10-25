@@ -14,7 +14,7 @@
       "name": "boot-rom",
       "address": 4293918720,
       "size": 32768,
-      "constant": false
+      "constant": true
     }
   ]
 }
