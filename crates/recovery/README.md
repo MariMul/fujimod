@@ -5,13 +5,30 @@ by the caller. It checks the complete DAT identity, decoded source hashes,
 initialized mappings, BSS, expected old words, header policy, and file names.
 The official DAT is included unchanged at its required card-root name.
 
-## Card contract
+## Scope and card contract
 
-A card's startup files are self-contained: the files the boot ROM requires,
-plus one firmware file holding everything the boot path needs. Startup never
-reads the update DAT on the card, so that DAT can be any firmware the updater
-flashes. It also never reads internal-storage regions a firmware update
-writes, so a card recovers a camera after a failed or corrupted update.
+SD boot has two purposes: recover a camera after a bad firmware flash by
+booting the card and flashing new firmware, and dual-boot another operating
+system that loads and saves settings normally.
+
+A card holds the files the boot ROM requires plus one OS image. The OS image
+is everything the firmware update installs, unpacked with overlays applied.
+The first stage loads it into RAM and runs it. Wherever the stock firmware
+would read bytes the update installed into internal storage, it reads them
+from the OS image instead. Per-camera storage (settings, calibration) stays in
+internal storage and works normally. Startup never reads the update DAT on the
+card, so that DAT can be any firmware the updater flashes.
+
+File names follow the Fujifilm service manuals' SD_BOOT packages:
+
+| Processor | Files | Roles |
+| --- | --- | --- |
+| EXR, EXR Pro | `ffsys.bin`, `ffboot.bin`, `ffuser.bin` | ROM settings header; small loader (the ROM reads only 16 bits of its length); OS image |
+| EXR II, X-Processor Pro | `ffsys.bin`, `ffboot.bin` | ROM settings header; OS image |
+| X-Processor 4 | `ffinit.bin`, `ffboot.bin` | ROM-run first stage that sets up DRAM; OS image |
+| X-Processor 5 | `marble_init.bin`, `ffboot.bin` | ROM-run first stage that sets up DRAM; OS image |
+
+Booting with zeroed or scrambled internal storage is out of scope.
 
 The processor selects the packaging mechanism. EXR II uses the stock NAND
 header fragments with SD power hold and a preloaded RAM image. XP4 uses raw
