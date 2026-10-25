@@ -4618,6 +4618,7 @@ class RunVirtualCard(TypedDict, total=False):
 
 
 type RunWifiSdioProfile = Literal[
+    "mt5931-no-peers",
     "declared-wifi-sdio-one-function-enumeration-unmeasured",
 ]
 

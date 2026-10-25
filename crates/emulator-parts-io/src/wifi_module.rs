@@ -1,18 +1,21 @@
-//! Declared one-function SDIO module. Enumeration and bounded ROM download
-//! only; no network, CIS, sleep protocol or command responder is modeled.
-//! Register readiness and download size are explicit unmeasured inputs.
+//! One-function SDIO module with enumeration, ROM download and MT5931 HIF.
+//! Device behavior consumes only SDIO transactions.
+pub mod mt5931;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     Enumeration,
     RomDownload,
+    Mt5931,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub protocol: Protocol,
     pub firmware_bytes: u32,
+    #[serde(default)]
+    pub mt5931: Option<mt5931::Options>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
 enum Phase {
@@ -27,19 +30,22 @@ enum Phase {
     PostDownload,
     Configured,
 }
-#[derive(Clone, Copy, Serialize, serde::Deserialize)]
+#[derive(Clone, Serialize, serde::Deserialize)]
 pub enum Change {
     None,
     Byte(u32, u8),
     Phase(PhaseChange),
     Frame(u32),
     Direct,
+    Hif(mt5931::Change),
+    Configure(u32),
 }
 #[derive(Clone, Copy, Serialize, serde::Deserialize)]
 pub struct PhaseChange(Phase);
 #[derive(Serialize, Deserialize)]
 pub struct Operation {
     pub response: u32,
+    pub data: Vec<u8>,
     pub change: Change,
 }
 #[derive(Serialize, Deserialize)]
@@ -50,19 +56,28 @@ pub struct WifiModule {
     phase: Phase,
     cursor: u32,
     direct: bool,
+    endpoint: mt5931::Endpoint,
 }
 impl WifiModule {
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"options":self.options,"bytes":self.bytes.as_slice(),"phase":self.phase,"cursor":self.cursor,"direct":self.direct})
+        serde_json::json!({"options":self.options,"bytes":self.bytes.as_slice(),"phase":self.phase,"cursor":self.cursor,"direct":self.direct,"endpoint":self.endpoint.fingerprint()})
     }
 
     pub fn new(options: Options) -> Result<Self, String> {
-        if options.protocol == Protocol::RomDownload
+        if options.protocol != Protocol::Enumeration
             && (options.firmware_bytes == 0
                 || options.firmware_bytes > 0x1000000
                 || !options.firmware_bytes.is_multiple_of(64))
         {
             return Err("Wi-Fi firmware extent must be bounded 64-byte units".into());
+        }
+        if options.protocol == Protocol::Mt5931 && options.mt5931.is_none() {
+            return Err("MT5931 requires explicit endpoint identity".into());
+        }
+        if let Some(endpoint) = &options.mt5931 {
+            if endpoint.mac_address == [0; 6] || endpoint.mac_address[0] & 1 != 0 {
+                return Err("MT5931 permanent MAC must be a nonzero unicast address".into());
+            }
         }
         let mut bytes = [0; 0x112];
         for (a, v) in [(0, 0x22), (1, 3), (8, 0x82)] {
@@ -74,6 +89,7 @@ impl WifiModule {
             phase: Phase::Idle,
             cursor: 0,
             direct: false,
+            endpoint: mt5931::Endpoint::default(),
         })
     }
     pub fn protocol(&self) -> Protocol {
@@ -99,6 +115,18 @@ impl WifiModule {
             return Err("SDIO CMD52 reserved bits".into());
         }
         if function != 0 {
+            if self.options.protocol == Protocol::Mt5931
+                && function == 1
+                && write
+                && !raw
+                && address == 4
+            {
+                return Ok(Operation {
+                    response: 0,
+                    data: Vec::new(),
+                    change: Change::Hif(self.endpoint.low_power(data as u32)?),
+                });
+            }
             if self.options.protocol != Protocol::RomDownload
                 || function != 1
                 || !write
@@ -111,6 +139,7 @@ impl WifiModule {
                 return Err("Unsupported Wi-Fi function direct I/O".into());
             }
             return Ok(Operation {
+                data: Vec::new(),
                 response: 0,
                 change: Change::Direct,
             });
@@ -129,6 +158,7 @@ impl WifiModule {
             return Err("Unsupported Wi-Fi CCCR write".into());
         }
         Ok(Operation {
+            data: Vec::new(),
             response: if write && raw {
                 data as u32
             } else {
@@ -141,6 +171,9 @@ impl WifiModule {
             },
         })
     }
+    pub fn interrupt(&self) -> bool {
+        self.bytes[2] & 2 != 0 && self.bytes[4] & 3 == 3 && self.endpoint.interrupt()
+    }
     pub fn block_size(&self) -> u16 {
         u16::from_le_bytes([self.bytes[0x110], self.bytes[0x111]])
     }
@@ -151,8 +184,24 @@ impl WifiModule {
         payload: &[u8],
         quantity: usize,
     ) -> Result<Operation, String> {
-        if self.options.protocol != Protocol::RomDownload {
+        if self.options.protocol == Protocol::Enumeration {
             return Err("Wi-Fi vendor transfers require ROM download option".into());
+        }
+        if self.options.protocol == Protocol::Mt5931 && self.phase == Phase::Configured {
+            let (data, change) = self.endpoint.transfer(
+                self.options.mt5931.as_ref().unwrap(),
+                address,
+                write,
+                payload,
+                quantity,
+            )?;
+            return Ok(Operation {
+                response: data
+                    .get(..4)
+                    .map_or(0, |v| u32::from_le_bytes(v.try_into().unwrap())),
+                data,
+                change: change.map_or(Change::None, Change::Hif),
+            });
         }
         if address == 0x80 {
             let expected = (self.options.firmware_bytes - self.cursor).min(2048) as usize;
@@ -170,6 +219,7 @@ impl WifiModule {
                 return Err("Wi-Fi download frame/header/termination unsupported".into());
             }
             return Ok(Operation {
+                data: Vec::new(),
                 response: 0,
                 change: Change::Frame(expected as u32),
             });
@@ -189,6 +239,7 @@ impl WifiModule {
                 _ => return Err("Wi-Fi vendor status read unsupported in current phase".into()),
             };
             return Ok(Operation {
+                data: Vec::new(),
                 response,
                 change: Change::None,
             });
@@ -211,12 +262,27 @@ impl WifiModule {
             _ => return Err("Unsupported Wi-Fi vendor write/order/value".into()),
         };
         Ok(Operation {
+            data: Vec::new(),
             response: 0,
-            change: Change::Phase(PhaseChange(next)),
+            change: if next == Phase::Configured && self.options.protocol == Protocol::Mt5931 {
+                Change::Configure(value)
+            } else {
+                Change::Phase(PhaseChange(next))
+            },
         })
     }
     pub fn commit(&mut self, operation: Operation) {
         match operation.change {
+            Change::Configure(mask) => {
+                self.phase = Phase::Configured;
+                self.endpoint.commit(mt5931::Change::InterruptEnable(mask));
+            }
+            Change::Hif(change) => {
+                if matches!(change, mt5931::Change::LowPower(_)) {
+                    self.direct = true;
+                }
+                self.endpoint.commit(change);
+            }
             Change::None => (),
             Change::Direct => self.direct = true,
             Change::Phase(PhaseChange(next)) => self.phase = next,
@@ -247,6 +313,7 @@ mod tests {
         let mut m = WifiModule::new(Options {
             protocol: Protocol::RomDownload,
             firmware_bytes: 64,
+            mt5931: None,
         })
         .unwrap();
         assert!(
@@ -278,6 +345,7 @@ mod tests {
         let mut m = WifiModule::new(Options {
             protocol: Protocol::Enumeration,
             firmware_bytes: 0,
+            mt5931: None,
         })
         .unwrap();
         assert_eq!(m.direct(0).unwrap().response, 0x22);

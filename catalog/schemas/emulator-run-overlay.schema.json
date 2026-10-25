@@ -3354,6 +3354,7 @@
     "RunWifiSdioProfile": {
       "description": "Closed selection for wifi sdio profile.",
       "enum": [
+        "mt5931-no-peers",
         "declared-wifi-sdio-one-function-enumeration-unmeasured"
       ],
       "type": "string"

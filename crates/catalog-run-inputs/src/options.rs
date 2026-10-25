@@ -693,6 +693,8 @@ pub enum RunStorageProfile {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum RunWifiSdioProfile {
+    #[serde(rename = "mt5931-no-peers")]
+    Mt5931NoPeers,
     #[serde(rename = "declared-wifi-sdio-one-function-enumeration-unmeasured")]
     DeclaredWifiSdioOneFunctionEnumerationUnmeasured,
 }
