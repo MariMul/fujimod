@@ -4904,6 +4904,30 @@
           "what": "retain preloaded stock kernel/application"
         },
         {
+          "address": 18232,
+          "old": 3942646097,
+          "new": 3818913792,
+          "what": "skip NAND initialization on card startup"
+        },
+        {
+          "address": 19556,
+          "old": 3942646503,
+          "new": 3818913792,
+          "what": "retain empty bad-block list without NAND/OOB scan"
+        },
+        {
+          "address": 18344,
+          "old": 3959422901,
+          "new": 3818913792,
+          "what": "skip installed-image NAND header probe"
+        },
+        {
+          "address": 18432,
+          "old": 3942646042,
+          "new": 3818913792,
+          "what": "skip unused NAND shutdown on card startup"
+        },
+        {
           "address": 5914632,
           "old": 0,
           "new": 1,

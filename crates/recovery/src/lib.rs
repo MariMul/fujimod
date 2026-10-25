@@ -3,6 +3,7 @@
 pub mod image;
 pub mod flash_free;
 mod lupi;
+mod lupi_loader;
 pub mod rom_sd;
 pub use lupi::Lupi;
 mod xp4;

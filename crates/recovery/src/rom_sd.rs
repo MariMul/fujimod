@@ -50,19 +50,19 @@ fn half(w: u32, register: u32, top: bool) -> Result<u32> {
     )?;
     Ok((w >> 4 & 0xf000) | (w & 0xfff))
 }
-fn address(data: &[u8], at: usize, register: u32) -> Result<usize> {
+pub(super) fn address(data: &[u8], at: usize, register: u32) -> Result<usize> {
     Ok(
         (half(word(data, at)?, register, false)? | half(word(data, at + 4)?, register, true)? << 16)
             as usize,
     )
 }
-fn call(data: &[u8], at: usize) -> Result<usize> {
+pub(super) fn call(data: &[u8], at: usize) -> Result<usize> {
     let w = word(data, at)?;
     require(w >> 24 == 0xeb, "Expected unconditional A32 BL")?;
     let target = at as i64 + 8 + ((((w & 0xffffff) as i32) << 8 >> 6) as i64);
     usize::try_from(target).map_err(|_| image::Error::Invalid("Call escapes loader".into()))
 }
-fn edit(code: &[u8], at: usize, new: u32, what: &str) -> Result<Edit> {
+pub(super) fn edit(code: &[u8], at: usize, new: u32, what: &str) -> Result<Edit> {
     Ok(Edit {
         address: at,
         old: word(code, at)?,
@@ -70,7 +70,7 @@ fn edit(code: &[u8], at: usize, new: u32, what: &str) -> Result<Edit> {
         what: what.into(),
     })
 }
-fn sequence(data: &[u8], at: usize, words: &[u32]) -> bool {
+pub(super) fn sequence(data: &[u8], at: usize, words: &[u32]) -> bool {
     words
         .iter()
         .enumerate()
@@ -338,7 +338,7 @@ fn xpp_flash_probe_edit(code: &[u8]) -> Result<Edit> {
         "skip installed-flash signature probe for preloaded startup",
     )
 }
-fn exr_edits(code: &[u8], table: &Table, flash: usize) -> Result<Vec<Edit>> {
+fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Result<Vec<Edit>> {
     let mut wrappers = vec![];
     for at in (0..code.len().saturating_sub(28)).step_by(4) {
         if address(code, at, 0).ok() == Some(flash)
@@ -398,6 +398,9 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize) -> Result<Vec<Edit>> {
             0xe3a00000,
             "retain preloaded stock kernel/application",
         )?);
+    }
+    if nand_free {
+        result.extend(crate::lupi_loader::edits(code, callers[0])?);
     }
     Ok(result)
 }
@@ -527,7 +530,7 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
     let mut edits = if processor == Processor::XpPro {
         xpp_edits(&code, &table)?
     } else {
-        exr_edits(&code, &table, table.offset - bias)?
+        exr_edits(&code, &table, table.offset - bias, processor == Processor::Exr)?
     };
     edits.push(Edit {
         address: table.address + 8,
