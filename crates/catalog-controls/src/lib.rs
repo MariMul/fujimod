@@ -140,7 +140,10 @@ pub struct PhysicalControl {
     pub face: Option<String>,
     /// Meaning of a printed icon, when present.
     #[serde(default)]
-    pub icon: Option<String>,
+    pub icon: Option<ControlIcon>,
+    /// Short uppercase caption for an unmarked control (at most 10 characters).
+    #[serde(default)]
+    pub short_name: Option<String>,
     /// Body connections carrying the control's electrical signals.
     pub connection_ids: Vec<String>,
     /// Whether the control's function can be assigned in the camera.
@@ -160,6 +163,22 @@ pub struct PhysicalControl {
     /// Actions defined by this control's mechanism; absent for mechanical controls.
     #[serde(default)]
     pub behavior: Option<ControlBehavior>,
+}
+
+/// Printed symbols on a camera control.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum ControlIcon {
+    Playback,
+    Delete,
+    Record,
+    Flash,
 }
 
 /// Physical roles that an operation may require from a body.
@@ -727,8 +746,7 @@ pub struct ResolvedControlAction {
 impl PhysicalControls {
     /// Decode a stored physical-controls document with its source in errors.
     pub fn decode_document(document: &serde_json::Value, source: &str) -> Result<Self, String> {
-        serde_json::from_value(document.clone())
-            .map_err(|error| format!("{source}: {error}"))
+        serde_json::from_value(document.clone()).map_err(|error| format!("{source}: {error}"))
     }
 
     /// Whether any control declares an input binding.
@@ -874,6 +892,11 @@ impl PhysicalControls {
                     .into(),
             );
         }
+        if self.boot.contains_key(&BootMode::Sd)
+            && !self.boot.contains_key(&BootMode::FirmwareUpdate)
+        {
+            return Err("SD boot requires a firmware update combination".into());
+        }
         let mut roles = BTreeSet::new();
         for (mode, combination) in &self.boot {
             if combination.hold.is_empty() {
@@ -918,6 +941,29 @@ impl PhysicalControls {
                 || (control.mechanical && control.behavior.is_some())
             {
                 return Err(format!("physical control {id} has an invalid declaration"));
+            }
+            if control.face.as_ref().is_some_and(|face| {
+                face.split('/')
+                    .any(|line| line.trim().is_empty() || line.trim() != line)
+            }) || control.short_name.as_ref().is_some_and(|name| {
+                name.is_empty()
+                    || name.len() > 10
+                    || name.trim() != name
+                    || !name
+                        .bytes()
+                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b' ')
+            }) {
+                return Err(format!("physical control {id} has invalid markings"));
+            }
+            if !control.mechanical
+                && !matches!(control.behavior, Some(ControlBehavior::Touch))
+                && control.face.is_none()
+                && control.icon.is_none()
+                && control.short_name.is_none()
+            {
+                return Err(format!(
+                    "physical control {id} needs a marking or short name"
+                ));
             }
             let mut positions = BTreeSet::new();
             if control
@@ -1587,7 +1633,7 @@ mod tests {
 
     fn control(behavior: Value) -> Value {
         json!({"name":"Documented control", "location":"rear", "manual_page":3,
-            "face":null,"icon":null,"connection_ids":["contact"],"assignable":false,"pushable":true,"positions":[],
+            "face":"KEY","icon":null,"connection_ids":["contact"],"assignable":false,"pushable":true,"positions":[],
             "default_function":null,"role":null,"mechanical":false,"behavior":behavior})
     }
 

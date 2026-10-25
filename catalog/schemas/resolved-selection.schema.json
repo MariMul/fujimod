@@ -4559,6 +4559,16 @@
       ],
       "type": "object"
     },
+    "ControlIcon": {
+      "description": "Printed symbols on a camera control.",
+      "enum": [
+        "playback",
+        "delete",
+        "record",
+        "flash"
+      ],
+      "type": "string"
+    },
     "ControlInterface": {
       "description": "Firmware interpretation of a control outside the key scanner.",
       "oneOf": [
@@ -15721,12 +15731,16 @@
           ]
         },
         "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlIcon"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null,
-          "description": "Meaning of a printed icon, when present.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Meaning of a printed icon, when present."
         },
         "location": {
           "$ref": "#/$defs/ControlSurface",
@@ -15772,6 +15786,14 @@
           ],
           "default": null,
           "description": "Physical role required by a declared cross-body operation."
+        },
+        "short_name": {
+          "default": null,
+          "description": "Short uppercase caption for an unmarked control (at most 10 characters).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

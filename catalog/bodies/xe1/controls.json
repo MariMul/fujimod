@@ -70,7 +70,8 @@
           "label": "full press",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SHUTTER"
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -145,7 +146,8 @@
           "label": "+2",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -330,7 +332,8 @@
           "label": "A",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -380,7 +383,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -398,13 +402,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "power_switch": {
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 15,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -444,7 +449,7 @@
       "name": "Fn (Function) button",
       "location": "top",
       "manual_page": 66,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -480,7 +485,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "CMD"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -504,14 +510,15 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DIOPTER"
     },
     "flash_pop_up_button": {
       "name": "Flash pop-up button",
       "location": "rear",
       "manual_page": 27,
       "face": null,
-      "icon": null,
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -528,7 +535,7 @@
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 17,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -546,7 +553,7 @@
       "name": "AE-L/AF-L (exposure/focus lock) button",
       "location": "rear",
       "manual_page": 73,
-      "face": null,
+      "face": "AE-L/AF-L",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -564,7 +571,7 @@
       "name": "Q (quick menu) button",
       "location": "rear",
       "manual_page": 32,
-      "face": null,
+      "face": "Q",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -582,7 +589,7 @@
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 4,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -612,13 +619,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "disp_back_button": {
       "name": "DISP (display)/BACK button; Silent mode button",
       "location": "rear",
       "manual_page": 19,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -636,7 +644,7 @@
       "name": "AF (autofocus) button; Delete button",
       "location": "rear",
       "manual_page": 44,
-      "face": null,
+      "face": "AF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -654,7 +662,7 @@
       "name": "AE (autoexposure) button; Playback zoom out button",
       "location": "rear",
       "manual_page": 48,
-      "face": null,
+      "face": "AE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -672,7 +680,7 @@
       "name": "DRIVE button; Playback zoom in button",
       "location": "rear",
       "manual_page": 30,
-      "face": null,
+      "face": "DRIVE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -691,7 +699,7 @@
       "location": "rear",
       "manual_page": 23,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -721,7 +729,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -740,7 +749,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

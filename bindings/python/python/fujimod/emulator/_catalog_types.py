@@ -1173,6 +1173,9 @@ class ControlBusChip(TypedDict, total=False):
     polarity_selector: Required[int]
 
 
+type ControlIcon = Literal["playback", "delete", "record", "flash"]
+
+
 type ControlInterface = ControlInterfaceVariant0 | ControlInterfaceVariant1
 
 
@@ -3504,7 +3507,7 @@ class PhysicalControl(TypedDict, total=False):
     connection_ids: Required[list[str]]
     default_function: NotRequired[str | None]
     face: NotRequired[str | None]
-    icon: NotRequired[str | None]
+    icon: NotRequired[ControlIcon | None]
     location: Required[ControlSurface]
     manual_page: NotRequired[int | None]
     mechanical: Required[bool]
@@ -3512,6 +3515,7 @@ class PhysicalControl(TypedDict, total=False):
     positions: Required[list[ControlPosition]]
     pushable: Required[bool]
     role: NotRequired[ControlRole | None]
+    short_name: NotRequired[str | None]
 
 
 PhysicalControls = TypedDict(

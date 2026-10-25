@@ -147,7 +147,8 @@
           "label": "C",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -179,7 +180,8 @@
           "label": "full press",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SHUTTER"
     },
     "auto_mode_selector_lever": {
       "name": "Auto mode selector lever",
@@ -220,7 +222,8 @@
           "label": "AUTO",
           "description": null
         }
-      ]
+      ],
+      "short_name": "AUTO"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -415,7 +418,8 @@
           "label": "A",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -465,7 +469,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -483,7 +488,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -507,13 +513,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT"
     },
     "power_switch": {
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 42,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -553,7 +560,7 @@
       "name": "Function button (Fn1)",
       "location": "top",
       "manual_page": 252,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -589,13 +596,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DIOPTER"
     },
     "view_mode_button": {
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 14,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -613,7 +621,7 @@
       "name": "DRIVE button / delete button",
       "location": "rear",
       "manual_page": 6,
-      "face": null,
+      "face": "DRIVE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -631,7 +639,7 @@
       "name": "AE-L (exposure lock) button",
       "location": "rear",
       "manual_page": 93,
-      "face": null,
+      "face": "AE-L",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -667,7 +675,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "REAR"
     },
     "focus_stick": {
       "name": "Focus stick (focus lever)",
@@ -691,13 +700,14 @@
         },
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "af_l_button": {
       "name": "AF-L (focus lock) button",
       "location": "rear",
       "manual_page": 93,
-      "face": null,
+      "face": "AF-L",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -715,7 +725,7 @@
       "name": "Q (quick menu) button",
       "location": "rear",
       "manual_page": 247,
-      "face": null,
+      "face": "Q",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -733,7 +743,7 @@
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 20,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -751,7 +761,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 16,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -770,7 +780,7 @@
       "location": "rear",
       "manual_page": 42,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -800,7 +810,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "lcd_monitor_touchscreen": {
       "name": "LCD monitor",
@@ -836,7 +847,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

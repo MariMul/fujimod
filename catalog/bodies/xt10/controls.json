@@ -70,6 +70,13 @@
           "id": "delete_button"
         }
       ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
     }
   },
   "controls": {
@@ -162,7 +169,8 @@
           "label": "AUTO",
           "description": null
         }
-      ]
+      ],
+      "short_name": "AUTO"
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -283,14 +291,15 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "flash_pop_up_lever": {
       "name": "Flash pop-up lever",
       "location": "top",
       "manual_page": 47,
       "face": null,
-      "icon": "flash pop-up",
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Raises the built-in flash for use.",
@@ -374,7 +383,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -389,7 +399,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -434,7 +445,7 @@
       "location": "top",
       "manual_page": 44,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": true,
       "default_function": "Starts or stops movie recording.",
@@ -575,7 +586,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "REAR"
     },
     "selector": {
       "name": "Selector/function buttons",
@@ -613,7 +625,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -651,7 +664,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -666,7 +680,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SPEED"
     },
     "view_mode_button": {
       "name": "VIEW button",

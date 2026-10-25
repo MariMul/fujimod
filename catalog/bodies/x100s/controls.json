@@ -99,7 +99,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "APERTURE"
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -166,7 +167,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "CMD"
     },
     "command_dial": {
       "name": "Command dial",
@@ -198,7 +200,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "CMD"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -266,13 +269,14 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "fn_button": {
       "name": "Fn (Function) button",
       "location": "top",
       "manual_page": 69,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [
         "controls-gpio-4-4"
@@ -351,7 +355,8 @@
           "label": "MF",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -381,7 +386,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "front_ring": {
       "name": "Front ring",
@@ -541,7 +547,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -556,13 +563,14 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SPEED"
     },
     "view_mode_button": {
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 18,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -600,7 +608,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "VIEW"
     },
     "selector": {
       "name": "Command dial directions",
@@ -638,7 +647,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     }
   }
 }

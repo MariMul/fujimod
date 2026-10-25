@@ -53,6 +53,13 @@
           "id": "fn1_button"
         }
       ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
     }
   },
   "controls": {
@@ -78,7 +85,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "CMD"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -213,13 +221,14 @@
           "label": "C3",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "power_switch": {
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 15,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -274,7 +283,8 @@
           "full_press": null
         }
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "exposure_compensation_button": {
       "name": "Exposure compensation button",
@@ -292,7 +302,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "continuous_shooting_button": {
       "name": "Continuous shooting button",
@@ -310,13 +321,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DRIVE"
     },
     "fn1_button": {
       "name": "Fn1 (Function 1) button",
       "location": "top",
       "manual_page": 52,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -335,7 +347,7 @@
       "location": "top",
       "manual_page": 37,
       "face": null,
-      "icon": null,
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -396,7 +408,8 @@
           "label": "MF",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -420,7 +433,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "zoom_ring": {
       "name": "Zoom ring",
@@ -444,7 +458,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "ZOOM"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -463,13 +478,14 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DIOPTER"
     },
     "evf_lcd_button": {
       "name": "EVF/LCD (display selection) button",
       "location": "rear",
       "manual_page": 4,
-      "face": null,
+      "face": "EVF/LCD",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -488,7 +504,7 @@
       "location": "rear",
       "manual_page": 15,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -505,7 +521,7 @@
       "name": "AE (autoexposure) button",
       "location": "rear",
       "manual_page": 45,
-      "face": null,
+      "face": "AE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -523,7 +539,7 @@
       "name": "AF (autofocus) button",
       "location": "rear",
       "manual_page": 48,
-      "face": null,
+      "face": "AF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -541,7 +557,7 @@
       "name": "ISO (sensitivity) button",
       "location": "rear",
       "manual_page": 49,
-      "face": null,
+      "face": "ISO",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -559,7 +575,7 @@
       "name": "WB (white balance) button",
       "location": "rear",
       "manual_page": 50,
-      "face": null,
+      "face": "WB",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -578,7 +594,7 @@
       "location": "rear",
       "manual_page": 66,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -595,7 +611,7 @@
       "name": "AE/AF LOCK (autofocus lock/autoexposure) button",
       "location": "rear",
       "manual_page": 35,
-      "face": null,
+      "face": "AE-L/AF-L",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -625,13 +641,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "raw_button": {
       "name": "RAW button",
       "location": "rear",
       "manual_page": 56,
-      "face": null,
+      "face": "RAW",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -649,7 +666,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 6,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,

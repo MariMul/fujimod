@@ -180,14 +180,15 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "flash_pop_up_switch": {
       "name": "Flash pop-up switch",
       "location": "rear",
       "manual_page": 42,
       "face": null,
-      "icon": "flash pop-up",
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Slide to raise the flash.",
@@ -201,7 +202,7 @@
       "name": "Fn (Function) button",
       "location": "top",
       "manual_page": 57,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [
         "controls-gpio-4-4"
@@ -280,7 +281,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "main_command_dial": {
       "name": "Main-command dial",
@@ -295,7 +297,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "MAIN"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -465,7 +468,8 @@
           "label": "F (MOVIE)",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "playback_button": {
       "name": "Playback button",
@@ -545,7 +549,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -583,7 +588,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "sub_command_dial": {
       "name": "Sub-command dial",
@@ -598,7 +604,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SUB"
     },
     "white_balance_button": {
       "name": "WB (white balance) button",
@@ -651,7 +658,8 @@
         "endless": false
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "ZOOM"
     }
   }
 }

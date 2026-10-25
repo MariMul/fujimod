@@ -48,7 +48,8 @@
           "full_press": null
         }
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -153,7 +154,8 @@
           "label": "-3",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "aperture_ring": {
       "name": "Aperture Ring",
@@ -218,7 +220,8 @@
           "label": "5",
           "description": null
         }
-      ]
+      ],
+      "short_name": "APERTURE"
     },
     "focus_ring": {
       "name": "Focus Ring",
@@ -242,13 +245,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "on_off_switch": {
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 36,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -312,7 +316,8 @@
           "label": "icon",
           "description": "Slide the flash switch to N to fire the flash during still photography. The video light turns on during movie recording."
         }
-      ]
+      ],
+      "short_name": "FLASH"
     },
     "still_movie_mode_switch": {
       "name": "STILL/MOVIE mode switch",
@@ -352,7 +357,8 @@
           "label": "MOVIE",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "frame_advance_lever": {
       "name": "Frame Advance Lever",
@@ -371,14 +377,15 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "ADVANCE"
     },
     "playback_button": {
       "name": "PLAY (playback) button",
       "location": "rear",
       "manual_page": 76,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -442,7 +449,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

@@ -42,7 +42,7 @@
       "location": "top",
       "manual_page": 46,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -77,13 +77,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "REAR"
     },
     "on_off_button": {
       "name": "ON/OFF button",
       "location": "top",
       "manual_page": 34,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -210,7 +211,8 @@
           "label": "Adv.",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "function_dial": {
       "name": "Fn (function) dial",
@@ -234,14 +236,15 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FN"
     },
     "flash_pop_up_lever": {
       "name": "Flash pop-up lever",
       "location": "top",
       "manual_page": 94,
       "face": null,
-      "icon": null,
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "pushable": false,
@@ -271,7 +274,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -295,7 +299,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -316,7 +321,8 @@
           "full_press": null
         }
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "lcd_touchscreen": {
       "name": "Vari-angle LCD monitor / Touch screen",
@@ -339,7 +345,7 @@
       "name": "Drive button / Delete button (playback mode)",
       "location": "rear",
       "manual_page": 5,
-      "face": null,
+      "face": "DRIVE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -358,7 +364,7 @@
       "location": "rear",
       "manual_page": 42,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -393,13 +399,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DIOPTER"
     },
     "view_mode_button": {
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 13,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -417,7 +424,7 @@
       "name": "Fn1 button",
       "location": "rear",
       "manual_page": 186,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -435,7 +442,7 @@
       "name": "Fn2 button",
       "location": "rear",
       "manual_page": 186,
-      "face": null,
+      "face": "Fn2",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -471,13 +478,14 @@
         },
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 18,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -495,7 +503,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 15,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -526,7 +534,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -545,7 +554,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

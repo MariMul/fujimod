@@ -13,6 +13,8 @@ const ROOTS: &[&str] = &[
     "SocProfile",
     "StabilizerCommand",
     "PhysicalControls",
+    "PhysicalControl",
+    "ControlIcon",
     "BootCombination",
     "BootHold",
 ];

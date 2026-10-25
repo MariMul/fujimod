@@ -65,7 +65,8 @@
           "label": "full press",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SHUTTER"
     },
     "main_command_dial": {
       "name": "Main command dial",
@@ -89,7 +90,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "MAIN"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -234,14 +236,15 @@
           "label": "Adv.",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "flash_pop_up_switch": {
       "name": "Flash pop-up switch",
       "location": "right",
       "manual_page": 94,
       "face": null,
-      "icon": null,
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "pushable": false,
@@ -258,7 +261,7 @@
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 29,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -298,7 +301,7 @@
       "name": "Fn (function) button",
       "location": "top",
       "manual_page": 162,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -328,7 +331,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "touch_screen": {
       "name": "Touch screen",
@@ -351,7 +355,7 @@
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 5,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -370,7 +374,7 @@
       "location": "rear",
       "manual_page": 38,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -405,14 +409,15 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SUB"
     },
     "movie_recording_button": {
       "name": "Movie recording button",
       "location": "rear",
       "manual_page": 42,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -441,13 +446,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "quick_menu_button": {
       "name": "Q (quick menu) button",
       "location": "rear",
       "manual_page": 159,
-      "face": null,
+      "face": "Q",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -465,7 +471,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 125,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -496,7 +502,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -515,7 +522,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

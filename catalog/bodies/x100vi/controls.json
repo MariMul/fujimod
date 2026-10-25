@@ -64,6 +64,13 @@
           "id": "rear_command_dial.press"
         }
       ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
     }
   },
   "controls": {
@@ -215,7 +222,8 @@
           "label": "2",
           "description": null
         }
-      ]
+      ],
+      "short_name": "APERTURE"
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -266,7 +274,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "BLUETOOTH"
     },
     "control_ring": {
       "name": "Control ring",
@@ -298,7 +307,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "RING"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -484,13 +494,14 @@
           "label": "+3",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "fn1_button": {
       "name": "Fn1 button",
       "location": "top",
       "manual_page": 319,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -505,7 +516,7 @@
       "name": "Fn2 button",
       "location": "front",
       "manual_page": 320,
-      "face": null,
+      "face": "Fn2",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -573,7 +584,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -603,7 +615,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "focus_stick": {
       "name": "Focus stick (focus lever)",
@@ -642,7 +655,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -675,7 +689,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT"
     },
     "front_ring": {
       "name": "Front ring (detachable)",
@@ -832,7 +847,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "REAR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -867,7 +883,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_sensitivity_dial": {
       "name": "Shutter speed dial/Sensitivity dial",
@@ -882,7 +899,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SPEED ISO"
     },
     "touchscreen": {
       "name": "Touch screen",
@@ -920,7 +938,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "VIEW"
     }
   }
 }

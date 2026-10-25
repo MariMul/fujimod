@@ -314,6 +314,16 @@
         }
       ]
     },
+    "ControlIcon": {
+      "description": "Printed symbols on a camera control.",
+      "enum": [
+        "playback",
+        "delete",
+        "record",
+        "flash"
+      ],
+      "type": "string"
+    },
     "ControlMotion": {
       "description": "A rotary mechanism's mutually exclusive position or step declarations.",
       "oneOf": [
@@ -571,12 +581,16 @@
           ]
         },
         "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ControlIcon"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null,
-          "description": "Meaning of a printed icon, when present.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Meaning of a printed icon, when present."
         },
         "location": {
           "$ref": "#/$defs/ControlSurface",
@@ -622,6 +636,14 @@
           ],
           "default": null,
           "description": "Physical role required by a declared cross-body operation."
+        },
+        "short_name": {
+          "default": null,
+          "description": "Short uppercase caption for an unmarked control (at most 10 characters).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

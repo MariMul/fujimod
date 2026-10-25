@@ -38,6 +38,13 @@
           "id": "fn_button"
         }
       ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
     }
   },
   "controls": {
@@ -99,7 +106,7 @@
       "location": "rear",
       "manual_page": 27,
       "face": null,
-      "icon": "flash pop-up",
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Raise the built-in flash.",
@@ -113,7 +120,7 @@
       "name": "Fn (function) button",
       "location": "top",
       "manual_page": 64,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [
         "controls-gpio-0-11"
@@ -175,7 +182,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "MAIN"
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -342,14 +350,15 @@
           "label": "C",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "movie_record_button": {
       "name": "Movie recording button",
       "location": "rear",
       "manual_page": 30,
       "face": null,
-      "icon": "movie recording",
+      "icon": "record",
       "connection_ids": [
         "controls-adc-9"
       ],
@@ -495,7 +504,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -533,7 +543,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "sub_command_dial": {
       "name": "Sub-command dial",
@@ -569,7 +580,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SUB"
     }
   }
 }

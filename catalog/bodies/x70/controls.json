@@ -342,7 +342,8 @@
           "label": "16",
           "description": null
         }
-      ]
+      ],
+      "short_name": "APERTURE"
     },
     "auto_mode_selector_lever": {
       "name": "Auto mode selector lever",
@@ -391,7 +392,8 @@
           "label": "AUTO",
           "description": null
         }
-      ]
+      ],
+      "short_name": "AUTO"
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -458,7 +460,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "CMD"
     },
     "control_ring": {
       "name": "Control ring",
@@ -490,7 +493,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "RING"
     },
     "control_ring_options_button": {
       "name": "Control ring options button / Function button (Fn7)",
@@ -513,7 +517,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SIDE"
     },
     "delete_button": {
       "name": "Delete button / Function button (Fn8)",
@@ -856,7 +861,8 @@
           "label": "−3",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -917,7 +923,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "front_ring": {
       "name": "Front ring",
@@ -980,7 +987,8 @@
           "label": "selfie",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SCREEN"
     },
     "menu_ok_button": {
       "name": "MENU/OK button / Control lock button",
@@ -1010,7 +1018,7 @@
       "location": "top",
       "manual_page": 36,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [
         "controls-gpio-0-11"
       ],
@@ -1158,7 +1166,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -1196,7 +1205,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -1431,7 +1441,8 @@
           "label": "B",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     },
     "touchscreen": {
       "name": "LCD monitor (touchscreen)",
@@ -1456,7 +1467,7 @@
       "name": "Wi-Fi button / Function button (Fn6)",
       "location": "rear",
       "manual_page": 48,
-      "face": null,
+      "face": "Wi-Fi",
       "icon": null,
       "connection_ids": [
         "controls-adc-8"

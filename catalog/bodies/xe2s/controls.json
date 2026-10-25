@@ -54,6 +54,13 @@
           "id": "fn7_button"
         }
       ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
     }
   },
   "controls": {
@@ -167,7 +174,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "CMD"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -500,14 +508,15 @@
           "label": "−3",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "flash_pop_up_button": {
       "name": "Flash pop-up button",
       "location": "rear",
       "manual_page": 36,
       "face": null,
-      "icon": "flash pop-up",
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Pops up the built-in flash.",
@@ -629,7 +638,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -797,7 +807,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -835,7 +846,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -1057,7 +1069,8 @@
           "label": "B",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     }
   }
 }
