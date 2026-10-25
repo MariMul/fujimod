@@ -31,7 +31,7 @@ struct Prepared {
     fraction: u32,
     linear: Arc<[[u16; 3]]>,
     response_scale: [f64; 3],
-    image_distance: Option<f64>,
+    illumination: Option<Field>,
     pixels: Arc<Projected>,
 }
 struct BinnedPrepared {
@@ -43,7 +43,7 @@ struct BinnedPrepared {
     coordinates: Arc<Coordinates>,
     linear: Arc<[[u16; 3]]>,
     response_scale: [f64; 3],
-    distance: Option<f64>,
+    illumination: Option<Field>,
     pixels: Arc<Projected>,
 }
 impl Projection {
@@ -157,15 +157,12 @@ impl Projection {
         let fraction = std::array::from_fn(|i| {
             libm::rint((radius[i] - libm::floor(radius[i])) * 65536.).clamp(0., 65535.) as u32
         });
-        let distance = match self.spec.relative_illumination {
-            Illumination::CosineFourth if lens_illuminates(&frame.frame) => {
-                Some(self.spec.focal_length_mm + shift)
-            }
-            _ => None,
-        };
-        if distance.is_some_and(|d| !d.is_finite() || d <= 0.) {
-            return Err("invalid readout image distance".into());
-        }
+        let illumination = Field::new(
+            &self.spec,
+            &frame.frame,
+            shift,
+            [self.spec.sensor_width_mm, sensor_height],
+        )?;
         let mut cache = self
             .readouts
             .lock()
@@ -180,7 +177,7 @@ impl Projection {
         });
         if let Some(i) = found {
             let old = &mut cache[i];
-            if old.response_scale != frame.response_scale || old.distance != distance {
+            if old.response_scale != frame.response_scale || old.illumination != illumination {
                 old.pixels = Arc::new(Projected::new_axes(
                     scene,
                     old.coordinates.clone(),
@@ -189,10 +186,10 @@ impl Projection {
                     &old.linear,
                     frame.response_scale,
                     [self.spec.sensor_width_mm, sensor_height],
-                    distance,
+                    illumination,
                 ));
                 old.response_scale = frame.response_scale;
-                old.distance = distance;
+                old.illumination = illumination;
             }
             frame.filtered = Some(super::exposure::Filtered::BinnedReadout(
                 dimensions,
@@ -227,7 +224,7 @@ impl Projection {
             &linear,
             frame.response_scale,
             [self.spec.sensor_width_mm, sensor_height],
-            distance,
+            illumination,
         ));
         frame.filtered = Some(super::exposure::Filtered::BinnedReadout(
             dimensions,
@@ -250,7 +247,7 @@ impl Projection {
                 coordinates,
                 linear,
                 response_scale: frame.response_scale,
-                distance,
+                illumination,
                 pixels,
             });
         }
@@ -301,16 +298,15 @@ impl Projection {
         if !projects(&frame.frame) {
             return Ok(());
         }
-        let image_distance = match self.spec.relative_illumination {
-            Illumination::CosineFourth if lens_illuminates(&frame.frame) => {
-                let d = self.spec.focal_length_mm + shift;
-                if !d.is_finite() || d <= 0. {
-                    return Err("thin-lens image distance must be finite and positive".into());
-                }
-                Some(d)
-            }
-            _ => None,
-        };
+        let illumination = Field::new(
+            &self.spec,
+            &frame.frame,
+            shift,
+            [
+                self.spec.sensor_width_mm,
+                self.spec.sensor_width_mm * frame.frame.height as f64 / frame.frame.width as f64,
+            ],
+        )?;
         frame.focus_shift_mm = Some(shift);
         frame.filtered = None;
         let diameter = (shift - self.subject_shift).abs() * self.spec.focal_length_mm
@@ -321,7 +317,7 @@ impl Projection {
         let whole = libm::floor(radius);
         let fraction = libm::rint((radius - whole) * 65536.).clamp(0., 65535.) as u32;
         let radius = whole as usize;
-        if radius == 0 && fraction == 0 && image_distance.is_none() {
+        if radius == 0 && fraction == 0 && illumination.is_none() {
             return Ok(());
         }
         let dimensions = [frame.frame.width, frame.frame.height];
@@ -341,7 +337,7 @@ impl Projection {
                 && old.radius == radius
                 && old.fraction == fraction
         }) {
-            if old.response_scale == frame.response_scale && old.image_distance == image_distance {
+            if old.response_scale == frame.response_scale && old.illumination == illumination {
                 frame.filtered = Some(super::exposure::Filtered::projected(old.pixels.clone()));
                 return Ok(());
             }
@@ -368,7 +364,7 @@ impl Projection {
             &linear,
             frame.response_scale,
             self.spec.sensor_width_mm,
-            image_distance,
+            illumination,
         ));
         frame.filtered = Some(super::exposure::Filtered::projected(pixels.clone()));
         if dimensions[0] * dimensions[1] <= CACHE_PIXELS && linear.len() <= CACHE_PIXELS {
@@ -379,7 +375,7 @@ impl Projection {
                 fraction,
                 linear,
                 response_scale: frame.response_scale,
-                image_distance,
+                illumination,
                 pixels,
             });
         } else {
@@ -388,20 +384,91 @@ impl Projection {
         Ok(())
     }
 }
-// Farrell, Catrysse and Wandell, Applied Optics 51 (2012), section 2.B.2:
-// https://web.stanford.edu/~wandell/data/papers/2012-DCS-OSA-Farrell.pdf
-// For the selected ideal lens, cos(theta)^4 = (d^2/(d^2+x^2+y^2))^2.
-fn relative_illumination(x: f64, y: f64, d: f64) -> f64 {
-    let (x, y) = (x / d, y / d);
-    let cos_squared = 1. / (1. + x * x + y * y);
-    cos_squared * cos_squared
+/// The lens's relative illumination over the image plane. Samplers share the
+/// normalized squared axes (x / length)^2 and evaluate the law from them.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct Field {
+    length: f64,
+    law: FieldLaw,
+}
+#[derive(Clone, Copy, PartialEq)]
+enum FieldLaw {
+    CosineFourth,
+    RadialPolynomial { r2: f64, r4: f64 },
+}
+impl Field {
+    /// `sensor` is the image plane's width and height in millimetres.
+    fn new(spec: &Spec, frame: &Frame, shift: f64, sensor: [f64; 2]) -> Result<Option<Self>, String> {
+        if !lens_illuminates(frame) {
+            return Ok(None);
+        }
+        match spec.relative_illumination {
+            Illumination::Uniform => Ok(None),
+            Illumination::CosineFourth => {
+                let d = spec.focal_length_mm + shift;
+                if !d.is_finite() || d <= 0. {
+                    return Err("thin-lens image distance must be finite and positive".into());
+                }
+                Ok(Some(Self::cosine_fourth(d)))
+            }
+            Illumination::RadialPolynomial { r2, r4 } => {
+                let length = 0.5 * libm::hypot(sensor[0], sensor[1]);
+                // rho^2 spans 0..1 over the frame; 1 + r2 s + r4 s^2 must stay
+                // positive there (ends, and the vertex of an upward parabola).
+                let vertex = if r4 > 0. { -r2 / (2. * r4) } else { -1. };
+                let positive = 1. + r2 + r4 > 0.
+                    && (!(0. ..1.).contains(&vertex) || 1. - r2 * r2 / (4. * r4) > 0.);
+                if !r2.is_finite() || !r4.is_finite() || !length.is_finite() || length <= 0. || !positive {
+                    return Err("radial illumination must be finite and positive over the frame".into());
+                }
+                Ok(Some(Self {
+                    length,
+                    law: FieldLaw::RadialPolynomial { r2, r4 },
+                }))
+            }
+        }
+    }
+    // Farrell, Catrysse and Wandell, Applied Optics 51 (2012), section 2.B.2:
+    // https://web.stanford.edu/~wandell/data/papers/2012-DCS-OSA-Farrell.pdf
+    // For the selected ideal lens, cos(theta)^4 = (d^2/(d^2+x^2+y^2))^2.
+    pub(super) fn cosine_fourth(image_distance: f64) -> Self {
+        Self {
+            length: image_distance,
+            law: FieldLaw::CosineFourth,
+        }
+    }
+    #[inline(always)]
+    pub(super) fn axis(&self, v: f64) -> f64 {
+        let v = v / self.length;
+        v * v
+    }
+    #[inline(always)]
+    pub(super) fn at(&self, xx: f64, yy: f64) -> f64 {
+        match self.law {
+            FieldLaw::CosineFourth => cosine_fourth(xx, yy),
+            FieldLaw::RadialPolynomial { r2, r4 } => radial_polynomial(r2, r4, xx, yy),
+        }
+    }
+    pub(super) fn at_point(&self, x: f64, y: f64) -> f64 {
+        self.at(self.axis(x), self.axis(y))
+    }
+}
+#[inline(always)]
+fn cosine_fourth(xx: f64, yy: f64) -> f64 {
+    let v = 1. / (1. + xx + yy);
+    v * v
+}
+#[inline(always)]
+fn radial_polynomial(r2: f64, r4: f64, xx: f64, yy: f64) -> f64 {
+    let s = xx + yy;
+    1. / (1. + r2 * s + r4 * s * s)
 }
 fn encode_response(
     linear: &[[u16; 3]],
     scale: [f64; 3],
     dimensions: [usize; 2],
     sensor_width_mm: f64,
-    image_distance: Option<f64>,
+    illumination: Option<Field>,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
     let [width, height] = dimensions;
@@ -409,11 +476,10 @@ fn encode_response(
     for (i, (pixel, packed)) in linear.iter().zip(pixels.chunks_exact_mut(6)).enumerate() {
         // Sample square pixels at their centers. Both RAW and metering consume
         // this same exposed frame; no statistics-specific brightness correction.
-        let field = image_distance.map_or(1., |d| {
-            relative_illumination(
+        let field = illumination.map_or(1., |f| {
+            f.at_point(
                 (i % width) as f64 * pitch + pitch * 0.5 - sensor_width_mm * 0.5,
                 (i / width) as f64 * pitch + pitch * 0.5 - height as f64 * pitch * 0.5,
-                d,
             )
         });
         for c in 0..3 {
@@ -430,17 +496,16 @@ fn encode_response_rect(
     scale: [f64; 3],
     dimensions: [usize; 2],
     sensor: [f64; 2],
-    distance: Option<f64>,
+    illumination: Option<Field>,
 ) -> Arc<[u8]> {
     let mut pixels = vec![0; linear.len() * 6];
     for (i, (pixel, out)) in linear.iter().zip(pixels.chunks_exact_mut(6)).enumerate() {
-        let field = distance.map_or(1., |d| {
-            relative_illumination(
+        let field = illumination.map_or(1., |f| {
+            f.at_point(
                 ((i % dimensions[0]) as f64 + 0.5) * sensor[0] / dimensions[0] as f64
                     - sensor[0] * 0.5,
                 ((i / dimensions[0]) as f64 + 0.5) * sensor[1] / dimensions[1] as f64
                     - sensor[1] * 0.5,
-                d,
             )
         });
         for c in 0..3 {
@@ -458,7 +523,7 @@ fn encode_response_coordinates(
     scale: [f64; 3],
     dimensions: [usize; 2],
     sensor: [f64; 2],
-    distance: Option<f64>,
+    illumination: Option<Field>,
     coordinates: &Coordinates,
 ) -> Arc<[u8]> {
     let mut pixels: Arc<[u8]> = std::iter::repeat_n(0, linear.len() * 6).collect();
@@ -470,10 +535,7 @@ fn encode_response_coordinates(
     // their original operation order while sharing them across the readout.
     let axis = |at: usize, length: usize, size: f64| {
         let v = ((at as f64 + 0.5) / length as f64 - 0.5) * size;
-        distance.map_or(0., |d| {
-            let v = v / d;
-            v * v
-        })
+        illumination.map_or(0., |f| f.axis(v))
     };
     let xs: Vec<_> = coordinates
         .xs
@@ -490,17 +552,14 @@ fn encode_response_coordinates(
                 .chunks_exact_mut(width * 6),
         )
         .map(|((&y, linear), out)| (axis(y, dimensions[1], sensor[1]), linear, out));
-    if distance.is_some() {
-        encode_rows(rows, &xs, scale, field);
-    } else {
-        encode_rows(rows, &xs, scale, |_, _| 1.);
+    match illumination.map(|f| f.law) {
+        Some(FieldLaw::CosineFourth) => encode_rows(rows, &xs, scale, cosine_fourth),
+        Some(FieldLaw::RadialPolynomial { r2, r4 }) => {
+            encode_rows(rows, &xs, scale, move |xx, yy| radial_polynomial(r2, r4, xx, yy))
+        }
+        None => encode_rows(rows, &xs, scale, |_, _| 1.),
     }
     pixels
-}
-#[inline(always)]
-fn field(xx: f64, yy: f64) -> f64 {
-    let v = 1. / (1. + xx + yy);
-    v * v
 }
 #[inline(always)]
 fn encode_rows<'a>(
@@ -608,9 +667,9 @@ mod tests {
             let linear: Vec<[u16; 3]> = (0..coordinates.xs.len() * coordinates.ys.len())
                 .map(|i| [(i * 811) as u16, (i * 1301) as u16, (i * 2113) as u16])
                 .collect();
-            for (sensor, distance) in [
-                ([23.6, 15.6], Some(18.5)),
-                ([1e200, 1e200], Some(1e-200)),
+            for (sensor, illumination) in [
+                ([23.6, 15.6], Some(Field::cosine_fourth(18.5))),
+                ([1e200, 1e200], Some(Field::cosine_fourth(1e-200))),
                 ([1., 3.], None),
             ] {
                 for scale in [[0.; 3], [1e-100, 19371.5, 1e300], [65535.5, 16383.5, 0.5]] {
@@ -619,7 +678,7 @@ mod tests {
                         for (col, &x) in coordinates.xs.iter().enumerate() {
                             let yy = ((y as f64 + 0.5) / dims[1] as f64 - 0.5) * sensor[1];
                             let xx = ((x as f64 + 0.5) / dims[0] as f64 - 0.5) * sensor[0];
-                            let field = distance.map_or(1., |d| relative_illumination(xx, yy, d));
+                            let field = illumination.map_or(1., |f| f.at_point(xx, yy));
                             for c in 0..3 {
                                 let value = libm::rint(
                                     f64::from(linear[row * coordinates.xs.len() + col][c])
@@ -639,7 +698,7 @@ mod tests {
                             scale,
                             dims,
                             sensor,
-                            distance,
+                            illumination,
                             &coordinates
                         ),
                         expected
@@ -732,13 +791,13 @@ mod tests {
     }
     #[test]
     fn thin_lens_field_illumination_matches_geometry_before_adc_clipping() {
-        assert_eq!(relative_illumination(0., 0., 18.5), 1.);
-        assert_eq!(relative_illumination(18.5, 0., 18.5), 0.25);
-        assert_eq!(relative_illumination(1e200, 0., 1e200), 0.25);
-        assert_eq!(relative_illumination(1e-200, 0., 1e-200), 0.25);
-        assert!((relative_illumination(18.5, 18.5, 18.5) - 1. / 9.).abs() < 1e-15);
+        assert_eq!(Field::cosine_fourth(18.5).at_point(0., 0.), 1.);
+        assert_eq!(Field::cosine_fourth(18.5).at_point(18.5, 0.), 0.25);
+        assert_eq!(Field::cosine_fourth(1e200).at_point(1e200, 0.), 0.25);
+        assert_eq!(Field::cosine_fourth(1e-200).at_point(1e-200, 0.), 0.25);
+        assert!((Field::cosine_fourth(18.5).at_point(18.5, 18.5) - 1. / 9.).abs() < 1e-15);
         let values = vec![[65535; 3]; 25];
-        let pixels = encode_response(&values, [20000.; 3], [5, 5], 10., Some(2.));
+        let pixels = encode_response(&values, [20000.; 3], [5, 5], 10., Some(Field::cosine_fourth(2.)));
         let sample = |x: usize, y: usize| {
             u16::from_le_bytes(
                 pixels[(y * 5 + x) * 6..(y * 5 + x) * 6 + 2]
@@ -784,6 +843,21 @@ mod tests {
             p.prepare(&mut base.clone(), -p.spec.focal_length_mm)
                 .is_err()
         );
+    }
+    #[test]
+    fn radial_polynomial_follows_the_half_diagonal_and_refuses_nonpositive_fields() {
+        let mut spec = projection().spec.clone();
+        spec.relative_illumination = Illumination::RadialPolynomial { r2: 0.57, r4: 0.378 };
+        let rgb = Frame::new(64, 8, FramePixels::Rgb24(vec![128; 64 * 8 * 3].into())).unwrap();
+        let field = Field::new(&spec, &rgb, 0., [3., 4.]).unwrap().unwrap();
+        assert_eq!(field.at_point(0., 0.), 1.);
+        // The corner of a 3 x 4 mm image plane is one half-diagonal (2.5 mm) out.
+        assert!((field.at_point(1.5, 2.) - 1. / (1. + 0.57 + 0.378)).abs() < 1e-15);
+        assert!((field.at_point(1.25, 0.) - 1. / (1. + 0.57 / 4. + 0.378 / 16.)).abs() < 1e-15);
+        for (r2, r4) in [(-1., 0.), (-3., 2.), (f64::NAN, 0.)] {
+            spec.relative_illumination = Illumination::RadialPolynomial { r2, r4 };
+            assert!(Field::new(&spec, &rgb, 0., [3., 4.]).is_err(), "{r2} {r4}");
+        }
     }
     #[test]
     fn raw_mosaic_scenes_keep_their_recorded_lens_shading() {

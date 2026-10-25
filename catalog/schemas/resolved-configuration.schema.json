@@ -12065,8 +12065,8 @@
           "type": "string"
         },
         "relative_illumination": {
-          "description": "Declared relative illumination.",
-          "type": "string"
+          "$ref": "#/$defs/SensorIllumination",
+          "description": "Declared relative illumination."
         },
         "sensor_width_mm": {
           "description": "Declared sensor width mm.",
@@ -21926,6 +21926,35 @@
           "const": "cosine-fourth",
           "description": "Cosine-fourth falloff across the image.",
           "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Measured radial falloff, 1 / (1 + r2 rho^2 + r4 rho^4), with rho the\nimage-plane radius over the sensor half-diagonal.",
+          "properties": {
+            "radial-polynomial": {
+              "properties": {
+                "r2": {
+                  "description": "Coefficient of rho^2.",
+                  "format": "double",
+                  "type": "number"
+                },
+                "r4": {
+                  "description": "Coefficient of rho^4.",
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "r2",
+                "r4"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "radial-polynomial"
+          ],
+          "type": "object"
         }
       ]
     },

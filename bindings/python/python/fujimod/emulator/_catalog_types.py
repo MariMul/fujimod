@@ -2513,7 +2513,7 @@ class HardwarePrimaryControlBus(TypedDict, total=False):
 class HardwareProjection(TypedDict, total=False):
     focal_length_mm: Required[int]
     focus: Required[str]
-    relative_illumination: Required[str]
+    relative_illumination: Required[SensorIllumination]
     sensor_width_mm: Required[int]
     subject_distance_mm: Required[int]
 
@@ -4702,7 +4702,23 @@ class SensorControlInterface(TypedDict, total=False):
     register_address_bits: Required[int]
 
 
-type SensorIllumination = Literal["uniform", "cosine-fourth"]
+type SensorIllumination = (
+    Literal["uniform"] | Literal["cosine-fourth"] | SensorIlluminationVariant0
+)
+
+
+SensorIlluminationVariant0 = TypedDict(
+    "SensorIlluminationVariant0",
+    {
+        "radial-polynomial": Required["SensorIlluminationVariant1"],
+    },
+    total=False,
+)
+
+
+class SensorIlluminationVariant1(TypedDict, total=False):
+    r2: Required[int]
+    r4: Required[int]
 
 
 class SensorProjection(TypedDict, total=False):

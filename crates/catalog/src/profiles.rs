@@ -477,7 +477,7 @@ pub struct Projection {
     /// Declared focus.
     pub focus: String,
     /// Declared relative illumination.
-    pub relative_illumination: String,
+    pub relative_illumination: crate::reference::SensorIllumination,
     /// Declared sensor width mm.
     pub sensor_width_mm: f64,
     /// Declared subject distance mm.

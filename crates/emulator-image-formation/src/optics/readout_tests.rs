@@ -90,16 +90,17 @@ fn scalar(p: &Projection, frame: &ExposedFrame, shift: f64) -> Arc<[u8]> {
     };
     let horizontal = pass(&source, true);
     let result = pass(&horizontal, false);
-    let distance = match p.spec.relative_illumination {
+    let illumination = match p.spec.relative_illumination {
         Illumination::Uniform => None,
-        Illumination::CosineFourth => Some(p.spec.focal_length_mm + shift),
+        Illumination::CosineFourth => Some(Field::cosine_fourth(p.spec.focal_length_mm + shift)),
+        Illumination::RadialPolynomial { .. } => unreachable!("reference covers the thin-lens laws"),
     };
     encode_response(
         &result,
         frame.response_scale,
         [w, h],
         p.spec.sensor_width_mm,
-        distance,
+        illumination,
     )
 }
 #[test]
@@ -272,7 +273,7 @@ fn vectorizable_response_rounding_matches_canonical_full_precision() {
         .map(|v| [v, v.rotate_left(7), u16::MAX - v])
         .collect();
     for scale in [0., f64::MIN_POSITIVE, 0.5, 32767.5, 65535., 1e9, f64::MAX] {
-        for distance in [None, Some(18.5)] {
+        for illumination in [None, Some(Field::cosine_fourth(18.5))] {
             let scale = [scale; 3];
             let projected = Projected::new(
                 scene.clone(),
@@ -282,11 +283,11 @@ fn vectorizable_response_rounding_matches_canonical_full_precision() {
                 &linear,
                 scale,
                 23.6,
-                distance,
+                illumination,
             );
             assert_eq!(
                 projected.materialize(),
-                encode_response(&linear, scale, dimensions, 23.6, distance)
+                encode_response(&linear, scale, dimensions, 23.6, illumination)
             );
         }
     }

@@ -167,7 +167,12 @@
         "focal_length_mm": 18.5,
         "subject_distance_mm": 2000.0,
         "sensor_width_mm": 23.6,
-        "relative_illumination": "cosine-fourth"
+        "relative_illumination": {
+          "radial-polynomial": {
+            "r2": 0.651,
+            "r4": 0.492
+          }
+        }
       }
     }
   }

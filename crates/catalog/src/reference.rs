@@ -1140,7 +1140,7 @@ pub struct SensorProjection {
 }
 
 /// Image-circle illumination model of a sensor projection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
@@ -1153,6 +1153,14 @@ pub enum SensorIllumination {
     Uniform,
     /// Cosine-fourth falloff across the image.
     CosineFourth,
+    /// Measured radial falloff, 1 / (1 + r2 rho^2 + r4 rho^4), with rho the
+    /// image-plane radius over the sensor half-diagonal.
+    RadialPolynomial {
+        /// Coefficient of rho^2.
+        r2: f64,
+        /// Coefficient of rho^4.
+        r4: f64,
+    },
 }
 
 /// A sensor's physical control-bus connection.

@@ -124,7 +124,7 @@ pub(crate) struct Projected {
     sensor_height: Option<f64>,
     scale: [f64; 3],
     sensor_width: f64,
-    distance: Option<f64>,
+    illumination: Option<super::Field>,
     pixels: Arc<[u8]>,
 }
 impl Projected {
@@ -136,7 +136,7 @@ impl Projected {
         linear: &[[u16; 3]],
         scale: [f64; 3],
         sensor_width: f64,
-        distance: Option<f64>,
+        illumination: Option<super::Field>,
     ) -> Self {
         let mut pixels = vec![0; linear.len() * 6];
         let [width, height] = scene.dimensions;
@@ -148,25 +148,14 @@ impl Projected {
             .iter()
             .map(|&x| {
                 let x = x as f64 * pitch + pitch * 0.5 - sensor_width * 0.5;
-                distance.map_or(0., |d| {
-                    let x = x / d;
-                    x * x
-                })
+                illumination.map_or(0., |f| f.axis(x))
             })
             .collect();
         for (row, &y) in coordinates.ys.iter().enumerate() {
             let y = y as f64 * pitch + pitch * 0.5 - height as f64 * pitch * 0.5;
-            let yy = distance.map_or(0., |d| {
-                let y = y / d;
-                y * y
-            });
+            let yy = illumination.map_or(0., |f| f.axis(y));
             for (column, &xx) in xs.iter().enumerate() {
-                let field = if distance.is_some() {
-                    let v = 1. / (1. + xx + yy);
-                    v * v
-                } else {
-                    1.
-                };
+                let field = illumination.map_or(1., |f| f.at(xx, yy));
                 let i = row * coordinates.xs.len() + column;
                 for c in 0..3 {
                     let value = (f64::from(linear[i][c]) * scale[c] / 65535. * field)
@@ -184,7 +173,7 @@ impl Projected {
             sensor_height: None,
             scale,
             sensor_width,
-            distance,
+            illumination,
             pixels: pixels.into(),
         }
     }
@@ -196,14 +185,14 @@ impl Projected {
         linear: &[[u16; 3]],
         scale: [f64; 3],
         sensor: [f64; 2],
-        distance: Option<f64>,
+        illumination: Option<super::Field>,
     ) -> Self {
         let pixels = super::encode_response_coordinates(
             linear,
             scale,
             scene.dimensions,
             sensor,
-            distance,
+            illumination,
             &coordinates,
         );
         Self {
@@ -214,7 +203,7 @@ impl Projected {
             scale,
             sensor_width: sensor[0],
             sensor_height: Some(sensor[1]),
-            distance,
+            illumination,
             pixels,
         }
     }
@@ -322,8 +311,8 @@ impl Projected {
         };
         let linear: [u16; 3] = std::array::from_fn(|c| blend(inner[c], self.fraction[1], outer[c]));
         let pitch = self.sensor_width / self.scene.dimensions[0] as f64;
-        let field = self.distance.map_or(1., |d| {
-            super::relative_illumination(
+        let field = self.illumination.map_or(1., |f| {
+            f.at_point(
                 self.sensor_height.map_or(
                     x as f64 * pitch + pitch * 0.5 - self.sensor_width * 0.5,
                     |_| {
@@ -335,7 +324,6 @@ impl Projected {
                     y as f64 * pitch + pitch * 0.5 - height as f64 * pitch * 0.5,
                     |h| ((y as f64 + 0.5) / height as f64 - 0.5) * h,
                 ),
-                d,
             )
         });
         std::array::from_fn(|c| {
@@ -355,7 +343,7 @@ impl Projected {
                 self.scale,
                 self.scene.dimensions,
                 [self.sensor_width, height],
-                self.distance,
+                self.illumination,
                 &all,
             );
         }
@@ -365,7 +353,7 @@ impl Projected {
             self.scale,
             self.scene.dimensions,
             self.sensor_width,
-            self.distance,
+            self.illumination,
         )
     }
 }
