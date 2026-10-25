@@ -101,3 +101,29 @@ then reinsert the battery before normal startup. The workflow issues no shutdown
 reset or cleanup command and leaves the volatile read gate for battery removal
 to discard. A protocol error retains the USB core's completion fence; no transfer
 or write is retried. Live use requires caller authorization and qualified facts.
+
+## Service preparation and captures
+
+`service_mode::prepare_service_session` performs the reset-guard checks and
+leaves debug access enabled in configuration RAM until restart. It reports both
+original flags and never stores a setting. `arm_reset_guard` retains its existing
+behavior of leaving debug access disabled after success.
+
+`state::dump` reads the selected catalog state regions through the qualified
+bulk reader. Constant regions must agree across two reads; all-zero and all-FF
+constants are omitted as masked. Each delivered region carries a SHA-256.
+
+`flash::backup` uses the catalog flash contract and a separately built
+flash-reader payload. The supported transport is `xp5-cmd-callback`. It verifies
+the stock reader and transport instructions, translation state, driver state,
+payload upload, request/result ABI and update-backed control before delivering
+backup chunks. Camera-only chunks are delivered first; the returned SHA-256
+covers flash-offset order. Cleanup verifies ownership and restores the callback,
+executable reservation, source, scratch and original debug gate. Unknown
+completion sends no further commands. A sink error stops capture and runs the
+same cleanup.
+
+JavaScript exposes `Session.prepareServiceSession`, `backupFlash` and
+`dumpState`; each holds the session lease for the complete workflow, including
+chunk callbacks and cleanup. `flash_reader_plan` validates a built artifact
+against the bundled catalog without opening USB.

@@ -157,6 +157,12 @@ class CameraDevice implements ModelDevice {
       abandon: () => this.update({ fenced: true }),
       deviceInfo: async () => ({ text: 'Identity', raw: new Uint8Array(), free() {} }),
       configurationGeometry: async () => ({ capacity: 16, pageBytes: 4, free() {} }),
+      backupFlash: async () => ({
+        device: { kind: 'serial-nand', part: 'Fixture' },
+        size: 4,
+        sha256: 'a'.repeat(64),
+      }),
+      dumpState: async () => {},
       readBulk: async () => ({ data: Uint8Array.of(1, 2, 3, 4), overwritten: null }),
       readConfiguration: async (...args) => {
         this.configurationReads(...args);
@@ -1056,5 +1062,83 @@ test('builds without a simulation service omit connectSimulated', () => {
     expect(typeof f.model.connectSimulated).toBe('undefined');
   } finally {
     f.model.dispose();
+  }
+});
+
+test('service preparation, flash chunks and state regions use the owned workflow methods', async () => {
+  vi.stubGlobal('document', { baseURI: 'https://example.com/' });
+  const device = new CameraDevice('workflows');
+  const acquire = device.acquireSession.bind(device);
+  const prepare = vi.fn<ModelSession['prepareServiceSession']>(async () => ({
+    guardBefore: 0,
+    debugBefore: 1,
+    progress: ['prepared'],
+  }));
+  const backup = vi.fn<ModelSession['backupFlash']>(async (_id, _metadata, _image, sink) => {
+    sink({ offset: 4, data: Uint8Array.of(5, 6) });
+    return { device: { kind: 'serial-nand', part: 'Fixture' }, size: 2, sha256: 'b'.repeat(64) };
+  });
+  const dump = vi.fn<ModelSession['dumpState']>(async (_id, sink) => {
+    sink({
+      name: 'dram',
+      address: 4096,
+      size: 2,
+      constant: false,
+      sha256: 'c'.repeat(64),
+      data: Uint8Array.of(7, 8),
+    });
+  });
+  vi.spyOn(device, 'acquireSession').mockImplementation(async (...args) => ({
+    ...(await acquire(...args)),
+    prepareServiceSession: prepare,
+    backupFlash: backup,
+    dumpState: dump,
+  }));
+  const firmware = {
+    id: 'sample-1',
+    body: 'sample',
+    model: 'Sample',
+    version: '1',
+    sha256: 'a'.repeat(64),
+    bytes: 4,
+    download_url: 'https://example.com/update.dat',
+    release_date: '',
+    camera_table: 'runtime/sample-1/camera.json',
+    flash_reader: 'runtime/sample-1/flash-reader.json',
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: URL | string) => {
+      const path = String(input);
+      if (path.endsWith('camera.json')) return new Response('{}');
+      if (path.endsWith('flash-reader.json'))
+        return Response.json({ payload: { schema: 1 }, image: 'flash-reader.bin' });
+      if (path.endsWith('flash-reader.bin')) return new Response(Uint8Array.of(1, 2, 3));
+      return Response.json({ schema: 1, firmwares: [firmware] });
+    }),
+  );
+  const f = fixture([device]);
+  try {
+    await idle(f.model);
+    const chunk = vi.fn(),
+      region = vi.fn();
+    await f.model.withSession(device.id, 'workflows', async (session) => {
+      expect(await session.prepareServiceSession('sample-1')).toEqual({
+        guardBefore: 0,
+        debugBefore: 1,
+        progress: ['prepared'],
+      });
+      expect((await session.backupFlash('sample-1', chunk)).sha256).toBe('b'.repeat(64));
+      await session.dumpState('sample-1', region);
+    });
+    expect(prepare).toHaveBeenCalledExactlyOnceWith('{}', 'sample-1', 'a'.repeat(64));
+    expect(backup).toHaveBeenCalledWith('sample-1', '{"schema":1}', Uint8Array.of(1, 2, 3), chunk);
+    expect(chunk).toHaveBeenCalledExactlyOnceWith({ offset: 4, data: Uint8Array.of(5, 6) });
+    expect(region).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'dram', data: Uint8Array.of(7, 8) }),
+    );
+  } finally {
+    f.model.dispose();
+    vi.unstubAllGlobals();
   }
 });

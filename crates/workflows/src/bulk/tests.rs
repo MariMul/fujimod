@@ -51,7 +51,7 @@ fn facts(source: BulkSource) -> FirmwareBulk {
     facts.validate().unwrap();
     facts
 }
-fn query_camera() -> FirmwareBulk {
+pub(crate) fn query_camera() -> FirmwareBulk {
     facts(BulkSource::Query {
         tag: 0x80,
         callback_table: 0x1100,
@@ -63,7 +63,7 @@ fn query_camera() -> FirmwareBulk {
         wrapping: true,
     })
 }
-fn zero_base_camera() -> FirmwareBulk {
+pub(crate) fn zero_base_camera() -> FirmwareBulk {
     facts(BulkSource::PatternZeroBase {
         registered_buffer: 0x1300,
         source_state: 0x1400,
@@ -161,7 +161,7 @@ pub(crate) fn write(at: u32, bytes: &[u8]) -> Vec<E> {
     let reply = request[..36].to_vec();
     exchange(request, reply)
 }
-fn diagnostic(opcode: u32, argument: u32, capacity: u32) -> Vec<E> {
+pub(crate) fn diagnostic(opcode: u32, argument: u32, capacity: u32) -> Vec<E> {
     let mut request = vec![0; 32];
     request[..4].copy_from_slice(&opcode.to_le_bytes());
     request[16..20].copy_from_slice(&argument.to_le_bytes());
@@ -169,7 +169,7 @@ fn diagnostic(opcode: u32, argument: u32, capacity: u32) -> Vec<E> {
     reply[20..24].copy_from_slice(&capacity.to_le_bytes());
     exchange(request, reply)
 }
-fn data(offset: u32, bytes: &[u8]) -> Vec<E> {
+pub(crate) fn data(offset: u32, bytes: &[u8]) -> Vec<E> {
     vec![
         E::Control(envelope(
             RequestKind::ReadData,
@@ -183,10 +183,10 @@ fn data(offset: u32, bytes: &[u8]) -> Vec<E> {
         },
     ]
 }
-fn words(values: &[u32]) -> Vec<u8> {
+pub(crate) fn words(values: &[u32]) -> Vec<u8> {
     values.iter().flat_map(|v| v.to_le_bytes()).collect()
 }
-fn qualified() -> Vec<E> {
+pub(crate) fn qualified() -> Vec<E> {
     let mut steps = info(4, "X-M5");
     steps.extend(info(8, "2.06"));
     steps.extend(read(0x1000, CODE));

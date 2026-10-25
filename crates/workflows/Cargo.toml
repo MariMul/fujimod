@@ -11,15 +11,17 @@ description = "Camera workflows composed from fujimod-usb operations: service mo
 doctest = false
 
 [features]
-service-capture = ["dep:serde", "dep:serde_json"]
+service-capture = []
 
 [dependencies]
+fujimod-catalog.workspace = true
+sha2.workspace = true
 fujimod-catalog-camera.workspace = true
 fujimod-catalog-bulk.workspace = true
 fujimod-usb.workspace = true
 thiserror.workspace = true
-serde = { workspace = true, features = ["derive"], optional = true }
-serde_json = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 fujimod-workspace-hack.workspace = true
 
 [[example]]
@@ -27,5 +29,6 @@ name = "service_capture_plan"
 required-features = ["service-capture"]
 
 [dev-dependencies]
+nusb.workspace = true
 fujimod-catalog-firmware-identity.workspace = true
 futures-lite.workspace = true

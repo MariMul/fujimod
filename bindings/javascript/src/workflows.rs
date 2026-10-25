@@ -235,3 +235,172 @@ export interface DebugModeResult {
     progress: string[];
 }
 "#;
+
+pub(crate) struct StateDump {
+    bulk: fujimod_catalog_bulk::FirmwareBulk,
+    state: fujimod_catalog::capture::FirmwareState,
+    limits: Limits,
+    sink: js_sys::Function,
+}
+pub(crate) struct FlashBackup {
+    bulk: fujimod_catalog_bulk::FirmwareBulk,
+    flash: fujimod_catalog::capture::FirmwareFlash,
+    payload: fujimod_workflows::flash::Payload,
+    image: Vec<u8>,
+    limits: Limits,
+    sink: js_sys::Function,
+}
+#[wasm_bindgen]
+impl Session {
+    #[wasm_bindgen(js_name=dumpState, unchecked_return_type="Promise<void>")]
+    pub fn dump_state(
+        &self,
+        firmware_id: &str,
+        #[wasm_bindgen(unchecked_param_type = "(region: CapturedStateRegion) => void")]
+        sink: js_sys::Function,
+    ) -> Result<js_sys::Promise, JsValue> {
+        let selection = crate::reference::resolve(firmware_id)?;
+        let bulk = selection
+            .bulk
+            .ok_or_else(|| workflow_error("Firmware has no located bulk reader"))?;
+        let state = selection
+            .state
+            .ok_or_else(|| workflow_error("Firmware has no located state regions"))?;
+        self.call(Operation::StateDump(StateDump {
+            bulk,
+            state,
+            sink,
+            limits: Limits {
+                memory: self.limits.memory,
+                configuration: self.limits.configuration,
+            },
+        }))
+    }
+    #[wasm_bindgen(js_name=backupFlash, unchecked_return_type="Promise<FlashBackupResult>")]
+    pub fn backup_flash(
+        &self,
+        firmware_id: &str,
+        payload_table: &str,
+        image: Vec<u8>,
+        #[wasm_bindgen(
+            unchecked_param_type = "(piece: { offset: number; data: Uint8Array }) => void"
+        )]
+        sink: js_sys::Function,
+    ) -> Result<js_sys::Promise, JsValue> {
+        let selection = crate::reference::resolve(firmware_id)?;
+        let bulk = selection
+            .bulk
+            .ok_or_else(|| workflow_error("Firmware has no located bulk reader"))?;
+        let flash = selection
+            .flash
+            .ok_or_else(|| workflow_error("Firmware has no located flash reader"))?;
+        let payload: fujimod_workflows::flash::Payload =
+            serde_json::from_str(payload_table).map_err(workflow_error)?;
+        if selection
+            .firmware
+            .update
+            .as_ref()
+            .is_none_or(|update| payload.firmware_sha256 != update.sha256)
+        {
+            return Err(workflow_error("Flash payload firmware hash differs"));
+        }
+        payload
+            .validate(&flash, &bulk, &image)
+            .map_err(workflow_error)?;
+        self.call(Operation::FlashBackup(FlashBackup {
+            bulk,
+            flash,
+            payload,
+            image,
+            sink,
+            limits: Limits {
+                memory: self.limits.memory,
+                configuration: self.limits.configuration,
+            },
+        }))
+    }
+}
+fn sink_error(error: JsValue) -> String {
+    error
+        .as_string()
+        .unwrap_or_else(|| format!("Download callback failed: {error:?}"))
+}
+impl StateDump {
+    pub(crate) async fn run(self, session: &mut usb::ff80::Session) -> Result<JsValue, JsValue> {
+        fujimod_workflows::state::dump(
+            session,
+            &self.bulk,
+            &self.state,
+            self.limits,
+            &mut |captured| {
+                let result = js_sys::Object::new();
+                property(&result, "name", captured.region.name);
+                property(&result, "address", captured.region.address as f64);
+                property(&result, "size", captured.region.size as f64);
+                property(&result, "constant", captured.region.constant);
+                property(&result, "sha256", captured.sha256);
+                property(&result, "data", crate::error::bytes(captured.data));
+                self.sink
+                    .call1(&JsValue::UNDEFINED, &result)
+                    .map(|_| ())
+                    .map_err(sink_error)
+            },
+        )
+        .await
+        .map_err(capture_error)?;
+        Ok(JsValue::UNDEFINED)
+    }
+}
+impl FlashBackup {
+    pub(crate) async fn run(self, session: &mut usb::ff80::Session) -> Result<JsValue, JsValue> {
+        let backup = fujimod_workflows::flash::backup(
+            session,
+            &self.bulk,
+            &self.flash,
+            &self.payload,
+            &self.image,
+            self.limits,
+            &mut |offset, data| {
+                let piece = js_sys::Object::new();
+                property(&piece, "offset", offset as f64);
+                property(&piece, "data", crate::error::bytes(data));
+                self.sink
+                    .call1(&JsValue::UNDEFINED, &piece)
+                    .map(|_| ())
+                    .map_err(sink_error)
+            },
+        )
+        .await
+        .map_err(capture_error)?;
+        let result = js_sys::Object::new();
+        let device = js_sys::Object::new();
+        property(&device, "kind", backup.device.kind);
+        property(&device, "part", backup.device.part);
+        property(&result, "device", device);
+        property(&result, "size", backup.size as f64);
+        property(&result, "sha256", backup.sha256);
+        Ok(result.into())
+    }
+}
+fn capture_error(source: bulk::BulkError) -> JsValue {
+    match source {
+        bulk::BulkError::Usb(source) => error(source),
+        other => workflow_error(other),
+    }
+}
+#[wasm_bindgen(typescript_custom_section)]
+const CAPTURE_TYPES: &str = r#"
+export interface CapturedStateRegion {
+    name: string;
+    address: number;
+    size: number;
+    constant: boolean;
+    sha256: string;
+    data: Uint8Array;
+}
+export interface FlashBackupResult {
+    device: { kind: string; part: string };
+    size: number;
+    sha256: string;
+}
+"#;

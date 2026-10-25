@@ -17,7 +17,7 @@ import type {
   SessionHolder,
   ToolSession,
 } from './camera-model';
-import { cameraDefinition } from './camera-definition';
+import { cameraDefinition, flashReader } from './camera-definition';
 import { Direction, Layer, Level, hex as dumpBytes } from './log';
 import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
 
@@ -39,6 +39,8 @@ export interface ModelSession extends Pick<
   | 'abandon'
   | 'state'
   | 'readBulk'
+  | 'backupFlash'
+  | 'dumpState'
   | 'readConfiguration'
   | 'submitConsole'
   | 'prepareServiceSession'
@@ -224,13 +226,12 @@ function toolSession(session: ModelSession, pause: UsbCameraServices['pause']): 
     },
     prepareServiceSession: async (firmwareId) =>
       session.prepareServiceSession(...(await cameraDefinition(firmwareId))),
-    backupFlash: () => unbuilt('Flash backup'),
-    dumpState: () => unbuilt('Camera state dump'),
+    backupFlash: async (firmwareId, chunk) => {
+      const [metadata, image] = await flashReader(firmwareId);
+      return session.backupFlash(firmwareId, metadata, image, chunk);
+    },
+    dumpState: (firmwareId, region) => session.dumpState(firmwareId, region),
   };
-}
-
-function unbuilt(operation: string): Promise<never> {
-  return Promise.reject(Error(`${operation} is not built yet.`));
 }
 
 const runtimes = new WeakMap<CameraModel, DevShareOptions & { stop?: () => void }>();

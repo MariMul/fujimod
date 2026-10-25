@@ -2600,14 +2600,17 @@ dependencies = [
 name = "fujimod-workflows"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog",
  "fujimod-catalog-bulk",
  "fujimod-catalog-camera",
  "fujimod-catalog-firmware-identity",
  "fujimod-usb",
  "fujimod-workspace-hack",
  "futures-lite",
+ "nusb",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
 ]
 

@@ -2,9 +2,9 @@
 //!
 //! Camera-validated on X70 1.10. The guard byte is set in configuration RAM so
 //! the stock teardown does not restore defaults on shutdown. It is never
-//! cleared here, including after a failure. Temporary debug access (`f7`) is
-//! restored on every exit path: to 0 after success, to its original value after
-//! a failed check.
+//! cleared here, including after a failure. Arming alone restores debug access
+//! to 0; preparing a service session leaves it at 1. A failed check restores
+//! the original debug value when completion is known.
 use crate::{
     Limits,
     access::{Access, range},

@@ -41,7 +41,7 @@ fn address(value: u64) -> Result<u32> {
     u32::try_from(value)
         .map_err(|_| BulkError::Check(format!("{value:#x} is beyond 32-bit E1 addressing")))
 }
-fn memory_range(target: BulkRange) -> Result<MemoryRange> {
+pub(crate) fn memory_range(target: BulkRange) -> Result<MemoryRange> {
     let size =
         u32::try_from(target.size).map_err(|_| BulkError::Check("Range too large".into()))?;
     Ok(range(address(target.address)?, size)?)
@@ -75,25 +75,16 @@ pub async fn read(
         "Range is outside the bulk window",
     )?;
     memory_range(target)?;
-    check_identity(session, bulk).await?;
-    let mut access = Access { session, limits };
-    for check in &bulk.code_checks {
-        let bytes = access
-            .raw(check.address | bulk.code_alias, check.size)
-            .await?;
-        require(
-            hex(&checks::sha256_bytes(&bytes)) == check.sha256,
-            &format!("Stock code differs: {}", check.name),
-        )?;
-    }
-    let source = Source::prepare(&mut access, bulk).await?;
-    let outcome = source.read(&mut access, bulk, target).await;
-    let restored = source.restore(&mut access).await;
+    let mut qualified = Qualified::prepare(session, bulk, limits).await?;
+    let outcome = qualified.read(target).await;
+    let overwritten = qualified.source.overwritten;
+    let restored = qualified.restore().await;
+    finish(outcome.map(|data| BulkRead { data, overwritten }), restored)
+}
+
+pub(crate) fn finish<T>(outcome: Result<T>, restored: Result<()>) -> Result<T> {
     match (outcome, restored) {
-        (Ok(data), Ok(())) => Ok(BulkRead {
-            data,
-            overwritten: source.overwritten,
-        }),
+        (Ok(data), Ok(())) => Ok(data),
         (Err(error), Ok(())) => Err(error),
         (Ok(_), Err(cleanup)) => Err(cleanup),
         (Err(error), Err(cleanup)) => Err(BulkError::Cleanup {
@@ -103,21 +94,66 @@ pub async fn read(
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+/// One qualified mapping, kept for a multi-command workflow. Call `restore`
+/// before releasing it; unknown completion withholds all cleanup traffic.
+pub(crate) struct Qualified<'a> {
+    pub(crate) access: Access<'a>,
+    source: Source,
+}
+impl<'a> Qualified<'a> {
+    pub(crate) async fn prepare(
+        session: &'a mut Session,
+        bulk: &FirmwareBulk,
+        limits: Limits,
+    ) -> Result<Self> {
+        check_identity(session, bulk).await?;
+        let mut access = Access { session, limits };
+        for check in &bulk.code_checks {
+            let bytes = access
+                .raw(check.address | bulk.code_alias, check.size)
+                .await?;
+            require(
+                hex(&checks::sha256_bytes(&bytes)) == check.sha256,
+                &format!("Stock code differs: {}", check.name),
+            )?;
+        }
+        let source = Source::prepare(&mut access, bulk).await?;
+        if let Err(error) = source.qualify(&mut access, bulk).await {
+            let restored = source.restore(&mut access).await;
+            if restored.is_err() {
+                access.session.invalidate_completion();
+            }
+            return finish(Err(error), restored);
+        }
+        Ok(Self { access, source })
+    }
+    pub(crate) async fn read(&mut self, target: BulkRange) -> Result<Vec<u8>> {
+        self.source.bulk(&mut self.access, target).await
+    }
+    pub(crate) async fn restore(&mut self) -> Result<()> {
+        let result = self.source.restore(&mut self.access).await;
+        if result.is_err() {
+            self.access.session.invalidate_completion();
+        }
+        result
+    }
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Slow memory reads within one qualified session.
-struct Access<'a> {
-    session: &'a mut Session,
-    limits: Limits,
+pub(crate) struct Access<'a> {
+    pub(crate) session: &'a mut Session,
+    pub(crate) limits: Limits,
 }
 impl Access<'_> {
-    async fn raw(&mut self, at: u64, size: u64) -> Result<Vec<u8>> {
+    pub(crate) async fn raw(&mut self, at: u64, size: u64) -> Result<Vec<u8>> {
         let target = memory_range(BulkRange { address: at, size })?;
         Ok(memory::read_range(self.session, target, self.limits.memory).await?)
     }
-    async fn write(&mut self, at: u64, bytes: &[u8]) -> Result<()> {
+    pub(crate) async fn write(&mut self, at: u64, bytes: &[u8]) -> Result<()> {
         memory::write_range(
             self.session,
             Address(address(at)?),
@@ -129,7 +165,7 @@ impl Access<'_> {
     }
 }
 
-async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -> Result<()> {
+pub(crate) async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -> Result<()> {
     let product = session.device_info(InfoSelector::Product).await?.text;
     require(
         product.trim() == bulk.product,
@@ -311,6 +347,9 @@ impl Source {
                 .await;
                 if let Err(error) = setup {
                     let cleanup = source.restore(access).await;
+                    if cleanup.is_err() {
+                        access.session.invalidate_completion();
+                    }
                     source.saved = None;
                     return Err(match cleanup {
                         Ok(()) => error,
@@ -325,12 +364,7 @@ impl Source {
         }
     }
 
-    async fn read(
-        &self,
-        access: &mut Access<'_>,
-        bulk: &FirmwareBulk,
-        target: BulkRange,
-    ) -> Result<Vec<u8>> {
+    async fn qualify(&self, access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<()> {
         for probe in &bulk.probes {
             let slow = access.raw(probe.address, probe.size).await?;
             require(
@@ -349,7 +383,7 @@ impl Source {
                 "Bulk read differs from the firmware's bytes",
             )?;
         }
-        self.bulk(access, target).await
+        Ok(())
     }
 
     async fn bulk(&self, access: &mut Access<'_>, target: BulkRange) -> Result<Vec<u8>> {
