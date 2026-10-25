@@ -1,0 +1,113 @@
+{
+  "code_ranges": [
+    {
+      "address": 10216664,
+      "name": "nand_read_transfer",
+      "size": 1568
+    },
+    {
+      "address": 10204804,
+      "name": "NAND correction mode",
+      "size": 52
+    },
+    {
+      "address": 9996768,
+      "name": "NAND correction gate",
+      "size": 40
+    },
+    {
+      "address": 10214348,
+      "name": "NAND completion polling",
+      "size": 84
+    },
+    {
+      "address": 9995604,
+      "name": "NAND read command bytes",
+      "size": 48
+    },
+    {
+      "address": 9995364,
+      "name": "NAND read trigger",
+      "size": 32
+    },
+    {
+      "address": 9995300,
+      "name": "NAND corrected status",
+      "size": 32
+    },
+    {
+      "address": 10256368,
+      "name": "NAND driver lock",
+      "size": 24
+    },
+    {
+      "address": 10256392,
+      "name": "NAND driver unlock",
+      "size": 20
+    },
+    {
+      "address": 10256656,
+      "name": "NAND geometry initialization",
+      "size": 244
+    },
+    {
+      "address": 10256584,
+      "name": "NAND page geometry query",
+      "size": 72
+    },
+    {
+      "address": 12083644,
+      "name": "selected NAND geometry record",
+      "size": 24
+    }
+  ],
+  "control": {
+    "offset": 262144,
+    "size": 32768
+  },
+  "device": {
+    "kind": "raw-nand"
+  },
+  "reader": {
+    "alignment": 2048,
+    "nand": {
+      "controller_mode": 0,
+      "destination_alignment": 32,
+      "event_mode": 0,
+      "lock": 10256368,
+      "max_pages_per_call": 1,
+      "page_bytes": 2048,
+      "pages_per_block": 64,
+      "timeout_ms": 2000,
+      "unlock": 10256392
+    },
+    "symbol": "nand_read_transfer"
+  },
+  "state_checks": [
+    {
+      "address": 13064512,
+      "name": "NAND driver initialized",
+      "size": 4,
+      "value": 1
+    },
+    {
+      "address": 13102132,
+      "name": "selected NAND geometry",
+      "size": 4,
+      "value": 3
+    }
+  ],
+  "transport": null,
+  "update_image": {
+    "dat_offset": 604,
+    "xor": 255
+  },
+  "window": {
+    "address": 0,
+    "size": 134217728
+  },
+  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
+  "schema": 1,
+  "id": "xt10-131-flash",
+  "firmware_id": "xt10-131"
+}

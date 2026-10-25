@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for line in io::stdin().lock().lines() {
         let input: Input = serde_json::from_str(&line?)?;
         let flash = (|| -> Result<_, String> {
-            if input.processor != "xp5" {
+            if !matches!(input.processor.as_str(), "xp5" | "exr2") {
                 return locators::flash(
                     &store,
                     &input.firmware_id,
@@ -33,6 +33,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .payload_offset as u64;
             for byte in &mut bytes {
                 *byte ^= 255;
+            }
+            if input.processor == "exr2" {
+                let control = locators::exr2_control(&bytes[origin as usize..])?;
+                return locators::exr2_flash(&store, &input.firmware_id, origin, control);
             }
             let (origin, control) =
                 locators::image_offsets(&store, &input.firmware_id, &bytes, origin)?;

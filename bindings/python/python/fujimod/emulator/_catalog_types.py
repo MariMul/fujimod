@@ -1661,7 +1661,7 @@ FirmwareFlash = TypedDict(
         "reader": Required["FlashReader"],
         "schema": Required["int"],
         "state_checks": Required["list[FlashStateCheck]"],
-        "transport": Required["str"],
+        "transport": NotRequired["str | None"],
         "update_image": Required["FlashUpdateImage"],
         "window": Required["FlashRange"],
     },
@@ -2017,9 +2017,9 @@ class FlashControl(TypedDict, total=False):
 
 
 class FlashDevice(TypedDict, total=False):
-    jedec_id: Required[str]
+    jedec_id: NotRequired[str | None]
     kind: Required[str]
-    part: Required[str]
+    part: NotRequired[str | None]
 
 
 class FlashRange(TypedDict, total=False):
@@ -2029,6 +2029,7 @@ class FlashRange(TypedDict, total=False):
 
 class FlashReader(TypedDict, total=False):
     alignment: Required[int]
+    nand: NotRequired[NandPageReader | None]
     symbol: Required[str]
 
 
@@ -2991,6 +2992,18 @@ class NandGeometry(TypedDict, total=False):
     page_bytes: Required[int]
     pages_per_block: Required[int]
     spare_bytes: Required[int]
+
+
+class NandPageReader(TypedDict, total=False):
+    controller_mode: Required[int]
+    destination_alignment: Required[int]
+    event_mode: Required[int]
+    lock: Required[int]
+    max_pages_per_call: Required[int]
+    page_bytes: Required[int]
+    pages_per_block: Required[int]
+    timeout_ms: Required[int]
+    unlock: Required[int]
 
 
 class NativeBlock11000InputsControlMode(TypedDict, total=False):

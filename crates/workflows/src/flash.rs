@@ -62,8 +62,8 @@ impl Payload {
             "Flash payload and catalog firmware differ",
         )?;
         require(
-            flash.transport == "xp5-cmd-callback",
-            format!("Unsupported flash transport {}", flash.transport),
+            flash.transport.as_deref() == Some("xp5-cmd-callback"),
+            format!("Unsupported flash transport {:?}", flash.transport),
         )?;
         require(
             self.sha256 == bulk::hex(&sha256_bytes(image)),

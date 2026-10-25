@@ -53,3 +53,48 @@ fn capture_contracts_resolve_with_the_selected_firmware() {
         state.validate().unwrap();
     }
 }
+
+#[test]
+fn parallel_nand_requires_the_corrected_main_page_contract() {
+    let catalog = ReferenceCatalog::bundled().unwrap();
+    for firmware in [
+        "x70-110",
+        "xa1-150",
+        "xa2-130",
+        "xe2-411",
+        "xe2s-111",
+        "xm1-150",
+        "xt10-131",
+        "x100t-111",
+        "x30-103",
+        "xq1-121",
+        "xq2-101",
+        "xt1-552",
+    ] {
+        let flash = catalog.resolve_firmware(firmware).unwrap().flash.unwrap();
+        flash.validate().unwrap();
+        assert_eq!(flash.device.kind, "raw-nand");
+        assert!(flash.device.jedec_id.is_none());
+        assert!(flash.transport.is_none());
+        assert_eq!((flash.window.address, flash.window.size), (0, 0x8000000));
+        let nand = flash.reader.nand.as_ref().unwrap();
+        assert_eq!(
+            (
+                nand.page_bytes,
+                nand.pages_per_block,
+                nand.controller_mode,
+                nand.max_pages_per_call
+            ),
+            (2048, 64, 0, 1)
+        );
+        let mut invalid = flash.clone();
+        invalid.reader.nand.as_mut().unwrap().controller_mode = 1;
+        assert!(invalid.validate().is_err());
+        invalid.reader.nand.as_mut().unwrap().controller_mode = 0;
+        invalid.reader.nand.as_mut().unwrap().max_pages_per_call = 2;
+        assert!(invalid.validate().is_err());
+    }
+    for firmware in ["x100s-121", "x20-103"] {
+        assert!(catalog.resolve_firmware(firmware).unwrap().flash.is_none());
+    }
+}

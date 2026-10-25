@@ -74,8 +74,8 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
         firmware_id: "sample-1".into(),
         device: FlashDevice {
             kind: "serial-nand".into(),
-            jedec_id: "abcdef".into(),
-            part: "Test part".into(),
+            jedec_id: Some("abcdef".into()),
+            part: Some("Test part".into()),
         },
         window: FlashRange {
             address: 0xf0000000,
@@ -88,8 +88,9 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
         reader: FlashReader {
             symbol: "flash_read".into(),
             alignment: 64,
+            nand: None,
         },
-        transport: "xp5-cmd-callback".into(),
+        transport: Some("xp5-cmd-callback".into()),
         code_ranges: vec![FlashCodeRange {
             name: "flash_read".into(),
             address: 0x1000,

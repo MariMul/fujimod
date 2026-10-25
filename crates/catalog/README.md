@@ -150,3 +150,10 @@ read side effects are excluded.
 
 Both formats are generated facts, have JSON Schemas derived from their Rust
 value types, and are checked when the catalog is loaded.
+
+Parallel NAND facts use a byte-offset source window and a page-based reader
+ABI. `reader.nand` records the 2 KiB page contract, destination alignment,
+correction and polling modes, timeout and driver lock pair. Calls read one
+main-area page with a zero-initialized progress word and a NULL observer;
+the caller holds the driver lock. Unresolved installed part identities are
+absent, and an unresolved execution transport is `null`.

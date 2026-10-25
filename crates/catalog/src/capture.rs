@@ -25,14 +25,14 @@ pub struct FirmwareFlash {
     pub firmware_id: String,
     /// Installed device, checked against the stock driver.
     pub device: FlashDevice,
-    /// CPU-visible corrected data aperture.
+    /// Reader source span: CPU aperture or physical NAND byte offsets.
     pub window: FlashRange,
     /// Update packaging that supplies comparison bytes.
     pub update_image: FlashUpdateImage,
     /// Stock reader ABI and alignment.
     pub reader: FlashReader,
-    /// Processor-specific payload transport.
-    pub transport: String,
+    /// Processor-specific payload transport, absent when unresolved.
+    pub transport: Option<String>,
     /// Stock instruction spans checked before running the reader.
     pub code_ranges: Vec<FlashCodeRange>,
     /// Live driver preconditions.
@@ -54,12 +54,14 @@ pub struct FlashDevice {
     /// Serial NAND, serial NOR or raw NAND.
     pub kind: String,
     /// Six lowercase hexadecimal JEDEC digits in wire order.
-    pub jedec_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jedec_id: Option<String>,
     /// Manufacturer and part number.
-    pub part: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
 }
 
-/// Half-open CPU-visible flash aperture.
+/// Half-open reader source span.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -69,7 +71,7 @@ pub struct FlashDevice {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct FlashRange {
-    /// First CPU address.
+    /// First source address or physical byte offset.
     pub address: u64,
     /// Length in bytes.
     pub size: u64,
@@ -91,6 +93,30 @@ pub struct FlashUpdateImage {
     pub xor: u8,
 }
 
+/// Stock eight-argument page read: (page, count, destination, controller_mode,
+/// event_mode, timeout_ms, NULL observer, zero-initialized progress word).
+/// The caller must acquire `lock` before the read and call `unlock` afterward.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NandPageReader {
+    pub page_bytes: u32,
+    pub pages_per_block: u32,
+    pub destination_alignment: u32,
+    pub controller_mode: u32,
+    pub event_mode: u32,
+    pub timeout_ms: u32,
+    /// One page per call, matching the stock physical-page caller.
+    pub max_pages_per_call: u32,
+    pub lock: u64,
+    pub unlock: u64,
+}
+
 /// Stock read request ABI.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -105,6 +131,9 @@ pub struct FlashReader {
     pub symbol: String,
     /// Required destination, source and size alignment.
     pub alignment: u32,
+    /// Parallel NAND page ABI, absent for memory-window readers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nand: Option<NandPageReader>,
 }
 
 /// Stock instruction range.
@@ -235,23 +264,52 @@ impl FirmwareFlash {
             &self.firmware_id,
         )?;
         extent(self.window.address, self.window.size)?;
+        let raw_nand = self.device.kind == "raw-nand";
         if !matches!(
             self.device.kind.as_str(),
             "serial-nand" | "serial-nor" | "raw-nand"
-        ) || self.device.jedec_id.len() != 6
-            || !self
-                .device
-                .jedec_id
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-            || self.device.part.is_empty()
+        ) || self.device.jedec_id.as_ref().is_some_and(|id| {
+            id.len() != 6
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        }) || self
+            .device
+            .part
+            .as_ref()
+            .is_some_and(|part| part.is_empty())
+            || (!raw_nand && (self.device.jedec_id.is_none() || self.device.part.is_none()))
             || self.reader.symbol.is_empty()
             || !self.reader.alignment.is_power_of_two()
             || self.code_ranges.is_empty()
             || self.state_checks.is_empty()
-            || self.transport.is_empty()
+            || self
+                .transport
+                .as_ref()
+                .is_some_and(|transport| transport.is_empty())
         {
             return Err("invalid flash device or reader contract".into());
+        }
+        match (&self.reader.nand, raw_nand) {
+            (Some(nand), true) => {
+                if self.window.address != 0
+                    || nand.page_bytes != 2048
+                    || nand.pages_per_block != 64
+                    || nand.destination_alignment != 32
+                    || nand.controller_mode != 0
+                    || nand.event_mode != 0
+                    || nand.timeout_ms == 0
+                    || nand.max_pages_per_call != 1
+                    || self.reader.alignment != nand.page_bytes
+                    || ![nand.lock, nand.unlock]
+                        .iter()
+                        .all(|address| self.code_ranges.iter().any(|r| r.address == *address))
+                {
+                    return Err("invalid corrected NAND page ABI".into());
+                }
+            }
+            (None, false) => {}
+            _ => return Err("NAND reader ABI and device kind differ".into()),
         }
         let alignment = u64::from(self.reader.alignment);
         if !self.window.address.is_multiple_of(alignment)

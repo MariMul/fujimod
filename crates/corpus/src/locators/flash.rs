@@ -5,32 +5,39 @@ use std::collections::{BTreeMap, BTreeSet};
 
 type Result<T> = std::result::Result<T, String>;
 #[derive(Clone, Debug)]
-struct Instruction {
-    mnemonic: String,
-    operands: String,
+pub(super) struct Instruction {
+    pub(super) mnemonic: String,
+    pub(super) operands: String,
 }
-struct Routine {
-    header: FunctionHeader,
-    code: Vec<Instruction>,
+pub(super) struct Routine {
+    pub(super) header: FunctionHeader,
+    pub(super) code: Vec<Instruction>,
 }
 impl Routine {
-    fn has(&self, mnemonic: &str, operands: &str) -> bool {
+    pub(super) fn has(&self, mnemonic: &str, operands: &str) -> bool {
         self.code
             .iter()
             .any(|i| i.mnemonic == mnemonic && i.operands == operands)
     }
-    fn span(&self, name: &str) -> Value {
-        let (start, end) = self.header.ranges[0];
+    pub(super) fn span(&self, name: &str) -> Value {
+        let start = self.header.key.address;
+        let end = self
+            .header
+            .ranges
+            .iter()
+            .map(|(_, end)| *end)
+            .max()
+            .unwrap();
         json!({"name": name, "address": start, "size": end-start})
     }
 }
-struct Locator<'a, L> {
-    index: &'a L,
-    firmware: &'a str,
-    unit: String,
+pub(super) struct Locator<'a, L> {
+    pub(super) index: &'a L,
+    pub(super) firmware: &'a str,
+    pub(super) unit: String,
 }
 impl<L: Lookup> Locator<'_, L> {
-    fn routine(&self, address: u64) -> Result<Routine> {
+    pub(super) fn routine(&self, address: u64) -> Result<Routine> {
         let entries = self
             .index
             .select(Some(self.firmware), Some(&self.unit), Some(address))
@@ -39,36 +46,43 @@ impl<L: Lookup> Locator<'_, L> {
             return Err(format!("{address:#x}: expected one indexed routine"));
         }
         let header = entries[0].function.as_ref().clone();
-        if header.architecture != Architecture::Aarch64 || header.ranges.len() != 1 {
-            return Err("flash path needs one contiguous AArch64 body".into());
-        }
-        let (start, end) = header.ranges[0];
-        if start != address || end <= start || end - start > 0x8000 {
+        let start = header.key.address;
+        let end = header
+            .ranges
+            .iter()
+            .map(|(_, end)| *end)
+            .max()
+            .ok_or("empty flash routine")?;
+        if header.ranges.iter().any(|&(lo, hi)| lo < start || hi <= lo)
+            || start != address
+            || end - start > 0x8000
+        {
             return Err("invalid flash routine extent".into());
         }
-        let bytes = self
-            .index
-            .read(self.firmware, &self.unit, start, (end - start) as usize)
-            .map_err(|e| e.to_string())?
-            .ok_or("unmapped flash routine")?;
-        let decoder = Capstone::new()
-            .arm64()
-            .mode(arch::arm64::ArchMode::Arm)
-            .build()
-            .map_err(|e| e.to_string())?;
-        let ins = decoder
-            .disasm_all(&bytes, start)
-            .map_err(|e| e.to_string())?;
-        if ins.len() * 4 != bytes.len() {
-            return Err("incomplete flash instruction decoding".into());
+        let decoder = match header.architecture {
+            Architecture::Aarch64 => Capstone::new()
+                .arm64()
+                .mode(arch::arm64::ArchMode::Arm)
+                .build(),
+            Architecture::Arm32 => Capstone::new().arm().mode(arch::arm::ArchMode::Arm).build(),
         }
-        let code = ins
-            .iter()
-            .map(|i| Instruction {
+        .map_err(|e| e.to_string())?;
+        let mut code = vec![];
+        for &(lo, hi) in &header.ranges {
+            let bytes = self
+                .index
+                .read(self.firmware, &self.unit, lo, (hi - lo) as usize)
+                .map_err(|e| e.to_string())?
+                .ok_or("unmapped flash routine")?;
+            let ins = decoder.disasm_all(&bytes, lo).map_err(|e| e.to_string())?;
+            if ins.len() * 4 != bytes.len() {
+                return Err("incomplete flash instruction decoding".into());
+            }
+            code.extend(ins.iter().map(|i| Instruction {
                 mnemonic: i.mnemonic().unwrap_or("").into(),
                 operands: i.op_str().unwrap_or("").into(),
-            })
-            .collect();
+            }));
+        }
         Ok(Routine { header, code })
     }
     fn calls(&self, routine: &Routine) -> Result<Vec<Routine>> {
@@ -80,7 +94,7 @@ impl<L: Lookup> Locator<'_, L> {
         }
         addresses.into_iter().map(|a| self.routine(a)).collect()
     }
-    fn named(&self, name: &str, verify: impl Fn(&Routine) -> bool) -> Result<Routine> {
+    pub(super) fn named(&self, name: &str, verify: impl Fn(&Routine) -> bool) -> Result<Routine> {
         let candidates = self
             .index
             .find(Some(name), None, Some(self.firmware), Some(&self.unit))
@@ -93,7 +107,7 @@ impl<L: Lookup> Locator<'_, L> {
         one(routines, name)
     }
 }
-fn number(text: &str) -> Result<u64> {
+pub(super) fn number(text: &str) -> Result<u64> {
     if let Some(hex) = text.strip_prefix("0x") {
         u64::from_str_radix(hex, 16)
     } else {
@@ -101,7 +115,7 @@ fn number(text: &str) -> Result<u64> {
     }
     .map_err(|e| format!("invalid immediate {text}: {e}"))
 }
-fn one<T>(mut values: Vec<T>, name: &str) -> Result<T> {
+pub(super) fn one<T>(mut values: Vec<T>, name: &str) -> Result<T> {
     if values.len() != 1 {
         return Err(format!("{name}: {} verified candidates", values.len()));
     }
