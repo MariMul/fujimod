@@ -256,10 +256,6 @@
   margin: 0 0 6px;
   line-height: 1.35;
 }
-.catalog-card > a {
-  display: inline-block;
-  font-size: 12px;
-}
 .catalog-card-path {
   margin: 0 0 3px;
   font-size: 11px;

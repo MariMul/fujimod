@@ -16,7 +16,6 @@ type Card = {
   summary: string | null;
   choices: Record<string, string>;
   related: { card: string; reason: string }[];
-  manual: string | null;
   changes: string | null;
   credits: Credits;
   choice_credits: Record<string, Credits>;
@@ -29,13 +28,7 @@ type IconMetric = { box: number[]; view: number[]; width: number; height: number
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
-const MANUAL = 'https://fujifilm-dsc.com/en/manual/x70/';
 const MEDIA = '/artifacts/docs/';
-/** An X70 manual page, optionally with an anchor ("menu_setup/screen_set-up#framing_guidline"). */
-const manualUrl = (manual: string) => {
-  const [page, anchor] = manual.split('#');
-  return `${MANUAL}${page}/index.html${anchor ? `#${anchor}` : ''}`;
-};
 const CARDS: Record<string, Card> = {
   image_size: {
     title: 'IMAGE SIZE',
@@ -43,7 +36,6 @@ const CARDS: Record<string, Card> = {
     summary: null,
     choices: {},
     related: [],
-    manual: 'menu_shooting/image_size',
     changes:
       'Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.',
     credits: {
@@ -74,7 +66,6 @@ const CARDS: Record<string, Card> = {
         reason: 'set the max width and height before applying the crop',
       },
     ],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -93,7 +84,6 @@ const CARDS: Record<string, Card> = {
       'WHITE BORDER': 'A white line marks the frame.',
     },
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -108,7 +98,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the squeeze factor of your anamorphic adapter.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -123,7 +112,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose whether JPEG pictures are also recorded at their corrected width.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -148,7 +136,6 @@ const CARDS: Record<string, Card> = {
         'A golden logarithmic spiral with its focal point at the upper-right golden-section intersection.',
     },
     related: [],
-    manual: 'menu_setup/screen_set-up#framing_guidline',
     changes:
       'Adds GOLDEN RATIO and four GOLDEN SPIRAL focal-point placements. All guides follow the selected image bounds and aspect ratio.',
     credits: {
@@ -164,7 +151,6 @@ const CARDS: Record<string, Card> = {
     summary: null,
     choices: {},
     related: [],
-    manual: 'menu_shooting/film_simulation',
     changes:
       'Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.',
     credits: {
@@ -180,7 +166,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Create and edit film simulations, saved as files on the memory card.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -205,7 +190,6 @@ const CARDS: Record<string, Card> = {
         reason: 'see how close the brightest areas are to losing detail in RAW file while shooting',
       },
     ],
-    manual: 'menu_shooting/photometry',
     changes:
       'Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.',
     credits: {
@@ -228,7 +212,6 @@ const CARDS: Record<string, Card> = {
       'Press a button assigned to RAW VIEW to see how close the brightest areas are to losing detail in the RAW file. Press it again to return to the normal live view.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -246,7 +229,6 @@ const CARDS: Record<string, Card> = {
       ON: 'Use F-Log movie processing.',
     },
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -264,7 +246,6 @@ const CARDS: Record<string, Card> = {
       'PLAYBACK ONLY': 'The HDMI device shows playback only, as on an unmodified camera.',
     },
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -279,7 +260,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose an action and the value each EV notch selects.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -294,7 +274,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the setting the command control adjusts.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -309,7 +288,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose an action and the value each Auto-lever position selects.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -324,7 +302,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose an action and the value each shutter notch selects.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -339,7 +316,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose an action and the value each aperture notch selects.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -354,7 +330,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose an action and the value S, C and M each select.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -369,7 +344,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the AE-L/AF-L button action and press operation.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -384,7 +358,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the DRIVE button action and press operation.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -399,7 +372,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the Q button action and press operation.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -414,7 +386,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the command control press action and press operation.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -429,7 +400,6 @@ const CARDS: Record<string, Card> = {
     summary: null,
     choices: {},
     related: [],
-    manual: 'menu_shooting/control_ring_setting',
     changes:
       'Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
     credits: {
@@ -445,7 +415,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the appearance of the menus.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -463,7 +432,6 @@ const CARDS: Record<string, Card> = {
       OFF: 'The screen ignores touch, in the menus too.',
     },
     related: [],
-    manual: 'menu_setup/touch_panel_setting',
     changes:
       'Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.',
     credits: {
@@ -479,7 +447,6 @@ const CARDS: Record<string, Card> = {
     summary: null,
     choices: {},
     related: [],
-    manual: 'menu_shooting/edit-save_custom_setting',
     changes:
       'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
     credits: {
@@ -495,7 +462,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose the distance used by the SNAP FOCUS action in manual focus mode.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -510,7 +476,6 @@ const CARDS: Record<string, Card> = {
     summary: 'Choose whether the side Fn button and DISP/BACK save a bug report.',
     choices: {},
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -528,7 +493,6 @@ const CARDS: Record<string, Card> = {
       OFF: 'Formatted cards are left unnamed, as on an unmodified camera.',
     },
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -547,7 +511,6 @@ const CARDS: Record<string, Card> = {
       OFF: 'Pictures are stored in folders as on an unmodified camera.',
     },
     related: [],
-    manual: null,
     changes: null,
     credits: {
       premiere: false,
@@ -716,9 +679,6 @@ function CardBody(props: { target: Target }) {
         fallback={
           <Show when={card().changes} fallback={<p>{card().summary}</p>}>
             <p>In FujiMod: {card().changes}</p>
-            <a href={manualUrl(card().manual!)} target="_blank" rel="noreferrer">
-              X70 manual
-            </a>
           </Show>
         }
       >
