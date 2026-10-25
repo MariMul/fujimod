@@ -145,7 +145,7 @@ test('the state dump adds each region as its own file', async () => {
   button(p.host, 'Dump memory')!.click();
   await vi.waitFor(() => expect(p.results().state).toBeTruthy());
   expect(p.results().state!.regions.map((region) => region.name)).toEqual(['boot-rom']);
-  expect(status).toBe('Dumping camera state');
+  expect(status).toBe('Dumping memory');
   expect(p.files.map((file) => file.name)).toEqual(['state-boot-rom.bin']);
   expect(p.files[0]!.meta).toMatchObject({ address: 0x80000000, constant: true, sha256: 'cd' });
 });

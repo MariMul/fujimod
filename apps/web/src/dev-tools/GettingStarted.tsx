@@ -80,7 +80,7 @@ export function GettingStarted(props: {
           ...results,
           prepared: results.prepared ?? prepared,
         }));
-        setProgress(kind === 'backup' ? 'Backing up flash' : 'Dumping camera state');
+        setProgress(kind === 'backup' ? 'Backing up flash' : 'Dumping memory');
         return operation(session, firmware);
       });
     } catch (error) {
