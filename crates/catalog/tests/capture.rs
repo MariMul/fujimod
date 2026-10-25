@@ -95,6 +95,29 @@ fn parallel_nand_requires_the_corrected_main_page_contract() {
         assert!(invalid.validate().is_err());
     }
     for firmware in ["x100s-121", "x20-103"] {
-        assert!(catalog.resolve_firmware(firmware).unwrap().flash.is_none());
+        let flash = catalog.resolve_firmware(firmware).unwrap().flash.unwrap();
+        flash.validate().unwrap();
+        assert_eq!(flash.device.kind, "raw-nand");
+        assert_eq!((flash.window.address, flash.window.size), (0, 0x4000000));
+        assert_eq!(flash.code_ranges.len(), 13);
+        let nand = flash.reader.nand.as_ref().unwrap();
+        assert_eq!(
+            (
+                nand.page_bytes,
+                nand.pages_per_block,
+                nand.controller_mode,
+                nand.max_pages_per_call
+            ),
+            (512, 32, 0, 1)
+        );
+        assert!(flash.transport.is_none());
+        for (page, pages) in [(512, 64), (2048, 32), (1024, 32)] {
+            let mut invalid = flash.clone();
+            let nand = invalid.reader.nand.as_mut().unwrap();
+            nand.page_bytes = page;
+            nand.pages_per_block = pages;
+            invalid.reader.alignment = page;
+            assert!(invalid.validate().is_err());
+        }
     }
 }

@@ -63,7 +63,76 @@ fn calls(r: &Routine, target: u64) -> bool {
         i.mnemonic == "bl" && number(i.operands.trim_start_matches('#')).ok() == Some(target)
     })
 }
-/// Locate a corrected 2 KiB physical-page read ABI. The update origin is decoded
+fn read_contract(r: &Routine, page: u32, pages: u32) -> bool {
+    let common = r.has("tst", "r1, #0x1f")
+        && r.has("movw", "r3, #0x8003")
+        && r.has("movne", "r6, #0xa")
+        && r.has("moveq", "r3, #0x70")
+        && r.has("movne", "r3, #0x40")
+        && r.has("orr", "r3, r3, #0x2080");
+    let Some(timeout) = r
+        .code
+        .iter()
+        .position(|i| i.mnemonic == "movw" && i.operands == "r3, #0x271")
+    else {
+        return false;
+    };
+    let count_writes: Vec<_> = r.code[..timeout]
+        .iter()
+        .filter(|i| {
+            i.operands.starts_with("r8,") && !matches!(i.mnemonic.as_str(), "str" | "cmp" | "tst")
+        })
+        .collect();
+    let count_is_pages = count_writes.len() == 1
+        && count_writes[0].mnemonic == "mov"
+        && count_writes[0].operands == "r8, r1";
+    let count_is_quarter_pages = count_writes.len() == 2
+        && count_writes[0].mnemonic == "mov"
+        && count_writes[0].operands == "r8, r1"
+        && ((count_writes[1].mnemonic == "lsl" && count_writes[1].operands == "r8, r8, #2")
+            || (count_writes[1].mnemonic == "mov" && count_writes[1].operands == "r8, r8, lsl #2"));
+    common
+        && match (page, pages) {
+            (512, 32) => {
+                count_is_pages
+                    && r.has("and", "sl, r2, #0x1f")
+                    && r.has("rsb", "sl, sl, #0x20")
+                    && r.has("lsl", "sb, sl, #9")
+            }
+            (2048, 64) => count_is_quarter_pages && r.has("mov", "r1, #0x30"),
+            _ => false,
+        }
+}
+fn read_commands(r: &Routine, command: u64, geometry: u64, page: u32) -> bool {
+    let (mode, second) = match page {
+        512 => ("r3, #4", "r1, r0"),
+        2048 => ("r3, #1", "r1, #0x30"),
+        _ => return false,
+    };
+    let geometry_call = r.code.windows(3).any(|w| {
+        w[0].mnemonic == "mov"
+            && w[0].operands == mode
+            && w[1].mnemonic == "str"
+            && w[1].operands == "r3, [r0, #-4]!"
+            && w[2].mnemonic == "bl"
+            && number(w[2].operands.trim_start_matches('#')).ok() == Some(geometry)
+    });
+    let command_call = r.code.windows(5).any(|w| {
+        w[0].mnemonic == "mov"
+            && w[0].operands == "r0, #0"
+            && w[1].mnemonic == "mov"
+            && w[1].operands == second
+            && w[2].mnemonic == "mov"
+            && w[2].operands == "r2, r0"
+            && w[3].mnemonic == "uxtb"
+            && w[3].operands.starts_with("r3,")
+            && w[4].mnemonic == "bl"
+            && number(w[4].operands.trim_start_matches('#')).ok() == Some(command)
+    });
+    geometry_call && command_call
+}
+
+/// Locate a corrected 512-byte or 2 KiB physical-page read ABI. The update origin is decoded
 /// by the container reader. No execution transport is claimed by this fact.
 /// Call under the located driver lock, with a zero-initialized progress word.
 pub fn exr2_flash<L: Lookup>(
@@ -116,19 +185,9 @@ pub fn exr2_flash<L: Lookup>(
     }
     let (geometry_address, selected, table, blocks, page, pages) =
         one(geometry, "selected NAND geometry")?;
-    if page != 2048 {
-        return Err(format!(
-            "selected NAND geometry has {page}-byte pages; corrected small-page ABI is unresolved"
-        ));
-    }
-    let reader = locator.named("nand_read_transfer", |r| {
-        (r.has("mov", "r8, r8, lsl #2") || r.has("lsl", "r8, r8, #2"))
-            && r.has("tst", "r1, #0x1f")
-            && r.has("mov", "r1, #0x30")
-            && r.has("movw", "r3, #0x8003")
-            && r.has("movne", "r6, #0xa")
-            && r.has("moveq", "r3, #0x70")
-            && r.has("movne", "r3, #0x40")
+    let reader = locator.named("nand_read_transfer", |r| read_contract(r, page, pages))?;
+    let transfer_geometry = locator.named("nand_set_geometry", |r| {
+        r.has("ldr", "r2, [r0]") && r.has("str", "r2, [r3, #-0xfff]")
     })?;
     let gate = locator.named("nand_set_controller_gate", |r| {
         r.has("cmp", "r0, #0")
@@ -145,6 +204,14 @@ pub fn exr2_flash<L: Lookup>(
     let command = locator.named("nand_pack_command_bytes", |r| {
         r.has("bfi", "ip, r1, #0x10, #8") && r.has("str", "ip, [r3, #-0xfe3]")
     })?;
+    if !read_commands(
+        &reader,
+        command.header.key.address,
+        transfer_geometry.header.key.address,
+        page,
+    ) {
+        return Err("NAND page geometry and READ0 command sequence differ".into());
+    }
     let trigger = locator.named("nand_set_trigger", |r| r.has("str", "r2, [r3, #-0xff7]"))?;
     let timing = locator.named("nand_get_timing", |r| r.has("ldr", "r3, [r3, #-0xffb]"))?;
     let wrapper = locator.named("nand_read_pages_wrapper", |r| {
@@ -212,6 +279,9 @@ pub fn exr2_flash<L: Lookup>(
     ] {
         ranges.push(r.span(name));
     }
+    if page == 512 {
+        ranges.push(transfer_geometry.span("NAND page transfer geometry"));
+    }
     ranges.push(
         json!({"name":"selected NAND geometry record","address":table+selected*24,"size":24}),
     );
@@ -259,6 +329,100 @@ pub fn exr2_control(image: &[u8]) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn synthetic_reader() -> Routine {
+        let instructions = [
+            ("mov", "r8, r1"),
+            ("movw", "r3, #0x271"),
+            ("tst", "r1, #0x1f"),
+            ("movw", "r3, #0x8003"),
+            ("movne", "r6, #0xa"),
+            ("moveq", "r3, #0x70"),
+            ("movne", "r3, #0x40"),
+            ("orr", "r3, r3, #0x2080"),
+            ("and", "sl, r2, #0x1f"),
+            ("rsb", "sl, sl, #0x20"),
+            ("lsl", "sb, sl, #9"),
+            ("mov", "r3, #4"),
+            ("str", "r3, [r0, #-4]!"),
+            ("bl", "#0x200"),
+            ("mov", "r0, #0"),
+            ("mov", "r1, r0"),
+            ("mov", "r2, r0"),
+            ("uxtb", "r3, sl"),
+            ("bl", "#0x300"),
+        ];
+        Routine {
+            header: crate::FunctionHeader {
+                key: crate::FunctionKey {
+                    firmware: "sample".into(),
+                    unit: "main".into(),
+                    address: 0x100,
+                },
+                architecture: crate::Architecture::Arm32,
+                names: vec![],
+                annotations: vec![],
+                ranges: vec![(0x100, 0x100 + instructions.len() as u64 * 4)],
+                signature: [0; 32],
+                instructions: instructions.len(),
+                calls: vec![],
+            },
+            code: instructions
+                .into_iter()
+                .map(|(mnemonic, operands)| super::super::flash::Instruction {
+                    mnemonic: mnemonic.into(),
+                    operands: operands.into(),
+                })
+                .collect(),
+        }
+    }
+    #[test]
+    fn small_page_reader_rejects_scaled_counts_and_missing_correction() {
+        let mut reader = synthetic_reader();
+        assert!(read_contract(&reader, 512, 32));
+        assert!(!read_contract(&reader, 512, 64));
+        assert!(!read_contract(&reader, 2048, 64));
+        reader.code.insert(
+            1,
+            super::super::flash::Instruction {
+                mnemonic: "lsl".into(),
+                operands: "r8, r8, #2".into(),
+            },
+        );
+        assert!(!read_contract(&reader, 512, 32));
+        reader.code.remove(1);
+        reader
+            .code
+            .retain(|i| i.mnemonic != "movne" || i.operands != "r6, #0xa");
+        assert!(!read_contract(&reader, 512, 32));
+    }
+    #[test]
+    fn small_page_commands_require_the_matching_geometry_and_helpers() {
+        let mut reader = synthetic_reader();
+        assert!(read_commands(&reader, 0x300, 0x200, 512));
+        assert!(!read_commands(&reader, 0x304, 0x200, 512));
+        assert!(!read_commands(&reader, 0x300, 0x204, 512));
+        assert!(!read_commands(&reader, 0x300, 0x200, 2048));
+        let geometry = reader
+            .code
+            .iter_mut()
+            .find(|i| i.operands == "r3, #4")
+            .unwrap();
+        geometry.operands = "r3, #1".into();
+        assert!(!read_commands(&reader, 0x300, 0x200, 512));
+        let geometry = reader
+            .code
+            .iter_mut()
+            .find(|i| i.operands == "r3, #1")
+            .unwrap();
+        geometry.operands = "r3, #4".into();
+        let command = reader
+            .code
+            .iter_mut()
+            .find(|i| i.operands == "r1, r0")
+            .unwrap();
+        command.operands = "r1, #0x30".into();
+        assert!(!read_commands(&reader, 0x300, 0x200, 512));
+    }
     #[test]
     fn control_uses_the_first_aligned_complete_reset_allocation() {
         let mut image = vec![0; 0x18000];

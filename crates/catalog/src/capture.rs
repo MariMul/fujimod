@@ -293,8 +293,10 @@ impl FirmwareFlash {
         match (&self.reader.nand, raw_nand) {
             (Some(nand), true) => {
                 if self.window.address != 0
-                    || nand.page_bytes != 2048
-                    || nand.pages_per_block != 64
+                    || !matches!(
+                        (nand.page_bytes, nand.pages_per_block),
+                        (512, 32) | (2048, 64)
+                    )
                     || nand.destination_alignment != 32
                     || nand.controller_mode != 0
                     || nand.event_mode != 0
