@@ -702,6 +702,24 @@ fn sensor_sync_acquisition_uses_the_declared_part_readouts() {
 }
 
 #[test]
+fn iris_motor_uses_the_body_mechanical_stops_beyond_the_optical_table() {
+    let base = prepare("x70-110-rec", &[]).unwrap();
+    let iris = &model(&base, "lens_serial")["routes"][0]["endpoint"]["options"]["motors"][1];
+    assert_eq!(iris["travel_limits"], json!([0, 78]));
+    assert_eq!(iris["boundary"], "end_stop");
+
+    let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+    resolved.reference.body.lens.as_mut().unwrap().iris.as_mut().unwrap()
+        .travel_limits = [0, 90];
+    let changed = prepared(resolved).unwrap();
+    assert_eq!(
+        model(&changed, "lens_serial")["routes"][0]["endpoint"]["options"]["motors"][1]
+            ["travel_limits"],
+        json!([0, 90])
+    );
+}
+
+#[test]
 fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
     use fujimod_emulator_devices::{Cx, Host, Record};
     struct Clock(u64);

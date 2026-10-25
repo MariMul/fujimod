@@ -1179,21 +1179,8 @@ fn apply_body_facts(
                 {
                     return Err("X70 lens iris positions exceed declared travel limits".into());
                 }
-                let observed_limits = [
-                    iris.positions
-                        .iter()
-                        .map(|position| position.position)
-                        .min()
-                        .ok_or("X70 lens iris has no positions")?,
-                    iris.positions
-                        .iter()
-                        .map(|position| position.position)
-                        .max()
-                        .ok_or("X70 lens iris has no positions")?,
-                ];
-                if observed_limits != iris.travel_limits {
-                    return Err("X70 lens iris travel limits differ from its position table".into());
-                }
+                options["motors"][1]["travel_limits"] = json!(iris.travel_limits);
+                options["motors"][1]["boundary"] = json!("end_stop");
             }
             let optics = lens
                 .iris

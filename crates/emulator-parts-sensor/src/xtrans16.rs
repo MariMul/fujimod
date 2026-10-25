@@ -126,10 +126,8 @@ impl Sensor {
         let extension = u64::from(word(2)) + 1;
         let exposure_rows = u64::from(reference) * extension;
         if let Some((output, tick_hz)) = &self.frame_clock {
-            // A drive mode's reference lines are its frame: the X70's idle
-            // mode 236 (706 x 9348 receiver raster, 856 lines) runs 54.54 fps
-            // on the camera (firmware FPS overlay), 856 x 706 clocks at 33 MHz;
-            // the padded receiver raster would give 5 fps. Unreferenced
+            // The drive mode's reset counter also times its frames; receiver
+            // raster padding does not lengthen that physical scan. Unreferenced
             // rasters keep their programmed rows.
             let frame_rows = exposure_rows;
             let clocks = u128::from(frame_rows) * u128::from(s.horizontal) * u128::from(*tick_hz);
@@ -247,9 +245,16 @@ impl Controls for Sensor {
             return Err("X-Trans sensor requires81/address/value words".into());
         }
         for b in bytes.chunks_exact(8) {
-            if b[1] == 0 && b[2] & 0xfc != self.state.registers[0] & 0xfc {
-                self.state.global_seconds = None;
-                self.state.settling = self.options.mode_change_frames;
+            if b[1] == 0 {
+                let changed = b[2] & 0xfc != self.state.registers[0] & 0xfc;
+                let restarted = b[2] & 1 == 0 && self.state.registers[0] & 1 != 0;
+                if changed {
+                    self.state.global_seconds = None;
+                }
+                if changed || restarted {
+                    self.state.rolling_seconds = None;
+                    self.state.settling = self.options.mode_change_frames;
+                }
             }
             if b[1] == 1 && b[2] & 4 != 0 && self.state.registers[1] & 4 == 0 {
                 self.state.global_seconds = None;
@@ -259,6 +264,11 @@ impl Controls for Sensor {
         self.publish()
     }
     fn frame(&mut self) -> Result<bool, String> {
+        // Standby stops readout. A configured clock may continue ticking at
+        // the receiver, but it cannot consume the sensor's startup interval.
+        if self.state.registers[0] & 1 != 0 {
+            return Ok(false);
+        }
         let valid = self.state.settling == 0;
         self.state.settling = self.state.settling.saturating_sub(1);
         self.integrate()?;
@@ -351,7 +361,7 @@ mod tests {
                     mode: 0xec,
                     horizontal: 706,
                     vertical: 9348,
-                    lines: 856,
+                    lines: 857,
                 }],
                 mode_change_frames: 0,
             },
@@ -376,12 +386,12 @@ mod tests {
         assert_eq!(*period.lock().unwrap(), 120109);
         s.timing(706, 9348, None).unwrap();
         // Before the drive mode selects the reference, the padded receiver
-        // raster times frames; mode 0xec's 856 lines then give 54.6 fps
+        // raster times frames; mode 0xec's 857 lines then give 54.54 fps
         // (camera: 54.54 fps idle in drive mode MV).
         assert_eq!(*period.lock().unwrap(), 2_399_887);
         s.command(&[0x81, 0, 0xec, 0, 0, 0, 0, 0]).unwrap();
-        assert_eq!(*period.lock().unwrap(), 219_759);
-        assert!((exposure.lock().unwrap().seconds - 856. * 706. / 33_000_000.).abs() < 1e-12);
+        assert_eq!(*period.lock().unwrap(), 220_015);
+        assert!((exposure.lock().unwrap().seconds - 857. * 706. / 33_000_000.).abs() < 1e-12);
         // A reset reference belongs to the complete declared scan tuple.
         // Another raster retains its own counter extent and frame cadence.
         s.timing(706, 935, None).unwrap();
@@ -489,9 +499,19 @@ mod tests {
         sensor.command(&mode(0xec)).unwrap();
         let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
         assert_eq!(frames, [false, false, true]);
-        // Low register-0 bits are not the drive mode.
+        // Bit 0 enters standby without changing the drive mode. Receiver
+        // clocks cannot consume startup readouts while the sensor is stopped.
         sensor.command(&mode(0xed)).unwrap();
-        assert!(sensor.frame().unwrap());
+        let saved = sensor.checkpoint().unwrap();
+        for _ in 0..5 { assert!(!sensor.frame().unwrap()); }
+        sensor.command(&mode(0xec)).unwrap();
+        let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
+        assert_eq!(frames, [false, false, true]);
+        sensor.restore_checkpoint(&saved).unwrap();
+        assert!(!sensor.frame().unwrap());
+        sensor.command(&mode(0xec)).unwrap();
+        let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
+        assert_eq!(frames, [false, false, true]);
         sensor.command(&mode(0x28)).unwrap();
         let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
         assert_eq!(frames, [false, false, true]);
