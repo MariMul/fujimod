@@ -6,6 +6,7 @@ mod loops;
 mod observation;
 mod xp4;
 mod xp5;
+mod xppro;
 pub use checkpoint::Checkpoint;
 use fujimod_python_base::xp4_backend;
 mod device;
@@ -465,6 +466,14 @@ impl Board {
                 graph, devices, assets, read_limit, mode, continue_refusals, engine,
                 serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}),
             );
+        }
+        if json::<serde_json::Value>(devices)?.get("kind").and_then(serde_json::Value::as_str) == Some("xppro") {
+            if !matches!(engine, factory::Engine::Unicorn) || !models.is_empty()
+                || json::<serde_json::Value>(scene)? != serde_json::json!({}) {
+                return Err(PyValueError::new_err("X-Processor Pro requires its native devices and explicit assets"));
+            }
+            return Self::xppro_graph(graph, devices, assets, read_limit, mode, continue_refusals,
+                serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}));
         }
         let plan = Plan::parse(devices.as_bytes()).map_err(error)?;
         plan.validate_reset_outputs(

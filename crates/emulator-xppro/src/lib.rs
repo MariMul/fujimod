@@ -4,5 +4,6 @@
 pub mod boot;
 pub mod clocks;
 pub mod flash;
+pub mod sd;
 pub mod serial;
 pub mod timer;

@@ -2079,6 +2079,7 @@ dependencies = [
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
  "fujimod-emulator-sensor-input",
+ "fujimod-emulator-storage",
  "fujimod-emulator-xp4-display",
  "fujimod-emulator-xp4-io",
  "fujimod-emulator-xp4-storage",
@@ -2206,6 +2207,7 @@ name = "fujimod-emulator-xppro"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
  "fujimod-emulator-xp4-io",
  "fujimod-workspace-hack",
  "serde",
@@ -2328,6 +2330,7 @@ dependencies = [
  "fujimod-emulator-preparation",
  "fujimod-emulator-session",
  "fujimod-emulator-storage",
+ "fujimod-emulator-xp4-board",
  "fujimod-emulator-xp5-board",
  "fujimod-python-base",
  "fujimod-settings",

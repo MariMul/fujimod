@@ -6,6 +6,7 @@ mod client;
 mod definition;
 pub use definition::Definition;
 pub mod observation;
+pub mod xppro;
 use observation::Call;
 mod devices;
 mod timer;

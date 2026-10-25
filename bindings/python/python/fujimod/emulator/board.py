@@ -358,7 +358,11 @@ class Board:
     def failure(self) -> dict[str, object] | None:
         self._ensure_open()
         failure = _json_object(json.loads(self._native.observation()))["failure"]
-        return None if failure is None else _json_object(failure)
+        if failure is None:
+            return None
+        if isinstance(failure, str):
+            return {"message": failure}
+        return _json_object(failure)
 
     def run(
         self,
