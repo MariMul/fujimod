@@ -107,6 +107,12 @@ At the virtual deadline, frame DMA completes before `C20` publishes mode 2,
 `C24` publishes frame bit 11 and `FC0` selects the completed slot. Exhausting
 input bank 0/1 publishes refill bit 9/10; an initial picture does not issue a
 refill. `4AC` and the bank selector track consumed Annex B boundaries.
+The [H.264 Annex B B.1.1](https://www.itu.int/rec/T-REC-H.264) byte-stream
+delimiter rule ends a NAL at `000000` or `000001`. A zero run therefore ends
+coded payload even when unrelated nonzero bytes remain later in the DMA bank.
+Padding before a following start code enters the consumed span; otherwise the
+receipt ends at the coded NAL. Emulation-prevention bytes preserve escaped
+zero sequences, and missing required escapes refuse.
 Pause and finish issue their separate bit 14/13 notices. W1C and level IRQ75
 behavior is shared with encoding.
 

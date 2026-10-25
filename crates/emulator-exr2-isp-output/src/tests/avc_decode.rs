@@ -132,6 +132,28 @@ fn native_bank_padding_is_consumed_by_annex_b_boundaries_before_clocked_dma_and_
 }
 
 #[test]
+fn zero_delimited_picture_ignores_stale_bank_pixels_and_receipts_only_coded_input() {
+    let packet = packets().remove(0);
+    let mut bytes = packet.clone();
+    bytes.extend_from_slice(&[0; 128]);
+    bytes.extend_from_slice(&[0, 0, 128, 128].repeat(256));
+    let mut host = TestHost::new();
+    let mut codec = configured(&mut host, &bytes);
+    complete(&mut codec, &mut host);
+    assert_eq!(codec.save()["decode"]["last_input"]["bytes"], packet.len());
+    assert_eq!(codec.diagnostic_buffer("decode-input").unwrap(), packet);
+    assert_eq!(
+        read(&mut codec, &mut host, 0xfff604ac) as usize,
+        packet.len()
+    );
+    assert_eq!(
+        codec.save()["decode"]["last_input"]["sha256"],
+        codec.save()["decode"]["last_output"]["input_sha256"]
+    );
+    assert!((host.ram[OUTPUT] as i16 - 40).abs() < 12);
+}
+
+#[test]
 fn decoder_reuses_parameter_sets_at_idr_and_replays_successors_after_checkpoint() {
     let frames = packets();
     let first_headers = h264::decode::parameter_sets(&frames[0]).unwrap();

@@ -24,6 +24,9 @@ impl Bits {
         let mut bytes = Vec::with_capacity(ebsp.len());
         let mut zeros = 0;
         for (index, &byte) in ebsp.iter().enumerate() {
+            if zeros == 2 && byte < 3 {
+                return Err("AVC missing emulation-prevention byte".into());
+            }
             if zeros == 2 && byte == 3 {
                 if ebsp.get(index + 1).is_none_or(|&next| next > 3) {
                     return Err("AVC invalid emulation-prevention byte".into());
@@ -154,7 +157,12 @@ pub fn access_unit(bytes: &[u8]) -> Result<(usize, bool), String> {
         }
         let kind = header & 31;
         let mut end = start + 1;
-        while end < bytes.len() && prefix(&bytes[end..]) == 0 {
+        // H.264 Annex B, B.1.1: a NAL ends at either 000001 or 000000.
+        // The latter starts trailing_zero_8bits, not more coded payload.
+        while end < bytes.len()
+            && prefix(&bytes[end..]) == 0
+            && !bytes[end..].starts_with(&[0, 0, 0])
+        {
             end += 1;
         }
         let mut used = end;
@@ -197,6 +205,19 @@ pub fn access_unit(bytes: &[u8]) -> Result<(usize, bool), String> {
             };
         }
         at = end;
+        while at < bytes.len() && prefix(&bytes[at..]) == 0 && bytes[at] == 0 {
+            at += 1;
+        }
+        if at == bytes.len() || prefix(&bytes[at..]) == 0 {
+            // A finite bank can end in zero transport padding followed by
+            // unrelated memory. Only a following start code establishes a
+            // successor NAL and lets that padding enter the consumed span.
+            return if found {
+                Ok((used, idr))
+            } else {
+                Err("AVC input has no picture before trailing padding".into())
+            };
+        }
     }
     Err("AVC input has no picture".into())
 }
@@ -337,6 +358,69 @@ mod tests {
     }
 
     #[test]
+    fn annex_b_zero_delimiters_exclude_unrelated_bank_tail() {
+        let mut encoder = Codec::new(Backend::Software, config(), &[]).unwrap();
+        let mut packet = encoder.encode(config(), &input(false)).unwrap();
+        let pps = (5..packet.len())
+            .find(|&at| prefix(&packet[at..]) != 0)
+            .unwrap();
+        // Non-VCL NALs can also carry transport padding before their successor.
+        packet.splice(pps..pps, [0; 18]);
+        let expected = Decoder::new(&[]).unwrap().decode(&packet).unwrap().i420;
+        for padding in [3, 19, 128] {
+            let mut bank = packet.clone();
+            bank.resize(bank.len() + padding, 0);
+            // Unrelated nonzero memory must not extend the coded slice.
+            bank.extend_from_slice(&[0, 0, 128, 128].repeat(256));
+            let (used, idr) = access_unit(&bank).unwrap();
+            assert_eq!(used, packet.len());
+            assert!(idr);
+            assert_eq!(
+                Decoder::new(&[])
+                    .unwrap()
+                    .decode(&bank[..used])
+                    .unwrap()
+                    .i420,
+                expected
+            );
+            bank.truncate(packet.len() + padding);
+            bank.extend_from_slice(&packet);
+            assert_eq!(access_unit(&bank).unwrap().0, packet.len() + padding);
+        }
+        let mut truncated = packet[..packet.len() / 2].to_vec();
+        truncated.extend_from_slice(&[0; 19]);
+        truncated.extend_from_slice(&[128; 128]);
+        let used = access_unit(&truncated).unwrap().0;
+        assert!(
+            Decoder::new(&[])
+                .unwrap()
+                .decode(&truncated[..used])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn emulation_prevention_keeps_escaped_zero_delimiters_and_refuses_missing_escape() {
+        for last in [0, 1, 2, 3] {
+            let bits = Bits::new(&[0x80, 0, 0, 3, last, 0x80]).unwrap();
+            assert_eq!(bits.bytes, [0x80, 0, 0, last, 0x80]);
+        }
+        for last in [0, 1, 2] {
+            assert!(Bits::new(&[0x80, 0, 0, last, 0x80]).is_err());
+        }
+        let malformed = [0, 0, 0, 1, 0x65, 0xb8, 0, 0, 2, 0x80];
+        assert!(
+            access_unit(&malformed)
+                .unwrap_err()
+                .contains("emulation-prevention")
+        );
+        for last in [0, 1, 2] {
+            let valid = [0, 0, 0, 1, 0x65, 0xb8, 0, 0, 3, last, 0x80];
+            assert_eq!(access_unit(&valid).unwrap(), (valid.len(), true));
+        }
+    }
+
+    #[test]
     fn progressive_macroblock_height_crops_1088_to_1080() {
         fn ue(value: u32) -> String {
             let bits = format!("{:b}", value + 1);
@@ -407,7 +491,11 @@ impl Decoder {
                 end += 1;
             }
             if bytes[start] & 31 == 7 {
-                let next = sequence(&bytes[start..end])?;
+                let mut payload_end = end;
+                while payload_end > start && bytes[payload_end - 1] == 0 {
+                    payload_end -= 1;
+                }
+                let next = sequence(&bytes[start..payload_end])?;
                 if self.sequence.is_some_and(|old| old != next) {
                     return Err("AVC dimensions changed without reset".into());
                 }
