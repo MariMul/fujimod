@@ -20,7 +20,12 @@ pub struct Located {
     pub packaging: Packaging,
     pub missing: Vec<String>,
 }
-fn source(data: &[u8], offset: usize, size: usize, compressed: bool) -> Result<(Source, Vec<u8>)> {
+pub(super) fn source(
+    data: &[u8],
+    offset: usize,
+    size: usize,
+    compressed: bool,
+) -> Result<(Source, Vec<u8>)> {
     let bytes = extent(data, offset, size)?;
     let decoded = if compressed {
         fujimod_firmware::decompress(bytes)?.0
@@ -407,7 +412,11 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
 
 /// Locate mappings and packaging from fresh update bytes, without a body ID.
 pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
-    let table = table(data)?;
+    let table = match table(data) {
+        Ok(table) => table,
+        Err(_) if processor == Processor::Exr => return crate::lupi_load_maps::locate(data),
+        Err(error) => return Err(error),
+    };
     let vector: Vec<_> = (0..8).flat_map(|_| 0xe59ff018u32.to_le_bytes()).collect();
     let loaders: Vec<_> = (0..table.offset)
         .step_by(4)
@@ -530,7 +539,12 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
     let mut edits = if processor == Processor::XpPro {
         xpp_edits(&code, &table)?
     } else {
-        exr_edits(&code, &table, table.offset - bias, processor == Processor::Exr)?
+        exr_edits(
+            &code,
+            &table,
+            table.offset - bias,
+            processor == Processor::Exr,
+        )?
     };
     edits.push(Edit {
         address: table.address + 8,

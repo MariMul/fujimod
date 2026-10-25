@@ -12,6 +12,8 @@ pub struct Lupi {
     pub open: u32,
     pub read: u32,
     pub filesystem: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firmware_transport: Option<crate::lupi_firmware::Transport>,
 }
 pub fn stage(api: &Lupi, ram: &[u8]) -> Result<Vec<u8>> {
     require(
@@ -50,7 +52,7 @@ pub fn package(
     header: &Packaging,
     inverted: &[u8],
     plan: &Plan,
-    ram: Vec<u8>,
+    mut ram: Vec<u8>,
 ) -> Result<Vec<File>> {
     require(
         plan.entry == 0 && header.entry == 0 && header.load_address == 0,
@@ -62,11 +64,20 @@ pub fn package(
         header.header_filename == "ffsys.bin" && header.image_filename == "ffboot.bin",
         "Lupi ROM filenames differ",
     )?;
-    Ok(vec![
+    let storage = api
+        .firmware_transport
+        .as_ref()
+        .map(|transport| transport.install(api, inverted, plan, &mut ram))
+        .transpose()?;
+    let mut files = vec![
         File::new("ffsys.bin", system)?,
         File::new("ffboot.bin", stage(api, &ram)?)?,
         File::new("ffimage.bin", ram)?,
-    ])
+    ];
+    if let Some(storage) = storage {
+        files.push(File::new("ffstore.bin", storage)?);
+    }
+    Ok(files)
 }
 
 #[cfg(test)]
@@ -78,6 +89,7 @@ mod tests {
             open: 0x80001a74,
             read: 0x80001b38,
             filesystem: 0xfff00000,
+            firmware_transport: None,
         };
         let payload = vec![0x35; 70001];
         let bytes = stage(&api, &payload).unwrap();

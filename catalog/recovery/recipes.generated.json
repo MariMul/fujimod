@@ -517,9 +517,238 @@
     "source_sha256": "bfa394d40b7e9cdda2fd78ac1e5ebe21dbe1e41dbb1d6cc615b88d6c10295897",
     "update_filename": "FPUPDATE.DAT",
     "generation": "exr",
-    "plan": null,
-    "packaging": null,
-    "lupi": null,
+    "plan": {
+      "size": 24585568,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 33372,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "bfc189330c48126905cb104642cbd64465e090679e402b91f9b4e76e3f896d22"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 5914624,
+          "source": {
+            "dat_offset": 819804,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "ab8ed1c08edbf93d18644da104699fddcc6a71ebd915be83b6b254d7f55d2867"
+          }
+        },
+        {
+          "name": "kernel-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 295516,
+            "size": 53952,
+            "compression": "raw",
+            "decoded_size": 53952,
+            "sha256": "3e80d68d6c31008198ad57cf9cec626effb41410523826bb1a2313f65661b315"
+          }
+        },
+        {
+          "name": "kernel-1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 361052,
+            "size": 53920,
+            "compression": "raw",
+            "decoded_size": 53920,
+            "sha256": "3f8d1e1f1710c9e9a6f2652b21ab5aba535239a9b7fd854f77de1041665cf9b1"
+          }
+        },
+        {
+          "name": "row-0",
+          "address": 5915648,
+          "source": {
+            "dat_offset": 836188,
+            "size": 995921,
+            "compression": "method4",
+            "decoded_size": 2004352,
+            "sha256": "9c7ed863c46aa38e809a7c5d3681ab513f390ad0bfef214a5f53e1f59265aa58"
+          }
+        },
+        {
+          "name": "row-2",
+          "address": 14548992,
+          "source": {
+            "dat_offset": 1835612,
+            "size": 4025933,
+            "compression": "method4",
+            "decoded_size": 7244576,
+            "sha256": "4a8952e1ac7eb5ebd3a443fc0975089500ca4074f76747c8eaf9df283dfc44b7"
+          }
+        },
+        {
+          "name": "row-6",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 7815772,
+            "size": 1909924,
+            "compression": "raw",
+            "decoded_size": 1909924,
+            "sha256": "5f6eb115fce37a3e2545b4e1ee793f416e3c80dedad20e5e67df546a53f36adc"
+          }
+        },
+        {
+          "name": "row-7",
+          "address": 3424256,
+          "source": {
+            "dat_offset": 13304412,
+            "size": 480848,
+            "compression": "raw",
+            "decoded_size": 480848,
+            "sha256": "c94074ddd21ffca18e61c326703746b46379b00faadca7e4910280b09a7e524b"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "row-1",
+          "address": 7920000,
+          "size": 3190176
+        },
+        {
+          "name": "row-4",
+          "address": 21793568,
+          "size": 2792000
+        }
+      ],
+      "edits": [
+        {
+          "address": 19320,
+          "old": 3959422727,
+          "new": 3818913792,
+          "what": "retain preloaded five-word table"
+        },
+        {
+          "address": 19244,
+          "old": 3942646183,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND initialization"
+        },
+        {
+          "address": 20912,
+          "old": 3942646512,
+          "new": 3818913792,
+          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+        },
+        {
+          "address": 19324,
+          "old": 3959422922,
+          "new": 3818913792,
+          "what": "skip five-word Lupi installed-image header probe"
+        },
+        {
+          "address": 19364,
+          "old": 3942646148,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND shutdown"
+        },
+        {
+          "address": 84856,
+          "old": 3959422727,
+          "new": 3818913792,
+          "what": "retain preloaded five-word table"
+        },
+        {
+          "address": 84780,
+          "old": 3942646183,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND initialization"
+        },
+        {
+          "address": 86448,
+          "old": 3942646512,
+          "new": 3818913792,
+          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+        },
+        {
+          "address": 84860,
+          "old": 3959422922,
+          "new": 3818913792,
+          "what": "skip five-word Lupi installed-image header probe"
+        },
+        {
+          "address": 84900,
+          "old": 3942646148,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND shutdown"
+        },
+        {
+          "address": 18936,
+          "old": 3942646165,
+          "new": 3818913792,
+          "what": "retain preloaded older raw kernel"
+        },
+        {
+          "address": 84472,
+          "old": 3942646165,
+          "new": 3818913792,
+          "what": "retain preloaded older raw kernel"
+        },
+        {
+          "address": 19020,
+          "old": 3942646183,
+          "new": 3818913792,
+          "what": "retain preloaded older resident stream"
+        },
+        {
+          "address": 84556,
+          "old": 3942646183,
+          "new": 3818913792,
+          "what": "retain preloaded older resident stream"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        }
+      ],
+      "header_sha256": "b02ff3cf30a95b3dd4ae926bbdaf2a7d9e2ccfaf301096a5a83fd7cf4c8e9885",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 769,
+          "new": 769,
+          "what": "hold power through SD load"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    },
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -528,7 +757,8 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
+      "five-word Lupi runtime firmware transport and updater acceptance",
+      "version-independent stock updater acceptance"
     ]
   },
   {
@@ -537,9 +767,182 @@
     "source_sha256": "ee1895d639ee6c64fff118a9fe4bab3dc821b145bbfa381110ff678a3ddc8998",
     "update_filename": "FPUPDATE.DAT",
     "generation": "exr",
-    "plan": null,
-    "packaging": null,
-    "lupi": null,
+    "plan": {
+      "size": 15554816,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 33372,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "b2492be81d0ac5485c8130bdab7b80963b2065255c74eefb104ccb8d865e290d"
+          }
+        },
+        {
+          "name": "kernel-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 295516,
+            "size": 53952,
+            "compression": "raw",
+            "decoded_size": 53952,
+            "sha256": "f59bd0cc11e732f0d2a53492062f78472be09c6e05dec18e4c1c3526cdd93951"
+          }
+        },
+        {
+          "name": "kernel-1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 361052,
+            "size": 53888,
+            "compression": "raw",
+            "decoded_size": 53888,
+            "sha256": "4abbc3a9115d8e793f5eb7fbdb230578dd266671ebc0812b3e9ed3b7525e0df4"
+          }
+        },
+        {
+          "name": "application",
+          "address": 7798784,
+          "source": {
+            "dat_offset": 1081948,
+            "size": 1743904,
+            "compression": "raw",
+            "decoded_size": 1743904,
+            "sha256": "a386edd13d4c09b20d2f6e904e2398c6bfcb90c7349dd0ca15fd42e3c0727fe3"
+          }
+        },
+        {
+          "name": "application-extension",
+          "address": 9542688,
+          "source": {
+            "dat_offset": 2825852,
+            "size": 6012128,
+            "compression": "raw",
+            "decoded_size": 6012128,
+            "sha256": "d2382304a5f4c5769a5fdb1ecfc7482178aaa6172cac126d4bbc2178af3924e2"
+          }
+        }
+      ],
+      "bss": [],
+      "edits": [
+        {
+          "address": 133784,
+          "old": 3942646283,
+          "new": 3818913792,
+          "what": "retain preloaded raw Lupi kernel/application"
+        },
+        {
+          "address": 199320,
+          "old": 3942646283,
+          "new": 3818913792,
+          "what": "retain preloaded raw Lupi kernel/application"
+        },
+        {
+          "address": 133936,
+          "old": 3942646211,
+          "new": 3818913792,
+          "what": "retain preloaded raw Lupi kernel/application"
+        },
+        {
+          "address": 199472,
+          "old": 3942646211,
+          "new": 3818913792,
+          "what": "retain preloaded raw Lupi kernel/application"
+        },
+        {
+          "address": 134564,
+          "old": 3942646142,
+          "new": 3818913792,
+          "what": "skip raw Lupi NAND initialization"
+        },
+        {
+          "address": 136068,
+          "old": 3942646455,
+          "new": 3818913792,
+          "what": "retain empty raw Lupi bad-block list without OOB scan"
+        },
+        {
+          "address": 134644,
+          "old": 3959422817,
+          "new": 3818913792,
+          "what": "retain normal preloaded raw Lupi application policy without NAND probes"
+        },
+        {
+          "address": 134684,
+          "old": 3942646107,
+          "new": 3818913792,
+          "what": "skip raw Lupi NAND shutdown"
+        },
+        {
+          "address": 200100,
+          "old": 3942646142,
+          "new": 3818913792,
+          "what": "skip raw Lupi NAND initialization"
+        },
+        {
+          "address": 201604,
+          "old": 3942646455,
+          "new": 3818913792,
+          "what": "retain empty raw Lupi bad-block list without OOB scan"
+        },
+        {
+          "address": 200180,
+          "old": 3959422817,
+          "new": 3818913792,
+          "what": "retain normal preloaded raw Lupi application policy without NAND probes"
+        },
+        {
+          "address": 200220,
+          "old": 3942646107,
+          "new": 3818913792,
+          "what": "skip raw Lupi NAND shutdown"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        }
+      ],
+      "header_sha256": "0a38109bc0e7439049c8c565daf472f413d569d00b108ddc1a0edc9bbbe4f0d9",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 769,
+          "new": 769,
+          "what": "hold power through SD load"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    },
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -548,7 +951,8 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
+      "raw Lupi application-extension/runtime firmware transport and updater acceptance",
+      "version-independent stock updater acceptance"
     ]
   },
   {
@@ -4910,7 +5314,30 @@
     "lupi": {
       "open": 2147490420,
       "read": 2147490616,
-      "filesystem": 4293918720
+      "filesystem": 4293918720,
+      "firmware_transport": {
+        "replaced_loader_text": {
+          "address": 20480,
+          "size": 4096,
+          "sha256": "a5d8e48ee4e4748a73c2a38fc697436af9fe39c21bb87656e4c81f5a7d91828e"
+        },
+        "indexed_reader": {
+          "address": 6545468,
+          "size": 212,
+          "sha256": "518a3dd2f91fed45be943dec2134fa9856c0c2e249c7626fd1c459dde0fb3279"
+        },
+        "dat_offset": 604,
+        "suppressed_loader_calls": [
+          17908,
+          17920,
+          17948,
+          18232,
+          18320,
+          18344,
+          18432,
+          19556
+        ]
+      }
     },
     "setup": null,
     "xp5": null,
@@ -7986,9 +8413,238 @@
     "source_sha256": "049e1b5e726cce2e96a780caeb6da9f0f9f8b25dc5378c251a3cac4631ad163f",
     "update_filename": "FPUPDATE.DAT",
     "generation": "exr",
-    "plan": null,
-    "packaging": null,
-    "lupi": null,
+    "plan": {
+      "size": 24606272,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "loader",
+          "address": 0,
+          "source": {
+            "dat_offset": 33372,
+            "size": 262144,
+            "compression": "raw",
+            "decoded_size": 262144,
+            "sha256": "720ed1e8d62ff06709afdf9ac6c095e7a7381912a2be0a7156832500b11a8051"
+          }
+        },
+        {
+          "name": "section-table",
+          "address": 5914624,
+          "source": {
+            "dat_offset": 819804,
+            "size": 1024,
+            "compression": "raw",
+            "decoded_size": 1024,
+            "sha256": "5aa77ce09e15eac87a9f54ac54a43b9d7be9e8e80afeea06ffe874f86bb62e46"
+          }
+        },
+        {
+          "name": "kernel-0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 295516,
+            "size": 54048,
+            "compression": "raw",
+            "decoded_size": 54048,
+            "sha256": "fd18db4e014e8c3cda54078896601da83ffb29cfe0ecd08b5dd909121b2946b4"
+          }
+        },
+        {
+          "name": "kernel-1",
+          "address": 851968,
+          "source": {
+            "dat_offset": 361052,
+            "size": 53984,
+            "compression": "raw",
+            "decoded_size": 53984,
+            "sha256": "01082de41e182709ba1980a549e40b4da585193d48688bedc1c26c7a99d12975"
+          }
+        },
+        {
+          "name": "row-0",
+          "address": 5915648,
+          "source": {
+            "dat_offset": 836188,
+            "size": 1013090,
+            "compression": "method4",
+            "decoded_size": 2024448,
+            "sha256": "cd8a5b35e38f3cdd05fda0cd1f75692dc07fb050b44d8062ec64ff6e626f0eaa"
+          }
+        },
+        {
+          "name": "row-2",
+          "address": 14565376,
+          "source": {
+            "dat_offset": 1851996,
+            "size": 3995801,
+            "compression": "method4",
+            "decoded_size": 7203584,
+            "sha256": "b85eb89e616c9b04fcbf5b3090106c721fdb80061dc68beecff2c3175c9fdad4"
+          }
+        },
+        {
+          "name": "row-6",
+          "address": 1245184,
+          "source": {
+            "dat_offset": 7815772,
+            "size": 1538544,
+            "compression": "raw",
+            "decoded_size": 1538544,
+            "sha256": "5c30a4733256b6991813ca822c28d7f46e46a4e0fa5ae7f39696ab76a140b6a7"
+          }
+        },
+        {
+          "name": "row-7",
+          "address": 3424256,
+          "source": {
+            "dat_offset": 13304412,
+            "size": 447228,
+            "compression": "raw",
+            "decoded_size": 447228,
+            "sha256": "61e36c5a5c10c741a881ada386f8ee7387680d5579db242c90666aebf32f369d"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "row-1",
+          "address": 7940096,
+          "size": 3185056
+        },
+        {
+          "name": "row-4",
+          "address": 21768960,
+          "size": 2837312
+        }
+      ],
+      "edits": [
+        {
+          "address": 19436,
+          "old": 3959422698,
+          "new": 3818913792,
+          "what": "retain preloaded five-word table"
+        },
+        {
+          "address": 19328,
+          "old": 3942646212,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND initialization"
+        },
+        {
+          "address": 21112,
+          "old": 3942646533,
+          "new": 3818913792,
+          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+        },
+        {
+          "address": 19456,
+          "old": 3959422906,
+          "new": 3818913792,
+          "what": "skip five-word Lupi installed-image header probe"
+        },
+        {
+          "address": 19540,
+          "old": 3942646154,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND shutdown"
+        },
+        {
+          "address": 84972,
+          "old": 3959422698,
+          "new": 3818913792,
+          "what": "retain preloaded five-word table"
+        },
+        {
+          "address": 84864,
+          "old": 3942646212,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND initialization"
+        },
+        {
+          "address": 86648,
+          "old": 3942646533,
+          "new": 3818913792,
+          "what": "retain empty five-word Lupi bad-block list without OOB scan"
+        },
+        {
+          "address": 84992,
+          "old": 3959422906,
+          "new": 3818913792,
+          "what": "skip five-word Lupi installed-image header probe"
+        },
+        {
+          "address": 85076,
+          "old": 3942646154,
+          "new": 3818913792,
+          "what": "skip five-word Lupi NAND shutdown"
+        },
+        {
+          "address": 18956,
+          "old": 3942646207,
+          "new": 3818913792,
+          "what": "retain preloaded older raw kernel"
+        },
+        {
+          "address": 84492,
+          "old": 3942646207,
+          "new": 3818913792,
+          "what": "retain preloaded older raw kernel"
+        },
+        {
+          "address": 19076,
+          "old": 3942646216,
+          "new": 3818913792,
+          "what": "retain preloaded older resident stream"
+        },
+        {
+          "address": 84612,
+          "old": 3942646216,
+          "new": 3818913792,
+          "what": "retain preloaded older resident stream"
+        }
+      ]
+    },
+    "packaging": {
+      "header_parts": [
+        {
+          "dat_offset": 604,
+          "size": 512
+        }
+      ],
+      "header_sha256": "1fccbfc95b4a334433ccf8b55fcea591bd9a2bf4ae054e235e6150e68ebae91f",
+      "header_words": [
+        {
+          "offset": 0,
+          "value": 16755285
+        },
+        {
+          "offset": 4,
+          "value": 19088743
+        },
+        {
+          "offset": 8,
+          "value": 2309737967
+        }
+      ],
+      "edits": [
+        {
+          "address": 16,
+          "old": 768,
+          "new": 769,
+          "what": "hold power through SD load"
+        }
+      ],
+      "header_filename": "ffsys.bin",
+      "image_filename": "ffboot.bin",
+      "entry": 0,
+      "load_address": 0
+    },
+    "lupi": {
+      "open": 2147490420,
+      "read": 2147490616,
+      "filesystem": 4293918720
+    },
     "setup": null,
     "xp5": null,
     "cold_start": null,
@@ -8007,7 +8663,8 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "located SD startup facts: Error: Invalid(\"No unique rooted nine-word section table with bounded overlay banks\")"
+      "five-word Lupi runtime firmware transport and updater acceptance",
+      "version-independent stock updater acceptance"
     ]
   },
   {
