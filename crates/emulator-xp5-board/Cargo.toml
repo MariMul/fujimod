@@ -21,6 +21,7 @@ fujimod-emulator-cpu.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-sensor-input.workspace = true
 fujimod-emulator-devices.workspace = true
+fujimod-emulator-graphics.workspace = true
 fujimod-emulator-ip.workspace = true
 fujimod-emulator-ip-arm.workspace = true
 fujimod-emulator-ip-dmp.workspace = true

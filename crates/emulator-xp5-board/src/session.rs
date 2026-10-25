@@ -1,7 +1,8 @@
 //! External XP5 controls and GPIO inputs of an opened XP5 session.
 use fujimod_emulator_session::Session;
 use fujimod_emulator_devices::xp5::pins::SharedPins;
-use fujimod_emulator_parts_controls::resistor_keys::{Key, ResistorKeys};
+pub use fujimod_emulator_parts_controls::resistor_keys::Key;
+use fujimod_emulator_parts_controls::resistor_keys::ResistorKeys;
 use std::time::Duration;
 
 /// External XP5 controls retained after device construction, for the session

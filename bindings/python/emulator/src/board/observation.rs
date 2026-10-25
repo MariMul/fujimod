@@ -2,7 +2,12 @@
 use super::*;
 impl Board {
     pub(super) fn clear_observation(&mut self) {
-        if let Some(Backend::Graph(session)) = self.backend.as_ref() {
+        let session = match self.backend.as_ref() {
+            Some(Backend::Graph(session)) => Some(session),
+            Some(Backend::Xp5(opened)) => Some(&opened.session),
+            _ => None,
+        };
+        if let Some(session) = session {
             if let Some(mut watch) = self.function_watch.take() {
                 let _ = session.board.function_watch_end(&mut watch);
             }

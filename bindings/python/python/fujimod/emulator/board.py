@@ -555,6 +555,26 @@ class Session:
         """Return the current externally supplied ADC sample channels."""
         return tuple(self._native_board().adc_samples(self._node(node)))
 
+    def xp5_gpio_input(self, port: int, pin: int, high: bool) -> None:
+        """Drive a physical input pad on an XP5 board."""
+        if type(port) is not int or type(pin) is not int or type(high) is not bool:
+            raise TypeError("XP5 GPIO input needs an integer port/pin and boolean level")
+        self._native_board().xp5_gpio_input(port, pin, high)
+
+    def xp5_gpio_level(self, port: int, pin: int) -> bool:
+        """Observe a physical input pad on an XP5 board."""
+        if type(port) is not int or type(pin) is not int:
+            raise TypeError("XP5 GPIO input needs an integer port and pin")
+        return self._native_board().xp5_gpio_level(port, pin)
+
+    def xp5_key(self, at_ns: int, key: str, pressed: bool) -> None:
+        """Queue a resistor-key edge at an absolute guest nanosecond."""
+        if type(at_ns) is not int or not 0 <= at_ns < 1 << 64 or type(pressed) is not bool:
+            raise TypeError("XP5 key edge needs an unsigned time and boolean pressed state")
+        if not isinstance(key, str) or not key:
+            raise TypeError("XP5 key must have a name")
+        self._native_board().xp5_key(at_ns, key, pressed)
+
     def set_adc_samples(self, node: str, samples: Sequence[int]) -> None:
         """Replace the ADC channels with unsigned 16-bit sample values."""
         if isinstance(samples, (str, bytes, bytearray)) or not isinstance(

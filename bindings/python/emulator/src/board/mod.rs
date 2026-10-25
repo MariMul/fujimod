@@ -5,6 +5,7 @@ mod context;
 mod loops;
 mod observation;
 mod xp4;
+mod xp5;
 pub use checkpoint::Checkpoint;
 use fujimod_python_base::xp4_backend;
 mod device;
@@ -36,6 +37,7 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
 
 enum Backend {
     Graph(fujimod_emulator_session::Session),
+    Xp5(Box<xp5::Opened>),
     Xp4(Box<dyn xp4_backend::Xp4Backend>),
 }
 
@@ -124,6 +126,7 @@ impl Board {
     fn session(&self) -> PyResult<&fujimod_emulator_session::Session> {
         match self.backend.as_ref() {
             Some(Backend::Graph(session)) => Ok(session),
+            Some(Backend::Xp5(opened)) => Ok(&opened.session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
                 "Selected XP4 system does not support this graph operation",
             )),
@@ -133,6 +136,7 @@ impl Board {
     pub fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator_session::Session> {
         match self.backend.as_mut() {
             Some(Backend::Graph(session)) => Ok(session),
+            Some(Backend::Xp5(opened)) => Ok(&mut opened.session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
                 "Selected XP4 system does not support this graph operation",
             )),
@@ -148,7 +152,7 @@ impl Board {
     fn xp4_session(&self) -> PyResult<&dyn xp4_backend::Xp4Backend> {
         match self.backend.as_ref() {
             Some(Backend::Xp4(session)) => Ok(session.as_ref()),
-            Some(Backend::Graph(_)) => Err(PyRuntimeError::new_err(
+            Some(Backend::Graph(_) | Backend::Xp5(_)) => Err(PyRuntimeError::new_err(
                 "Selected graph system does not support this XP4 operation",
             )),
             None => Err(PyRuntimeError::new_err("runtime is closed")),
@@ -172,10 +176,10 @@ impl Board {
 impl Drop for Board {
     fn drop(&mut self) {
         self.clear_observation();
-        if let (Some(mut driver), Some(Backend::Graph(session))) =
-            (self.driver.take(), self.backend.as_ref())
-        {
-            let _ = session.board.harness_end(&mut driver);
+        if let Some(mut driver) = self.driver.take() {
+            if let Ok(session) = self.session() {
+                let _ = session.board.harness_end(&mut driver);
+            }
         }
     }
 }
@@ -447,6 +451,21 @@ impl Board {
                 sum.checked_add(bytes)
                     .ok_or_else(|| PyValueError::new_err("declared RAM extent overflows host size"))
             })?;
+        if json::<serde_json::Value>(devices)?
+            .get("kind")
+            .and_then(serde_json::Value::as_str)
+            == Some("xp5")
+        {
+            if !models.is_empty() || json::<serde_json::Value>(scene)? != serde_json::json!({}) {
+                return Err(PyValueError::new_err(
+                    "XP5 requires its native devices and explicit assets",
+                ));
+            }
+            return Self::xp5_graph(
+                graph, devices, assets, read_limit, mode, continue_refusals, engine,
+                serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}),
+            );
+        }
         let plan = Plan::parse(devices.as_bytes()).map_err(error)?;
         plan.validate_reset_outputs(
             &graph
@@ -548,10 +567,10 @@ impl Board {
     }
     fn __clear__(&mut self) {
         self.clear_observation();
-        if let (Some(mut driver), Some(Backend::Graph(session))) =
-            (self.driver.take(), self.backend.as_ref())
-        {
-            let _ = session.board.harness_end(&mut driver);
+        if let Some(mut driver) = self.driver.take() {
+            if let Ok(session) = self.session() {
+                let _ = session.board.harness_end(&mut driver);
+            }
         }
         if let Some(Backend::Xp4(session)) = &self.backend {
             session.__clear__();
