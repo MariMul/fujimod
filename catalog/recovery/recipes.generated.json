@@ -747,7 +747,37 @@
     "lupi": {
       "open": 2147490420,
       "read": 2147490616,
-      "filesystem": 4293918720
+      "filesystem": 4293918720,
+      "firmware_transport": {
+        "loader_reservation": {
+          "address": 8192,
+          "size": 4096,
+          "sha256": "f47a8ec3e9aff2318d896942282ad4fe37d6391c82914f54a5da8a37de1300c6"
+        },
+        "indexed_reader": {
+          "address": 6217176,
+          "size": 208,
+          "sha256": "1159433c59127a82f08d52984e99080148ff0aaeccbfb49a21257321e61f5b7e"
+        },
+        "indexed_arguments": 4,
+        "dat_offset": 604,
+        "suppressed_loader_calls": [
+          18936,
+          19020,
+          19244,
+          19320,
+          19324,
+          19364,
+          20912,
+          84472,
+          84556,
+          84780,
+          84856,
+          84860,
+          84900,
+          86448
+        ]
+      }
     },
     "setup": null,
     "xp5": null,
@@ -757,7 +787,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "five-word Lupi runtime firmware transport and updater acceptance",
+      "five-word Lupi stock updater acceptance",
       "version-independent stock updater acceptance"
     ]
   },
@@ -941,7 +971,35 @@
     "lupi": {
       "open": 2147490420,
       "read": 2147490616,
-      "filesystem": 4293918720
+      "filesystem": 4293918720,
+      "firmware_transport": {
+        "loader_reservation": {
+          "address": 8192,
+          "size": 4096,
+          "sha256": "f47a8ec3e9aff2318d896942282ad4fe37d6391c82914f54a5da8a37de1300c6"
+        },
+        "indexed_reader": {
+          "address": 8056592,
+          "size": 200,
+          "sha256": "82ceae4a9bfbd0dce77adbb44aa22c06bfa313ed7bac7c8ebc9011c41a7d5d21"
+        },
+        "indexed_arguments": 3,
+        "dat_offset": 604,
+        "suppressed_loader_calls": [
+          133784,
+          133936,
+          134564,
+          134644,
+          134684,
+          136068,
+          199320,
+          199472,
+          200100,
+          200180,
+          200220,
+          201604
+        ]
+      }
     },
     "setup": null,
     "xp5": null,
@@ -951,7 +1009,7 @@
     "firmware_update": null,
     "updater": null,
     "missing": [
-      "raw Lupi application-extension/runtime firmware transport and updater acceptance",
+      "raw Lupi stock updater acceptance",
       "version-independent stock updater acceptance"
     ]
   },
@@ -5316,16 +5374,17 @@
       "read": 2147490616,
       "filesystem": 4293918720,
       "firmware_transport": {
-        "replaced_loader_text": {
-          "address": 20480,
+        "loader_reservation": {
+          "address": 8192,
           "size": 4096,
-          "sha256": "a5d8e48ee4e4748a73c2a38fc697436af9fe39c21bb87656e4c81f5a7d91828e"
+          "sha256": "f47a8ec3e9aff2318d896942282ad4fe37d6391c82914f54a5da8a37de1300c6"
         },
         "indexed_reader": {
           "address": 6545468,
           "size": 212,
           "sha256": "518a3dd2f91fed45be943dec2134fa9856c0c2e249c7626fd1c459dde0fb3279"
         },
+        "indexed_arguments": 5,
         "dat_offset": 604,
         "suppressed_loader_calls": [
           17908,
@@ -8643,7 +8702,37 @@
     "lupi": {
       "open": 2147490420,
       "read": 2147490616,
-      "filesystem": 4293918720
+      "filesystem": 4293918720,
+      "firmware_transport": {
+        "loader_reservation": {
+          "address": 8192,
+          "size": 4096,
+          "sha256": "f47a8ec3e9aff2318d896942282ad4fe37d6391c82914f54a5da8a37de1300c6"
+        },
+        "indexed_reader": {
+          "address": 6214364,
+          "size": 208,
+          "sha256": "1f65b5d50ff3c17881b5896e766cc5c3a96aa2a0771ca1ada57cd6815abfb9a9"
+        },
+        "indexed_arguments": 4,
+        "dat_offset": 604,
+        "suppressed_loader_calls": [
+          18956,
+          19076,
+          19328,
+          19436,
+          19456,
+          19540,
+          21112,
+          84492,
+          84612,
+          84864,
+          84972,
+          84992,
+          85076,
+          86648
+        ]
+      }
     },
     "setup": null,
     "xp5": null,
@@ -8660,10 +8749,16 @@
         }
       ]
     },
-    "firmware_update": null,
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    },
     "updater": null,
     "missing": [
-      "five-word Lupi runtime firmware transport and updater acceptance",
+      "five-word Lupi stock updater acceptance",
       "version-independent stock updater acceptance"
     ]
   },

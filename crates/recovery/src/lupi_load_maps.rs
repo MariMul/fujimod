@@ -283,7 +283,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
             entry: 0,
             load_address: 0,
         },
-        missing: vec!["five-word Lupi runtime firmware transport and updater acceptance".into()],
+        missing: vec!["five-word Lupi stock updater acceptance".into()],
     })
 }
 
@@ -549,9 +549,6 @@ fn locate_raw(
             entry: 0,
             load_address: 0,
         },
-        missing: vec![
-            "raw Lupi application-extension/runtime firmware transport and updater acceptance"
-                .into(),
-        ],
+        missing: vec!["raw Lupi stock updater acceptance".into()],
     })
 }

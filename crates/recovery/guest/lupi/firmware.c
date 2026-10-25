@@ -55,3 +55,12 @@ finish:
     __asm__ volatile("msr cpsr_c, %0" :: "r"(saved) : "memory");
     return (int)status;
 }
+
+int lupi_firmware_indexed4(u32 block, u32 count, u8 *output,
+                           void (*progress)(u32)) {
+    return lupi_firmware_indexed(block,count,output,progress,1);
+}
+
+int lupi_firmware_indexed3(u32 block, u32 count, u8 *output) {
+    return lupi_firmware_indexed(block,count,output,0,1);
+}
