@@ -1,4 +1,4 @@
-//! Public releases and the internal version returned by the service interface.
+//! Public releases and their internal firmware identities.
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,11 +16,11 @@ pub const SCHEMA_URI: &str = "https://fujimod.com/schemas/firmware-versions.gene
 pub struct FirmwareVersion {
     /// Stable identity of the firmware release.
     pub firmware_id: String,
-    /// Camera model reported by the service interface.
+    /// Camera product name.
     pub product: String,
     /// Public release version shown on Fujifilm's download page.
     pub version: String,
-    /// Internal version returned by the service interface for this release.
+    /// Native BCD version, LEN build identifier, or three-part HCE version.
     pub internal_version: String,
     /// SHA-256 of the official update from which the mapping was extracted.
     pub update_sha256: String,
@@ -58,6 +58,52 @@ fn version(value: &str) -> Option<(u8, u8)> {
     (major <= 99).then_some((major, minor))
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum InternalVersion {
+    Native(u8, u8),
+    Len(String, u8),
+    Hce(u8, u8, u8),
+}
+
+impl InternalVersion {
+    fn parse(value: &str) -> Option<Self> {
+        if let Some((major, minor)) = version(value) {
+            return Some(Self::Native(major, minor));
+        }
+        if let Some((model, revision)) = value.split_once("-v") {
+            if model.len() != 5
+                || !model.starts_with('C')
+                || revision.len() != 2
+                || !model[1..]
+                    .bytes()
+                    .chain(revision.bytes())
+                    .all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b))
+            {
+                return None;
+            }
+            return Some(Self::Len(
+                model.into(),
+                u8::from_str_radix(revision, 16).ok()?,
+            ));
+        }
+        let (major, suffix) = value.split_once('.')?;
+        if suffix.len() != 4 || !suffix.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let (major, minor) = version(&format!("{major}.{}", &suffix[..2]))?;
+        Some(Self::Hce(major, minor, suffix[2..].parse().ok()?))
+    }
+
+    fn order(&self, next: &Self) -> Option<std::cmp::Ordering> {
+        match (self, next) {
+            (Self::Native(a, b), Self::Native(c, d)) => Some((a, b).cmp(&(c, d))),
+            (Self::Hce(a, b, c), Self::Hce(d, e, f)) => Some((a, b, c).cmp(&(d, e, f))),
+            (Self::Len(model, a), Self::Len(other, b)) if model == other => Some(a.cmp(b)),
+            _ => None,
+        }
+    }
+}
+
 impl FirmwareVersions {
     /// Decode and check identities, version ordering and official download links.
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
@@ -66,13 +112,13 @@ impl FirmwareVersions {
             return Err("firmware versions schema differs".into());
         }
         let mut ids = BTreeSet::new();
-        let mut products: BTreeMap<&str, BTreeMap<(u8, u8), (u8, u8)>> = BTreeMap::new();
+        let mut products: BTreeMap<&str, BTreeMap<(u8, u8), InternalVersion>> = BTreeMap::new();
         for release in &document.releases {
             fujimod_catalog_identity::validate_id(&release.firmware_id)?;
             fujimod_catalog_identity::validate_sha256(&release.update_sha256)?;
             let public = version(&release.version).ok_or("invalid public firmware version")?;
-            let internal =
-                version(&release.internal_version).ok_or("invalid internal firmware version")?;
+            let internal = InternalVersion::parse(&release.internal_version)
+                .ok_or("invalid internal firmware version")?;
             if release.product.trim().is_empty()
                 || release.product.trim() != release.product
                 || !ids.insert(&release.firmware_id)
@@ -101,10 +147,15 @@ impl FirmwareVersions {
             }
         }
         for (product, releases) in products {
-            let mut previous = None;
+            let mut previous: Option<InternalVersion> = None;
             for internal in releases.into_values() {
-                if previous.is_some_and(|value| value > internal) {
-                    return Err(format!("internal firmware versions decrease for {product}"));
+                if let Some(value) = previous.as_ref() {
+                    let ordering = value.order(&internal).ok_or_else(|| {
+                        format!("incomparable internal firmware identities for {product}")
+                    })?;
+                    if ordering == std::cmp::Ordering::Greater {
+                        return Err(format!("internal firmware versions decrease for {product}"));
+                    }
                 }
                 previous = Some(internal);
             }
@@ -123,6 +174,23 @@ impl FirmwareVersions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn internal_identities_preserve_build_and_patch_components() {
+        let first = InternalVersion::parse("C1234-v99").unwrap();
+        let second = InternalVersion::parse("C1234-vA0").unwrap();
+        assert_eq!(first.order(&second), Some(std::cmp::Ordering::Less));
+        assert_eq!(
+            first.order(&InternalVersion::parse("C5678-v99").unwrap()),
+            None
+        );
+        let first = InternalVersion::parse("2.0006").unwrap();
+        let second = InternalVersion::parse("2.0100").unwrap();
+        assert_eq!(first.order(&second), Some(std::cmp::Ordering::Less));
+        for value in ["C1234-vZZ", "C1234-v1", "2.001", "2.00000", "nan"] {
+            assert_eq!(InternalVersion::parse(value), None);
+        }
+    }
 
     #[test]
     fn bundled_map_covers_known_models_and_distinguishes_internal_from_public_versions() {

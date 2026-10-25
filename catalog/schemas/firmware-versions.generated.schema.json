@@ -13,11 +13,11 @@
           "type": "string"
         },
         "internal_version": {
-          "description": "Internal version returned by the service interface for this release.",
+          "description": "Native BCD version, LEN build identifier, or three-part HCE version.",
           "type": "string"
         },
         "product": {
-          "description": "Camera model reported by the service interface.",
+          "description": "Camera product name.",
           "type": "string"
         },
         "update_sha256": {

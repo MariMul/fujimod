@@ -24,8 +24,11 @@ versions to public release versions and official update pages. Each mapping is
 qualified by its update's SHA-256. The map covers known updates independently
 of hardware, emulation and bulk-read profiles and is exposed by
 `ReferenceCatalog::firmware_versions` and JavaScript's `catalog.firmwareVersions()`.
-Internal versions are ordered only within the same product; catalog validation
-rejects decreasing internal versions across known public releases.
+Native internal versions use BCD decimal notation. LEN builds retain identifiers
+such as `C1234-vA0`; HCE versions include their revision, such as `2.0006`.
+Internal versions are ordered only within the same product and representation;
+catalog validation rejects decreasing or incomparable internal identities across
+known public releases.
 
 A body directory may contain only `controls.json`, without `body.json` or a
 hardware definition. `ReferenceCatalog::physical_controls` retrieves these
