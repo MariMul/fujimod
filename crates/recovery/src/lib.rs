@@ -27,11 +27,17 @@ pub struct Proof {
     pub sha256: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
+pub enum VersionConfiguration {
+    Reader { address: usize },
+    Memory { pointer: usize, selector_offset: usize },
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VersionContract {
     pub public_version: [u8; 2],
     pub version_getter: Proof,
-    pub configuration_reader: usize,
+    pub configuration: VersionConfiguration,
     pub getter_arguments: u8,
     pub comparison: Proof,
     pub version_producer: Proof,

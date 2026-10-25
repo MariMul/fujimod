@@ -1085,7 +1085,10 @@
         "size": 68,
         "sha256": "8a8e5e6e462347b17a0258d05c1df59483b9e3c87cf0bf5614a18984559859d2"
       },
-      "configuration_reader": 9730768,
+      "configuration": {
+        "kind": "reader",
+        "address": 9730768
+      },
       "getter_arguments": 2,
       "comparison": {
         "address": 17019324,
@@ -1319,7 +1322,10 @@
         "size": 72,
         "sha256": "e2ce3f0e69996fb85179cea8fef3e78fe63898a420fe10c871a9a296052413fa"
       },
-      "configuration_reader": 17987656,
+      "configuration": {
+        "kind": "reader",
+        "address": 17987656
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 30489912,
@@ -2734,7 +2740,10 @@
         "size": 68,
         "sha256": "58272bb267f3c6d5369a5f81556df6a9d44cffd4377b416f26fa8289bc176869"
       },
-      "configuration_reader": 9720600,
+      "configuration": {
+        "kind": "reader",
+        "address": 9720600
+      },
       "getter_arguments": 2,
       "comparison": {
         "address": 17018892,
@@ -3398,7 +3407,10 @@
         "size": 68,
         "sha256": "236ab02c38febb36a0f3399b3c1b4820b5be034d1aea4797963f6381bdff7d1e"
       },
-      "configuration_reader": 9717420,
+      "configuration": {
+        "kind": "reader",
+        "address": 9717420
+      },
       "getter_arguments": 2,
       "comparison": {
         "address": 17106924,
@@ -3644,7 +3656,10 @@
         "size": 68,
         "sha256": "f5a4a62b32269563cc040c7c3fddd361a5c3018772982484c3bfbf01a942adc9"
       },
-      "configuration_reader": 9717680,
+      "configuration": {
+        "kind": "reader",
+        "address": 9717680
+      },
       "getter_arguments": 2,
       "comparison": {
         "address": 17167436,
@@ -3888,7 +3903,10 @@
         "size": 72,
         "sha256": "bef6925d1858ac51bdc5ef046539a11ff562a617f4dd14c55c318fe1a5cd1757"
       },
-      "configuration_reader": 19343152,
+      "configuration": {
+        "kind": "reader",
+        "address": 19343152
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 32540732,
@@ -5599,7 +5617,10 @@
         "size": 72,
         "sha256": "0da07e49d0c0fb8e3c46d00a3fa4fb0ec0de11fbf162547693cb9130a0b20cf1"
       },
-      "configuration_reader": 18063824,
+      "configuration": {
+        "kind": "reader",
+        "address": 18063824
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 31807684,
@@ -6267,7 +6288,10 @@
         "size": 72,
         "sha256": "57df0831cfe9f4234891567411b302c0ba3a080761cbd5c3001031afb7cb5830"
       },
-      "configuration_reader": 19455912,
+      "configuration": {
+        "kind": "reader",
+        "address": 19455912
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 33845152,
@@ -6522,10 +6546,51 @@
     "file_api": null,
     "sd_boot": null,
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        5,
+        82
+      ],
+      "version_getter": {
+        "address": 8867636,
+        "size": 92,
+        "sha256": "864f453395237541f203f0858c39927700ebb3ab79d2c6e471d21ef327cd10d6"
+      },
+      "configuration": {
+        "kind": "memory",
+        "pointer": 12748220,
+        "selector_offset": 518
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 16807848,
+        "size": 620,
+        "sha256": "096d739b72f6238da504aa277a01701d0069a981622a1503c353e4a31535cfd4"
+      },
+      "target_major": 12685496,
+      "target_minor": 12685500,
+      "current_major": 12685504,
+      "current_minor": 12685508,
+      "version_producer": {
+        "address": 18756860,
+        "size": 264,
+        "sha256": "9be7bcf4da8a2fafab081a1e82566a48d81484273595d903e4e1e01cfddefe85"
+      },
+      "producer_stop": 18756896,
+      "version_context_pointer": 23453308,
+      "version_context": 12684968,
+      "current_major_setter": {
+        "address": 18760232,
+        "size": 52,
+        "sha256": "2ac7c59ae6773d8c1ba18398d995e2eb33da0ae69c87d68976602cf751e98953"
+      },
+      "current_minor_setter": {
+        "address": 18760284,
+        "size": 52,
+        "sha256": "6eda63c0d8bcc5da7d388ccafa49cc5da2e0e5b0050890d3efa666f4d8777a83"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt10-131",
@@ -6741,7 +6806,10 @@
         "size": 68,
         "sha256": "59941bc165d793d298ade84db96f24445339cad9c09404b368a1c73caf4ad1f2"
       },
-      "configuration_reader": 9717140,
+      "configuration": {
+        "kind": "reader",
+        "address": 9717140
+      },
       "getter_arguments": 2,
       "comparison": {
         "address": 17154584,
@@ -6975,7 +7043,10 @@
         "size": 72,
         "sha256": "bf3bb88c311628ddb7dc6c3dea6168489ffdc26f3e30af6673c689e79cf27edc"
       },
-      "configuration_reader": 17951284,
+      "configuration": {
+        "kind": "reader",
+        "address": 17951284
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 30079528,
@@ -7219,7 +7290,10 @@
         "size": 72,
         "sha256": "bef6925d1858ac51bdc5ef046539a11ff562a617f4dd14c55c318fe1a5cd1757"
       },
-      "configuration_reader": 17877656,
+      "configuration": {
+        "kind": "reader",
+        "address": 17877656
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 29636168,
@@ -7463,7 +7537,10 @@
         "size": 72,
         "sha256": "847c6389b9f83929df22f42b1ecded6a86f2379925016facbeac492eb10c52ea"
       },
-      "configuration_reader": 19344724,
+      "configuration": {
+        "kind": "reader",
+        "address": 19344724
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 33127648,
@@ -7726,7 +7803,10 @@
         "size": 72,
         "sha256": "fe43a708d0033a3844556bdb63ec398cd112085358fb216a8fb739bcb2243784"
       },
-      "configuration_reader": 19282260,
+      "configuration": {
+        "kind": "reader",
+        "address": 19282260
+      },
       "getter_arguments": 1,
       "comparison": {
         "address": 33173840,
