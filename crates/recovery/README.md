@@ -44,6 +44,12 @@ CRC32 before entering the stock RAM image. The extra file avoids the ROM's
 checked against `ffuser.bin`. The runtime indexed reader opens this same file
 and reads the firmware namespace appended after its initialized RAM image.
 
+EXR II's remaining preloaded section-5 read uses the source bytes appended to
+`ffboot.bin`. Construction checks the section selector, callback-free call,
+16 KiB or 128 KiB block geometry, section descriptor, and code reservation before
+redirecting that call. The stock indexed reader and per-camera storage calls
+retain their original code.
+
 X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
 complete RAM image as `ffboot.bin`. The locator follows the update's single
 or initial/trained DDR-copy helper to choose the header. Three checked

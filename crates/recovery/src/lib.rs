@@ -7,6 +7,7 @@ mod exr_firmware;
 mod exr_load_maps;
 pub mod rom_sd;
 pub use exr::Exr;
+mod exr2;
 mod xp4;
 mod xp5;
 use image::{File, Packaging, Plan, Result, require};
@@ -332,7 +333,11 @@ impl Recipe {
                     let packaging = self.packaging.as_ref().ok_or_else(|| {
                         image::Error::Invalid("Missing SD header packaging".into())
                     })?;
-                    packaging.package(&inverted, plan, image::transform(&inverted, plan)?)?
+                    let mut ram = image::transform(&inverted, plan)?;
+                    if matches!(self.generation, Generation::Exr2) {
+                        exr2::install(&inverted, plan, &mut ram)?;
+                    }
+                    packaging.package_bytes(&inverted, plan.entry, ram)?
                 }
                 Generation::Xp4 => {
                     let cold = self
