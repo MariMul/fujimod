@@ -815,6 +815,12 @@
       "target_minor": 17919892,
       "current_major": 17919896,
       "current_minor": 17919900,
+      "comparison_inputs": [
+        {
+          "address": 17278004,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 23356528,
         "size": 256,
@@ -1285,6 +1291,12 @@
       "target_minor": 13162532,
       "current_major": 13162536,
       "current_minor": 13162540,
+      "comparison_inputs": [
+        {
+          "address": 13336768,
+          "value": 1
+        }
+      ],
       "version_producer": {
         "address": 18748640,
         "size": 264,
@@ -1532,10 +1544,10 @@
         "size": 608,
         "sha256": "0e84d613bc13f1ebe987b39cc9b78696a47a5e70a46197224188bb19f759ed7e"
       },
-      "target_major": 25456644,
-      "target_minor": 25456648,
-      "current_major": 25456652,
-      "current_minor": 25456656,
+      "target_major": 25457196,
+      "target_minor": 25457200,
+      "current_major": 25457204,
+      "current_minor": 25457208,
       "version_producer": {
         "address": 33100328,
         "size": 248,
@@ -1543,7 +1555,7 @@
       },
       "producer_stop": 33100364,
       "version_context_pointer": 46813468,
-      "version_context": 25456120,
+      "version_context": 25456672,
       "current_major_setter": {
         "address": 33103608,
         "size": 52,
@@ -3125,6 +3137,12 @@
       "target_minor": 13181024,
       "current_major": 13181028,
       "current_minor": 13181032,
+      "comparison_inputs": [
+        {
+          "address": 13358768,
+          "value": 1
+        }
+      ],
       "version_producer": {
         "address": 18769356,
         "size": 264,
@@ -3388,6 +3406,12 @@
       "target_minor": 9819700,
       "current_major": 9819704,
       "current_minor": 9819708,
+      "comparison_inputs": [
+        {
+          "address": 9765764,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 15496164,
         "size": 264,
@@ -3651,6 +3675,12 @@
       "target_minor": 9533388,
       "current_major": 9533392,
       "current_minor": 9533396,
+      "comparison_inputs": [
+        {
+          "address": 9689796,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 15336500,
         "size": 264,
@@ -4121,6 +4151,12 @@
       "target_minor": 13271556,
       "current_major": 13271560,
       "current_minor": 13271564,
+      "comparison_inputs": [
+        {
+          "address": 13453736,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 18882304,
         "size": 264,
@@ -4383,6 +4419,12 @@
       "target_minor": 13298340,
       "current_major": 13298344,
       "current_minor": 13298348,
+      "comparison_inputs": [
+        {
+          "address": 13489832,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 18943196,
         "size": 264,
@@ -4652,10 +4694,10 @@
         "size": 608,
         "sha256": "00b212a990641cec2eae2ce2f0ed527ae5925fdb1872b4176cab17ff81c09375"
       },
-      "target_major": 27165456,
-      "target_minor": 27165460,
-      "current_major": 27165464,
-      "current_minor": 27165468,
+      "target_major": 27166008,
+      "target_minor": 27166012,
+      "current_major": 27166016,
+      "current_minor": 27166020,
       "version_producer": {
         "address": 35297936,
         "size": 248,
@@ -4663,7 +4705,7 @@
       },
       "producer_stop": 35297972,
       "version_context_pointer": 50680956,
-      "version_context": 27164932,
+      "version_context": 27165484,
       "current_major_setter": {
         "address": 35301868,
         "size": 52,
@@ -5165,6 +5207,12 @@
       "target_minor": 19761660,
       "current_major": 19761664,
       "current_minor": 19761668,
+      "comparison_inputs": [
+        {
+          "address": 18991916,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 26144300,
         "size": 252,
@@ -5713,6 +5761,12 @@
       "target_minor": 9810580,
       "current_major": 9810584,
       "current_minor": 9810588,
+      "comparison_inputs": [
+        {
+          "address": 9756884,
+          "value": 1
+        }
+      ],
       "version_producer": {
         "address": 15484584,
         "size": 264,
@@ -5976,6 +6030,12 @@
       "target_minor": 9819764,
       "current_major": 9819768,
       "current_minor": 9819772,
+      "comparison_inputs": [
+        {
+          "address": 9765828,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 15500628,
         "size": 264,
@@ -7275,6 +7335,12 @@
       "target_minor": 16800364,
       "current_major": 16800368,
       "current_minor": 16800372,
+      "comparison_inputs": [
+        {
+          "address": 16046980,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 22413016,
         "size": 244,
@@ -7522,10 +7588,10 @@
         "size": 608,
         "sha256": "bb4b9fdb4a9c3a2f666ce3ced163c50710719a02a6b468153a8f8154a71b8d29"
       },
-      "target_major": 26758260,
-      "target_minor": 26758264,
-      "current_major": 26758268,
-      "current_minor": 26758272,
+      "target_major": 26758812,
+      "target_minor": 26758816,
+      "current_major": 26758820,
+      "current_minor": 26758824,
       "version_producer": {
         "address": 34444032,
         "size": 248,
@@ -7533,7 +7599,7 @@
       },
       "producer_stop": 34444068,
       "version_context_pointer": 47921256,
-      "version_context": 26757736,
+      "version_context": 26758288,
       "current_major_setter": {
         "address": 34447628,
         "size": 52,
@@ -8235,10 +8301,10 @@
         "size": 608,
         "sha256": "f3c78617acbfe0eabf1b9cc09be7a58141595b11a8cf42417f0a6a99ee5e5c9a"
       },
-      "target_major": 28299748,
-      "target_minor": 28299752,
-      "current_major": 28299756,
-      "current_minor": 28299760,
+      "target_major": 28300300,
+      "target_minor": 28300304,
+      "current_major": 28300308,
+      "current_minor": 28300312,
       "version_producer": {
         "address": 36645780,
         "size": 248,
@@ -8246,7 +8312,7 @@
       },
       "producer_stop": 36645816,
       "version_context_pointer": 52193716,
-      "version_context": 28299224,
+      "version_context": 28299776,
       "current_major_setter": {
         "address": 36649728,
         "size": 52,
@@ -8525,6 +8591,16 @@
       "target_minor": 12685500,
       "current_major": 12685504,
       "current_minor": 12685508,
+      "comparison_inputs": [
+        {
+          "address": 12873084,
+          "value": 0
+        },
+        {
+          "address": 12883480,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 18756860,
         "size": 264,
@@ -8787,6 +8863,12 @@
       "target_minor": 13296480,
       "current_major": 13296484,
       "current_minor": 13296488,
+      "comparison_inputs": [
+        {
+          "address": 13489608,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 18927924,
         "size": 264,
@@ -9065,6 +9147,12 @@
       "target_minor": 18359244,
       "current_major": 18359248,
       "current_minor": 18359252,
+      "comparison_inputs": [
+        {
+          "address": 17607900,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 24087848,
         "size": 248,
@@ -9343,6 +9431,12 @@
       "target_minor": 18073980,
       "current_major": 18073984,
       "current_minor": 18073988,
+      "comparison_inputs": [
+        {
+          "address": 17429744,
+          "value": 0
+        }
+      ],
       "version_producer": {
         "address": 23632604,
         "size": 256,
@@ -9590,10 +9684,10 @@
         "size": 608,
         "sha256": "ace5dc4c03a0925aa5da33f457d6f0b3824fa4c642ff6c5a2177513eaf9946e7"
       },
-      "target_major": 25167220,
-      "target_minor": 25167224,
-      "current_major": 25167228,
-      "current_minor": 25167232,
+      "target_major": 25167772,
+      "target_minor": 25167776,
+      "current_major": 25167780,
+      "current_minor": 25167784,
       "version_producer": {
         "address": 32589104,
         "size": 248,
@@ -9601,7 +9695,7 @@
       },
       "producer_stop": 32589140,
       "version_context_pointer": 46998252,
-      "version_context": 25166696,
+      "version_context": 25167248,
       "current_major_setter": {
         "address": 32592928,
         "size": 52,
@@ -9841,10 +9935,10 @@
         "size": 588,
         "sha256": "abe931cb740e28b08e5c0b8d564094301febadb8c96e50ac332e8fdef6c17463"
       },
-      "target_major": 24800140,
-      "target_minor": 24800144,
-      "current_major": 24800148,
-      "current_minor": 24800152,
+      "target_major": 24799036,
+      "target_minor": 24799040,
+      "current_major": 24799044,
+      "current_minor": 24799048,
       "version_producer": {
         "address": 32102936,
         "size": 248,
@@ -9852,7 +9946,7 @@
       },
       "producer_stop": 32102972,
       "version_context_pointer": 43601392,
-      "version_context": 24799616,
+      "version_context": 24798512,
       "current_major_setter": {
         "address": 32106760,
         "size": 52,
@@ -10092,10 +10186,10 @@
         "size": 608,
         "sha256": "b6de63522bbc2b38ad1c7bc4b0976ed7b01bf8f7544802302e40d55955df2471"
       },
-      "target_major": 27661892,
-      "target_minor": 27661896,
-      "current_major": 27661900,
-      "current_minor": 27661904,
+      "target_major": 27662444,
+      "target_minor": 27662448,
+      "current_major": 27662452,
+      "current_minor": 27662456,
       "version_producer": {
         "address": 35893040,
         "size": 248,
@@ -10103,7 +10197,7 @@
       },
       "producer_stop": 35893076,
       "version_context_pointer": 51378308,
-      "version_context": 27661368,
+      "version_context": 27661920,
       "current_major_setter": {
         "address": 35896748,
         "size": 52,
@@ -11091,10 +11185,10 @@
         "size": 608,
         "sha256": "54910534219ecae83a5745786d4137d1750cfcc94b83a813c249ea4ac09eec1c"
       },
-      "target_major": 27676900,
-      "target_minor": 27676904,
-      "current_major": 27676908,
-      "current_minor": 27676912,
+      "target_major": 27677452,
+      "target_minor": 27677456,
+      "current_major": 27677460,
+      "current_minor": 27677464,
       "version_producer": {
         "address": 36041656,
         "size": 248,
@@ -11102,7 +11196,7 @@
       },
       "producer_stop": 36041692,
       "version_context_pointer": 52379008,
-      "version_context": 27676376,
+      "version_context": 27676928,
       "current_major_setter": {
         "address": 36045604,
         "size": 52,

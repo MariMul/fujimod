@@ -54,12 +54,20 @@ pub enum VersionConfiguration {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct VersionInput {
+    pub address: usize,
+    pub value: u32,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VersionContract {
     pub public_version: [u8; 2],
     pub version_getter: Proof,
     pub configuration: VersionConfiguration,
     pub getter_arguments: u8,
     pub comparison: Proof,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub comparison_inputs: Vec<VersionInput>,
     pub version_producer: Proof,
     pub producer_stop: usize,
     pub version_context_pointer: usize,
