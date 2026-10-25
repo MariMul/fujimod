@@ -12,8 +12,8 @@ test('recovery availability does not require an emulator board', () => {
   try {
     assert.equal(status.firmwareId, 'xt30-201');
     assert.equal(status.generation, 'xp4');
-    assert.equal(status.canBuild, true);
-    assert.deepEqual(status.missing, []);
+    assert.equal(status.canBuild, false);
+    assert.ok(status.missing.includes('flash-free SD updater proof (zeroed and scrambled update-covered storage)'));
     assert.ok(status.outputFilenames.includes('ffinit.bin'));
     assert.ok(status.outputFilenames.includes('ffboot.bin'));
   } finally {
@@ -34,19 +34,19 @@ test('recovery exposes the documented power-on combinations', () => {
   }
 });
 
-test('located XP5 recovery recipes require the correct official DAT', () => {
+test('located XP5 startup recipes still require flash-free updater proof', () => {
   for (const firmwareId of ['xm5-130', 'x100vi-131']) {
     const status = recovery.availability(firmwareId);
     try {
       assert.equal(status.generation, 'xp5');
-      assert.equal(status.canBuild, true);
-      assert.deepEqual(status.missing, []);
+      assert.equal(status.canBuild, false);
+      assert.ok(status.missing.includes('flash-free SD updater proof (zeroed and scrambled update-covered storage)'));
       assert.ok(status.outputFilenames.includes('marble_init.bin'));
       assert.ok(status.outputFilenames.includes('ffboot.bin'));
     } finally {
       status.free();
     }
-    assert.throws(() => recovery.build(firmwareId, new Uint8Array(4)), /size differs/);
+    assert.throws(() => recovery.build(firmwareId, new Uint8Array(4)), /flash-free SD updater proof/);
   }
 });
 
@@ -60,6 +60,6 @@ test('missing generation facts and incorrect DAT bytes are refused', () => {
   } finally {
     status.free();
   }
-  assert.throws(() => recovery.build('xs10-311', new Uint8Array(4)), /size differs/);
+  assert.throws(() => recovery.build('xs10-311', new Uint8Array(4)), /flash-free SD updater proof/);
   assert.throws(() => recovery.build('gfx100rf-113', new Uint8Array(4)), /Missing recovery facts/);
 });

@@ -1,6 +1,7 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
 pub mod image;
+pub mod flash_free;
 mod lupi;
 pub mod rom_sd;
 pub use lupi::Lupi;
@@ -93,6 +94,8 @@ pub struct Recipe {
     pub firmware_id: String,
     pub source_size: usize,
     pub updater: Option<VersionContract>,
+    #[serde(default)]
+    pub flash_free: Option<flash_free::FlashFreeProof>,
     pub source_sha256: String,
     pub update_filename: String,
     pub generation: Generation,
@@ -108,6 +111,25 @@ pub struct Recipe {
     pub missing: Vec<String>,
 }
 impl Recipe {
+    pub fn missing_facts(&self) -> Vec<String> {
+        let mut missing = self.missing.clone();
+        if self.updater.is_none()
+            && !missing
+                .iter()
+                .any(|s| s == "version-independent stock updater acceptance")
+        {
+            missing.push("version-independent stock updater acceptance".into());
+        }
+        if self
+            .flash_free
+            .as_ref()
+            .is_none_or(|proof| proof.verify(self).is_err())
+            && !missing.iter().any(|s| s == flash_free::MISSING)
+        {
+            missing.push(flash_free::MISSING.into());
+        }
+        missing
+    }
     pub fn bundled(firmware_id: &str) -> Result<Option<Self>> {
         let recipes: Vec<Self> = serde_json::from_str(include_str!(concat!(
             env!("OUT_DIR"),
@@ -212,15 +234,18 @@ impl Recipe {
     /// Boot files retain the stock updater and storage drivers. DAT is copied
     /// verbatim to its required root filename, including signed containers.
     pub fn build(&self, source: &[u8]) -> Result<Vec<File>> {
+        let missing = self.missing_facts();
         require(
-            self.missing.is_empty(),
-            &format!("Missing recovery facts: {}", self.missing.join(", ")),
+            missing.is_empty(),
+            &format!("Missing recovery facts: {}", missing.join(", ")),
         )?;
         require(
             self.updater.is_some(),
             "Missing version-independent stock updater acceptance",
         )?;
-        self.build_startup(source)
+        let files = self.build_startup(source)?;
+        self.flash_free.as_ref().unwrap().verify_files(&files)?;
+        Ok(files)
     }
     /// Construct established startup files independently of updater readiness.
     pub fn build_startup(&self, source: &[u8]) -> Result<Vec<File>> {
@@ -330,7 +355,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
     let firmware_update = recipe.as_ref().and_then(|r| r.firmware_update.clone());
     let missing = recipe
         .as_ref()
-        .map(|r| r.missing.clone())
+        .map(|r| r.missing_facts())
         .unwrap_or_else(|| vec!["recovery recipe".into()]);
     let mut output_filenames = Vec::new();
     if let Some(recipe) = &recipe {
