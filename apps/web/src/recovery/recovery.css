@@ -1,0 +1,112 @@
+.recovery.shell {
+  max-width: 820px;
+}
+.recovery main {
+  margin-top: 8px;
+}
+.recovery h1 {
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+.recovery-lead {
+  color: var(--dim);
+  line-height: 1.6;
+  margin: 0 0 32px;
+}
+.recovery-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+.recovery-steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0 0 28px 48px;
+  border-left: 1px solid var(--edge);
+  margin-left: 14px;
+}
+.recovery-steps > li:last-child {
+  border-left-color: transparent;
+}
+.recovery-steps > li::before {
+  content: counter(step);
+  position: absolute;
+  left: -15px;
+  top: -2px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--panel, #151719);
+  font-size: 13px;
+  color: var(--dim);
+}
+.recovery-steps h2 {
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+.recovery-steps p {
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+.recovery-pending {
+  opacity: 0.5;
+}
+.recovery-system {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
+.recovery-system select {
+  padding: 4px 8px;
+  background: #0a0a0b;
+  color: var(--text, #eee);
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+}
+.recovery-sub,
+.recovery-holds {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+.recovery-holds {
+  list-style: none;
+  padding-left: 0;
+}
+.recovery-holds li {
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: var(--panel, #151719);
+}
+.recovery input[type='file'] {
+  display: block;
+  margin: 6px 0;
+  font-size: 14px;
+}
+.recovery-ok {
+  color: var(--accent, #3ddc6a);
+  font-weight: 600;
+}
+.recovery-error {
+  color: #ffa7a7;
+  overflow-wrap: anywhere;
+}
+.recovery-dim {
+  color: var(--dim);
+}
+.recovery-download {
+  margin-bottom: 10px;
+}
+.recovery code {
+  font-size: 13px;
+  color: #c7c7cc;
+}

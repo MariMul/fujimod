@@ -67,6 +67,7 @@ export default function Home() {
           </a>
           <nav class="site-nav" aria-label="Pages">
             <a href="dev-tools/">Dev Tools</a>
+            <a href="recovery/">Recovery</a>
           </nav>
           <div class="meta build-info">
             <a href="https://github.com/justjake/fujimod">github.com/justjake/fujimod</a>

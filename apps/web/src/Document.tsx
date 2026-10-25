@@ -5,7 +5,8 @@ export default function Document(props: { children: JSX.Element }) {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
   const bug = /^\/bug(?:\/|$)/.test(path),
     tools = /^\/dev-tools(?:\/|$)/.test(path),
-    setup = /^\/setup(?:\/|$)/.test(path);
+    setup = /^\/setup(?:\/|$)/.test(path),
+    recovery = /^\/recovery(?:\/|$)/.test(path);
   return (
     <html lang="en">
       <head>
@@ -22,9 +23,11 @@ export default function Document(props: { children: JSX.Element }) {
                 ? 'Retrieve and prepare a private camera bug report locally.'
                 : setup
                   ? 'Put your camera in service mode and connect it over USB, step by step.'
-                  : tools
-                    ? 'FujiMod USB console and protocol logs.'
-                    : 'Try your camera firmware in the browser and build Fujimod SD boot files.'
+                  : recovery
+                    ? 'Recover an unresponsive camera by booting from an SD card and reflashing official firmware.'
+                    : tools
+                      ? 'FujiMod USB console and protocol logs.'
+                      : 'Try your camera firmware in the browser and build Fujimod SD boot files.'
             }
           />
           <meta name="referrer" content="no-referrer" />
@@ -38,9 +41,11 @@ export default function Document(props: { children: JSX.Element }) {
               ? 'Report a camera bug · FujiMod'
               : setup
                 ? 'Set up USB access · FujiMod'
-                : tools
-                  ? 'Dev Tools · FujiMod'
-                  : 'Fujimod'}
+                : recovery
+                  ? 'Recovery · FujiMod'
+                  : tools
+                    ? 'Dev Tools · FujiMod'
+                    : 'Fujimod'}
           </title>
           <link rel="icon" href="data:," />
           <HydrationScript />

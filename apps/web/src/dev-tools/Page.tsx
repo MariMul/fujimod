@@ -95,6 +95,7 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
           <a href="./" aria-current="page">
             Dev Tools
           </a>
+          <a href="../recovery/">Recovery</a>
         </nav>
       </header>
       <Workbench model={model} usbSupported={usbSupported()} initialWizard={initialWizard()} />

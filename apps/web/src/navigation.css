@@ -1,4 +1,6 @@
 .site-nav {
+  display: inline-flex;
+  gap: 16px;
   margin-left: 20px;
   font-size: 12px;
   white-space: nowrap;
