@@ -1,6 +1,7 @@
 //! Bounded physical power-controller SPI register protocol, not a CPU harness.
 //! 10a09fc clocks a 24-bit frame; 10a1d40 supplies the six-bit register address.
-use crate::{gpio::SharedPins, rtc::Counter, spi::Input};
+use crate::{rtc::Counter, spi::Input};
+use fujimod_emulator_ip::socionext::gpio::SharedPins;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 /// Direct stop/load/start law over the shared counter.
@@ -240,7 +241,8 @@ impl Input for PowerSerial {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpio::{BASE, Gpio, Pins};
+    use fujimod_emulator_ip::socionext::gpio::{Gpio, Pins};
+    const BASE: u64 = 0x10000;
     use fujimod_emulator_devices::{Cx, Device, Host, Record};
     struct Clock;
     impl Host for Clock {
@@ -299,7 +301,7 @@ mod tests {
             54_000_000,
         )
         .unwrap();
-        let mut gpio = Gpio::new(pins);
+        let mut gpio = Gpio::new(BASE, pins).unwrap();
         gpio.write(
             &mut Cx::new(&mut Clock, 0, 0, 0),
             BASE + 12 * 64,
@@ -333,7 +335,7 @@ mod tests {
     #[test]
     fn physical_selection_frames_latches_and_unknown_commands() {
         let pins = Pins::new([0; 16]);
-        let mut gpio = Gpio::new(pins.clone());
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
         let mut peer = PowerSerial::new(
             pins,
             12,

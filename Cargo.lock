@@ -2106,6 +2106,7 @@ name = "fujimod-emulator-xp4-io"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",

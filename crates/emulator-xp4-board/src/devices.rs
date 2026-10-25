@@ -52,7 +52,7 @@ pub struct Devices {
     windows: Vec<(u64, u64, usize)>,
     pub log: Vec<Record>,
     prior_records: usize,
-    pins: Option<fujimod_emulator_xp4_io::gpio::SharedPins>,
+    pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
     usb: Option<Arc<Mutex<Dwc3>>>,
     pub frames: BTreeMap<usize, Frame>,
@@ -173,12 +173,12 @@ impl Devices {
         {
             return Err("Overlapping XP4 GPIO wiring".into());
         }
-        let pins = fujimod_emulator_xp4_io::gpio::Pins::new(inputs);
+        let pins = fujimod_emulator_ip::socionext::gpio::Pins::new(inputs);
         let id = self.models.len();
         self.models
-            .push(Some(Box::new(fujimod_emulator_xp4_io::gpio::Gpio::new(
-                pins.clone(),
-            ))));
+            .push(Some(Box::new(fujimod_emulator_ip::socionext::gpio::Gpio::new(
+                base,pins.clone(),
+            )?)));
         self.windows.push((base, base + 0x400, id));
         self.pins = Some(pins);
         Ok(())
