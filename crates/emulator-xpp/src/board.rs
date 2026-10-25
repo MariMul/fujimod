@@ -43,6 +43,12 @@ pub struct Node {
     pub model: Model,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Nor {
+    pub chip_select: u8,
+    pub options: fujimod_emulator_devices::parts::micron_nor::Options,
+}
+#[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Model {
     Gpio {
@@ -78,6 +84,8 @@ pub enum Model {
         irq_routes: Vec<u32>,
         setup_ticks: u64,
         bytes_per_tick: u64,
+        transfer_ticks: u64,
+        nor: Vec<Nor>,
     },
 }
 pub struct Built {
@@ -274,13 +282,31 @@ pub fn build(
                 irq_routes,
                 setup_ticks,
                 bytes_per_tick,
+                transfer_ticks,
+                nor,
             } => {
                 let bytes = assets
                     .get(&asset)
                     .ok_or("Missing X-Processor Pro flash asset")?
                     .clone();
                 let source = Arc::new(flash::Aperture::new(aperture, size, bytes)?);
-                let flash = flash::FlashController::new(controller, source.clone())?;
+                let mut ports = BTreeMap::new();
+                for attachment in nor {
+                    let registers = fujimod_emulator_devices::parts::micron_nor::Registers::new(
+                        attachment.options,
+                    )?;
+                    if ports.insert(attachment.chip_select, registers).is_some() {
+                        return Err("Repeated serial-flash register device chip select".into());
+                    }
+                }
+                let flash = flash::FlashController::new(
+                    flash::Options {
+                        base: controller,
+                        transfer_ticks,
+                    },
+                    source.clone(),
+                    ports,
+                )?;
                 let id = devices.register_windows(
                     vec![
                         Mapping {

@@ -8,6 +8,7 @@ pub mod encoder_input;
 pub mod gpio;
 pub mod hdmi_sink;
 pub mod lens_bridge;
+pub mod micron_nor;
 pub mod nand;
 pub mod optics;
 pub mod pins;

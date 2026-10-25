@@ -675,7 +675,9 @@ impl Devices {
             storage.aperture_size,
             image,
         )?);
-        let controller = FlashController::new(storage.flash_controller, aperture.clone())?;
+        let controller = FlashController::new(
+            flash::Options {base:storage.flash_controller,transfer_ticks:1},
+            aperture.clone(), BTreeMap::new())?;
         let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
             storage.dma,
             storage.dma_irq_routes,
