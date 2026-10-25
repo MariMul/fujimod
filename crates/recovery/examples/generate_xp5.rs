@@ -41,8 +41,8 @@ fn main() {
         "crc32.c",
         "boot.S",
         "flash_boot.c",
-        "flash_entry.c",
-        "flash_entry.S",
+        "setup_entry.c",
+        "setup_entry.S",
     ] {
         let output = format!("{source}.o");
         run(
@@ -75,9 +75,9 @@ fn main() {
     fs::write(
         work.join("loader.ld"),
         r#"
-ENTRY(xp5_flash_entry)
+ENTRY(xp5_setup_entry)
 SECTIONS {
- .text 0x100000 : { KEEP(*flash_entry.S.o(.text)) KEEP(*loader.c.o(.text.setup_sd_initialize)) *(.text .text.*) }
+ .text 0x100000 : { KEEP(*setup_entry.S.o(.text)) KEEP(*loader.c.o(.text.setup_sd_initialize)) *(.text .text.*) }
  .rodata : { *(.rodata .rodata.*) }
  .data : { *(.data .data.*) }
  .bss : { *(.bss .bss.* COMMON) }
@@ -123,7 +123,7 @@ PROVIDE(boot_setup_delay = 0x0c0200);
         .map(|s| (s.address(), (s.name().unwrap().to_string(), s.size())))
         .collect();
     let mut frames = std::collections::BTreeMap::new();
-    for source in ["flash_boot.c", "flash_entry.c"] {
+    for source in ["flash_boot.c", "setup_entry.c"] {
         for line in fs::read_to_string(work.join(format!("{source}.su")))
             .unwrap()
             .lines()
@@ -171,7 +171,7 @@ PROVIDE(boot_setup_delay = 0x0c0200);
         frames.get(name).expect("Missing GCC stack report") + child
     }
     let maximum = stack_depth(
-        symbols["xp5_flash_prepare"],
+        symbols["xp5_setup_prepare"],
         base,
         &image,
         &functions,
@@ -179,7 +179,7 @@ PROVIDE(boot_setup_delay = 0x0c0200);
         &mut Vec::new(),
     );
     assert!(
-        maximum + 512 <= (symbols["xp5_flash_stack_top"] - symbols["xp5_flash_stack"]) as usize,
+        maximum + 512 <= (symbols["xp5_setup_stack_top"] - symbols["xp5_setup_stack"]) as usize,
         "Prelude stack overflow"
     );
     for section in elf.sections() {
@@ -198,11 +198,11 @@ PROVIDE(boot_setup_delay = 0x0c0200);
     );
     out += &format!("pub const PRELUDE_STACK_MAX: usize = {maximum};\n");
     for name in [
-        "xp5_flash_entry",
-        "xp5_flash_configuration",
-        "xp5_flash_setup_branch",
-        "xp5_flash_stack",
-        "xp5_flash_stack_top",
+        "xp5_setup_entry",
+        "xp5_setup_configuration",
+        "xp5_setup_return_branch",
+        "xp5_setup_stack",
+        "xp5_setup_stack_top",
         "setup_sd_initialize",
         "setup_sd_request",
         "setup_sd_progress",

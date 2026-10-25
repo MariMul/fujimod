@@ -174,8 +174,8 @@ impl Setup {
         Ok(prefix)
     }
 }
-/// Both modes enter the same flash-preparation guest. Only a complete payload
-/// enables the two post-DDR SD hooks; stage one retains the stock continuation.
+/// Card entry replays its checked header without probing installed flash.
+/// Stage one probes installed flash before retaining its stock continuation.
 pub fn package(
     inverted: &[u8],
     setup: &Setup,
@@ -208,15 +208,15 @@ pub fn package(
     )?;
     require(
         template::PRELUDE_STACK_MAX + 512
-            <= template::XP5_FLASH_STACK_TOP - template::XP5_FLASH_STACK,
+            <= template::XP5_SETUP_STACK_TOP - template::XP5_SETUP_STACK,
         "XP5 prelude exceeds private stack",
     )?;
-    let cfg = template::XP5_FLASH_CONFIGURATION;
-    let mut empty = vec![0; 200];
-    empty[0] = 1;
+    let cfg = template::XP5_SETUP_CONFIGURATION;
+    let mut empty = vec![0; 208];
+    empty[0] = 2;
     require(
-        extent(&program, cfg, 200)? == empty,
-        "XP5 flash configuration template changed",
+        extent(&program, cfg, 208)? == empty,
+        "XP5 setup configuration template changed",
     )?;
     let flash = &setup.flash;
     let lamp = &setup.lamp;
@@ -249,11 +249,11 @@ pub fn package(
     let first = word(stock, 0)?;
     let jump = branch(
         setup.base,
-        address + template::XP5_FLASH_ENTRY as u64,
+        address + template::XP5_SETUP_ENTRY as u64,
         false,
     )?;
     for (n, value) in [
-        1,
+        2,
         flash.controller,
         flash.aperture,
         u64::from(flash.window_mask),
@@ -292,7 +292,8 @@ pub fn package(
         // two billion iterations per second, 2,048 units take >= 1.024 s.
         u64::from(success_hold_seconds) * 2_048,
     )?;
-    let restore = template::XP5_FLASH_SETUP_BRANCH;
+    put64(&mut program, cfg + 200, u64::from(ram.is_none()))?;
+    let restore = template::XP5_SETUP_RETURN_BRANCH;
     require(
         word(&program, restore)? == 0x14000000,
         "XP5 restore branch template changed",
@@ -535,7 +536,7 @@ mod tests {
         (data, setup, ram)
     }
     #[test]
-    fn both_modes_enter_flash_preparation_and_preserve_stock_setup() {
+    fn startup_skips_installed_flash_probe_while_stage_one_preserves_it() {
         let (data, s, ram) = fixture();
         for payload in [None, Some(ram.clone())] {
             let combined = payload.is_some();
@@ -543,10 +544,12 @@ mod tests {
             let raw = &files[0].bytes;
             assert_eq!(files.len(), if combined { 2 } else { 1 });
             assert_eq!(files[0].name, "marble_init.bin");
+            let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
+            assert_eq!(u64::from_le_bytes(raw[source..source+8].try_into().unwrap()),u64::from(!combined));
             let address = s.base + 0xc000;
             assert_eq!(
                 word(raw, 0).unwrap(),
-                branch(s.base, address + template::XP5_FLASH_ENTRY as u64, false).unwrap()
+                branch(s.base, address + template::XP5_SETUP_ENTRY as u64, false).unwrap()
             );
             let mut restored = raw[..s.low_length].to_vec();
             put(&mut restored, 0, word(&data, 0x800).unwrap()).unwrap();
@@ -567,9 +570,9 @@ mod tests {
             assert_eq!(&raw[header..header + 0x800], &data[..0x800]);
             assert!(raw.len() <= 0x38800);
             assert_eq!(
-                word(raw, 0xc000 + template::XP5_FLASH_SETUP_BRANCH).unwrap(),
+                word(raw, 0xc000 + template::XP5_SETUP_RETURN_BRANCH).unwrap(),
                 branch(
-                    address + template::XP5_FLASH_SETUP_BRANCH as u64,
+                    address + template::XP5_SETUP_RETURN_BRANCH as u64,
                     s.base,
                     false
                 )
@@ -583,7 +586,7 @@ mod tests {
         assert_eq!(crate::StartupOptions::default().success_hold_seconds, 0);
         for payload in [None, Some(ram)] {
             let normal = package(&data, &s, payload.clone(), 0).unwrap();
-            let at = 0xc000 + template::XP5_FLASH_CONFIGURATION + 192;
+            let at = 0xc000 + template::XP5_SETUP_CONFIGURATION + 192;
             assert_eq!(&normal[0].bytes[at..at + 8], &[0; 8]);
             for seconds in [1, 3, u32::MAX] {
                 let held = package(&data, &s, payload.clone(), seconds).unwrap();

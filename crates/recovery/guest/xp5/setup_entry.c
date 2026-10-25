@@ -3,7 +3,7 @@
 #include "flash_boot.h"
 
 
-struct xp5_flash_configuration {
+struct xp5_setup_configuration {
     uint64_t abi;
     struct xp5_flash_boot flash;
     uint64_t setup, original_word, branch_word;
@@ -12,11 +12,12 @@ struct xp5_flash_configuration {
     uint32_t pins[12];
     const uint32_t *header;
     uint64_t success_hold_units;
+    uint64_t source; /* 0: card startup; 1: installed-flash continuation probe. */
 };
-_Static_assert(sizeof(struct xp5_flash_configuration)==200 && offsetof(struct xp5_flash_configuration,header)==184
-    && offsetof(struct xp5_flash_configuration,success_hold_units)==192,"flash configuration ABI");
-volatile struct xp5_flash_configuration xp5_flash_configuration = {.abi = 1};
-volatile uint64_t xp5_flash_progress[4];
+_Static_assert(sizeof(struct xp5_setup_configuration)==208 && offsetof(struct xp5_setup_configuration,header)==184
+    && offsetof(struct xp5_setup_configuration,success_hold_units)==192 && offsetof(struct xp5_setup_configuration,source)==200,"setup configuration ABI");
+volatile struct xp5_setup_configuration xp5_setup_configuration = {.abi = 2};
+volatile uint64_t xp5_setup_progress[4];
 static void write32(uintptr_t address, uint32_t value) { *(volatile uint32_t *)address = value; }
 static void lamp_pin(uintptr_t pio, uint32_t port, uint32_t pin, int high)
 {
@@ -33,7 +34,7 @@ static void prepare_lamp(uintptr_t pio, uint32_t port, uint32_t pin)
 }
 static void show(int green, int red)
 {
-    const volatile struct xp5_flash_configuration *b=&xp5_flash_configuration;
+    const volatile struct xp5_setup_configuration *b=&xp5_setup_configuration;
     lamp_pin(b->pio,b->green,b->pin,green);
     lamp_pin(b->pio,b->red,b->pin,red);
 }
@@ -41,24 +42,24 @@ static void delay(void) { for (volatile unsigned n=0;n<1000000;n++) __asm__ vola
 static void fail(unsigned count) __attribute__((noreturn));
 static void fail(unsigned count)
 {
-    xp5_flash_progress[1]=count;
+    xp5_setup_progress[1]=count;
     for (;;) {
         for (unsigned n=0;n<count;n++) {show(0,1);delay();show(0,0);delay();}
         delay();delay();delay();
     }
 }
-void xp5_flash_prepare(void)
+void xp5_setup_prepare(void)
 {
     uint64_t el, sctlr;
     __asm__ volatile("mrs %0, CurrentEL" : "=r"(el));
     if (el!=12) for (;;) __asm__ volatile("wfi");
     __asm__ volatile("mrs %0, sctlr_el3" : "=r"(sctlr));
     if (sctlr & 0x1005) for (;;) __asm__ volatile("wfi");
-    xp5_flash_progress[0]=1;
-    xp5_flash_progress[2]=el;
-    xp5_flash_progress[3]=sctlr;
-    const struct xp5_flash_configuration *b=(const struct xp5_flash_configuration *)&xp5_flash_configuration;
-    if (b->abi!=1 || !b->flash.poll_limit || b->flash.poll_limit>UINT32_MAX || b->count>253
+    xp5_setup_progress[0]=1;
+    xp5_setup_progress[2]=el;
+    xp5_setup_progress[3]=sctlr;
+    const struct xp5_setup_configuration *b=(const struct xp5_setup_configuration *)&xp5_setup_configuration;
+    if (b->abi!=2 || b->source>1 || !b->flash.poll_limit || b->flash.poll_limit>UINT32_MAX || b->count>253
             || b->green>=16 || b->red>=16 || b->green==3 || b->red==3
             || b->green==b->red || b->pin>=8 || !b->header)
         for (;;) __asm__ volatile("wfi");
@@ -67,12 +68,14 @@ void xp5_flash_prepare(void)
     prepare_lamp(b->pio,b->green,b->pin);
     prepare_lamp(b->pio,b->red,b->pin);
     show(1,1);
-    if (xp5_flash_initialize(&b->flash)) fail(1);
-    for (unsigned n=0;n<6;n++) write32(b->pins[2*n],b->pins[2*n+1]);
-    xp5_flash_progress[0]=2;
-    if (xp5_flash_scan(&b->flash,b->header)) fail(1);
+    if (b->source==1) {
+        if (xp5_flash_initialize(&b->flash)) fail(1);
+        for (unsigned n=0;n<6;n++) write32(b->pins[2*n],b->pins[2*n+1]);
+        xp5_setup_progress[0]=2;
+        if (xp5_flash_scan(&b->flash,b->header)) fail(1);
+    }
     show(0,0);
-    xp5_flash_progress[0]=3;
+    xp5_setup_progress[0]=3;
     /* Preserve the complete input header in the XP5 boot-service area. */
     for (unsigned n=0;n<0x800/4;n++) write32(b->setup+0x3a800+4u*n,b->header[n]);
     if (xp5_flash_header(b->header,b->count,(uint32_t)b->flash.poll_limit)) fail(2);
@@ -90,5 +93,5 @@ void xp5_flash_prepare(void)
     if (*(volatile uint32_t *)b->setup != b->branch_word) fail(2);
     write32(b->setup,(uint32_t)b->original_word);
     __asm__ volatile("dsb sy\n\tic iallu\n\tdsb sy\n\tisb" : : : "memory");
-    xp5_flash_progress[0]=4;
+    xp5_setup_progress[0]=4;
 }

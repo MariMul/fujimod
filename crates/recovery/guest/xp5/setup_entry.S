@@ -1,8 +1,8 @@
 .text
 .balign 4
-.global xp5_flash_entry
-.type xp5_flash_entry,%function
-xp5_flash_entry:
+.global xp5_setup_entry
+.type xp5_setup_entry,%function
+xp5_setup_entry:
     /* Save two scratch registers on the incoming per-core entry stack before
      * moving to the appended, private primary stack. All values are restored. */
     stp x0, x1, [sp, #-16]!
@@ -10,8 +10,8 @@ xp5_flash_entry:
     and x0, x0, #255
     cbnz x0, 9f
     mov x0, sp
-    adrp x1, xp5_flash_stack_top
-    add x1, x1, :lo12:xp5_flash_stack_top
+    adrp x1, xp5_setup_stack_top
+    add x1, x1, :lo12:xp5_setup_stack_top
     mov sp, x1
     sub sp, sp, #256
     stp x2, x3, [sp]
@@ -31,7 +31,7 @@ xp5_flash_entry:
     stp x30, x0, [sp, #224]
     mrs x1, nzcv
     str x1, [sp, #240]
-    bl xp5_flash_prepare
+    bl xp5_setup_prepare
     ldr x1, [sp, #240]
     msr nzcv, x1
     ldp x2, x3, [sp]
@@ -51,16 +51,16 @@ xp5_flash_entry:
     ldp x30, x0, [sp, #224]
     mov sp, x0
     ldp x0, x1, [sp], #16
-.global xp5_flash_setup_branch
-xp5_flash_setup_branch:
+.global xp5_setup_return_branch
+xp5_setup_return_branch:
     b . /* Bound by the packager after verifying this exact instruction. */
 9:  wfi
     b 9b
-.size xp5_flash_entry, .-xp5_flash_entry
+.size xp5_setup_entry, .-xp5_setup_entry
 .bss
 .balign 16
-.global xp5_flash_stack
-xp5_flash_stack:
+.global xp5_setup_stack
+xp5_setup_stack:
     .zero 2048
-.global xp5_flash_stack_top
-xp5_flash_stack_top:
+.global xp5_setup_stack_top
+xp5_setup_stack_top:
