@@ -636,9 +636,8 @@ impl CommandProcessor {
         actions: &mut Vec<Action>,
         record_receipts: bool,
     ) -> Result<()> {
-        if control != FILL_CONTROL {
-            return fail(format!("Unknown graphics fill control {control:#x}"));
-        }
+        let format =
+            fujimod_emulator_ip_dmp::fill::Control::decode(control).map_err(Unsupported)?;
         if self.busy
             || self.command_pending.is_some()
             || self.status() & (FILL_STATUS | COPY_STATUS | CLEAR_STATUS) != 0
@@ -673,6 +672,18 @@ impl CommandProcessor {
         }
         let count = endpoint - destination;
         let pattern = word.to_le_bytes();
+        let mut payload = if format.preserves_destination() {
+            if !host.has_reader() {
+                return fail("Graphics masked fill requires destination memory");
+            }
+            host.read(cpu, destination, count).map_err(Unsupported)?
+        } else {
+            vec![0; count as usize]
+        };
+        if payload.len() as u64 != count {
+            return fail("Graphics fill destination read is incomplete");
+        }
+        format.apply(&mut payload, word).map_err(Unsupported)?;
         let delay = self.delay(count);
         self.busy = true;
         self.store(0x1c, control);
@@ -712,14 +723,14 @@ impl CommandProcessor {
             self.last_job = Some(j.clone());
         }
         log(actions, "Graphics fill started", &j);
-        // Atomic DMA uses the same repeating little-endian word as Python.
+        // The complete validated output becomes visible at the DMA deadline.
         self.schedule(
             Completion {
                 cpu,
                 irq_cpu,
                 status: FILL_STATUS,
                 bytes: count,
-                output: vec![(destination, Arc::new(pattern.repeat(count as usize / 4)))],
+                output: vec![(destination, Arc::new(payload))],
                 job: j,
                 event: CompletionEvent::Fill,
                 ui: false,
@@ -1534,7 +1545,7 @@ impl CommandProcessor {
                 "limits".into(),
                 Value::List(vec![
                     Value::constant(
-                        "Only packet4 exact control0x0f100201 RAM pattern fill is supported",
+                        "Pattern DMA supports 16-bit repetition and masked 32-bit byte lanes",
                     ),
                     Value::constant(
                         "Initialization register values are explicit fixtures; physical reset values are unmeasured",

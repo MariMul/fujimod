@@ -1240,7 +1240,8 @@ impl State {
     }
     fn fill_job(&self, cx: &Cx<'_>, control: u32) -> Result<Job, String> {
         self.idle()?;
-        if self.path_pending.is_some() || !matches!(control, 0x0f100201 | 0x0f100001) {
+        let format = crate::fill::Control::decode(control)?;
+        if self.path_pending.is_some() {
             return Err("DMP unsupported fill control/pending command".into());
         }
         for o in [0x10, 0x14, 0x18] {
@@ -1257,12 +1258,8 @@ impl State {
         if start & 3 != 0 {
             return Err("DMP unaligned fill".into());
         }
-        cx.ram_bytes(start, count)?;
-        let pattern = self.r(0x18).to_le_bytes();
-        let mut bytes = vec![0; count];
-        for p in bytes.as_chunks_mut::<4>().0 {
-            p.copy_from_slice(&pattern);
-        }
+        let mut bytes = cx.ram_bytes(start, count)?;
+        format.apply(&mut bytes, self.r(0x18))?;
         Ok(Job {
             status: FILL,
             writes: vec![(start, bytes)],
