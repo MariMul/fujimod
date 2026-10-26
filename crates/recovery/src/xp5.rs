@@ -3,6 +3,8 @@ use crate::image::{self, File, Result, Source, extent, put, require, word};
 use serde::{Deserialize, Serialize};
 mod banks;
 pub use banks::Banks;
+mod card_boot;
+pub use card_boot::CardBoot;
 mod template {
     include!(concat!(env!("OUT_DIR"), "/xp5_sd_loader.rs"));
 }
@@ -86,6 +88,8 @@ pub struct Setup {
     pub board: Board,
     pub proofs: Vec<SourceProof>,
     pub banks: Banks,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_boot: Option<CardBoot>,
 }
 fn put64(data: &mut [u8], at: usize, value: u64) -> Result<()> {
     extent(data, at, 8)?;
@@ -182,6 +186,13 @@ pub fn package(
     ram: Option<Vec<u8>>,
     success_hold_seconds: u32,
 ) -> Result<Vec<File>> {
+    package_with_storage(inverted, setup, ram, success_hold_seconds, None)
+}
+
+pub(crate) fn package_with_storage(
+    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
+    storage: Option<&[u8]>,
+) -> Result<Vec<File>> {
     let prefix = setup.verify(inverted)?;
     let copied_end = setup.base + setup.low_length as u64;
     // XP5 raw-entry SRAM reserves its upper workspace for the boot service.
@@ -198,9 +209,12 @@ pub fn package(
     let mut program = template::IMAGE.to_vec();
     let header_at = program.len();
     program.extend_from_slice(extent(&prefix, 0, header_size)?);
-    let resident_end = setup
+    let mut resident_end = setup
         .banks
         .end(setup.low_length, (workspace - setup.base) as usize)?;
+    if let Some(card) = &setup.card_boot {
+        resident_end = resident_end.max(card.resident_end()?);
+    }
     let end = (address + program.len() as u64).max(
         setup.base
             + if ram.is_some() {
@@ -333,7 +347,7 @@ pub fn package(
     raw[..stock.len()].copy_from_slice(stock);
     put(&mut raw, 0, jump)?;
     let mut files = Vec::new();
-    if let Some(ram) = ram {
+    if let Some(mut ram) = ram {
         require(
             !ram.is_empty()
                 && ram.len() < 1 << 30
@@ -423,6 +437,18 @@ pub fn package(
             (gate - setup.base) as usize,
             branch(gate, address + template::A64_BOOT_ZERO_GATE as u64, false)?,
         )?;
+        if let Some(card) = &setup.card_boot {
+            card.copy_unit_cache(storage, &mut raw, setup.low_length,
+                (setup.stack-setup.base) as usize,
+                (address-setup.base) as usize..(address-setup.base) as usize+program.len(),
+                &setup.banks)?;
+            card.install(inverted, storage, card_boot::Installation {
+                base: setup.base, stock, program_address: address,
+                raw: &mut raw, program: &mut program, ram: &mut ram,
+            })?;
+        } else {
+            require(storage.is_none(), "Setup has no card storage binding")?;
+        }
         files.push(File::new("ffboot.bin", ram)?);
     }
     require(
@@ -547,6 +573,7 @@ mod tests {
                 copies: vec![],
                 edits: vec![],
             },
+            card_boot: None,
         };
         let mut ram = data[0x40000..].to_vec();
         put64(&mut ram, 0x40, 0).unwrap();

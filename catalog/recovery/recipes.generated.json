@@ -2769,6 +2769,18 @@
             "destination_offset": 158032,
             "size": 168,
             "sha256": "8e59ba4b8ddfaad7e36008cbad1adc22236e659f1cda46b2ff3f9b418ab5d83f"
+          },
+          {
+            "source_offset": 116736,
+            "destination_offset": 73728,
+            "size": 9472,
+            "sha256": "5d5bbc714ef68a288f760044d00ae91a1aac36d9e6243f19973a6ebc32852384"
+          },
+          {
+            "source_offset": 159576,
+            "destination_offset": 90112,
+            "size": 680,
+            "sha256": "cc25eeb68ce0b3acb8fd43d9a32c118a41da767f2d38292731f1797940d52050"
           }
         ],
         "edits": [
@@ -2867,8 +2879,995 @@
             "old": 3490168624,
             "new": 4043308848,
             "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 288,
+            "old": 4042801440,
+            "new": 3489661088,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 292,
+            "old": 2432958464,
+            "new": 2433130496,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1288,
+            "old": 3505930369,
+            "new": 2952790145,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1292,
+            "old": 2432925729,
+            "new": 2435022881,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1352,
+            "old": 3505930368,
+            "new": 2952790144,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1356,
+            "old": 2432917504,
+            "new": 2435014656,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1540,
+            "old": 3505930369,
+            "new": 2952790145,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1544,
+            "old": 2432843809,
+            "new": 2434940961,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1624,
+            "old": 2969059459,
+            "new": 2952790147,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1628,
+            "old": 2436366435,
+            "new": 2434269283,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1652,
+            "old": 2969059459,
+            "new": 2952790147,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1656,
+            "old": 2436366435,
+            "new": 2434269283,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1812,
+            "old": 2969059458,
+            "new": 2952790146,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 1816,
+            "old": 2436366402,
+            "new": 2434269250,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2004,
+            "old": 3505930369,
+            "new": 2952790145,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2008,
+            "old": 2433073185,
+            "new": 2435170337,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2076,
+            "old": 3505930370,
+            "new": 2952790146,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2080,
+            "old": 2432843842,
+            "new": 2434940994,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2188,
+            "old": 3505930370,
+            "new": 2952790146,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2192,
+            "old": 2432843842,
+            "new": 2434940994,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2296,
+            "old": 3505930370,
+            "new": 2952790146,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 2300,
+            "old": 2432843842,
+            "new": 2434940994,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 3176,
+            "old": 3505930389,
+            "new": 2952790165,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 3180,
+            "old": 2434024117,
+            "new": 2436121269,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4600,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4604,
+            "old": 2433695744,
+            "new": 2435792896,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4624,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4628,
+            "old": 2433712128,
+            "new": 2435809280,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4648,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4652,
+            "old": 2433728512,
+            "new": 2435825664,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4672,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4676,
+            "old": 2433744896,
+            "new": 2435842048,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4696,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4700,
+            "old": 2433761280,
+            "new": 2435858432,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4720,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4724,
+            "old": 2433564672,
+            "new": 2435661824,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4744,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4748,
+            "old": 2433581056,
+            "new": 2435678208,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4768,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4772,
+            "old": 2433597440,
+            "new": 2435694592,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4792,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4796,
+            "old": 2433613824,
+            "new": 2435710976,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4816,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4820,
+            "old": 2433630208,
+            "new": 2435727360,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4840,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4844,
+            "old": 2433646592,
+            "new": 2435743744,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4864,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4868,
+            "old": 2433662976,
+            "new": 2435760128,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4888,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4892,
+            "old": 2433515520,
+            "new": 2435612672,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4912,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4916,
+            "old": 2433679360,
+            "new": 2435776512,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4936,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4940,
+            "old": 2433777664,
+            "new": 2435874816,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4960,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4964,
+            "old": 2433794048,
+            "new": 2435891200,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4984,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 4988,
+            "old": 2433531904,
+            "new": 2435629056,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5008,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5012,
+            "old": 2433548288,
+            "new": 2435645440,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5032,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5036,
+            "old": 2433368064,
+            "new": 2435465216,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5056,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5060,
+            "old": 2433400832,
+            "new": 2435497984,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5080,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5084,
+            "old": 2433384448,
+            "new": 2435481600,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5136,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5140,
+            "old": 2433892352,
+            "new": 2435989504,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5160,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5164,
+            "old": 2433957888,
+            "new": 2436055040,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5184,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5188,
+            "old": 2433875968,
+            "new": 2435973120,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5208,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5212,
+            "old": 2433941504,
+            "new": 2436038656,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5232,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5236,
+            "old": 2433925120,
+            "new": 2436022272,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5256,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5260,
+            "old": 2433859584,
+            "new": 2435956736,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5280,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5284,
+            "old": 2433826816,
+            "new": 2435923968,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5304,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5308,
+            "old": 2433843200,
+            "new": 2435940352,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5328,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5332,
+            "old": 2433908736,
+            "new": 2436005888,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5352,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 5356,
+            "old": 2433810432,
+            "new": 2435907584,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 7380,
+            "old": 2969059456,
+            "new": 2415919232,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 7384,
+            "old": 2433351680,
+            "new": 2435448832,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 7392,
+            "old": 2969059478,
+            "new": 2415919254,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 7396,
+            "old": 2433336022,
+            "new": 2435433174,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8360,
+            "old": 2432188566,
+            "new": 4026531958,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8364,
+            "old": 2433417942,
+            "new": 2435515094,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8368,
+            "old": 2432188565,
+            "new": 4026531957,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8372,
+            "old": 2433434293,
+            "new": 2435531445,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8416,
+            "old": 2432188544,
+            "new": 4026531936,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8420,
+            "old": 2433449984,
+            "new": 2435547136,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8440,
+            "old": 2432188544,
+            "new": 4026531936,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8444,
+            "old": 2433466368,
+            "new": 2435563520,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8464,
+            "old": 2432188544,
+            "new": 4026531936,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8468,
+            "old": 2433482752,
+            "new": 2435579904,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8488,
+            "old": 2432188544,
+            "new": 4026531936,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8492,
+            "old": 2433499136,
+            "new": 2435596288,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8724,
+            "old": 2432188565,
+            "new": 4026531957,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 8728,
+            "old": 2433499829,
+            "new": 2435596981,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56128,
+            "old": 2969059363,
+            "new": 2415919139,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56132,
+            "old": 2433974371,
+            "new": 2436071523,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56328,
+            "old": 2969059363,
+            "new": 2415919139,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56332,
+            "old": 2433990755,
+            "new": 2436087907,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56376,
+            "old": 2969059361,
+            "new": 2415919137,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56380,
+            "old": 2433990689,
+            "new": 2436087841,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56460,
+            "old": 4042801267,
+            "new": 2952790067,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 56464,
+            "old": 2435031667,
+            "new": 2432934515,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57028,
+            "old": 4042801267,
+            "new": 2952790067,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57032,
+            "old": 2436219507,
+            "new": 2434122355,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57104,
+            "old": 4042801267,
+            "new": 2952790067,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57108,
+            "old": 2436743795,
+            "new": 2434646643,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57156,
+            "old": 4042801267,
+            "new": 2952790067,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57160,
+            "old": 2436678259,
+            "new": 2434581107,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57212,
+            "old": 4042801267,
+            "new": 2952790067,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 57216,
+            "old": 2436719219,
+            "new": 2434622067,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 58596,
+            "old": 2432188609,
+            "new": 2415919169,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 58600,
+            "old": 2436718625,
+            "new": 2432696353,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 65892,
+            "old": 3505930402,
+            "new": 3489660962,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 65896,
+            "old": 2436849730,
+            "new": 2432827458,
+            "what": "Use card-resident setup tables"
+          },
+          {
+            "address": 75656,
+            "old": 4026654272,
+            "new": 4286658112,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75672,
+            "old": 4026655184,
+            "new": 4286659024,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75688,
+            "old": 4026656096,
+            "new": 4286659936,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75704,
+            "old": 4026657008,
+            "new": 4286660848,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75720,
+            "old": 4026650624,
+            "new": 4286654464,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75736,
+            "old": 4026651536,
+            "new": 4286655376,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75752,
+            "old": 4026652448,
+            "new": 4286656288,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 75768,
+            "old": 4026653360,
+            "new": 4286657200,
+            "what": "Use resident DDR table pointers"
+          },
+          {
+            "address": 848,
+            "old": 1384122336,
+            "new": 335544339,
+            "what": "Skip reset flash DMA before FFBOOT replaces RAM zero"
+          },
+          {
+            "address": 3704,
+            "old": 3532269569,
+            "new": 3533318145,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3708,
+            "old": 4072603585,
+            "new": 4072665153,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3728,
+            "old": 3532531713,
+            "new": 3533580289,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3732,
+            "old": 4072603585,
+            "new": 4072665153,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3768,
+            "old": 3535732673,
+            "new": 2415919425,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3788,
+            "old": 3531936769,
+            "new": 3532985345,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3792,
+            "old": 4072603585,
+            "new": 4072665153,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3872,
+            "old": 3532793882,
+            "new": 3531745306,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3876,
+            "old": 4072603610,
+            "new": 4072665210,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3880,
+            "old": 3532794137,
+            "new": 3531745561,
+            "what": "Read retained DDR training from the card-loaded unit cache"
+          },
+          {
+            "address": 3884,
+            "old": 4072603609,
+            "new": 4072665209,
+            "what": "Read retained DDR training from the card-loaded unit cache"
           }
         ]
+      },
+      "card_boot": {
+        "hooks": [
+          {
+            "proof": {
+              "address": 4286581468,
+              "size": 132,
+              "sha256": "565bf29a685e7c12b84ace44ea0ba251e7be16e4dd86e6c3a41d7bae3359c6f1"
+            },
+            "target": "phy_imem",
+            "call": false
+          },
+          {
+            "proof": {
+              "address": 4286581336,
+              "size": 132,
+              "sha256": "c1e3edc1c0bb218c5f9b4e3bdea64d52a3931aa5c2f62d44db9ed2cc7dba6568"
+            },
+            "target": "phy_dmem",
+            "call": false
+          },
+          {
+            "proof": {
+              "address": 4286581644,
+              "size": 4,
+              "sha256": "756a6a108e3a7c8054b80e6a9a75eee4bc85612f66963cbaa2c5b207c1fe8366"
+            },
+            "target": "layout_marker",
+            "call": true
+          },
+          {
+            "proof": {
+              "address": 4286642884,
+              "size": 2328,
+              "sha256": "1fa51276b5e872350475b31fd513da9792be30e2a59e161baa559ca450d0070f"
+            },
+            "target": "flash_info",
+            "call": false
+          }
+        ],
+        "dma": {
+          "address": 4286581060,
+          "size": 276,
+          "sha256": "74c0f36c9d38601ff42e0b5a11b6c223eddc280403b08e65e4e59803a0b1f113"
+        },
+        "layout_marker": 1431677612,
+        "jedec_id": 2906907,
+        "secondary_sgi": [
+          4195024896,
+          4195155968,
+          4195287040
+        ],
+        "payloads": [
+          {
+            "source": {
+              "dat_offset": 524988,
+              "size": 65536,
+              "compression": "raw",
+              "decoded_size": 65536,
+              "sha256": "5a69e9b721c7dafb03443057cc5f72b2d67247b983da7ef811617fcfce7e264f"
+            },
+            "file_offset": 266240,
+            "destinations": [
+              4211736576,
+              4215930880
+            ]
+          },
+          {
+            "source": {
+              "dat_offset": 590524,
+              "size": 65536,
+              "compression": "raw",
+              "decoded_size": 65536,
+              "sha256": "4a6a06fc377fa7b449766a1809f211d6715eb097d4856cdc422b7d0044aa7349"
+            },
+            "file_offset": 331776,
+            "destinations": [
+              4211802112,
+              4215996416
+            ]
+          },
+          {
+            "source": {
+              "dat_offset": 656060,
+              "size": 24864,
+              "compression": "raw",
+              "decoded_size": 24864,
+              "sha256": "23d483ac29839cc35deffac3ab7b8ece0b74d27922802e9b977960fc0ba544bf"
+            },
+            "file_offset": 397312,
+            "destinations": [
+              4211736576,
+              4215930880
+            ]
+          },
+          {
+            "source": {
+              "dat_offset": 680924,
+              "size": 65536,
+              "compression": "raw",
+              "decoded_size": 65536,
+              "sha256": "ba61ef4f662d1b4a949c19a9f059c022ff176f23e9f6dd65d8b373b72208adbe"
+            },
+            "file_offset": 422176,
+            "destinations": [
+              4211802112,
+              4215996416
+            ]
+          }
+        ],
+        "namespace": {
+          "dat_offset": 700,
+          "size": 109250876,
+          "compression": "raw",
+          "decoded_size": 109250876,
+          "sha256": "d69ae76e1bdee2d52f660efb209c5a429d747f18ad18a95d88d4b4df43ed7b02"
+        },
+        "unit_cache": {
+          "storage_bytes": 134217728,
+          "source_offset": 134086656,
+          "destination_offset": 163840,
+          "size": 37200
+        }
       }
     },
     "cold_start": null,

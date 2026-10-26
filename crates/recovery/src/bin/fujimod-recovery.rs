@@ -52,15 +52,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .collect::<Result<Vec<_>, _>>()?;
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
-        Some(command @ ("build" | "startup" | "stage-one" | "rescue-baseline")) => {
+        Some(command @ ("build" | "startup" | "card-startup" | "stage-one" | "rescue-baseline")) => {
+            let mut inputs = args[1..].to_vec();
+            let storage = if command == "card-startup" {
+                if inputs.len() != 4 || inputs.iter().any(|v| v.starts_with("--")) {
+                    return Err("Expected FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY".into());
+                }
+                Some(fs::read(inputs.remove(2))?)
+            } else { None };
             let (firmware, dat, output, success_hold_seconds) =
-                construction_args(&args[1..], matches!(command, "startup" | "stage-one"))?;
+                construction_args(&inputs, matches!(command, "startup" | "stage-one"))?;
             let options = StartupOptions {
                 success_hold_seconds,
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing recovery recipe")?;
             let source = fs::read(dat)?;
-            let files = if command == "build" {
+            let files = if let Some(storage) = storage {
+                recipe.build_startup_with_storage(&source, &storage, options)?
+            } else if command == "build" {
                 recipe.build(&source)?
             } else if command == "rescue-baseline" {
                 recipe.build_rescue_baseline(&source)?
@@ -80,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-recovery list | build|startup|stage-one|rescue-baseline FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N]"
+                "Usage: fujimod-recovery list | build|startup|stage-one|rescue-baseline FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }

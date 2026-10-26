@@ -105,6 +105,11 @@ The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
 pair before firmware-reader redirection. `Recipe::build_rescue_baseline` exposes
 the same construction for regression comparisons.
 
+`card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY` accepts an explicit
+unit storage image for recipes with retained setup data. It checks the storage
+size and complete update pages, carries the retained cache in SRAM, and appends
+the storage namespace to the OS file. It defaults to zero success hold.
+
 `startup` and `stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units

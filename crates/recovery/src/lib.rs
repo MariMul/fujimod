@@ -296,6 +296,17 @@ impl Recipe {
         source: &[u8],
         options: StartupOptions,
     ) -> Result<Vec<File>> {
+        self.startup_inputs(source, options, None)
+    }
+    /// Include the unit's retained storage data in a checked card startup.
+    pub fn build_startup_with_storage(
+        &self, source: &[u8], storage: &[u8], options: StartupOptions,
+    ) -> Result<Vec<File>> {
+        require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
+        self.startup_inputs(source, options, Some(storage))
+    }
+    fn startup_inputs(&self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>)
+        -> Result<Vec<File>> {
         require(
             options.success_hold_seconds == 0 || matches!(self.generation, Generation::Xp5),
             "Success hold requires XP5",
@@ -362,11 +373,12 @@ impl Recipe {
                             "Missing XP5 post-setup SD loader and handoff facts".into(),
                         )
                     })?;
-                    xp5::package(
+                    xp5::package_with_storage(
                         &inverted,
                         setup,
                         Some(image::transform(&inverted, plan)?),
                         options.success_hold_seconds,
+                        storage,
                     )?
                 }
             };
