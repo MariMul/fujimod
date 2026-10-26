@@ -79,11 +79,16 @@ impl Options {
     }
 }
 
-const BROWSER_TRANSLATION_CACHE_MIN_BYTES: u64 = 32 << 20;
+/// Browser code cache per processor. Emscripten serves it from Wasm heap that
+/// is committed when allocated and never returned, and a phone tab is killed
+/// once its memory passes a limit far below a desktop's. Before the 128 MiB
+/// native size the browser ran with 16 MiB per processor; two X70 processors at
+/// 128 MiB grew the tab by 224 MiB and iPhone Safari killed it after boot.
+const BROWSER_TRANSLATION_CACHE_BYTES: u32 = 32 << 20;
 const BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES: u64 = 64 << 20;
-const MEBIBYTE: u64 = 1 << 20;
 
-/// Choose the browser cache size from remaining Emscripten heap capacity.
+/// Refuse construction when the remaining Emscripten heap cannot hold every
+/// processor's browser cache plus headroom.
 pub fn browser_translation_cache_size_bytes(
     remaining_heap_bytes: u64,
     processors: usize,
@@ -91,24 +96,16 @@ pub fn browser_translation_cache_size_bytes(
     if processors == 0 {
         return Err("browser translation cache sizing requires a processor".into());
     }
-    let cache_total = u64::from(TRANSLATION_CACHE_BYTES)
+    let required = u64::from(BROWSER_TRANSLATION_CACHE_BYTES)
         .checked_mul(processors as u64)
+        .and_then(|total| total.checked_add(BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES))
         .ok_or("browser translation cache size overflows")?;
-    let full_heap = cache_total
-        .checked_add(BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES)
-        .ok_or("browser translation cache size overflows")?;
-    if remaining_heap_bytes >= full_heap {
-        return Ok(TRANSLATION_CACHE_BYTES);
-    }
-    let usable_heap = remaining_heap_bytes.saturating_sub(BROWSER_TRANSLATION_CACHE_HEADROOM_BYTES);
-    let per_processor = usable_heap / processors as u64;
-    let rounded = per_processor / MEBIBYTE * MEBIBYTE;
-    if rounded < BROWSER_TRANSLATION_CACHE_MIN_BYTES {
+    if remaining_heap_bytes < required {
         return Err(format!(
-            "browser heap cannot fit the minimum 32 MiB translation cache for each of {processors} processors plus 64 MiB of headroom"
+            "browser heap cannot fit the 32 MiB translation cache for each of {processors} processors plus 64 MiB of headroom"
         ));
     }
-    Ok(rounded.min(u64::from(TRANSLATION_CACHE_BYTES)) as u32)
+    Ok(BROWSER_TRANSLATION_CACHE_BYTES)
 }
 
 pub fn translation_cache_size_bytes(processors: usize) -> Result<u32, String> {
@@ -430,19 +427,19 @@ mod translation_cache_tests {
     use super::browser_translation_cache_size_bytes;
 
     #[test]
-    fn browser_cache_fits_heap_headroom_and_processor_count() {
+    fn browser_cache_is_fixed_and_refuses_a_full_heap() {
         let mib: u64 = 1 << 20;
         assert_eq!(
-            browser_translation_cache_size_bytes((64 + 128 + 128) * mib, 2).unwrap(),
-            128 << 20
+            browser_translation_cache_size_bytes(1024 * mib, 2).unwrap(),
+            32 << 20
         );
         assert_eq!(
-            browser_translation_cache_size_bytes((64 + 95) * mib, 1).unwrap(),
-            95 << 20
+            browser_translation_cache_size_bytes((64 + 32 + 32) * mib, 2).unwrap(),
+            32 << 20
         );
-        assert!(browser_translation_cache_size_bytes((64 + 31) * mib, 1)
+        assert!(browser_translation_cache_size_bytes((64 + 63) * mib, 2)
             .unwrap_err()
-            .contains("minimum 32 MiB"));
+            .contains("32 MiB"));
         assert!(browser_translation_cache_size_bytes((64 + 64) * mib, 0).is_err());
     }
 }
