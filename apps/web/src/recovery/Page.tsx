@@ -2,7 +2,7 @@ import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { For, Show, createMemo, createSignal, onSettled } from 'solid-js';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
-import { initialize } from 'fujimod';
+import { catalog as reference, initialize } from 'fujimod';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 
@@ -16,6 +16,7 @@ import { SYSTEMS, FORMAT_STEPS, detectSystem, type System } from './format-guide
 import '../home/site.css';
 import '../navigation.css';
 import './recovery.css';
+import { firmwareDownloadName } from '../firmware-download';
 
 declare const __FUJIMOD_BUILD_SHA__: string;
 
@@ -86,8 +87,19 @@ export default function Recovery() {
       const zip = await zipBlob(
         files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
       );
-      const name = kind === 'green-led' ? 'fujimod-green-led' : 'fujimod-recovery';
-      downloadBlob(zip, `${name}-build-${__FUJIMOD_BUILD_SHA__}.zip`);
+      const release = reference
+        .firmwareVersions()
+        .find((entry) => entry.firmware_id === firmware.firmwareId);
+      if (!release) throw Error('Firmware is not in the catalog.');
+      downloadBlob(
+        zip,
+        firmwareDownloadName(
+          kind === 'green-led' ? 'green-led' : 'recovery',
+          'sd-boot',
+          { model: release.product, version: release.version },
+          __FUJIMOD_BUILD_SHA__,
+        ),
+      );
     } catch (caught) {
       setBuildError(message(caught));
     } finally {

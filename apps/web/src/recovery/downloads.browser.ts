@@ -49,6 +49,7 @@ for (const engine of engines) {
         .firmwareVersions()
         .find((entry) => entry.firmware_id === test.firmwareId);
       assert.ok(release);
+      const identity = `${release.product.toLowerCase().replace(/\s+/g, '-')}-${release.version}`;
       await page
         .getByRole('radio', {
           name: `${release.product} · ${release.version} In this browser`,
@@ -72,7 +73,10 @@ for (const engine of engines) {
         await led.click();
         console.log(`${engine.name()}: building ${test.firmwareId} LED ZIP`);
         const download = await pending;
-        assert.equal(download.suggestedFilename(), `fujimod-green-led-build-${buildSha}.zip`);
+        assert.equal(
+          download.suggestedFilename(),
+          `fujimod-green-led-sd-boot-${identity}-build-${buildSha}.zip`,
+        );
         const zip = unzipSync(await readFile((await download.path())!));
         assert.deepEqual(Object.keys(zip).sort(), [...status.greenLedFilenames].sort());
         assert.ok(
@@ -113,7 +117,7 @@ for (const engine of engines) {
           const systemDownload = await pendingSystem;
           assert.equal(
             systemDownload.suggestedFilename(),
-            `fujimod-recovery-build-${buildSha}.zip`,
+            `fujimod-recovery-sd-boot-${identity}-build-${buildSha}.zip`,
           );
           const files = unzipSync(await readFile((await systemDownload.path())!));
           assert.deepEqual(Object.keys(files).sort(), [...status.outputFilenames].sort());

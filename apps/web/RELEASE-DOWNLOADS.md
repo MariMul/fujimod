@@ -97,3 +97,12 @@ Disclaimer, in bold above each download button:
 
 Followed by: "[Recovery tools](/recovery/) are available in the very unlikely
 event this bricks your camera."
+
+## Download filenames
+
+Archives use `fujimod-{recovery,green-led,modified}-{sd-boot,installable}-{model}-{firmware}-build-{build}.zip`.
+The model is lowercase with hyphens instead of spaces; firmware versions retain
+periods, and the build is the website's eight-character Git commit SHA.
+For example: `fujimod-recovery-sd-boot-x-t1-5.52-build-1234abcd.zip`.
+Camera-required filenames inside each archive stay intact. Modified installable
+archives include the SD boot files and `FPUPDATE.DAT`.

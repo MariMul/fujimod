@@ -10,7 +10,7 @@ import {
 import { CameraStore, type CameraRecord } from '../cameras/store';
 import '../home/site.css';
 import { flags } from '@fujimod/emulator-ui/flags';
-import { cardZip } from '../patch/download';
+import { modifiedDownload } from '../patch/download';
 import type { PatchResult } from '../patch/patcher';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { validateIndex, verifyPatch } from '../patch/catalog';
@@ -30,6 +30,7 @@ import { supportedCameras } from './state';
 declare const __FUJIMOD_LOCAL_DAT__: boolean;
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 declare const __FUJIMOD_CATALOG__: string;
+declare const __FUJIMOD_BUILD_SHA__: string;
 const adapters = import.meta.glob<{
   panel: DevicePanel;
   preview?: string;
@@ -330,12 +331,15 @@ export function startHome(
             const result = await patchFirmware(file);
             if (current !== generation) return;
             if (!result) throw Error('No release patch is available for this firmware.');
-            if (action === 'sd-card') downloadBlob(await cardZip(result), 'sd-card.zip');
-            else {
-              if (!flags.allowFpUpdateDownload || !result.fpupdate)
-                throw Error('FP update download unavailable.');
-              downloadBlob(new Blob([result.fpupdate]), 'FPUPDATE.DAT');
-            }
+            if (action === 'fp-update' && !flags.allowFpUpdateDownload)
+              throw Error('FP update download unavailable.');
+            const download = await modifiedDownload(
+              action === 'sd-card' ? 'sd-boot' : 'installable',
+              result,
+              entry,
+              __FUJIMOD_BUILD_SHA__,
+            );
+            downloadBlob(download.blob, download.name);
           }
           finishLoading();
           setState((s) => {
