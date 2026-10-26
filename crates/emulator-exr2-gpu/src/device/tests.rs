@@ -307,3 +307,40 @@ fn decoded_clear_preserves_pending_dma_deadline_restore_and_observational_reads(
     }
     assert_eq!(restored.next_deadline(deadline), None);
 }
+
+#[test]
+fn masked_depth_stencil_fill_preserves_destination_and_restores_pending_dma() {
+    for (control, pattern) in [
+        (0x07000201, [0x11, 0x22, 0x33, 0xa5]),
+        (0x08000201, [0xa5, 0xa5, 0xa5, 0x44]),
+        (0x0f000201, [0x11, 0x22, 0x33, 0x44]),
+        (0x0f000001, [0x11, 0x22, 0x11, 0x22]),
+    ] {
+        let (mut gpu, mut host, mut controllers) = setup();
+        enable(&mut controllers, &mut host, 1);
+        host.bytes.fill(0xa5);
+        for (offset, value) in [
+            (0x10, 128),
+            (0x14, 160),
+            (0x18, 0x44332211),
+            (0x1c, control),
+        ] {
+            assert_eq!(put(&mut gpu, &mut host, offset, value), None);
+        }
+        let saved = gpu.checkpoint().unwrap();
+        let fingerprint = gpu.fingerprint().unwrap();
+        assert_eq!(&host.bytes[128..160], &[0xa5; 32]);
+        let deadline = gpu.next_deadline(host.now).unwrap();
+        host.now = deadline - 1;
+        gpu.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.writes, 0);
+        gpu.restore_checkpoint(&saved).unwrap();
+        assert_eq!(gpu.fingerprint().unwrap(), fingerprint);
+        host.now = deadline;
+        gpu.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(&host.bytes[128..160], pattern.repeat(8));
+        assert_eq!(&host.bytes[..128], &[0xa5; 128]);
+        assert_eq!(&host.bytes[160..], &[0xa5; 4096 - 160]);
+        assert_eq!(host.effects, [(1, IRQ.into())]);
+    }
+}

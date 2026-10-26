@@ -22,6 +22,6 @@ serde = { workspace = true, features = ["derive", "rc"] }
 serde_json.workspace = true
 thiserror.workspace = true
 regex = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 rusqlite.workspace = true
 fujimod-workspace-hack.workspace = true
