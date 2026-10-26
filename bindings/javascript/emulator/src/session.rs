@@ -209,6 +209,7 @@ impl Session {
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
                     companion: None,
                     storage: None,
+                    sd: BTreeMap::new(),
                     displays: scanouts,
                 };
                 board::register_all(&mut devices, &windows, &mut resources, &mut |w| {
