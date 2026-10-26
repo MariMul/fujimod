@@ -153,11 +153,6 @@
 .recovery-dim {
   color: var(--dim);
 }
-.recovery-downloads {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 .recovery-download {
   margin-bottom: 14px;
   border: 0;
@@ -191,4 +186,30 @@
   .recovery .downloads-table {
     max-height: 226px;
   }
+}
+
+.recovery-led {
+  color: var(--dim);
+  max-width: 520px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid rgb(84 84 88 / 45%);
+  border-radius: 12px;
+  background: rgb(44 44 46 / 35%);
+}
+.recovery-led p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.recovery .recovery-led-download {
+  min-height: 32px;
+  margin-bottom: 0;
+  padding: 7px 12px;
+  background: rgb(118 118 128 / 20%);
+  color: #d1d1d6;
+  font-size: 13px;
+  font-weight: 500;
+}
+.recovery .recovery-led-download:hover:not(:disabled) {
+  background: rgb(118 118 128 / 35%);
 }

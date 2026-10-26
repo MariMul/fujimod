@@ -201,41 +201,22 @@ export default function Recovery() {
             >
               {(card) => (
                 <>
-                  <div class="recovery-downloads">
-                    <button
-                      class="launcher-button recovery-download"
-                      disabled={building() || !card().canBuild}
-                      onClick={() => {
-                        const firmware = chosen();
-                        if (firmware) void download(firmware, 'system');
-                      }}
-                    >
-                      {building() && downloadType() === 'system'
-                        ? 'Building…'
-                        : 'Download full system image'}
-                    </button>
-                    <button
-                      class="launcher-button recovery-download"
-                      disabled={building() || !card().greenLedFiles.length}
-                      onClick={() => {
-                        const firmware = chosen();
-                        if (firmware) void download(firmware, 'green-led');
-                      }}
-                    >
-                      {building() && downloadType() === 'green-led'
-                        ? 'Building…'
-                        : 'Download green LED image'}
-                    </button>
-                  </div>
+                  <button
+                    class="launcher-button recovery-download"
+                    disabled={building() || !card().canBuild}
+                    onClick={() => {
+                      const firmware = chosen();
+                      if (firmware) void download(firmware, 'system');
+                    }}
+                  >
+                    {building() && downloadType() === 'system'
+                      ? 'Building…'
+                      : 'Download full system image'}
+                  </button>
                   <Show when={!card().canBuild}>
                     <p class="recovery-error">
                       Recovery files can't be built for the {card().model} yet. Missing:{' '}
                       {card().missing.join(', ')}.
-                    </p>
-                  </Show>
-                  <Show when={!card().greenLedFiles.length}>
-                    <p class="recovery-error">
-                      Green LED bindings are not available for the {card().model} yet.
                     </p>
                   </Show>
                   <Show when={buildError()}>
@@ -258,6 +239,30 @@ export default function Recovery() {
                     .
                   </p>
                   <p>Insert the card into the camera.</p>
+                  <aside class="recovery-led">
+                    <p>
+                      If the system image won’t boot, use this image to check your SD card boot
+                      instructions. It only turns on the rear green LED. If the light comes on, your
+                      camera is booting from the SD card.
+                    </p>
+                    <button
+                      class="launcher-button recovery-download recovery-led-download"
+                      disabled={building() || !card().greenLedFiles.length}
+                      onClick={() => {
+                        const firmware = chosen();
+                        if (firmware) void download(firmware, 'green-led');
+                      }}
+                    >
+                      {building() && downloadType() === 'green-led'
+                        ? 'Building…'
+                        : 'Download green LED image'}
+                    </button>
+                    <Show when={!card().greenLedFiles.length}>
+                      <p class="recovery-error">
+                        Green LED bindings are not available for the {card().model} yet.
+                      </p>
+                    </Show>
+                  </aside>
                 </>
               )}
             </Show>
