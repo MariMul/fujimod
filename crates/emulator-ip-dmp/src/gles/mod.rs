@@ -453,7 +453,15 @@ impl Engine {
                 )?;
                 self.vertices.remove(1);
             }
-            0..=3 => {}
+            4 | 5 if n == 2 => {
+                raster::line(self, [self.vertices[0], self.vertices[1]], read, out)?;
+                if mode == 4 {
+                    self.vertices.clear();
+                } else {
+                    self.vertices.remove(0);
+                }
+            }
+            0..=5 => {}
             _ => return Err(format!("DMP unsupported primitive mode {mode}")),
         }
         Ok(())

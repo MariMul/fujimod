@@ -830,9 +830,10 @@ impl CommandProcessor {
         Ok(())
     }
     fn native_pixmap_descriptor(&self) -> bool {
-        self.regs.get_or_zero(0xc10) == 1
-            && self.regs.get_or_zero(0xc0c) > 0
-            && self.regs.get_or_zero(0xc0c) >> 16 == 0
+        self.regs.get_or_zero(0xc10) == 8
+            || (self.regs.get_or_zero(0xc10) == 1
+                && self.regs.get_or_zero(0xc0c) > 0
+                && self.regs.get_or_zero(0xc0c) >> 16 == 0)
     }
     fn start_copy(
         &mut self,
@@ -858,6 +859,9 @@ impl CommandProcessor {
             return fail("Graphics copy descriptor is incomplete");
         }
         let control = self.regs.get_or_zero(0xc10);
+        if control == 8 {
+            return self.start_tile_copy(cpu, trigger, host, actions, record_receipts);
+        }
         if control != 1 {
             return fail(format!(
                 "Unknown graphics software-profile copy control {control:#x}"
@@ -977,6 +981,86 @@ impl CommandProcessor {
                 bytes: count,
                 output: vec![(destination, Arc::new(payload))],
                 job: j,
+                event: CompletionEvent::Copy,
+                ui: false,
+            },
+            delay,
+            actions,
+        );
+        Ok(())
+    }
+    /// Copy byte chunks with independently pitched source and destination rows.
+    fn start_tile_copy(
+        &mut self,
+        cpu: i64,
+        trigger: u32,
+        host: &mut dyn Inputs,
+        actions: &mut Vec<Action>,
+        record_receipts: bool,
+    ) -> Result<()> {
+        if ![0xc20, 0xc24, 0xc28]
+            .iter()
+            .all(|r| self.written.contains(r))
+        {
+            return fail("DMP tile copy descriptor is incomplete");
+        }
+        let count = u64::from(self.regs.get_or_zero(0xc20));
+        if count == 0 || count > self.max_copy_bytes || count & 15 != 0 {
+            return fail("DMP tile copy byte count exceeds bounds");
+        }
+        let descriptors = [self.regs.get_or_zero(0xc24), self.regs.get_or_zero(0xc28)];
+        let mut bases = [0; 2];
+        let mut chunks = [0; 2];
+        let mut strides = [0; 2];
+        let mut lengths = [0; 2];
+        for i in 0..2 {
+            let address = self.regs.get_or_zero(if i == 0 { 0xc00 } else { 0xc04 });
+            if address & 0x8000000f != 0 {
+                return fail("DMP tile copy address alias/alignment is unsupported");
+            }
+            bases[i] = u64::from(address & !0x40000000);
+            chunks[i] = u64::from(descriptors[i] & 65535) * 16;
+            strides[i] = chunks[i] + u64::from(descriptors[i] >> 16) * 16;
+            if chunks[i] == 0 || count % chunks[i] != 0 {
+                return fail("DMP tile copy has a partial chunk");
+            }
+            lengths[i] = (count / chunks[i] - 1) * strides[i] + chunks[i];
+            if lengths[i] > self.max_copy_bytes || bases[i] + lengths[i] > self.ram_bytes {
+                return fail("DMP tile copy DMA exceeds bounds");
+            }
+        }
+        if bases[0] < bases[1] + lengths[1] && bases[1] < bases[0] + lengths[0] {
+            return fail("DMP overlapping tile copy is unsupported");
+        }
+        let irq_cpu = self.irq_cpu(cpu, "copy", host)?;
+        let source = host.read(cpu, bases[0], lengths[0]).map_err(Unsupported)?;
+        let mut destination = host.read(cpu, bases[1], lengths[1]).map_err(Unsupported)?;
+        if source.len() as u64 != lengths[0] || destination.len() as u64 != lengths[1] {
+            return fail("DMP short tile copy DMA");
+        }
+        for n in 0..count {
+            let src = n / chunks[0] * strides[0] + n % chunks[0];
+            let dst = n / chunks[1] * strides[1] + n % chunks[1];
+            destination[dst as usize] = source[src as usize];
+        }
+        let delay = self.delay(count);
+        let job = self.new_job_with_receipts(record_receipts, || {
+            vec![
+                ("operation", Value::constant("tile-copy")),
+                ("bytes", num(count)),
+            ]
+        });
+        self.busy = true;
+        self.jobs_started += 1;
+        self.store(0xc18, trigger);
+        self.schedule(
+            Completion {
+                cpu,
+                irq_cpu,
+                status: COPY_STATUS,
+                bytes: count,
+                output: vec![(bases[1], Arc::new(destination))],
+                job,
                 event: CompletionEvent::Copy,
                 ui: false,
             },

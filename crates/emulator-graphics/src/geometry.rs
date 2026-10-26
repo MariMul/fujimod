@@ -1,7 +1,7 @@
 //! Path recovery, curve flattening and stroke construction
 //! (`_ui_transform`, `_ui_curve`, `_ui_paths`, `_ui_stroke`).
 //!
-//! Declared software laws, not measured hardware: 0.125px flattening
+//! Declared software laws, not measured hardware: 1/32px flattening
 //! tolerance, adaptive de Casteljau subdivision to depth 14, round/bevel/miter
 //! (limit 4) joins, butt/round/square caps and polygonal circles.
 
@@ -119,7 +119,11 @@ pub fn paths(draw: &Draw) -> Result<Vec<(Vec<Point>, bool)>> {
         pmax(hypot2(matrix[0], matrix[3]), hypot2(matrix[1], matrix[4])),
         1.0,
     );
-    let tolerance = if object_stroke { 0.125 / scale } else { 0.125 };
+    let tolerance = if object_stroke {
+        0.03125 / scale
+    } else {
+        0.03125
+    };
     let mut paths: Vec<(Vec<Point>, bool)> = Vec::new();
     let mut current: Vec<Point> = Vec::new();
     let mut closed = false;
@@ -325,7 +329,8 @@ pub fn stroke_with_style(
             for (point, tangent, direction) in ends {
                 if draw.cap == 1 {
                     polygon(circle_points(point))?;
-                } else if draw.cap == 2 {
+                } else if draw.cap == 0 {
+                    // Hardware code zero extends this cap by the stroke radius.
                     let (tx, ty) = (
                         tangent.0 * radius * direction,
                         tangent.1 * radius * direction,

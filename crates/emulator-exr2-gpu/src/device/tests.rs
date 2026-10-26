@@ -391,3 +391,35 @@ fn native_pitched_pixmap_copy_uses_dma_and_irq_without_a_vg_profile() {
     }
     assert_eq!(host.effects, [(1, IRQ.into())]);
 }
+
+#[test]
+fn pitched_tile_copy_preserves_gaps_and_commits_only_at_completion() {
+    let (mut gpu, mut host, mut controllers) = setup();
+    enable(&mut controllers, &mut host, 1);
+    for (i, byte) in host.bytes[128..320].iter_mut().enumerate() {
+        *byte = i as u8;
+    }
+    let before = host.bytes.clone();
+    for (offset, value) in [
+        (0xc00, 0x40000080),
+        (0xc04, 1024),
+        (0xc08, 0),
+        (0xc0c, 0),
+        (0xc10, 8),
+        (0xc20, 64),
+        (0xc24, 0x00020001),
+        (0xc28, 0x00010002),
+        (0xc18, 1),
+    ] {
+        assert_eq!(put(&mut gpu, &mut host, offset, value), None);
+    }
+    assert_eq!(host.bytes, before);
+    host.now = gpu.next_deadline(host.now).unwrap();
+    gpu.advance(&mut Cx::new(&mut host, 0, 0, 0));
+    let mut expected = before.clone();
+    for n in 0..64 {
+        expected[1024 + n / 32 * 48 + n % 32] = before[128 + n / 16 * 48 + n % 16];
+    }
+    assert_eq!(host.bytes, expected);
+    assert_eq!(host.effects, [(1, IRQ.into())]);
+}
