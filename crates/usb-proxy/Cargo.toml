@@ -21,7 +21,7 @@ thiserror.workspace = true
 futures-lite.workspace = true
 futures-timer.workspace = true
 futures-util = { version = "0.3", features = ["sink"] }
-base64 = "0.22"
+base64 = "0.23"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 serde_bytes = "0.11"
 fujimod-workspace-hack.workspace = true
