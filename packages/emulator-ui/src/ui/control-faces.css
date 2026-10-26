@@ -25,7 +25,7 @@
   font-size: 15px;
   font-weight: 600;
 }
-.dial .vals span[data-value='A'] {
+.dial .vals span[data-action='A'] {
   color: #f00;
 }
 .dial:before {
@@ -431,16 +431,23 @@
   vertical-align: middle;
   color: #e5e5ea;
 }
-.control-face.mini {
+.control-face[data-size='mini'] {
   --control-scale: 0.6;
   gap: 4px;
   pointer-events: none;
 }
 /* At mini size a key's marking fills most of it, so it stays legible. */
-.control-face.mini .key > span:not(.two) {
+/* A D-pad or shutter at the panel's mini scale would dwarf the keys beside it. */
+.control-face[data-size='mini'][data-part='pad'] {
+  --control-scale: 0.34;
+}
+.control-face[data-size='mini'][data-part='shutter'] {
+  --control-scale: 0.45;
+}
+.control-face[data-size='mini'] .key > span:not(.two) {
   font-size: 20px;
 }
-.control-face.mini .key.rec i {
+.control-face[data-size='mini'] .key.rec i {
   width: 30px;
   height: 30px;
 }
@@ -474,12 +481,12 @@
   width: 100%;
   background-color: #141416;
 }
-.control-face.panel[data-part='positions'],
-.control-face.panel[data-part='shutter'] {
+.control-face[data-size='panel'][data-part='positions'],
+.control-face[data-size='panel'][data-part='shutter'] {
   display: flex;
   width: 100%;
 }
-.control-face.panel .slide {
+.control-face[data-size='panel'] .slide {
   width: 100%;
 }
 .key-wrapper {
@@ -508,7 +515,7 @@
   touch-action: none;
   cursor: ew-resize;
 }
-.control-face .seg {
+.control-face[data-size='mini'] .seg {
   display: inline-grid;
   width: auto;
 }
@@ -591,10 +598,11 @@
 }
 .combo {
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px 10px;
 }
 .combo .power-combo-keys {
-  flex: 1 1 100%;
+  flex: 0 1 auto;
+  gap: 12px;
 }
 
 .glow {
@@ -606,36 +614,4 @@
 .dpad .a.glow {
   background: linear-gradient(#c7c7cc, #686870);
   color: #fff;
-}
-
-.rocker {
-  display: inline-block;
-  width: 168px;
-  position: relative;
-}
-.rocker .knurl {
-  border-radius: 45% 45% 46% 46% / 20% 20% 75% 75%;
-  height: 38px;
-  overflow: visible;
-}
-.rocker .knurl .side {
-  height: 38px;
-  background: transparent;
-}
-.rocker .knurl .tab {
-  height: 32px;
-  width: 38px;
-  border-radius: 3px 3px 8px 8px;
-  align-self: end;
-  margin-bottom: -3px;
-}
-.rocker .knurl .side.l {
-  border-radius: 50% 0 0 80%;
-}
-.rocker .knurl .side.r {
-  border-radius: 0 50% 80% 0;
-}
-.rocker .knurl .side.active,
-.rocker .knurl .tab.active {
-  background-color: #252528;
 }

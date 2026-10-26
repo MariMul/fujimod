@@ -33,6 +33,86 @@
   stroke: #1f1f21;
   stroke-width: 1.4;
 }
+/* The panel's rocker tips its band toward a held side and sinks its tab on a press. */
+.rocker-panel {
+  position: relative;
+  display: block;
+  width: 168px;
+}
+.rocker-panel .rocker-panel-drawing {
+  display: block;
+  width: 100%;
+  overflow: visible;
+  height: auto;
+  stroke-linejoin: round;
+}
+/* At panel size the line art thins and dims to sit with the panel's soft controls. */
+.rocker-panel .housing {
+  stroke: #8e8e93;
+  stroke-width: 1.1;
+}
+.rocker-panel .line {
+  stroke: #c7c7cc;
+  stroke-width: 1;
+}
+.rocker-panel .ridge {
+  stroke-width: 1.1;
+}
+.rocker-panel-drawing .rocker-moving {
+  transform-box: view-box;
+  transform-origin: 60px 13px;
+  transition: transform 80ms ease-out;
+}
+.rocker-panel-drawing .tab {
+  transition: transform 80ms ease-out;
+}
+.rocker-panel:has(.zone-decrease.active) .rocker-moving {
+  transform: rotate(-5deg);
+}
+.rocker-panel:has(.zone-increase.active) .rocker-moving {
+  transform: rotate(5deg);
+}
+.rocker-panel:has(.zone-press.active) .tab {
+  transform: translateY(1.5px);
+  fill: #5a5a5f;
+}
+.rocker-panel:has(.zone-press.glow) .tab,
+.rocker-panel:has(.zone-decrease.glow, .zone-increase.glow) .band {
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 3px rgb(255 255 255 / 45%));
+}
+.rocker-panel .zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rocker-panel .zone.glow {
+  box-shadow: none !important;
+}
+.rocker-panel .zone-decrease {
+  left: 0;
+  width: 40%;
+}
+.rocker-panel .zone-press {
+  left: 40%;
+  width: 20%;
+}
+.rocker-panel .zone-increase {
+  left: 60%;
+  width: 40%;
+}
+.rocker-panel .zone:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: -2px;
+  border-radius: 8px;
+}
 /* The arrow is the held highlight; its dark halo separates it from the drawing. */
 .control-drawing .arrow {
   fill: #fff;

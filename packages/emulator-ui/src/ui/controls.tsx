@@ -487,6 +487,8 @@ function panelMarking(
   id: string,
   node: Pick<ControlNode, 'face' | 'icon' | 'variant' | 'caption'>,
 ): Marking {
+  // A device panel's explicit face or icon wins; otherwise the catalog marks the control.
+  if (node.face?.length || node.icon) return nodeMarking(node);
   const control = session.physicalControls?.controls[id.split('.')[0]!];
   return control ? marking(control) : nodeMarking(node);
 }
@@ -496,13 +498,16 @@ function Key(props: {
   id: string;
   node: Pick<ControlNode, 'face' | 'icon' | 'hint' | 'variant'>;
   class?: string;
+  /** One tappable part of a larger control, drawn by that control's face. */
+  region?: boolean;
   children?: JSX.Element;
 }) {
   return (
     <button
       type="button"
       class={[
-        props.children === undefined ? 'key-wrapper' : props.class,
+        !props.region && 'key-wrapper',
+        props.class,
         { rec: props.node.variant === 'record', wifi: !!props.node.hint },
         props.session.classes(props.id),
       ]}
@@ -525,7 +530,7 @@ function Key(props: {
       }}
     >
       <Show
-        when={props.children !== undefined}
+        when={props.region}
         fallback={
           <KeyFace
             part={{ kind: 'key', marking: panelMarking(props.session, props.id, props.node) }}
@@ -743,7 +748,7 @@ function Node(props: {
                 { decrease: 'left', increase: 'right', press: 'center' }[action] ?? action;
               const bound = props.node.bindings?.[slot];
               return bound ? (
-                <Key session={props.session} id={bound} node={{}} class={className}>
+                <Key session={props.session} id={bound} node={{}} class={className} region>
                   {content}
                 </Key>
               ) : (
@@ -908,6 +913,7 @@ function Combo(props: { session: ControlSession; item: PowerCombo }) {
       <Show when={props.session.physicalControls}>
         {(controls) => <PowerComboKeys controls={controls()} modes={props.item.modes} />}
       </Show>
+      <span class="plus">+ POWER</span>
       <span class="what">{props.item.label}</span>
     </button>
   );

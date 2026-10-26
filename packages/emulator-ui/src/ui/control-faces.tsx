@@ -2,7 +2,7 @@ import { For, Show, Switch, Match } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from './icons';
 import type { ControlPart, Marking } from './control-part';
-import { CommandDialDrawing, RockerDrawing } from './control-drawings';
+import { CommandDialDrawing, RockerDrawing, RockerPanelDrawing } from './control-drawings';
 import './control-faces.css';
 
 type RenderKey = (action: string, className: string, content: JSX.Element) => JSX.Element;
@@ -89,7 +89,8 @@ function Actuator(props: {
 export function KeyFace(props: FaceProps & { hint?: string }) {
   return (
     <span
-      class={`control-face ${props.size}`}
+      class="control-face"
+      data-size={props.size}
       data-part="key"
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
@@ -112,7 +113,8 @@ export function ShutterFace(props: FaceProps & { left?: string }) {
   const stage = () => (props.part.kind === 'shutter' ? props.part.stage : undefined);
   return (
     <span
-      class={`control-face ${props.size}`}
+      class="control-face"
+      data-size={props.size}
       data-part="shutter"
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
@@ -133,7 +135,8 @@ export function ShutterFace(props: FaceProps & { left?: string }) {
 export function CommandFace(props: FaceProps) {
   return (
     <span
-      class={`control-face ${props.size}`}
+      class="control-face"
+      data-size={props.size}
       data-part="command"
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
@@ -176,7 +179,8 @@ export function RockerFace(props: FaceProps) {
   const held = (action: string) => props.part.kind === 'rocker' && props.part.held === action;
   return (
     <span
-      class={`control-face ${props.size}`}
+      class="control-face"
+      data-size={props.size}
       data-part="rocker"
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
@@ -184,22 +188,17 @@ export function RockerFace(props: FaceProps) {
       <Show
         when={props.size === 'mini'}
         fallback={
-          <span class="rocker">
-            <span class="knurl">
-              <For each={['decrease', 'press', 'increase']}>
-                {(action) => (
-                  <Actuator
-                    render={props.renderKey}
-                    action={action}
-                    class={`key ${action === 'press' ? 'tab' : `side ${action === 'decrease' ? 'l' : 'r'}`} ${held(action) ? 'glow' : ''}`}
-                  >
-                    <Show when={action === 'press'}>
-                      <PrintedMark marking={props.part.marking} />
-                    </Show>
-                  </Actuator>
-                )}
-              </For>
-            </span>
+          <span class="rocker-panel control-drawing">
+            <RockerPanelDrawing />
+            <For each={['decrease', 'press', 'increase']}>
+              {(action) => (
+                <Actuator
+                  render={props.renderKey}
+                  action={action}
+                  class={`zone zone-${action} ${held(action) ? 'glow' : ''}`}
+                />
+              )}
+            </For>
           </span>
         }
       >
@@ -220,7 +219,8 @@ export function PadFace(props: FaceProps) {
   ];
   return (
     <span
-      class={`control-face ${props.size}`}
+      class="control-face"
+      data-size={props.size}
       data-part="pad"
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
@@ -255,7 +255,8 @@ export function PositionsFace(
   const selected = () => (props.part.kind === 'positions' ? props.part.position : undefined);
   return (
     <span
-      class={`control-face ${props.size}`}
+      class="control-face"
+      data-size={props.size}
       data-part="positions"
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}

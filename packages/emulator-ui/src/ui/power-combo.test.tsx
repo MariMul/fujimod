@@ -93,7 +93,8 @@ for (const held of ['decrease', 'press', 'increase'] as const) {
         expect(host.querySelectorAll('.glow')).toHaveLength(1);
         expect(host.querySelector('.glow')?.getAttribute('data-action')).toBe(held);
         expect(host.querySelectorAll('[data-action]')).toHaveLength(3);
-        expect(host.querySelector('.control-drawing')).toBeNull();
+        expect(host.querySelector('.rocker-panel-drawing')).toBeTruthy();
+        expect(host.querySelector('.rocker-drawing')).toBeNull();
       } else {
         expect(host.querySelector('.rocker-drawing')?.getAttribute('data-held')).toBe(held);
         expect(host.querySelector('.drawing-arrow.push') !== null).toBe(held === 'press');

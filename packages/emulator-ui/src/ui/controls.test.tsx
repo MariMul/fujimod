@@ -352,6 +352,21 @@ test('importing a layout lists ids this camera does not have', async () => {
   expect(onLayoutChange).toHaveBeenLastCalledWith(imported);
 });
 
+test("a device panel's explicit face wins over the catalog marking", () => {
+  const { host } = mount(
+    [{ id: 'quick_menu_button', label: 'Q (quick menu) button', kind: 'button', supported: true }],
+    {
+      schema: 1,
+      body: 'x70',
+      layout: [{ kind: 'control', id: 'quick_menu_button', variant: 'key', face: ['QM'] }],
+      combos: [],
+    },
+    undefined,
+    x70 as PhysicalControls,
+  );
+  expect(host.querySelector('button[data-id="quick_menu_button"]')?.textContent).toBe('QM');
+});
+
 test('the live panel uses catalog markings and runs combos through the session', () => {
   const item = {
     label: 'SD card boot',
@@ -363,14 +378,13 @@ test('the live panel uses catalog markings and runs combos through the session',
     {
       schema: 1,
       body: 'x70',
-      layout: [{ kind: 'control', id: 'playback_button', variant: 'key', face: ['OTHER'] }],
+      layout: [{ kind: 'control', id: 'playback_button', variant: 'key' }],
       combos: [item],
     },
     undefined,
     x70 as PhysicalControls,
   );
   expect(host.querySelector('button[data-id="playback_button"] .key svg')).not.toBeNull();
-  expect(host.textContent).not.toContain('OTHER');
   expect(host.querySelector('.combo .rocker-drawing .drawing-arrow.push')).not.toBeNull();
   expect(host.querySelector('.combo .control-short-name')?.textContent).toBe('COMMAND');
   const button = host.querySelector<HTMLButtonElement>('.combo')!;
@@ -396,7 +410,7 @@ test('rocker halves and tab send separate native contact presses and releases', 
   const stop = session.listen();
   session.powered = true;
   flush();
-  expect(host.querySelector('[data-part="rocker"] .knurl')).toBeTruthy();
+  expect(host.querySelector('[data-part="rocker"] .rocker-panel-drawing')).toBeTruthy();
   for (const [index, id] of ids.entries()) {
     const button = host.querySelector<HTMLButtonElement>(`button[data-id="${id}"]`)!;
     button.setPointerCapture = vi.fn();
@@ -406,8 +420,8 @@ test('rocker halves and tab send separate native contact presses and releases', 
     expect(engine.release).toHaveBeenLastCalledWith(id);
     session.feedback([id], true);
     flush();
-    expect(host.querySelectorAll('.rocker .glow')).toHaveLength(1);
-    expect(host.querySelector('.rocker .glow')?.getAttribute('data-id')).toBe(ids[index]);
+    expect(host.querySelectorAll('.rocker-panel .glow')).toHaveLength(1);
+    expect(host.querySelector('.rocker-panel .glow')?.getAttribute('data-id')).toBe(ids[index]);
   }
   expect(engine.rotate).not.toHaveBeenCalled();
   stop();
