@@ -52,7 +52,7 @@ for (const engine of engines) {
       const identity = `${release.product.toLowerCase().replace(/\s+/g, '-')}-${release.version}`;
       await page
         .getByRole('radio', {
-          name: `${release.product} · ${release.version} In this browser`,
+          name: `${release.product} · ${release.version}`,
           exact: true,
         })
         .check();

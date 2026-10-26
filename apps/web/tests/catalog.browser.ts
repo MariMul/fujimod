@@ -76,8 +76,11 @@ try {
       await page.goto(url);
       console.log(`${firmware.id}: choosing DAT`);
       const chooser = page.waitForEvent('filechooser');
-      await page.locator('#firmware-prompt').click();
+      await page.locator('label.firmware-choose').click();
       await (await chooser).setFiles(files[firmware.id]);
+      await page
+        .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
+        .click();
       console.log(`${firmware.id}: waiting for cold boot`);
       await page.waitForFunction(
         () =>
@@ -123,14 +126,18 @@ try {
       await settled();
       await waitTicks(6_000_000);
       const menuId = await page
-        .locator('#controls button[data-id="menu_ok_button"], #controls button[data-id="selector.press"]')
+        .locator(
+          '#controls button[data-id="menu_ok_button"], #controls button[data-id="selector.press"]',
+        )
         .getAttribute('data-id');
       assert.ok(menuId, 'The body must expose its MENU/OK contact');
       const pixels = () =>
         page.locator('#lcd-source').evaluate(async (canvas: HTMLCanvasElement) => {
           const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
           const digest = await crypto.subtle.digest('SHA-256', pixels.data);
-          return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+          return [...new Uint8Array(digest)]
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('');
         });
       const shooting = await pixels();
       await press(menuId);

@@ -99,7 +99,7 @@ function addToLibrary(
     if (existing.result !== undefined) return;
     try {
       library.add(firmware);
-      tx.objectStore('library-bytes').add(bytes, firmware.sha256);
+      tx.objectStore('library-bytes').put(bytes, firmware.sha256);
     } catch (error) {
       fail(error);
     }
@@ -210,6 +210,18 @@ export class CameraStore {
         result(stored ?? entry);
       };
       addToLibrary(tx, entry, bytes, fail);
+    });
+  }
+  /** Remove the library row; owned cameras keep access to their firmware bytes. */
+  removeFirmware(sha256: string): Promise<void> {
+    return transaction(['library', 'library-bytes', 'cameras'], 'readwrite', (tx, result) => {
+      tx.objectStore('library').delete(sha256);
+      const request = tx.objectStore('cameras').getAll();
+      request.onsuccess = () => {
+        if (!(request.result as CameraRecord[]).some((camera) => camera.firmwareHash === sha256))
+          tx.objectStore('library-bytes').delete(sha256);
+        result(undefined);
+      };
     });
   }
   async create(

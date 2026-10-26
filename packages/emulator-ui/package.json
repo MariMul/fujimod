@@ -18,7 +18,6 @@
     "./feedback/detent": "./src/feedback/detent.ts",
     "./feedback/detent-sound": "./src/feedback/detent-sound.ts",
     "./feedback/input": "./src/feedback/input.tsx",
-    "./flags": "./src/flags.ts",
     "./loading.css": "./src/loading.css",
     "./session/controller": "./src/session/controller.ts",
     "./session/state": "./src/session/state.ts",
