@@ -3,11 +3,16 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { chromium, webkit } from 'playwright';
+import { execFileSync } from 'node:child_process';
 import { catalog, initialize, recovery } from 'fujimod';
 
 const cases: { firmwareId: string; dat: string }[] = JSON.parse(
   process.env.FUJIMOD_RECOVERY_CASES ?? '[]',
 );
+const buildSha =
+  process.env.FUJIMOD_TEST_BUILD_SHA ??
+  execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().slice(0, 8);
+assert.match(buildSha, /^[a-f0-9]{8}$/);
 assert.ok(cases.length, 'Set FUJIMOD_RECOVERY_CASES to official update test cases');
 await initialize({
   module_or_path: await readFile(
@@ -67,7 +72,7 @@ for (const engine of engines) {
         await led.click();
         console.log(`${engine.name()}: building ${test.firmwareId} LED ZIP`);
         const download = await pending;
-        assert.equal(download.suggestedFilename(), 'fujimod-green-led.zip');
+        assert.equal(download.suggestedFilename(), `fujimod-green-led-build-${buildSha}.zip`);
         const zip = unzipSync(await readFile((await download.path())!));
         assert.deepEqual(Object.keys(zip).sort(), [...status.greenLedFilenames].sort());
         assert.ok(
@@ -106,7 +111,10 @@ for (const engine of engines) {
           await system.click();
           console.log(`${engine.name()}: building full system ZIP`);
           const systemDownload = await pendingSystem;
-          assert.equal(systemDownload.suggestedFilename(), 'fujimod-recovery.zip');
+          assert.equal(
+            systemDownload.suggestedFilename(),
+            `fujimod-recovery-build-${buildSha}.zip`,
+          );
           const files = unzipSync(await readFile((await systemDownload.path())!));
           assert.deepEqual(Object.keys(files).sort(), [...status.outputFilenames].sort());
           assert.equal(

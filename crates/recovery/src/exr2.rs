@@ -5,6 +5,7 @@ use crate::{
 };
 use serde::Deserialize;
 pub mod lamp;
+pub mod footer;
 const PROGRAM: &[u8] = include_bytes!("../assets/section-reader.generated.bin");
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -17,6 +17,8 @@ import '../home/site.css';
 import '../navigation.css';
 import './recovery.css';
 
+declare const __FUJIMOD_BUILD_SHA__: string;
+
 function message(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -84,7 +86,8 @@ export default function Recovery() {
       const zip = await zipBlob(
         files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
       );
-      downloadBlob(zip, kind === 'green-led' ? 'fujimod-green-led.zip' : 'fujimod-recovery.zip');
+      const name = kind === 'green-led' ? 'fujimod-green-led' : 'fujimod-recovery';
+      downloadBlob(zip, `${name}-build-${__FUJIMOD_BUILD_SHA__}.zip`);
     } catch (caught) {
       setBuildError(message(caught));
     } finally {

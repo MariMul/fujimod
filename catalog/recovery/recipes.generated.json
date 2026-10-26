@@ -10454,6 +10454,23 @@
       }
     },
     "missing": [],
+    "loader_footer": {
+      "check": {
+        "address": 7400,
+        "size": 72,
+        "sha256": "c571222f378d312cc32c2f59097c00316b295230c82f5ee440fc7c8c11a7ef87"
+      },
+      "read_call": 7428,
+      "read_target": 8648,
+      "flash_offset": 42598400,
+      "source": {
+        "dat_offset": 42599004,
+        "size": 32,
+        "compression": "raw",
+        "decoded_size": 32,
+        "sha256": "691c8a12f3d303dfa63f7d089fd4c331e4a558493c54eef4975ffc8b61f4ff52"
+      }
+    },
     "startup_lamp": {
       "gpio": 4294480832,
       "pin": 2,

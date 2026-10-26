@@ -56,6 +56,13 @@ keep it enabled until stock system initialization reports completion in the
 normal or update mode. The marker then turns green off and releases control
 to the stock LED driver. ROM loading precedes this marker.
 
+X-T1 5.52 also supplies the loader's footer header from the verified update
+embedded in the SD image. Only the footer checker's read call is redirected;
+the original magic validation still rejects a damaged header. The builder
+verifies the original checker, read target, logical offset and exact 32-byte
+update header before installing the source-compiled reader. NAND initialization,
+bad-block mapping and per-camera storage retain their stock behavior.
+
 X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
 complete RAM image as `ffboot.bin`. The locator follows the update's single
 or initial/trained DDR-copy helper to choose the header. Three checked
