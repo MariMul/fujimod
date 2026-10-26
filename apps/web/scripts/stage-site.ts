@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
 import { validateFeatureMedia, type FeatureMedia } from '../src/home/feature-media.ts';
+import { validateRuntimeApi } from './runtime-api.ts';
 
 export interface SiteInputs {
   runtime: string;
@@ -76,6 +77,13 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
     const manifest: unknown = JSON.parse(await readFile(join(directory, 'wasm.json'), 'utf8'));
     for (const name of runtimeBundleFiles(manifest))
       await copy(join(directory, name), bundle + name);
+    validateRuntimeApi(
+      await readFile(join(directory, 'camera.mjs'), 'utf8'),
+      await readFile(
+        new URL('../../../bindings/javascript/emulator/camera.generated.ts', import.meta.url),
+        'utf8',
+      ),
+    );
     const licenses = await readdir(join(directory, 'licenses'), { withFileTypes: true });
     if (!licenses.length || licenses.some((entry) => !entry.isFile()))
       throw Error(`Invalid runtime licenses: ${bundle}`);

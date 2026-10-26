@@ -6,6 +6,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stageSite, runtimeBundleFiles } from '../scripts/stage-site.ts';
 import type { Catalog } from '../src/catalog';
+import { cameraApi, validateRuntimeApi } from '../scripts/runtime-api';
+
+test('runtime API validation distinguishes static methods and rejects missing boot release', () => {
+  const declarations =
+    'declare class Camera { static fromPrepared(): Camera; releaseBootInputs(): void; }';
+  assert.throws(
+    () => validateRuntimeApi('class Camera { static fromPrepared() {} }', declarations),
+    /missing: releaseBootInputs/,
+  );
+  assert.throws(
+    () =>
+      validateRuntimeApi('class Camera { fromPrepared() {} releaseBootInputs() {} }', declarations),
+    /missing: static fromPrepared/,
+  );
+  validateRuntimeApi(
+    'function factory() { const Camera = class Camera { static fromPrepared() {} releaseBootInputs() {} }; }',
+    declarations,
+  );
+});
 
 test('local preparation gates qualification and stages complete runtime bundles', async () => {
   const root = await mkdtemp(join(tmpdir(), 'site-assets-'));
@@ -65,6 +84,13 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await assert.rejects(stageSite(inputs, destination), /camera.wasm/);
     for (const name of ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'])
       if (name !== 'wasm.json') await writeFile(join(runtime, 'test-100', name), 'test');
+    await assert.rejects(stageSite(inputs, destination), /Runtime Camera API is missing/);
+    const declarations = await readFile(
+      new URL('../../../bindings/javascript/emulator/camera.generated.ts', import.meta.url),
+      'utf8',
+    );
+    const loader = `class Camera { ${[...cameraApi(declarations)].map((method) => `${method}() {}`).join(' ')} }`;
+    await writeFile(join(runtime, 'test-100/camera.mjs'), loader);
     await assert.rejects(stageSite(inputs, destination), /licenses/);
     await mkdir(join(runtime, 'test-100/licenses'));
     await writeFile(join(runtime, 'test-100/licenses/COPYING.txt'), 'license');
@@ -145,6 +171,7 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await mkdir(join(runtime, 'test-100-usb/licenses'), { recursive: true });
     for (const name of ['camera.wasm', 'camera.mjs', 'runtime-NOTICES.txt', 'licenses/COPYING.txt'])
       await writeFile(join(runtime, 'test-100-usb', name), 'usb ' + name);
+    await writeFile(join(runtime, 'test-100-usb/camera.mjs'), loader);
     await writeFile(join(runtime, 'test-100-usb/wasm.json'), '{"construction":"session"}');
     await stageSite(inputs, destination);
     for (const [name, expected] of [
