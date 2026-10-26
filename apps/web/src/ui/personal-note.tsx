@@ -14,7 +14,9 @@ export function PersonalNote() {
         <a href="https://discord.gg/YN4Qqq365">#fujimod on the FujiHack discord</a>
       </p>
       <p>
-        Head to <a href="#software">SOFTWARE</a> below to try it out.
+        Head to <a href="#software">SOFTWARE</a> below to try it out. Even if you don't have an X70,
+        you can run FujiMod in the emulator on this website, although it's a bit slow ( Enable
+        webcam access and use your imagination 😂).
       </p>
       <p class="signature">
         Love,

@@ -137,7 +137,7 @@ export function CameraLauncher(props: {
     <div class={{ launcher: true, 'launcher-pending': !props.ready, 'launcher-empty': !chosen() }}>
       <section class="release-panel" aria-label="Current release">
         <div class="release-heading">
-          <h3>{props.release?.name ?? 'FujiMod'}</h3>
+          <h3>{props.release ? `FujiMod ${props.release.tag}` : 'FujiMod'}</h3>
           <Show when={props.release?.published_at}>
             {(date) => (
               <time datetime={date()}>
