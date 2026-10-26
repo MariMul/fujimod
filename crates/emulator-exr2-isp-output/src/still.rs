@@ -268,6 +268,12 @@ impl Device for StillProcessor {
         }
         self.r[o / 4] = v as u32;
     }
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        match name {
+            "raw-input" => Ok(&self.source),
+            _ => Err(format!("unknown still-processor diagnostic buffer: {name}")),
+        }
+    }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.dma
             .deadline()
