@@ -893,7 +893,7 @@ dependencies = [
  "rand_core 0.6.4",
  "rcgen",
  "sec1",
- "sha2",
+ "sha2 0.10.9",
  "signature",
  "spki",
  "subtle",
@@ -1207,7 +1207,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1220,7 +1220,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1233,7 +1233,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1246,7 +1246,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror",
 ]
 
@@ -1262,7 +1262,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1290,7 +1290,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1322,7 +1322,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1356,7 +1356,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1388,7 +1388,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror",
 ]
 
@@ -1402,7 +1402,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1418,7 +1418,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.11.1",
  "thiserror",
 ]
 
@@ -1449,7 +1449,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "toml",
 ]
 
@@ -1481,7 +1481,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1544,7 +1544,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1566,7 +1566,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "toml",
  "tsify",
  "videotoolbox",
@@ -1665,7 +1665,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1679,7 +1679,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1920,7 +1920,7 @@ dependencies = [
  "libm",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1988,7 +1988,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_bytes",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
 ]
@@ -2080,7 +2080,7 @@ dependencies = [
  "ruzstd",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2161,7 +2161,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2225,7 +2225,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2284,7 +2284,7 @@ name = "fujimod-firmware"
 version = "0.1.0"
 dependencies = [
  "fujimod-workspace-hack",
- "sha2",
+ "sha2 0.11.1",
  "thiserror",
 ]
 
@@ -2403,7 +2403,7 @@ dependencies = [
  "pyo3",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -2550,7 +2550,7 @@ dependencies = [
  "png",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "tiny-skia",
 ]
 
@@ -2614,7 +2614,7 @@ dependencies = [
  "nusb",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror",
  "wasm-bindgen-test",
 ]
@@ -2703,7 +2703,7 @@ dependencies = [
  "nusb",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "thiserror",
 ]
 
@@ -2747,7 +2747,7 @@ dependencies = [
  "serde",
  "serde_core",
  "serde_json",
- "sha2",
+ "sha2 0.10.9",
  "slab",
  "smallvec",
  "subtle",
@@ -3779,7 +3779,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "primeorder",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -3791,7 +3791,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "primeorder",
- "sha2",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -4622,6 +4622,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha2"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "sha2-asm"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4766,7 +4777,7 @@ dependencies = [
  "hmac",
  "p256",
  "sha1 0.10.7",
- "sha2",
+ "sha2 0.10.9",
  "str0m-proto",
  "time",
 ]

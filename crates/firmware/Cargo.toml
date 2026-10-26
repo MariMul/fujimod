@@ -11,6 +11,6 @@ description = "Body-independent Fujifilm update-file decoding"
 doctest = false
 
 [dependencies]
-sha2 = "0.10"
+sha2 = "0.11"
 thiserror.workspace = true
 fujimod-workspace-hack.workspace = true

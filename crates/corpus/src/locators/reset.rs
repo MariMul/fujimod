@@ -3,7 +3,6 @@
 use crate::Lookup;
 use capstone::prelude::*;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Serialize)]
 pub struct ResetAudit {
@@ -108,7 +107,7 @@ pub fn boot_rom_audit<L: Lookup>(
             address,
             entry,
             prefix_size: bytes.len(),
-            prefix_sha256: format!("{:x}", Sha256::digest(bytes)),
+            prefix_sha256: fujimod_firmware::sha256(bytes),
             calls,
         });
     }
