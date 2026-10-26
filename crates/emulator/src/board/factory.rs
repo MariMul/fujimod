@@ -437,9 +437,11 @@ mod translation_cache_tests {
             browser_translation_cache_size_bytes((64 + 32 + 32) * mib, 2).unwrap(),
             32 << 20
         );
-        assert!(browser_translation_cache_size_bytes((64 + 63) * mib, 2)
-            .unwrap_err()
-            .contains("32 MiB"));
+        assert!(
+            browser_translation_cache_size_bytes((64 + 63) * mib, 2)
+                .unwrap_err()
+                .contains("32 MiB")
+        );
         assert!(browser_translation_cache_size_bytes((64 + 64) * mib, 0).is_err());
     }
 }
