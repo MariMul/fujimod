@@ -6,9 +6,18 @@ export interface RecoveryFile {
   data: Uint8Array<ArrayBuffer>;
 }
 
+export type RecoveryDownload = 'system' | 'green-led';
+
 /** The SD recovery card files for `firmwareId`, built from its official update `dat`. */
-export function recoveryCard(firmwareId: string, dat: Uint8Array): RecoveryFile[] {
-  const card = recovery.build(firmwareId, dat);
+export function recoveryCard(
+  firmwareId: string,
+  dat: Uint8Array,
+  kind: RecoveryDownload,
+): RecoveryFile[] {
+  const card =
+    kind === 'green-led'
+      ? recovery.buildGreenLed(firmwareId, dat)
+      : recovery.build(firmwareId, dat);
   try {
     return card.takeFiles().map((file) => {
       try {

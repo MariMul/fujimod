@@ -43,6 +43,13 @@ impl RecoveryAvailability {
             .into()
         })
     }
+    #[wasm_bindgen(getter, js_name = greenLedFilenames)]
+    pub fn green_led_filenames(&self) -> Result<Vec<String>, JsValue> {
+        match core::Recipe::bundled(&self.inner.firmware_id).map_err(error)? {
+            Some(recipe) => core::green_led::filenames(&recipe).map_err(error),
+            None => Ok(vec![]),
+        }
+    }
     #[wasm_bindgen(getter, js_name = sdBoot, unchecked_return_type = "BootCombination | null")]
     pub fn sd_boot(&self) -> Result<JsValue, JsValue> {
         js_sys::JSON::parse(
@@ -123,6 +130,16 @@ pub fn build(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> 
         .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
     recipe
         .build(source)
+        .map(|files| RecoveryCard { files })
+        .map_err(error)
+}
+
+#[wasm_bindgen(js_name = buildGreenLedCard)]
+pub fn build_green_led(firmware_id: &str, source: &[u8]) -> Result<RecoveryCard, JsValue> {
+    let recipe = core::Recipe::bundled(firmware_id)
+        .map_err(error)?
+        .ok_or_else(|| js_sys::Error::new("Missing recovery recipe"))?;
+    core::green_led::build(&recipe, source)
         .map(|files| RecoveryCard { files })
         .map_err(error)
 }

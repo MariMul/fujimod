@@ -236,16 +236,24 @@ export class CameraStore {
     });
     return record;
   }
-  /** The firmware update with this SHA-256. */
-  firmware(sha256: string): Promise<Blob> {
-    return transaction(['library-bytes'], 'readonly', (tx, result) => {
+  private firmwareValue(sha256: string): Promise<ArrayBuffer | Blob> {
+    return transaction<unknown>(['library-bytes'], 'readonly', (tx, result) => {
       const request = tx.objectStore('library-bytes').get(sha256);
       request.onsuccess = () => result(request.result);
     }).then((value) => {
       if (!(value instanceof ArrayBuffer) && !(value instanceof Blob))
         throw Error('This firmware is missing from browser storage.');
-      return new Blob([value]);
+      return value;
     });
+  }
+  /** The firmware update with this SHA-256. */
+  async firmware(sha256: string): Promise<Blob> {
+    return new Blob([await this.firmwareValue(sha256)]);
+  }
+  /** Read stored bytes directly, avoiding a large temporary Blob in WebKit. */
+  async firmwareBytes(sha256: string): Promise<ArrayBuffer> {
+    const value = await this.firmwareValue(sha256);
+    return value instanceof ArrayBuffer ? value : value.arrayBuffer();
   }
   async saved(id: string): Promise<CameraSave | undefined> {
     for (let attempt = 0; ; attempt++) {

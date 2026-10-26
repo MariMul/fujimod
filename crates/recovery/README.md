@@ -159,3 +159,18 @@ transfer sizes, and CRC32.
 `cargo run -p fujimod-recovery --example locate_rom_sd -- exr UPDATE.DAT`
 emits freshly located startup plans and header facts from the supplied update.
 Use `exrpro` or `xpp` for the other processor families.
+
+## Green LED card
+
+The recovery page offers separate full system and green LED downloads. The LED
+card executes a position-independent terminal GPIO program and holds the status
+lamp steady green. It does not start the camera firmware or include an updater
+DAT. EXR, EXR Pro, EXR II and X-Processor Pro use their checked SD header and a
+small `ffboot.bin`; X-Processor 4 uses only `ffinit.bin`, and X-Processor 5 uses
+only `marble_init.bin`.
+
+`green_led::filenames` reports availability independently of updater support.
+`green_led::build` verifies the supplied update and output-descriptor source
+proofs before binding the GPIO writes. The compiled ARM and AArch64 programs
+need no stack, heap, timers, firmware calls or DDR initialization. The catalog
+holds each body's polarity, register writes and source proofs.

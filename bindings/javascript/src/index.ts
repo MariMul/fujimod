@@ -132,6 +132,7 @@ export const catalog = Object.freeze({
 export const recovery = Object.freeze({
   availability: native.recoveryAvailability,
   build: native.buildRecoveryCard,
+  buildGreenLed: native.buildGreenLedCard,
 });
 export const usb = Object.freeze({
   Device: native.Device,

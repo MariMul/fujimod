@@ -1,6 +1,7 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
 pub mod image;
+pub mod green_led;
 mod exr;
 mod exr_loader;
 mod exr_firmware;

@@ -153,6 +153,11 @@
 .recovery-dim {
   color: var(--dim);
 }
+.recovery-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .recovery-download {
   margin-bottom: 14px;
   border: 0;

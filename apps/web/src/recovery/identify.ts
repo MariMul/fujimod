@@ -8,6 +8,7 @@ export interface RecoveryPlan {
   canBuild: boolean;
   missing: string[];
   files: string[];
+  greenLedFiles: string[];
   /** How to hold the camera to boot from the SD card, when the catalog documents it. */
   sdBoot?: PhysicalControls;
 }
@@ -75,6 +76,7 @@ export function recoveryPlan(firmwareId: string): RecoveryPlan {
       canBuild: status.canBuild,
       missing: [...status.missing],
       files: [...status.outputFilenames],
+      greenLedFiles: [...status.greenLedFilenames],
       sdBoot: sd && controls ? controls : undefined,
     };
   } finally {

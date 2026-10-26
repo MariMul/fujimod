@@ -58,6 +58,39 @@ test('missing generation facts and incorrect DAT bytes are refused', () => {
   } finally {
     status.free();
   }
-  assert.throws(() => recovery.build('xs10-311', new Uint8Array(4)), /Update size differs from recipe/);
+  assert.throws(
+    () => recovery.build('xs10-311', new Uint8Array(4)),
+    /Update size differs from recipe/,
+  );
   assert.throws(() => recovery.build('gfx100rf-113', new Uint8Array(4)), /Missing recovery facts/);
+});
+
+test('green LED cards cover every processor generation without an updater DAT', () => {
+  for (const firmwareId of [
+    'x10-201',
+    'xe1-271',
+    'xt1-552',
+    'gfx50r-311',
+    'x100v-301',
+    'x100vi-131',
+  ]) {
+    const status = recovery.availability(firmwareId);
+    try {
+      assert.ok(status.greenLedFilenames.length > 0, firmwareId);
+      assert.ok(status.greenLedFilenames.every((name) => name.endsWith('.bin')));
+      assert.ok(!status.greenLedFilenames.includes('ffuser.bin'));
+    } finally {
+      status.free();
+    }
+    assert.throws(
+      () => recovery.buildGreenLed(firmwareId, new Uint8Array(4)),
+      /Update size differs/,
+    );
+  }
+  const unknown = recovery.availability('unknown-update');
+  try {
+    assert.deepEqual(unknown.greenLedFilenames, []);
+  } finally {
+    unknown.free();
+  }
 });

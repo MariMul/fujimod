@@ -10,7 +10,7 @@ import { identify, recoveryCameras, recoveryPlan } from './identify';
 import { CameraStore, type LibraryFirmware } from '../cameras/store';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
-import { recoveryCard } from './card';
+import { recoveryCard, type RecoveryDownload } from './card';
 import { SiteHeader } from '../ui/site-header';
 import { SYSTEMS, FORMAT_STEPS, detectSystem, type System } from './format-guide';
 import '../home/site.css';
@@ -31,6 +31,7 @@ export default function Recovery() {
   const [adding, setAdding] = createSignal(false);
   const [building, setBuilding] = createSignal(false);
   const [buildError, setBuildError] = createSignal('');
+  const [downloadType, setDownloadType] = createSignal<RecoveryDownload>('system');
   const [dragging, setDragging] = createSignal(false);
   const [cameras, setCameras] = createSignal<DownloadRow[]>([]);
 
@@ -55,6 +56,7 @@ export default function Recovery() {
   function select(sha256: string) {
     setBuildError('');
     setSelected(sha256);
+    setDownloadType('system');
   }
   async function chooseFile(file: File | undefined) {
     if (!file) return;
@@ -72,16 +74,17 @@ export default function Recovery() {
       setAdding(false);
     }
   }
-  async function download(firmware: LibraryFirmware) {
+  async function download(firmware: LibraryFirmware, kind: RecoveryDownload) {
     setBuildError('');
+    setDownloadType(kind);
     setBuilding(true);
     try {
-      const bytes = new Uint8Array(await (await store.firmware(firmware.sha256)).arrayBuffer());
-      const files = recoveryCard(firmware.firmwareId, bytes);
+      const bytes = new Uint8Array(await store.firmwareBytes(firmware.sha256));
+      const files = recoveryCard(firmware.firmwareId, bytes, kind);
       const zip = await zipBlob(
         files.map((entry) => ({ path: entry.name, data: new Blob([entry.data]) })),
       );
-      downloadBlob(zip, 'fujimod-recovery.zip');
+      downloadBlob(zip, kind === 'green-led' ? 'fujimod-green-led.zip' : 'fujimod-recovery.zip');
     } catch (caught) {
       setBuildError(message(caught));
     } finally {
@@ -188,7 +191,7 @@ export default function Recovery() {
             </div>
           </li>
 
-          <li class={{ 'recovery-pending': !plan()?.canBuild }}>
+          <li class={{ 'recovery-pending': !plan() }}>
             <h2>Copy the recovery files onto the card</h2>
             <Show
               when={plan()}
@@ -197,25 +200,44 @@ export default function Recovery() {
               }
             >
               {(card) => (
-                <Show
-                  when={card().canBuild}
-                  fallback={
+                <>
+                  <div class="recovery-downloads">
+                    <button
+                      class="launcher-button recovery-download"
+                      disabled={building() || !card().canBuild}
+                      onClick={() => {
+                        const firmware = chosen();
+                        if (firmware) void download(firmware, 'system');
+                      }}
+                    >
+                      {building() && downloadType() === 'system'
+                        ? 'Building…'
+                        : 'Download full system image'}
+                    </button>
+                    <button
+                      class="launcher-button recovery-download"
+                      disabled={building() || !card().greenLedFiles.length}
+                      onClick={() => {
+                        const firmware = chosen();
+                        if (firmware) void download(firmware, 'green-led');
+                      }}
+                    >
+                      {building() && downloadType() === 'green-led'
+                        ? 'Building…'
+                        : 'Download green LED image'}
+                    </button>
+                  </div>
+                  <Show when={!card().canBuild}>
                     <p class="recovery-error">
                       Recovery files can't be built for the {card().model} yet. Missing:{' '}
                       {card().missing.join(', ')}.
                     </p>
-                  }
-                >
-                  <button
-                    class="launcher-button recovery-download"
-                    disabled={building()}
-                    onClick={() => {
-                      const firmware = chosen();
-                      if (firmware) void download(firmware);
-                    }}
-                  >
-                    {building() ? 'Building…' : 'Download recovery files'}
-                  </button>
+                  </Show>
+                  <Show when={!card().greenLedFiles.length}>
+                    <p class="recovery-error">
+                      Green LED bindings are not available for the {card().model} yet.
+                    </p>
+                  </Show>
                   <Show when={buildError()}>
                     <p class="recovery-error" role="alert">
                       {buildError()}
@@ -223,7 +245,9 @@ export default function Recovery() {
                   </Show>
                   <p>
                     Unzip onto the card’s top level:{' '}
-                    <For each={card().files}>
+                    <For
+                      each={downloadType() === 'green-led' ? card().greenLedFiles : card().files}
+                    >
                       {(name, i) => (
                         <span>
                           {i() ? ', ' : ''}
@@ -234,7 +258,7 @@ export default function Recovery() {
                     .
                   </p>
                   <p>Insert the card into the camera.</p>
-                </Show>
+                </>
               )}
             </Show>
           </li>
@@ -257,7 +281,9 @@ export default function Recovery() {
                 <>
                   <p>
                     With the camera off, hold these while switching it on, and keep holding until
-                    the screen lights:
+                    {downloadType() === 'green-led'
+                      ? 'the green LED lights:'
+                      : 'the screen lights:'}
                   </p>
                   <Show
                     when={result().sdBoot}
@@ -268,7 +294,10 @@ export default function Recovery() {
                     }
                   >
                     {(controls) => (
-                      <PowerComboKeys controls={controls()} modes={['sd', 'firmware_update']} />
+                      <PowerComboKeys
+                        controls={controls()}
+                        modes={downloadType() === 'green-led' ? ['sd'] : ['sd', 'firmware_update']}
+                      />
                     )}
                   </Show>
                 </>
@@ -276,10 +305,12 @@ export default function Recovery() {
             </Show>
           </li>
 
-          <li class={{ 'recovery-pending': !plan() }}>
-            <h2>Flash the firmware as usual</h2>
-            <p>Follow the on-screen firmware update to flash the official .DAT from the card.</p>
-          </li>
+          <Show when={downloadType() === 'system'}>
+            <li class={{ 'recovery-pending': !plan() }}>
+              <h2>Flash the firmware as usual</h2>
+              <p>Follow the on-screen firmware update to flash the official .DAT from the card.</p>
+            </li>
+          </Show>
         </ol>
       </main>
     </div>
