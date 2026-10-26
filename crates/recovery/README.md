@@ -108,7 +108,10 @@ the same construction for regression comparisons.
 `card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY` accepts an explicit
 unit storage image for recipes with retained setup data. It checks the storage
 size and complete update pages, carries the retained cache in SRAM, and appends
-the storage namespace to the OS file. It defaults to zero success hold.
+the storage namespace to the OS file. It defaults to zero success hold. The
+optional runtime binding initializes the card and serves checked descriptor
+reads from that namespace; it uses the card’s retained training data and
+does not initialize the serial NOR controller.
 
 `startup` and `stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady

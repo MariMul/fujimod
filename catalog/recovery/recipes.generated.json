@@ -3867,7 +3867,44 @@
           "source_offset": 134086656,
           "destination_offset": 163840,
           "size": 37200
-        }
+        },
+        "runtime": {
+          "read": {
+            "address": 21430944,
+            "size": 684,
+            "sha256": "72231f85ae30dcdcf33dadae1c97697048a510d594634a05f1876fd6ec23ff5a"
+          },
+          "training_backup": {
+            "address": 21432124,
+            "size": 216,
+            "sha256": "4e2f46c7f02bf58bc607546d780ab9f5d118fc97f9c19e23311819968d781a78"
+          },
+          "lock": {
+            "address": 22654340,
+            "size": 96,
+            "sha256": "754801135493c3e9aa211c373f21135f07ef574faca0e2d2057cc5f0b9c388dd"
+          },
+          "unlock": {
+            "address": 22654436,
+            "size": 112,
+            "sha256": "ee0ed905f865aa773855cb2562665f72dfdad9f3a900b135f90bd4882e83ef5a"
+          },
+          "lock_id": 132,
+          "initialize": {
+            "address": 21435028,
+            "size": 912,
+            "sha256": "f7fa7a7d32c9636f5a1da867ffcd98470c89aabb3b751ccafc3423c419e4f4b9"
+          },
+          "state": 34321504
+        },
+        "ram_edits": [
+          {
+            "address": 9592,
+            "old": 3036679424,
+            "new": 335544424,
+            "what": "Use the card-supplied setup metadata without reset-stage NOR initialization"
+          }
+        ]
       }
     },
     "cold_start": null,

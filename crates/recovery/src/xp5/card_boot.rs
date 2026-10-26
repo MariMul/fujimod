@@ -37,6 +37,21 @@ pub struct CardBoot {
     pub payloads: [Payload; 4],
     pub namespace: Option<Source>,
     pub unit_cache: Option<UnitCache>,
+    pub runtime: Option<Runtime>,
+    #[serde(default)]
+    pub ram_edits: Vec<image::Edit>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Runtime {
+    pub read: CodeProof,
+    pub training_backup: CodeProof,
+    pub initialize: CodeProof,
+    pub lock: CodeProof,
+    pub unlock: CodeProof,
+    pub lock_id: u32,
+    pub state: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -250,6 +265,81 @@ impl CardBoot {
             )?;
         }
         require(targets.len() == 4, "Incomplete card setup hooks")?;
+        if let Some(runtime) = &self.runtime {
+            require(
+                namespace_size > 0,
+                "Runtime reader lacks its storage namespace",
+            )?;
+            let proofs = [
+                &runtime.read,
+                &runtime.training_backup,
+                &runtime.initialize,
+                &runtime.lock,
+                &runtime.unlock,
+            ];
+            for (index, proof) in proofs.into_iter().enumerate() {
+                verify_code(ram, 0, proof)?;
+                require(
+                    proofs[..index].iter().all(|other| {
+                        proof.address >= other.address + other.size
+                            || other.address >= proof.address + proof.size
+                    }),
+                    "Runtime code proofs overlap",
+                )?;
+            }
+            let at = template::SETUP_SD_RUNTIME;
+            require(
+                extent(program, at, 40)? == [1u64, 0, 0, 0, 0].map(u64::to_le_bytes).concat(),
+                "Card runtime template changed",
+            )?;
+            require(
+                runtime.state.is_multiple_of(4)
+                    && extent(ram, runtime.state, 28)?.iter().all(|v| *v == 0),
+                "Card driver state is not empty RAM",
+            )?;
+            for (index, value) in [
+                1,
+                runtime.lock.address as u64,
+                runtime.unlock.address as u64,
+                u64::from(runtime.lock_id),
+                runtime.state as u64,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                program[at + index * 8..at + index * 8 + 8].copy_from_slice(&value.to_le_bytes());
+            }
+            for (proof, symbol) in [
+                (&runtime.read, template::SETUP_SD_FIRMWARE_READ),
+                (&runtime.training_backup, template::SETUP_SD_TRAINING_BACKUP),
+                (&runtime.initialize, template::SETUP_SD_FIRMWARE_INITIALIZE),
+            ] {
+                let at = verify_code(ram, 0, proof)?;
+                require(proof.size >= 16, "Runtime hook lacks a complete entry")?;
+                put(ram, at, 0x58000050)?; // LDR X16, literal at +8.
+                put(ram, at + 4, 0xd61f0200)?; // BR X16; caller's X30 is retained.
+                ram[at + 8..at + 16]
+                    .copy_from_slice(&(program_address + symbol as u64).to_le_bytes());
+            }
+        }
+        let mut edits = std::collections::BTreeSet::new();
+        for edit in &self.ram_edits {
+            require(
+                edit.address.is_multiple_of(4)
+                    && edits.insert(edit.address)
+                    && word(ram, edit.address)? == edit.old,
+                "Card RAM edit differs from source",
+            )?;
+        }
+        for edit in &self.ram_edits {
+            put(ram, edit.address, edit.new)?;
+        }
+        // The CRC covers the patched RAM prefix, excluding its namespace.
+        put(
+            program,
+            template::SETUP_SD_REQUEST + 16,
+            crate::xp4::crc32(ram),
+        )?;
         if let Some(namespace) = namespace {
             ram.resize(namespace_offset, 0);
             ram.extend(namespace);
@@ -306,6 +396,8 @@ mod tests {
             }),
             namespace: Some(source(0, bytes.len())),
             unit_cache: None,
+            runtime: None,
+            ram_edits: vec![],
         };
         (card, stock, bytes.clone(), bytes)
     }
@@ -344,6 +436,76 @@ mod tests {
                 result.unwrap();
                 assert_eq!(&ram[bytes.len()..], bytes);
                 assert_eq!(word(&raw, 0x20).unwrap() & 0xfc000000, 0x94000000);
+            } else {
+                assert!(result.is_err(), "case {case}");
+            }
+        }
+    }
+
+    #[test]
+    fn runtime_hooks_pin_all_functions_and_crc_the_patched_ram_prefix() {
+        for case in 0..10 {
+            let (mut card, stock, bytes, mut ram) = fixture();
+            let proof = |address| CodeProof {
+                address,
+                size: 32,
+                sha256: fujimod_firmware::sha256(&bytes[address..address + 32]),
+            };
+            card.runtime = Some(Runtime {
+                read: proof(0x100),
+                training_backup: proof(0x140),
+                initialize: proof(0x240),
+                lock: proof(0x180),
+                unlock: proof(0x1c0),
+                lock_id: 0x84,
+                state: 0x400,
+            });
+            ram[0x400..0x41c].fill(0);
+            card.ram_edits.push(image::Edit {
+                address: 0x600,
+                old: 0x33333333,
+                new: 0x01010101,
+                what: "Select card metadata".into(),
+            });
+            match case {
+                1 => ram[0x110] ^= 1,
+                2 => ram[0x150] ^= 1,
+                3 => ram[0x190] ^= 1,
+                4 => ram[0x1d0] ^= 1,
+                5 => card.runtime.as_mut().unwrap().lock = proof(0x100),
+                6 => ram[0x250] ^= 1,
+                7 => ram[0x400] = 1,
+                8 => card.ram_edits[0].old ^= 1,
+                9 => card.ram_edits.push(card.ram_edits[0].clone()),
+                _ => (),
+            }
+            let mut raw = stock.clone();
+            let mut program = template::IMAGE.to_vec();
+            let result = card.install(
+                &bytes,
+                None,
+                Installation {
+                    base: 0xff800000,
+                    stock: &stock,
+                    program_address: 0xff818000,
+                    raw: &mut raw,
+                    program: &mut program,
+                    ram: &mut ram,
+                },
+            );
+            if case == 0 {
+                result.unwrap();
+                assert_eq!(word(&ram, 0x100).unwrap(), 0x58000050);
+                assert_eq!(word(&ram, 0x104).unwrap(), 0xd61f0200);
+                assert_eq!(
+                    u64::from_le_bytes(ram[0x108..0x110].try_into().unwrap()),
+                    0xff818000 + template::SETUP_SD_FIRMWARE_READ as u64
+                );
+                assert_eq!(
+                    word(&program, template::SETUP_SD_REQUEST + 16).unwrap(),
+                    crate::xp4::crc32(&ram[..bytes.len()])
+                );
+                assert_eq!(&ram[bytes.len()..], bytes);
             } else {
                 assert!(result.is_err(), "case {case}");
             }
