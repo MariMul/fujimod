@@ -169,7 +169,7 @@ test('rejects unsupported magic and invalid metadata framing', async () => {
 function index() {
   const digest = 'a'.repeat(64);
   return {
-    schema: 1,
+    schema: 2,
     release: 'test',
     patches: { [digest]: 'x70-110.fmpatch' },
     firmwares: [

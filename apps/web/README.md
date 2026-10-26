@@ -24,8 +24,8 @@ production request handler. Deploy **`dist/client/`**, which contains the full
 page HTML, CSS and browser assets; static hosting needs no running SSR server.
 `dist/server/` is a build-time renderer. `npm run build:local-preview` uses
 `dist-local-preview/{client,server}`. Both build commands fail if a page cannot
-be prerendered. The initial camera catalog and release metadata enter the build
-from the installed public artifacts; the browser refreshes them after mounting.
+be prerendered. The initial camera catalog enters the build from installed public artifacts.
+The browser refreshes the catalog and loads release metadata after mounting.
 Firmware selection and execution remain browser operations.
 
 `npm run test:prerender` checks the production static files in Chromium and
@@ -269,14 +269,14 @@ state starts fresh at each cold boot.
 The Web checks workflow runs lint, type checks, tests and the public build on
 web changes in pull requests and on main. It does not deploy.
 
-`npm run deploy -- --runtime DIRECTORY --patches DIRECTORY --media DIRECTORY`
+`npm run deploy -- --runtime DIRECTORY --media DIRECTORY`
 validates locally generated assets, runs checks and tests, builds the website,
 and uploads it directly to Cloudflare. Runtime bundles and feature media remain
 in ignored generated directories. GitHub Releases contain mod patches and their
 index; publishing a mod does not deploy the website.
 
 `scripts/stage-site.ts` requires a complete qualified runtime for every advertised
-emulator, verifies mod patches, and records asset hashes. A failed preparation
+emulator and records asset hashes. A failed preparation
 preserves installed assets. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full command.
 Neither a firmware DAT nor a boot ROM is a website build input.
 
@@ -327,10 +327,15 @@ trailing bytes and mismatched output hashes. Versioned magic permits future
 format changes while existing pages handle any firmware represented by these
 operations. A genuinely new codec would require an interpreter update.
 
-`patches.json` has schema 1, a release tag, `patches: {SHA256: filename}` and a
+`patches.json` has schema 2, a release tag, `patches: {SHA256: filename}` and a
 `firmwares` array. Each entry supplies model/version, source hash/size, Fuji
 download page and original release date, patch hash/size, included mods and model-specific boot instructions. Patch filenames are simple
-local filenames. Pages serves index and patches from the same origin.
+local filenames. The Worker serves the index and patches from the same origin
+through `/releases/`; they are fetched at runtime and are never website build
+inputs. Each firmware has `downloads: {sd_card, installable}`, both false by
+default; installable requires a verified `fpupdate` patch output. Optional
+`notes: {name, bytes, sha256}` identifies UTF-8 Markdown checked before display.
+See [the release contract](RELEASE-DOWNLOADS.md).
 
 `report.json` includes the user's comment and the complete issue URL and prefilled
 fields (including labels, firmware ID, version and simulator version). The ZIP

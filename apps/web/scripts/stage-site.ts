@@ -3,13 +3,11 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
-import { validateIndex, verifyPatch } from '../src/patch/catalog.ts';
 import { validateFeatureMedia, type FeatureMedia } from '../src/home/feature-media.ts';
 import { validateRuntimeApi } from './runtime-api.ts';
 
 export interface SiteInputs {
   runtime: string;
-  patches: string;
   media: string;
 }
 /** Files of the media for cards the homepage still shows; recordings of removed cards stay behind. */
@@ -140,19 +138,6 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
       bytes: catalogBytes.length,
       sha256: createHash('sha256').update(catalogBytes).digest('hex'),
     });
-    const index = validateIndex(
-      JSON.parse(await readFile(join(inputs.patches, 'patches.json'), 'utf8')),
-    );
-    await copy(join(inputs.patches, 'patches.json'), 'artifacts/patches.json');
-    for (const firmware of index.firmwares) {
-      const name = index.patches[firmware.sha256];
-      await verifyPatch(
-        index,
-        firmware,
-        new Uint8Array(await readFile(join(inputs.patches, name))),
-      );
-      await copy(join(inputs.patches, name), 'artifacts/' + name);
-    }
     const media = validateFeatureMedia(
       JSON.parse(await readFile(join(inputs.media, 'media.json'), 'utf8')),
     );

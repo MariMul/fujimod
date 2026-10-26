@@ -1,0 +1,46 @@
+import { validateIndex, verifyNotes, verifyPatch, type PatchIndex } from './catalog.ts';
+import { validateReleaseInfo, type ReleaseInfo } from './releases.ts';
+
+export interface LoadedRelease extends PatchIndex, ReleaseInfo {
+  /** Absolute same-origin /releases/<tag>/ URL, also passed to the patch worker. */
+  assetBase: string;
+  /** Verified UTF-8 Markdown. Absent when the index has no notes. */
+  notesText?: string;
+}
+/** A missing release is normal; upstream and integrity failures remain errors. */
+export async function loadRelease(
+  base: string | URL,
+  fetcher: typeof fetch = fetch,
+): Promise<LoadedRelease | undefined> {
+  const root = new URL('/releases/', base);
+  const response = await fetcher(new URL('current', root));
+  if (response.status === 404) return;
+  if (!response.ok) throw Error('Current release unavailable.');
+  const info = validateReleaseInfo(await response.json());
+  const assetBase = new URL(`${encodeURIComponent(info.tag)}/`, root).href;
+  async function asset(name: string) {
+    const response = await fetcher(new URL(name, assetBase));
+    if (!response.ok) throw Error(`Release asset unavailable: ${name}`);
+    return response;
+  }
+  const index = validateIndex(await (await asset('patches.json')).json());
+  if (index.release !== info.tag) throw Error('The release index does not match its tag.');
+  const [notesText] = await Promise.all([
+    index.notes
+      ? asset(index.notes.name).then(async (response) =>
+          verifyNotes(index.notes!, new Uint8Array(await response.arrayBuffer())),
+        )
+      : undefined,
+    // The index alone cannot prove that an installable output exists.
+    ...index.firmwares
+      .filter((entry) => entry.downloads.installable)
+      .map(async (entry) =>
+        verifyPatch(
+          index,
+          entry,
+          new Uint8Array(await (await asset(index.patches[entry.sha256])).arrayBuffer()),
+        ),
+      ),
+  ]);
+  return { ...index, ...info, assetBase, ...(notesText === undefined ? {} : { notesText }) };
+}

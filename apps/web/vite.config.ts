@@ -6,6 +6,7 @@ import { defineConfig } from 'vite-plus';
 import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
+import { localReleases } from './scripts/local-releases.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { bugReportRoute } from './src/bug/route.ts';
 import { powerComboReview } from './scripts/power-combo-review';
@@ -58,7 +59,6 @@ function localArtifacts(env: Record<string, string>): Plugin {
     const mounts = [
       ['/runtime/', env.FUJIMOD_RUNTIME],
       ['/artifacts/docs/', env.FUJIMOD_MEDIA],
-      ['/artifacts/', env.FUJIMOD_PATCHES],
       ['/local/firmware.dat', env.FUJIMOD_DAT],
       ...firmwares.map(([id, path]) => [`/local/firmware/${id}.dat`, path as string]),
     ].filter((pair): pair is [string, string] => Boolean(pair[1]));
@@ -223,9 +223,6 @@ export default defineConfig(({ mode, command }) => ({
       catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
       'utf8',
     ),
-    __FUJIMOD_INITIAL_RELEASE__: existsSync('public/artifacts/patches.json')
-      ? readFileSync('public/artifacts/patches.json', 'utf8')
-      : 'null',
     __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(
       `${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim()} / ${new Date().toISOString()}`,
     ),
@@ -245,6 +242,7 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     isolationHeaders(),
+    localReleases(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_PATCHES),
     powerComboReview(),
     watchWorkspacePackages(),
     solid({

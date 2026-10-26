@@ -13,7 +13,8 @@ import { flags } from '@fujimod/emulator-ui/flags';
 import { modifiedDownload } from '../patch/download';
 import type { PatchResult } from '../patch/patcher';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
-import { validateIndex, verifyPatch } from '../patch/catalog';
+import { verifyPatch } from '../patch/catalog';
+import { loadRelease, type LoadedRelease } from '../patch/release';
 import { sha256 } from '../patch/patcher';
 import { EngineError, faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { cachedFetch } from '../asset-cache';
@@ -50,7 +51,7 @@ export function startHome(
 ) {
   performance.mark('camera-module-ready');
   let catalog: Catalog = state.catalog,
-    release: ReturnType<typeof validateIndex> | undefined = state.release;
+    release: LoadedRelease | undefined = state.release;
   const cameras = new CameraStore();
   let activeCamera: CameraRecord | undefined;
   let generation = 0,
@@ -159,9 +160,7 @@ export function startHome(
     if (!index || !firmware || !index.patches[selected.sha256])
       return { identities: Promise.resolve([]), load: async () => [] };
     const metadata = (async () => {
-      const response = await fetch(
-        new URL(`artifacts/${index.patches[selected.sha256]}`, document.baseURI),
-      );
+      const response = await fetch(new URL(index.patches[selected.sha256], index.assetBase));
       if (!response.ok) throw Error('The release patch could not be downloaded.');
       return verifyPatch(index, firmware, new Uint8Array(await response.arrayBuffer()));
     })();
@@ -212,7 +211,7 @@ export function startHome(
       worker.postMessage({
         file,
         index: release,
-        artifactBase: new URL('artifacts/', document.baseURI).href,
+        artifactBase: release!.assetBase,
       });
     });
   }
@@ -537,9 +536,12 @@ export function startHome(
       if (!response.ok) throw Error('Firmware catalog unavailable.');
       if (disposed) return;
       catalog = validateCatalog(await response.json());
-      const patchResponse = await fetch(new URL('artifacts/patches.json', document.baseURI));
-      if (patchResponse.ok && patchResponse.headers.get('content-type')?.includes('json'))
-        release = validateIndex(await patchResponse.json());
+      release = await loadRelease(document.baseURI);
+      if (disposed) return;
+      setState((s) => {
+        s.catalog = catalog;
+        s.release = release;
+      });
       if (disposed) return;
       if (release && !import.meta.env.DEV) {
         build = release.release;
