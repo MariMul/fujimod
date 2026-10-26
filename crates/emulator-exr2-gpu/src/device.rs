@@ -354,7 +354,7 @@ impl Device for VectorGpu {
         // the diagnostic JSON returned to a viewer.
         let s = &self.state;
         serde_json::json!({"engine":{
-            "regs":s.regs,"path":s.path,"fill":s.fill,"written":s.written,
+            "gles":s.gles.diagnostics(),"regs":s.regs,"path":s.path,"fill":s.fill,"written":s.written,
             "clear_ack_offsets":s.clear_ack_offsets,"command_pending":s.command_pending,
             "busy":s.busy,"jobs_started":s.jobs_started,"jobs_completed":s.jobs_completed,
             "bytes_completed":s.bytes_completed,"irqs_raised":s.irqs_raised,

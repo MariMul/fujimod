@@ -39,6 +39,8 @@ struct FillDraw {
 }
 #[derive(Default, Serialize, Deserialize)]
 struct State {
+    #[serde(default)]
+    gles: crate::gles::Engine,
     regs: BTreeMap<u64, u32>,
     path: Stream,
     fill: Stream,
@@ -1297,24 +1299,39 @@ impl State {
             let dims = self.r(0xc08);
             let width = (dims & 65535) as usize;
             let height = (dims >> 16) as usize;
-            if dims != self.r(0xc0c) || width == 0 || height == 0 || (width | height) & 7 != 0 {
-                return Err("DMP copy needs equal 8-aligned extents".into());
+            if width == 0 || height == 0 || (width | height) & 7 != 0 {
+                return Err("DMP copy needs positive 8-aligned extents".into());
             }
-            (width * height * bpp, Some((width, height)))
+            let destination_shape = self.r(0xc0c);
+            let (pitch, native) = if destination_shape == dims {
+                (width * bpp, false)
+            } else if mode == 1
+                && destination_shape >> 16 == 0
+                && destination_shape as usize >= width * bpp
+                && destination_shape & 3 == 0
+            {
+                (destination_shape as usize, true)
+            } else {
+                return Err("DMP unsupported native pixmap pitch".into());
+            };
+            (width * height * bpp, Some((width, height, pitch, native)))
         };
+        let destination_count = shape.map_or(count, |(_, h, pitch, _)| h * pitch);
         if count == 0
             || count > MAX_BYTES
+            || destination_count > MAX_BYTES
             || (source | dest) & 3 != 0
-            || (source < dest + count as u64 && dest < source + count as u64)
+            || (source < dest + destination_count as u64 && dest < source + count as u64)
         {
             return Err("DMP copy range/alignment/overlap invalid".into());
         }
         let input = cx.ram_bytes(source, count)?;
-        cx.ram_bytes(dest, count)?;
-        let bytes = if let Some((width, height)) = shape {
-            let mut bytes = vec![0; count];
+        let original = cx.ram_bytes(dest, destination_count)?;
+        let bytes = if let Some((width, height, pitch, native)) = shape {
+            let mut bytes = original;
             // Control 2 uploads linear pixels into Morton tiles. Control 1
-            // reads a native pixmap back with inverted-y word rotation.
+            // untiles bottom-up rows. Pitched native pixmaps retain pixel
+            // words; the equal-shape readback form rotates packed channels.
             for y in 0..height {
                 for x in 0..width {
                     let (i, j) = if mode == 2 {
@@ -1322,18 +1339,18 @@ impl State {
                     } else {
                         (
                             pixel_index(x, y, width, true) * bpp,
-                            ((height - 1 - y) * width + x) * bpp,
+                            (height - 1 - y) * pitch + x * bpp,
                         )
                     };
                     if bpp == 4 {
                         let mut p = u32::from_le_bytes(input[i..i + 4].try_into().unwrap());
-                        if mode == 1 {
+                        if mode == 1 && !native {
                             p = p.rotate_right(8);
                         }
                         bytes[j..j + 4].copy_from_slice(&p.to_le_bytes());
                     } else {
                         let mut p = u16::from_le_bytes(input[i..i + 2].try_into().unwrap());
-                        if mode == 1 {
+                        if mode == 1 && !native {
                             p = p.rotate_right(match format {
                                 3 => 1,
                                 4 => 4,
@@ -1474,6 +1491,21 @@ impl Device for Renderer {
                     s.regs.insert(o, v);
                     s.begin(cx, job);
                 }
+                0x20f0 if v == 1 => {
+                    s.idle()?;
+                    let data = words(cx, s.r(0x20e8) as u64 * 8, s.r(0x20e0) as usize * 2)?;
+                    let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
+                    s.command_ack = 0;
+                    s.regs.insert(o, v);
+                    s.begin(
+                        cx,
+                        Job {
+                            status: COMMAND,
+                            writes,
+                            banks: None,
+                        },
+                    );
+                }
                 0x10d0 | 0x10e0 | 0x20f0 => {
                     return Err(format!("DMP unsupported command trigger{o:#x}={v:#x}"));
                 }
@@ -1565,3 +1597,6 @@ impl Device for Renderer {
         self.event(cx, generation);
     }
 }
+
+#[cfg(test)]
+mod transfer_tests;

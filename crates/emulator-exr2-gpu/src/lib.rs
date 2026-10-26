@@ -201,6 +201,7 @@ pub enum CompletionEvent {
     Copy,
     Clear,
     Batch,
+    Gles,
 }
 impl CompletionEvent {
     fn name(self) -> &'static str {
@@ -209,6 +210,7 @@ impl CompletionEvent {
             Self::Copy => "Graphics software-profile copy completed",
             Self::Clear => "Graphics clear-only completed",
             Self::Batch => "Graphics declared UI batch completed",
+            Self::Gles => "DMP 3D command batch completed",
         }
     }
 }
@@ -226,6 +228,8 @@ pub struct Completion {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommandProcessor {
+    #[serde(default)]
+    pub gles: fujimod_emulator_ip_dmp::gles::Engine,
     pub regs: WordMap,
     pub path: WordMap,
     pub fill: WordMap,
@@ -254,6 +258,7 @@ pub struct CommandProcessor {
 impl Default for CommandProcessor {
     fn default() -> Self {
         Self {
+            gles: Default::default(),
             regs: WordMap::default(),
             path: WordMap::default(),
             fill: WordMap::default(),
@@ -415,10 +420,13 @@ impl CommandProcessor {
         if o == 0x34 || o == 0x105c {
             return fail("Graphics completion status is read-only");
         }
+        if o == 0x20f0 {
+            return self.start_gles(cpu, value, host, actions, record_receipts);
+        }
         if TRIGGERS.contains(&o) {
             self.store(o, value);
             let mut capture = self.capture(cpu, o, value, true, record_receipts, host, actions);
-            if self.clear_profile.is_none() || o == 0x20f0 {
+            if self.clear_profile.is_none() {
                 return fail("Graphics command-list rasterization is not modeled");
             }
             if let Err(error) =
@@ -449,7 +457,7 @@ impl CommandProcessor {
         }
         if o == 0xc18 {
             if value != 0 {
-                if self.copy_profile.is_none() {
+                if self.copy_profile.is_none() && !self.native_pixmap_descriptor() {
                     self.store(o, value);
                     return fail("Graphics image copy/untile is not modeled");
                 }
@@ -557,9 +565,12 @@ impl CommandProcessor {
         record_receipts: bool,
     ) -> Result<()> {
         let o = offset(address, 4)?;
+        if o == 0x20f0 {
+            return self.start_gles(cpu, value, host, actions, record_receipts);
+        }
         if TRIGGERS.contains(&o) {
             let mut capture = self.capture(cpu, o, value, false, record_receipts, host, actions);
-            if self.clear_profile.is_none() || o == 0x20f0 {
+            if self.clear_profile.is_none() {
                 return fail("Graphics command-list rasterization is not modeled");
             }
             self.start_commands(cpu, o, value, &mut capture, host, actions, record_receipts)?;
@@ -570,7 +581,7 @@ impl CommandProcessor {
             return Ok(());
         }
         if o == 0xc18 && value != 0 {
-            if self.copy_profile.is_none() {
+            if self.copy_profile.is_none() && !self.native_pixmap_descriptor() {
                 return fail("Graphics image copy/untile is not modeled");
             }
             return self.start_copy(cpu, value, host, actions, record_receipts);
@@ -626,6 +637,84 @@ impl CommandProcessor {
         self.bytes_completed += c.bytes as i64;
         self.regs.insert(0x34, self.status() | c.status);
         self.irqs_raised += 1;
+        Ok(())
+    }
+    fn start_gles(
+        &mut self,
+        cpu: i64,
+        trigger: u32,
+        host: &mut dyn Inputs,
+        actions: &mut Vec<Action>,
+        receipts: bool,
+    ) -> Result<()> {
+        if trigger != 1 || self.busy || self.command_pending.is_some() || self.status() != 0 {
+            return fail("DMP 3D submission requires idle engine and acknowledged completion");
+        }
+        if ![0x20e0, 0x20e8].iter().all(|r| self.written.contains(r))
+            || !host.has_reader()
+            || !host.has_irq()
+        {
+            return fail("DMP 3D submission needs command descriptor, DMA and IRQ routing");
+        }
+        let length = u64::from(self.regs.get_or_zero(0x20e0)) * 8;
+        let address = (u64::from(self.regs.get_or_zero(0x20e8)) * 8) & !0x40000000;
+        if length == 0 || length > 1024 * 1024 || address + length > self.ram_bytes {
+            return fail("DMP 3D command range exceeds bound");
+        }
+        let irq_cpu = self.irq_cpu(cpu, "3D", host)?;
+        let bytes = host.read(cpu, address, length).map_err(Unsupported)?;
+        if bytes.len() as u64 != length {
+            return fail("DMP short 3D command DMA");
+        }
+        let words: Vec<_> = bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| u32::from_le_bytes(*b))
+            .collect();
+        let ram_bytes = self.ram_bytes;
+        let output = self
+            .gles
+            .execute(&words, &mut |address, length| {
+                let address = address & !0x40000000;
+                if address
+                    .checked_add(length as u64)
+                    .is_none_or(|end| end > ram_bytes)
+                {
+                    return Err(format!("DMP 3D DMA outside RAM {address:#x}+{length:#x}"));
+                }
+                host.read(cpu, address, length as u64)
+            })
+            .map_err(Unsupported)?;
+        let count = output.iter().map(|(_, b)| b.len() as u64).sum::<u64>();
+        let job = self.new_job_with_receipts(receipts, || {
+            vec![
+                ("operation", Value::constant("3D")),
+                ("command_address", hex(address)),
+                ("command_bytes", num(length)),
+                ("bytes", num(count)),
+                ("completed", Value::Bool(false)),
+            ]
+        });
+        self.last_job = if receipts { Some(job.clone()) } else { None };
+        self.busy = true;
+        self.jobs_started += 1;
+        self.clear_ack_offsets.clear();
+        self.store(0x20f0, trigger);
+        self.schedule(
+            Completion {
+                cpu,
+                irq_cpu,
+                status: CLEAR_STATUS,
+                bytes: count,
+                output: output.into_iter().map(|(a, b)| (a, Arc::new(b))).collect(),
+                job,
+                event: CompletionEvent::Gles,
+                ui: false,
+            },
+            self.delay(length + count),
+            actions,
+        );
         Ok(())
     }
     fn start_fill(
@@ -740,6 +829,11 @@ impl CommandProcessor {
         );
         Ok(())
     }
+    fn native_pixmap_descriptor(&self) -> bool {
+        self.regs.get_or_zero(0xc10) == 1
+            && self.regs.get_or_zero(0xc0c) > 0
+            && self.regs.get_or_zero(0xc0c) >> 16 == 0
+    }
     fn start_copy(
         &mut self,
         cpu: i64,
@@ -771,30 +865,42 @@ impl CommandProcessor {
         }
         let dims = self.regs.get_or_zero(0xc08);
         let (w, h) = (dims & 0xffff, dims >> 16);
-        if dims != self.regs.get_or_zero(0xc0c) || w == 0 || h == 0 || w & 7 != 0 || h & 7 != 0 {
+        let destination_shape = self.regs.get_or_zero(0xc0c);
+        let output_pitch = if destination_shape == dims {
+            w as u64 * 4
+        } else if destination_shape >> 16 == 0
+            && destination_shape >= w * 4
+            && destination_shape & 3 == 0
+        {
+            u64::from(destination_shape)
+        } else {
+            return fail("DMP unsupported native pixmap pitch");
+        };
+        if w == 0 || h == 0 || w & 7 != 0 || h & 7 != 0 {
             return fail(
                 "Graphics software-profile copy requires identical positive8-aligned dimensions",
             );
         }
         let count = w as u64 * h as u64 * 4;
-        if count > self.max_copy_bytes {
+        let destination_count = output_pitch * u64::from(h);
+        if count > self.max_copy_bytes || destination_count > self.max_copy_bytes {
             return fail("Graphics software-profile copy exceeds byte bound");
         }
         let (sreg, dreg) = (self.regs.get_or_zero(0xc00), self.regs.get_or_zero(0xc04));
         let mut addresses = Vec::new();
-        for a in [sreg, dreg] {
+        for (a, length) in [(sreg, count), (dreg, destination_count)] {
             let alias = a & 0xc0000000;
             if ![0, 0x40000000].contains(&alias) {
                 return fail("Graphics software-profile copy has unresolved RAM alias");
             }
             let p = (a - alias) as u64;
-            if p & 3 != 0 || p + count > self.ram_bytes {
+            if p & 3 != 0 || p + length > self.ram_bytes {
                 return fail("Graphics software-profile copy range/alignment exceeds bounds");
             }
             addresses.push(p);
         }
         let (source, destination) = (addresses[0], addresses[1]);
-        if source < destination + count && destination < source + count {
+        if source < destination + destination_count && destination < source + count {
             return fail("Graphics software-profile overlapping copy is unproved");
         }
         if !host.has_reader() || !host.has_irq() {
@@ -805,12 +911,29 @@ impl CommandProcessor {
         if input.len() as u64 != count {
             return fail("Graphics software-profile copy source read is incomplete");
         }
-        let payload = render::copy_untile(&input, w as usize, h as usize);
-        let delay = self.delay(count);
+        let linear = render::copy_untile(&input, w as usize, h as usize);
+        let payload = if output_pitch == u64::from(w) * 4 {
+            linear
+        } else {
+            let mut bytes = host
+                .read(cpu, destination, destination_count)
+                .map_err(Unsupported)?;
+            if bytes.len() as u64 != destination_count {
+                return fail("DMP short native pixmap DMA");
+            }
+            for row in 0..h as usize {
+                bytes[row * output_pitch as usize..row * output_pitch as usize + w as usize * 4]
+                    .copy_from_slice(&linear[row * w as usize * 4..(row + 1) * w as usize * 4]);
+            }
+            bytes
+        };
+        let delay = self.delay(destination_count);
         self.busy = true;
         self.store(0xc18, trigger);
         self.jobs_started += 1;
-        let profile = self.copy_profile.unwrap().value();
+        let profile = self
+            .copy_profile
+            .map_or_else(|| Value::constant("native-pixmap"), Profile::value);
         let j = self.new_job_with_receipts(record_receipts, || vec![
             ("operation", Value::constant("copy")),
             ("profile", profile),
@@ -902,9 +1025,6 @@ impl CommandProcessor {
         let mut words = HashMap::new();
         let mut invalid = BTreeSet::new();
         for (name, a, c) in [("path", 0x10d4, 0x10dc), ("fill", 0x10e4, 0x10ec)] {
-            if o == 0x20f0 {
-                continue;
-            }
             let mut s = if record_receipts {
                 dict([
                     (
@@ -1013,26 +1133,6 @@ impl CommandProcessor {
             if record_receipts {
                 append_capture_stream(&mut j, name, s);
             }
-        }
-        if o == 0x20f0 && record_receipts {
-            update(
-                &mut j,
-                vec![
-                    (
-                        "alternate_descriptor_registers",
-                        dict(
-                            [0x20e0, 0x20e8]
-                                .iter()
-                                .filter(|n| self.written.contains(n))
-                                .map(|n| (format!("{n:#x}"), hex(self.regs.get_or_zero(*n)))),
-                        ),
-                    ),
-                    (
-                        "capture_error",
-                        Value::constant("alternate address/length semantics are unresolved"),
-                    ),
-                ],
-            );
         }
         if publish && record_receipts {
             self.last_job = Some(j.clone());

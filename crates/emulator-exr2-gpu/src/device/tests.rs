@@ -344,3 +344,50 @@ fn masked_depth_stencil_fill_preserves_destination_and_restores_pending_dma() {
         assert_eq!(host.effects, [(1, IRQ.into())]);
     }
 }
+
+#[test]
+fn native_pitched_pixmap_copy_uses_dma_and_irq_without_a_vg_profile() {
+    let (mut gpu, mut host, mut controllers) = setup();
+    enable(&mut controllers, &mut host, 1);
+    host.bytes.fill(0xa5);
+    for y in 0..8 {
+        for x in 0..16 {
+            let i = ((x & !7) * 8
+                + (x & 1)
+                + ((y & 1) << 1)
+                + ((x & 2) << 1)
+                + ((y & 2) << 2)
+                + ((x & 4) << 2)
+                + ((y & 4) << 3))
+                * 4;
+            host.bytes[128 + i..132 + i].copy_from_slice(&[255, x as u8, y as u8, 71]);
+        }
+    }
+    for (offset, value) in [
+        (0xc00, 128),
+        (0xc04, 1024),
+        (0xc08, 0x00080010),
+        (0xc0c, 80),
+        (0xc10, 1),
+        (0xc18, 1),
+    ] {
+        assert_eq!(put(&mut gpu, &mut host, offset, value), None);
+    }
+    assert!(host.bytes[1024..].iter().all(|b| *b == 0xa5));
+    host.now = gpu.next_deadline(host.now).unwrap();
+    gpu.advance(&mut Cx::new(&mut host, 0, 0, 0));
+    for y in 0..8 {
+        for x in 0..16 {
+            assert_eq!(
+                &host.bytes[1024 + y * 80 + x * 4..1028 + y * 80 + x * 4],
+                &[255, x as u8, (7 - y) as u8, 71]
+            );
+        }
+        assert!(
+            host.bytes[1024 + y * 80 + 64..1024 + (y + 1) * 80]
+                .iter()
+                .all(|b| *b == 0xa5)
+        );
+    }
+    assert_eq!(host.effects, [(1, IRQ.into())]);
+}
