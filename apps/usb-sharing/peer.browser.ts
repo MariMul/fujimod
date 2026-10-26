@@ -24,7 +24,7 @@ const ice = relay
   : undefined;
 if (relay && (!ice?.[0].username || !ice?.[0].credential))
   throw Error('Set TURN_TEST_USER and TURN_TEST_PASSWORD');
-const mf = runtime({
+const mf = await runtime({
   bindings: {
     ALLOWED_ORIGINS: new URL(base).origin,
     ...(relay ? { TURN_KEY_ID: 'test-key', TURN_API_TOKEN: 'test-master-secret' } : {}),
