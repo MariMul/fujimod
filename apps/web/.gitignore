@@ -1,5 +1,6 @@
 node_modules/
 .vite/
+.wrangler/
 dist/
 dist-local-preview/
 public/artifacts/
