@@ -1,13 +1,13 @@
 //! FFF65000 warp registers. Endpoint nearest
 //! packed422 sampling and timing are declared approximations. Memory DMA
 //! completes with IRQ74; the explicit JPEG stream has joint START ownership.
-use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
-use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
-use fujimod_emulator_imaging::exr2_isp::{due, word};
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
-use std::sync::Arc;
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer};
 use fujimod_emulator_imaging::exr2_isp::options::warp::Options;
+use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
+use fujimod_emulator_imaging::exr2_isp::{due, word};
+use std::sync::Arc;
 
 pub struct Warp {
     r: Vec<u32>,
@@ -64,7 +64,13 @@ impl Warp {
         );
         let last = [(r[0x50 / 4] & 65535) as usize, (r[0x50 / 4] >> 16) as usize];
         let mode = r[0x34 / 4];
-        src.validate(src.width * 2)?;
+        // Source width is a logical crop extent. Rows begin at their
+        // programmed pitch, and a selected endpoint can extend beyond it.
+        src.validate(src.pitch)?;
+        let source_bytes = fujimod_emulator_image_processing::resample::Endpoint::source_bytes(
+            src.width, src.height, src.pitch, w, h, last, mode,
+        )?;
+        fujimod_emulator_imaging::exr2_isp::dma::physical(src.address, source_bytes)?;
         if mode > 2
             || [0x24, 0x30, 0x48].iter().any(|&o| r[o / 4] != 0)
             || r[0x40 / 4] != 4096
@@ -85,7 +91,7 @@ impl Warp {
         if self.stream.lock().unwrap().state != State::Idle {
             return Err("warp stream is outstanding".into());
         }
-        self.source = vec![0; src.pitch * src.height].into();
+        self.source = vec![0; source_bytes].into();
         cx.ram_read(src.address, Arc::get_mut(&mut self.source).unwrap())?;
         let source = self.source.clone();
         if r[1] == 0x40 {
@@ -114,7 +120,13 @@ impl Warp {
                 height: h,
                 ..dst
             };
-            if src.overlaps(active)? {
+            let source_span = Raster {
+                address: src.address,
+                width: 2,
+                height: 1,
+                pitch: source_bytes,
+            };
+            if source_span.overlaps(active)? {
                 return Err("warp source and output overlap".into());
             }
             self.dma

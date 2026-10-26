@@ -80,6 +80,47 @@ pub struct Endpoint {
     mode: u32,
 }
 impl Endpoint {
+    /// Length of the register-addressed source window needed by this endpoint
+    /// operation. Source width describes the logical view; row pitch describes
+    /// where each row begins, so the selected view may extend into later rows.
+    pub fn source_bytes(
+        sw: usize,
+        sh: usize,
+        pitch: usize,
+        dw: usize,
+        dh: usize,
+        last: [usize; 2],
+        mode: u32,
+    ) -> Result<usize, String> {
+        if mode > 2
+            || sw == 0
+            || sh == 0
+            || pitch == 0
+            || dw == 0
+            || dh == 0
+            || last[0] >= sw
+            || last[1] >= sh
+        {
+            return Err("invalid packed422 endpoint geometry".into());
+        }
+        let step = 1usize << mode;
+        let x = if dw > 1 { last[0] / step * step } else { 0 };
+        let y = if dh > 1 { last[1] / step * step } else { 0 };
+        let sample_end = y
+            .checked_mul(pitch)
+            .and_then(|row| {
+                (x / 2)
+                    .checked_mul(4)
+                    .and_then(|pair| row.checked_add(pair))
+            })
+            .and_then(|pair| pair.checked_add(4))
+            .ok_or("packed422 endpoint source size overflow")?;
+        let raster_bytes = pitch
+            .checked_mul(sh)
+            .ok_or("packed422 endpoint source size overflow")?;
+        Ok(raster_bytes.max(sample_end))
+    }
+
     pub fn new(
         source_bytes: usize,
         sw: usize,
@@ -100,8 +141,7 @@ impl Endpoint {
             || dh == 0
             || last[0] >= sw
             || last[1] >= sh
-            || pitch < sw * 2
-            || source_bytes != pitch * sh
+            || source_bytes < Self::source_bytes(sw, sh, pitch, dw, dh, last, mode)?
             || output_bytes != dw * dh * 2
         {
             return Err("invalid packed422 endpoint geometry".into());
