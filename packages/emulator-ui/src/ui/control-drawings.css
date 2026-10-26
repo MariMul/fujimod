@@ -1,0 +1,46 @@
+/* Inverted manual line art: light lines on the panel's dark fills. */
+.control-drawing {
+  display: inline-block;
+  line-height: 0;
+}
+.control-drawing svg {
+  display: block;
+  width: 128px;
+  height: auto;
+  stroke-linejoin: round;
+}
+.control-drawing .housing {
+  fill: #242426;
+  stroke: #e5e5ea;
+  stroke-width: 1.8;
+}
+.control-drawing .line {
+  stroke: #e5e5ea;
+  stroke-width: 1.5;
+}
+.control-drawing .groove {
+  fill: #1f1f21;
+}
+.control-drawing .face {
+  fill: #5a5a5f;
+  stroke: #e5e5ea;
+  stroke-width: 1.1;
+}
+.control-drawing .smooth {
+  fill: #6e6e73;
+}
+.control-drawing .ridge {
+  stroke: #1f1f21;
+  stroke-width: 1.4;
+}
+/* The arrow is the held highlight; its dark halo separates it from the drawing. */
+.control-drawing .arrow {
+  fill: #fff;
+  stroke: #1c1c1e;
+  stroke-width: 4;
+  paint-order: stroke;
+}
+.control-drawing .stripe {
+  stroke: #1c1c1e;
+  stroke-width: 1.6;
+}

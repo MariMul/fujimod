@@ -2,6 +2,7 @@ import { For, Show, Switch, Match } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from './icons';
 import type { ControlPart, Marking } from './control-part';
+import { CommandDialDrawing, RockerDrawing } from './control-drawings';
 import './control-faces.css';
 
 type RenderKey = (action: string, className: string, content: JSX.Element) => JSX.Element;
@@ -129,20 +130,7 @@ export function ShutterFace(props: FaceProps & { left?: string }) {
     </span>
   );
 }
-/** A command dial pushed in: a knurled wheel seen edge-on with an arrow into it. */
-function PressedDial() {
-  return (
-    <span class="dial-press glow" data-action="press">
-      <svg viewBox="0 0 48 44" aria-hidden="true">
-        <path class="push" d="M24 2v12m-7-7 7 7 7-7" />
-        <rect class="wheel" x="4" y="20" width="40" height="22" rx="7" />
-        <path class="ridges" d="M12 24v14M18 24v14M24 24v14M30 24v14M36 24v14" />
-      </svg>
-    </span>
-  );
-}
 export function CommandFace(props: FaceProps) {
-  const held = (action: string) => props.part.kind === 'command' && props.part.held === action;
   return (
     <span
       class={`control-face ${props.size}`}
@@ -150,8 +138,8 @@ export function CommandFace(props: FaceProps) {
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
     >
-      <Show when={props.size === 'mini' && held('press')} fallback={<CommandKnurl {...props} />}>
-        <PressedDial />
+      <Show when={props.size === 'mini'} fallback={<CommandKnurl {...props} />}>
+        <CommandDialDrawing held={props.part.kind === 'command' ? props.part.held : undefined} />
       </Show>
       <ShortName {...props} />
     </span>
@@ -183,7 +171,7 @@ function CommandKnurl(props: FaceProps) {
     </span>
   );
 }
-/** The manual's bowed knurled band and smooth center tab, with three contact targets. */
+/** A rocker: on the panel, three contact targets; as a mini, the manual's drawing. */
 export function RockerFace(props: FaceProps) {
   const held = (action: string) => props.part.kind === 'rocker' && props.part.held === action;
   return (
@@ -193,39 +181,30 @@ export function RockerFace(props: FaceProps) {
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
     >
-      <span
-        class={`rocker ${props.size === 'mini' && props.part.kind === 'rocker' && props.part.held ? 'with-arrow' : ''}`}
+      <Show
+        when={props.size === 'mini'}
+        fallback={
+          <span class="rocker">
+            <span class="knurl">
+              <For each={['decrease', 'press', 'increase']}>
+                {(action) => (
+                  <Actuator
+                    render={props.renderKey}
+                    action={action}
+                    class={`key ${action === 'press' ? 'tab' : `side ${action === 'decrease' ? 'l' : 'r'}`} ${held(action) ? 'glow' : ''}`}
+                  >
+                    <Show when={action === 'press'}>
+                      <PrintedMark marking={props.part.marking} />
+                    </Show>
+                  </Actuator>
+                )}
+              </For>
+            </span>
+          </span>
+        }
       >
-        <span class="knurl">
-          <For each={['decrease', 'press', 'increase']}>
-            {(action) => (
-              <Actuator
-                render={props.renderKey}
-                action={action}
-                class={`key ${action === 'press' ? 'tab' : `side ${action === 'decrease' ? 'l' : 'r'}`} ${held(action) ? 'glow' : ''}`}
-              >
-                <Show when={action === 'press'}>
-                  <PrintedMark marking={props.part.marking} />
-                </Show>
-              </Actuator>
-            )}
-          </For>
-        </span>
-        <Show when={props.size === 'mini' && props.part.kind === 'rocker' && props.part.held}>
-          <svg
-            class={`rocker-arrow ${held('decrease') ? 'left' : ''}`}
-            viewBox="0 0 168 34"
-            aria-hidden="true"
-          >
-            <Show
-              when={held('press')}
-              fallback={<path class="curve" d="M40 5 Q84 34 128 5 L122 23 L119 13 Q84 38 40 15Z" />}
-            >
-              <path class="push" d="M84 1 68 18H77V32H91V18H100Z" />
-            </Show>
-          </svg>
-        </Show>
-      </span>
+        <RockerDrawing held={props.part.kind === 'rocker' ? props.part.held : undefined} />
+      </Show>
       <ShortName {...props} />
     </span>
   );

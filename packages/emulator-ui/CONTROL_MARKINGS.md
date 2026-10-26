@@ -86,14 +86,17 @@ interactive wrapper. The drawing parts move to `src/ui/control-faces.tsx`:
 takes a `ControlPart` and a `size: 'panel' | 'mini'`, and draws the held part
 with the panel's `glow` highlight, the one that marks a combo's controls when
 the combo is hovered. A key glows as a whole; a command control glows only at
-its held side, a D-pad only at the held direction. A mini command control
-whose press is held is drawn as its own icon instead: the knurled wheel seen
-edge-on with an arrow pushing into it, without the turn arrows.
+its held side, a D-pad only at the held direction.
 
-`RockerFace` follows the owner's manual drawing of a rocker: a knurled band
-with a smooth tab at its center. On the panel, its left and right halves tip it
-and the tab presses it. A mini with its press held adds a solid arrow pushing
-into the tab; with a direction held, a curved arrow pointing to that side. The panel's `Key`, `Shutter`, `Dial` and
+On the panel, a rocker's left and right halves tip it and its tab presses it.
+Mini command dials and rockers are instead line drawings after the owner's
+manual illustrations, in `src/ui/control-drawings.tsx`: a command dial is a
+knurled drum seen edge-on in its housing, its faces spaced as on a cylinder; a
+rocker is a bowed knurled band with a smooth center tab. A held press adds the
+manual's block arrow pushing into the control; a held direction adds its
+curved arrow with a head on that side.
+
+The panel's `Key`, `Shutter`, `Dial` and
 D-pad/command nodes wrap these with `ControlSession` handlers, so a change to
 how a control looks reaches every place it appears.
 

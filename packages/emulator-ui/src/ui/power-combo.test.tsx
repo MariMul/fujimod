@@ -16,9 +16,8 @@ test('X70 recovery draws the panel faces with command center, record, DISP/BACK 
   expect([...host.querySelectorAll('[data-part]')].map((e) => e.getAttribute('data-part'))).toEqual(
     ['rocker', 'key', 'key', 'positions'],
   );
-  expect(host.querySelector('.rocker .tab.glow')).toBeTruthy();
-  expect(host.querySelector('.rocker-arrow .push')).toBeTruthy();
-  expect(host.querySelector('.dial-press')).toBeNull();
+  expect(host.querySelector('.rocker-drawing[data-held="press"] .drawing-arrow.push')).toBeTruthy();
+  expect(host.querySelector('.dial-drawing')).toBeNull();
   expect(host.querySelector('.control-short-name')?.textContent).toBe('COMMAND');
   expect(host.querySelector('.key.rec i')).toBeTruthy();
   expect(host.querySelectorAll('[data-part="key"] .key.glow')).toHaveLength(2);
@@ -42,7 +41,7 @@ test('service sequence draws USB, the held selector direction, and full shutter 
 });
 
 for (const held of ['decrease', 'press', 'increase'] as const) {
-  test(`command mini highlights only its held ${held} part`, () => {
+  test(`command mini draws the manual's ${held} arrow`, () => {
     const host = document.createElement('div');
     const dispose = render(
       () => (
@@ -54,9 +53,11 @@ for (const held of ['decrease', 'press', 'increase'] as const) {
       host,
     );
     flush();
-    expect(host.querySelectorAll('.glow')).toHaveLength(1);
-    expect(host.querySelector('.glow')?.getAttribute('data-action')).toBe(held);
-    expect(host.querySelector('.active')).toBeNull();
+    expect(host.querySelector('.dial-drawing')?.getAttribute('data-held')).toBe(held);
+    expect(host.querySelector('.drawing-arrow.push') !== null).toBe(held === 'press');
+    expect(host.querySelector('.drawing-arrow.turn.left') !== null).toBe(held === 'decrease');
+    expect(host.querySelector('.drawing-arrow.turn.right') !== null).toBe(held === 'increase');
+    expect(host.querySelector('.knurl')).toBeNull();
     dispose();
   });
 }
@@ -89,13 +90,16 @@ for (const held of ['decrease', 'press', 'increase'] as const) {
         host,
       );
       flush();
-      expect(host.querySelectorAll('.glow')).toHaveLength(1);
-      expect(host.querySelector('.glow')?.getAttribute('data-action')).toBe(held);
-      expect(host.querySelectorAll('[data-action]')).toHaveLength(3);
-      expect(host.querySelector('.rocker-arrow') !== null).toBe(size === 'mini');
-      if (size === 'mini') {
-        expect(host.querySelector('.rocker-arrow .push') !== null).toBe(held === 'press');
-        expect(host.querySelector('.rocker-arrow.left') !== null).toBe(held === 'decrease');
+      if (size === 'panel') {
+        expect(host.querySelectorAll('.glow')).toHaveLength(1);
+        expect(host.querySelector('.glow')?.getAttribute('data-action')).toBe(held);
+        expect(host.querySelectorAll('[data-action]')).toHaveLength(3);
+        expect(host.querySelector('.control-drawing')).toBeNull();
+      } else {
+        expect(host.querySelector('.rocker-drawing')?.getAttribute('data-held')).toBe(held);
+        expect(host.querySelector('.drawing-arrow.push') !== null).toBe(held === 'press');
+        expect(host.querySelector('.drawing-arrow.turn.left') !== null).toBe(held === 'decrease');
+        expect(host.querySelector('.drawing-arrow.turn.right') !== null).toBe(held === 'increase');
         expect(host.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe(
           `COMMAND ${held}`,
         );
