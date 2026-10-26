@@ -80,8 +80,8 @@ export default function Home() {
           <PersonalNote />
           <FeatureCatalog />
           <div class="emulator-heading">
-            <h2 class="section-heading" id="emulator-heading">
-              Emulator
+            <h2 class="section-heading" id="software">
+              Software
             </h2>
             <Show when={state.activeCamera}>
               <span
@@ -107,7 +107,7 @@ export default function Home() {
             state={state}
             runtime={runtime()}
             bodyPreview={state.bodyPreview}
-            labelledBy="emulator-heading"
+            labelledBy="software"
             workspace={(element) => {
               workspace = element;
             }}

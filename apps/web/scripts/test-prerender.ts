@@ -54,7 +54,7 @@ try {
     try {
       const noJs = await browser.newContext({ javaScriptEnabled: false });
       for (const [route, text] of [
-        ['/', 'FujiMod is not ready for your camera'],
+        ['/', 'start testing FujiMod for X70 dual booting from the SD card'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -139,11 +139,11 @@ try {
         'hydrate existing homepage nodes',
       );
       const note = page.locator('.personal-note');
-      assert.match(await note.innerText(), /It is \d+ days old and changing too quickly/);
+      assert.match(await note.innerText(), /dual booting from the SD card/);
       assert.equal(await note.locator('mark, em, strong, b, svg').count(), 0);
-      assert.equal(await note.locator('a').count(), 1);
-      await note.getByRole('link', { name: 'camera emulator', exact: true }).click();
-      assert.equal(new URL(page.url()).hash, '#workspace');
+      assert.equal(await note.locator('a').count(), 2);
+      await note.getByRole('link', { name: 'SOFTWARE', exact: true }).click();
+      assert.equal(new URL(page.url()).hash, '#software');
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
       // The idle homepage has no camera bar; feedback opens from its URL.

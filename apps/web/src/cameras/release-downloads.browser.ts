@@ -140,7 +140,7 @@ for (const engine of [chromium, webkit].filter(
           false,
           `${device} launcher must not overflow`,
         );
-        if (!modal) await page.locator('#emulator-heading').scrollIntoViewIfNeeded();
+        if (!modal) await page.locator('#software').scrollIntoViewIfNeeded();
         const name = `${engine.name()}-${device}-${state}.png`;
         if (modal) await page.screenshot({ path: new URL(name, output).pathname });
         else {

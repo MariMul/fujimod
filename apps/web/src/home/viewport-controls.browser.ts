@@ -128,7 +128,7 @@ try {
   await closeMenu(page);
   assert.equal(await page.locator('.firmware-menu').count(), 0);
   await menu(page);
-  await page.locator('#emulator-heading').click();
+  await page.locator('#software').click();
   assert.equal(await page.locator('.firmware-menu').count(), 0);
   for (const label of ['Unmodded', 'FujiMod']) {
     await menu(page);
