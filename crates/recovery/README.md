@@ -70,7 +70,10 @@ comparisons select the stock preloaded table, header and image paths while
 retaining cold reset mode. Its plain and progress read paths share a checked
 read-only descriptor reader. Calls to that reader fetch update-installed
 addresses from the firmware namespace appended to `ffboot.bin`, using Agate
-ROM file I/O. Other addresses delegate to the unchanged stock reader. Program
+ROM file I/O. The reader keeps the ROM-selected drive, seeks through the FAT
+chain, and leaves the caller's IRQ mask intact. ROM metadata calls use the ROM
+SRAM stack; payload DMA uses an aligned sector buffer and copies only requested
+bytes into the caller's destination. Other addresses delegate to the unchanged stock reader. Program
 and erase paths retain their stock code. Both families use rooted section tables and checked
 source mappings; unrecognized table or update-device layouts refuse.
 

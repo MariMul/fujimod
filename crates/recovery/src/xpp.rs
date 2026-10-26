@@ -177,7 +177,7 @@ pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result
             && layout.address == 0x100000
             && layout.size == IMAGE.len()
             && layout.entry < IMAGE.len()
-            && layout.config + 32 <= IMAGE.len(),
+            && layout.config + 44 <= IMAGE.len(),
         "Invalid Agate card reader layout",
     )?;
     for region in &plan.regions {
@@ -216,6 +216,9 @@ pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result
         reads.namespace_size,
         total,
         reads.descriptor_reader.address,
+        0xfff01eb4,
+        0xfff0a000,
+        0xfff0de00,
     ]
     .into_iter()
     .enumerate()
@@ -383,6 +386,27 @@ mod tests {
                 .iter()
                 .all(|b| *b == 255)
         );
+        let layout: Layout =
+            serde_json::from_str(include_str!("../assets/xpp-reader.generated.json")).unwrap();
+        let expected = [
+            0xfff02548,
+            0xfff027b8,
+            0xfff02880,
+            0xfff0df0c,
+            original.len(),
+            reads.namespace_size,
+            ram.len(),
+            reads.descriptor_reader.address,
+            0xfff01eb4,
+            0xfff0a000,
+            0xfff0de00,
+        ];
+        for (index, value) in expected.into_iter().enumerate() {
+            assert_eq!(
+                word(&ram, layout.address + layout.config + index * 4).unwrap() as usize,
+                value
+            );
+        }
         assert_eq!(&ram[0x2000c0..0x200100], &original[0x2000c0..0x200100]);
         for p in reads.call_sites.iter().chain(&reads.pointer_sites) {
             ram[p.address..p.address + 4].copy_from_slice(&original[p.address..p.address + 4]);
