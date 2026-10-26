@@ -433,7 +433,16 @@
 }
 .control-face.mini {
   --control-scale: 0.6;
+  gap: 4px;
   pointer-events: none;
+}
+/* At mini size a key's marking fills most of it, so it stays legible. */
+.control-face.mini .key > span:not(.two) {
+  font-size: 20px;
+}
+.control-face.mini .key.rec i {
+  width: 30px;
+  height: 30px;
 }
 /* Scale the panel's actual drawing, including its wedge geometry and pressed style. */
 .control-face > :first-child {
@@ -553,7 +562,7 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 18px;
   max-width: 100%;
 }
 .combo-usb {

@@ -120,10 +120,10 @@ export function bootSequence(controls: PhysicalControls, modes: BootMode[]): {
 
 `bootSequence` joins the holds of the given modes in order, without duplicates,
 and throws when the body lacks one of the modes or two modes disagree about
-USB. `PowerComboKeys` draws, in order: a USB plug icon (connected or
-disconnected) when the sequence states USB, one mini per hold, then the power
-switch as a mini `PositionsFace` at `ON`. Minis wrap to further lines rather
-than overlapping.
+USB. `PowerComboKeys` draws, in order: the USB trident (crossed out when
+disconnected) when the sequence states USB, then one mini per hold. The power
+switch is not drawn: the instruction around the combo says to switch the camera
+on while holding these. Minis wrap to further lines rather than overlapping.
 
 Users:
 
@@ -162,8 +162,7 @@ layouts" section of `apps/web/EMULATOR_UI.md` is rewritten to point here.
   error and cover each row of the mapping table.
 - Component tests draw the X70's `sd` and `firmware_update` sequence: the
   rocker with the push arrow into its tab and `COMMAND` beside it, the record
-  key,
-  the DISP/BACK key, and the power switch at ON.
+  key and the DISP/BACK key, without the power switch.
 - A development-only page at `/review/power-combos/` draws every body's SD
   sequence at phone width for visual review, titled with each body's model
   name.

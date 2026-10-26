@@ -2,7 +2,7 @@ import { For, Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import type { BootHold, BootMode, PhysicalControls } from 'fujimod';
 import { heldControlPart } from './control-part';
-import { ControlFace, PositionsFace } from './control-faces';
+import { ControlFace } from './control-faces';
 import './control-faces.css';
 
 export function bootSequence(
@@ -65,14 +65,6 @@ export function PowerComboKeys(props: {
           />
         )}
       </For>
-      <PositionsFace
-        part={{ kind: 'positions', marking: {}, position: 'ON' }}
-        size="mini"
-        positions={[
-          { id: 'OFF', label: 'OFF' },
-          { id: 'ON', label: 'ON' },
-        ]}
-      />
     </span>
   );
 }

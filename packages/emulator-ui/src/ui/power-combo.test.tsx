@@ -6,7 +6,7 @@ import x70 from '../../../../catalog/bodies/x70/controls.json';
 import { CommandFace, RockerFace, PadFace } from './control-faces';
 import { PowerComboKeys } from './power-combo';
 
-test('X70 recovery draws the panel faces with command center, record, DISP/BACK and ON', () => {
+test('X70 recovery draws the pressed rocker, record and DISP/BACK, without the power switch', () => {
   const host = document.createElement('div');
   const dispose = render(
     () => <PowerComboKeys controls={x70 as PhysicalControls} modes={['sd', 'firmware_update']} />,
@@ -14,7 +14,7 @@ test('X70 recovery draws the panel faces with command center, record, DISP/BACK 
   );
   flush();
   expect([...host.querySelectorAll('[data-part]')].map((e) => e.getAttribute('data-part'))).toEqual(
-    ['rocker', 'key', 'key', 'positions'],
+    ['rocker', 'key', 'key'],
   );
   expect(host.querySelector('.rocker-drawing[data-held="press"] .drawing-arrow.push')).toBeTruthy();
   expect(host.querySelector('.dial-drawing')).toBeNull();
@@ -22,7 +22,6 @@ test('X70 recovery draws the panel faces with command center, record, DISP/BACK 
   expect(host.querySelector('.key.rec i')).toBeTruthy();
   expect(host.querySelectorAll('[data-part="key"] .key.glow')).toHaveLength(2);
   expect(host.textContent).toContain('DISP\nBACK');
-  expect(host.querySelector('.seg .on')?.textContent).toBe('ON');
   expect(host.querySelectorAll('button')).toHaveLength(0);
   dispose();
 });
