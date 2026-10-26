@@ -42,10 +42,16 @@ export function PowerComboKeys(props: {
     <span class="power-combo-keys">
       <Show when={sequence().usb !== undefined}>
         <span class="combo-usb" aria-label={sequence().usb ? 'USB connected' : 'USB disconnected'}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 3v5m6-5v5M7 8h10v4a5 5 0 0 1-10 0Zm5 9v5" />
+          {/* The USB trident: arrowhead, round base, a circle branch and a square branch. */}
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path class="usb-line" d="M16 25V7M16 21 9.5 16.5V12.5M16 18 22.5 13.5V10.5" />
+            <path class="usb-fill" d="M16 2.5 20 8.5H12Z" />
+            <circle class="usb-fill" cx="16" cy="26.5" r="3" />
+            <circle class="usb-fill" cx="9.5" cy="10.8" r="2.4" />
+            <rect class="usb-fill" x="20.4" y="7" width="4.2" height="4.2" />
             <Show when={!sequence().usb}>
-              <path d="m3 3 18 18" />
+              <path class="usb-gap" d="M4.5 4.5 27.5 27.5" />
+              <path class="usb-line" d="M4.5 4.5 27.5 27.5" />
             </Show>
           </svg>
         </span>

@@ -561,11 +561,24 @@
   color: #bbb;
 }
 .combo-usb svg {
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
+}
+.combo-usb .usb-line {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.combo-usb .usb-fill {
+  fill: currentColor;
+}
+/* A dark gap keeps the slash readable where it crosses the trident. */
+.combo-usb .usb-gap {
+  stroke: #1c1c1e;
+  stroke-width: 5;
+  stroke-linecap: round;
 }
 .combo {
   flex-wrap: wrap;
