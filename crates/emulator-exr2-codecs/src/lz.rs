@@ -53,6 +53,8 @@ enum RasterKind {
     PackedFilter,
     FilteredRational,
     ScalarFilteredHalf,
+    ScalarWeightedHalf,
+    ScalarThresholdedHalf,
     LumaFilteredHalf,
 }
 
@@ -324,6 +326,46 @@ impl Decompressor {
         }
         let (sw, sh) = (r(0x18) & 8191, r(0x18) >> 16);
         let (dw, dh) = (r(0x28) & 8191, r(0x28) >> 16);
+        // This bounded scalar descriptor supplies the saved threshold and
+        // asymmetric kernels. Its pixel operation is not decoded; raster()
+        // applies a small empirical luma curve after the declared FIR.
+        if r(8) == 0x1100
+            && r(0x30) == 0x4c
+            && r(0x34) == 0x00191a1a
+            && r(0x38) == 0x24242526
+            && r(0x3c) == 0x00400080
+            && r(0x80) == 0
+            && sw == 720
+            && sh == 480
+            && dw == 368
+            && dh == 240
+            && r(0x14) == 1440
+            && r(0x24) == 1440
+        {
+            return Ok(RasterKind::ScalarThresholdedHalf);
+        }
+        // The matching unthresholded kernel is used by the following
+        // half-size stages. Keep its exact weights while allowing the same
+        // bounded dimensions and row-padded layouts as the scalar FIR path.
+        if r(8) == 0x1000
+            && r(0x30) == 0x40
+            && r(0x34) == 0x00191a1a
+            && r(0x38) == 0x24242526
+            && r(0x3c) == 0x00400080
+            && r(0x80) == 0
+            && (1..=720).contains(&sw)
+            && (1..=480).contains(&sh)
+            && dh > 0
+            && dh * 2 == sh
+            && dw >= sw.div_ceil(2)
+            && dw <= sw.div_ceil(2) + 15
+            && r(0x14) >= sw * 2
+            && r(0x14) <= 1440
+            && r(0x24) >= dw * 2
+            && r(0x24) <= 1440
+        {
+            return Ok(RasterKind::ScalarWeightedHalf);
+        }
         // Declared replicated-edge FIR with a 2:1 pixel-center step. The
         // destination may include up to 15 replicated columns for alignment.
         // Format/control and both normalized kernels remain explicit; an
@@ -368,7 +410,11 @@ impl Decompressor {
         {
             return Ok(RasterKind::LumaFilteredHalf);
         }
-        Err("MOVRSZ descriptor has no selected numerical law".into())
+        let registers = [0x08, 0x14, 0x18, 0x24, 0x28, 0x30, 0x34, 0x38, 0x3c, 0x80]
+            .map(|offset| (offset, r(offset)));
+        Err(format!(
+            "MOVRSZ descriptor has no selected numerical law: {registers:x?}"
+        ))
     }
     fn resize_alias_conflicts(
         regs: &[u32],
@@ -384,7 +430,10 @@ impl Decompressor {
         }
         if !matches!(
             kind,
-            RasterKind::ScalarFilteredHalf | RasterKind::LumaFilteredHalf
+            RasterKind::ScalarFilteredHalf
+                | RasterKind::ScalarWeightedHalf
+                | RasterKind::ScalarThresholdedHalf
+                | RasterKind::LumaFilteredHalf
         ) {
             return Ok(true);
         }
@@ -475,6 +524,9 @@ impl Decompressor {
                 RasterKind::ScalarFilteredHalf | RasterKind::LumaFilteredHalf => {
                     ([8, 30, 56, 68, 56, 30, 8], [8, 32, 48, 32, 8], [2, 1])
                 }
+                RasterKind::ScalarWeightedHalf | RasterKind::ScalarThresholdedHalf => {
+                    ([36, 36, 37, 38, 37, 36, 36], [25, 26, 26, 26, 25], [2, 1])
+                }
                 RasterKind::FilteredRational => (
                     [0, 34, 60, 68, 60, 34, 0],
                     [20, 28, 32, 28, 20],
@@ -515,6 +567,16 @@ impl Decompressor {
                 &mut self.a,
                 &mut self.b,
             )?;
+            if kind == RasterKind::ScalarThresholdedHalf {
+                // The measured 8-bit sample points (16→19, 21→24, 240→255)
+                // fit this empirical curve. The register's exact operation
+                // and its ordering relative to filtering remain unknown.
+                for sample in self.output[..row_bytes * h].chunks_exact_mut(2) {
+                    let value = u16::from_le_bytes([sample[0], sample[1]]);
+                    let adjusted = (u32::from(value) + u32::from(value) / 16 + 2).min(255);
+                    sample.copy_from_slice(&(adjusted as u16).to_le_bytes());
+                }
+            }
             return Ok((row_bytes, h, pitch));
         }
         let get = |x: usize, y: usize| -> u32 {
