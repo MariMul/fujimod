@@ -74,6 +74,7 @@ impl<'de> Deserialize<'de> for SensorFrame {
 /// One sensor input's captured frames.
 pub trait SensorState: Send + Sync {
     fn edge(&self) -> Option<Edge>;
+    fn view(&self) -> Option<([usize; 2], [usize; 4])>;
     /// Whether the current and latched frames are one frame.
     fn shared(&self) -> bool;
     /// The current frame and, unless shared, the latched frame.
@@ -89,6 +90,7 @@ pub struct SensorSnapshot(pub Arc<dyn SensorState>);
 pub struct SensorRecord {
     pub name: String,
     pub edge: Option<Edge>,
+    pub view: Option<([usize; 2], [usize; 4])>,
     pub shared: bool,
 }
 

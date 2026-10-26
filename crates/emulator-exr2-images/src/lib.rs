@@ -2,11 +2,11 @@
 //! resources' image part: models that read images, sensors or ISP state reach
 //! it through [`images`], [`wire`] and [`image_wire!`]; sessions and every
 //! other crate see it only as `ImageResources`.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_exr2_resources::{
     Edge, ImageResources, ImageSnapshot, Resources, SensorFrame, SensorFrameCodec, SensorRecord,
     SensorSnapshot, SensorState,
 };
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_imaging::exr2_isp as isp;
 use fujimod_emulator_imaging::scene::{
     Frame, FrameEdge, FramePixels, ImageFrames, SensorFrames, SensorFramesHandle,
@@ -350,6 +350,12 @@ impl ImageResources for Images {
         Ok(SensorSnapshot(Arc::new(Sensor(SensorFrames {
             current,
             latched,
+            view: record
+                .view
+                .map(|(field, rectangle)| {
+                    fujimod_emulator_imaging::scene::view::View::new(field, rectangle)
+                })
+                .transpose()?,
             edge: record.edge.map(|edge| FrameEdge {
                 index: edge.index,
                 tick: edge.tick,
@@ -361,6 +367,9 @@ impl ImageResources for Images {
 /// A sensor input's captured frames.
 struct Sensor(SensorFrames);
 impl SensorState for Sensor {
+    fn view(&self) -> Option<([usize; 2], [usize; 4])> {
+        self.0.view.map(|v| (v.field, v.rectangle))
+    }
     fn edge(&self) -> Option<Edge> {
         self.0.edge.map(|edge| Edge {
             index: edge.index,

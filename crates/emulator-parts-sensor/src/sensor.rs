@@ -2,10 +2,10 @@
 //! black level, active image area and reference white are body data. The RGB spectral response
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
-use fujimod_emulator_image_formation::exposure::ExposedFrame;
-use fujimod_emulator_imaging::exposure::{Calibration, ExposureHandle};
 use fujimod_emulator_devices::parts::optics::ApertureHandle;
+use fujimod_emulator_image_formation::exposure::ExposedFrame;
 use fujimod_emulator_image_processing::raw::{Cfa, Packing};
+use fujimod_emulator_imaging::exposure::{Calibration, ExposureHandle};
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
@@ -19,6 +19,10 @@ pub trait Controls: Send {
     /// Complete one physical exposure/readout edge before sampling its pixels.
     /// Returns whether the readout carries a valid frame.
     fn frame(&mut self) -> Result<bool, String>;
+    fn preview_view(
+        &self,
+        horizontal: [usize; 2],
+    ) -> Result<Option<fujimod_emulator_imaging::scene::view::View>, String>;
     fn timing(
         &mut self,
         horizontal: u32,
@@ -129,6 +133,7 @@ mod tests {
                             shutter: None,
                             rolling_references: vec![],
                             mode_change_frames: 0,
+                            preview_field: None,
                         },
                         wire.clone(),
                         iris.clone(),
@@ -573,6 +578,15 @@ impl Sensor {
             state["controller"] = self.controls.as_ref().map(|c| c.save()).unwrap_or_default();
             state
         })
+    }
+    pub fn preview_view(&mut self, horizontal: [usize; 2]) -> Result<(), String> {
+        if let Some(controls) = &self.controls {
+            self.frames
+                .lock()
+                .map_err(|_| "sensor frame poisoned")?
+                .view = controls.preview_view(horizontal)?;
+        }
+        Ok(())
     }
     pub fn latch(&mut self, tick: u64) -> Result<Option<FrameEdge>, String> {
         let valid = match &mut self.controls {

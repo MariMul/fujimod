@@ -137,6 +137,7 @@
         ]
       ],
       "mode_change_frames": 2,
+      "preview_field": [2496, 3344],
       "rolling_references": [
         {
           "mode": 236,

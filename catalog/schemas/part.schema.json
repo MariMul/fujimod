@@ -1660,6 +1660,20 @@
           "minimum": 0,
           "type": "integer"
         },
+        "preview_field": {
+          "description": "Full preview readout field in sensor command-window coordinates.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "projection": {
           "$ref": "#/$defs/SensorProjection",
           "description": "Lens projection onto the sensor."

@@ -114,6 +114,11 @@ impl Renderer {
             return Ok(None);
         };
         exposure.focus_shift_mm = self.projection.as_ref().map(|p| p.focus()).transpose()?;
+        exposure.view = self
+            .frames
+            .lock()
+            .map_err(|_| "sensor frame poisoned")?
+            .view;
         let p = self.parameters.lock().map_err(|_| "film bank poisoned")?;
         // 0x12c is the live digital gain (Q10, 1024 = 1x): the firmware raises
         // it to preview exposure compensation and lowers it while S1 raises
@@ -136,6 +141,7 @@ impl Renderer {
                 && old.exposure.exposure == exposure.exposure
                 && old.exposure.aperture_squared == exposure.aperture_squared
                 && old.exposure.focus_shift_mm == exposure.focus_shift_mm
+                && old.exposure.view == exposure.view
                 && old.gain == gain
                 && old.film.matches(|o| p.words[o / 4])
             {
@@ -253,11 +259,15 @@ impl Image {
         }
         drop(cache);
         let mut frame = self.exposure.clone();
+        let view = frame.view.take();
+        let full = [[0, 0, grid[0], grid[1]]];
+        let prepared_windows = if view.is_some() { &full[..] } else { windows };
         if let Some(projection) = &self.projection {
-            projection.prepare_binned_windows(&mut frame, dimensions, grid, windows)?
+            projection.prepare_binned_windows(&mut frame, dimensions, grid, prepared_windows)?
         } else {
             super::optics::bin_exposure(&mut frame, dimensions)?
         }
+        frame.view = view;
         // Bound retained derived pixels; the immutable source is shared.
         let cost = dimensions[0] * dimensions[1];
         let mut cache = self
@@ -501,7 +511,11 @@ impl Image {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_imaging::{exr2_isp::parameters::Parameters, exposure::Exposure, scene::{Frame, FramePixels, SensorFrames}};
+    use fujimod_emulator_imaging::{
+        exposure::Exposure,
+        exr2_isp::parameters::Parameters,
+        scene::{Frame, FramePixels, SensorFrames},
+    };
     fn renderer() -> (Renderer, ParameterHandle, ExposureHandle) {
         renderer_with_projection(None)
     }
@@ -575,6 +589,51 @@ mod tests {
         }
         output
     }
+    #[test]
+    fn sensor_window_changes_pixels_and_statistics_and_survives_later_input_and_checkpoint() {
+        use fujimod_emulator_imaging::scene::view::View;
+        let (mut renderer, _, _) = renderer();
+        renderer.frames.lock().unwrap().set_frame(
+            Frame::new(
+                64,
+                48,
+                FramePixels::Rgb24(
+                    (0..64 * 48)
+                        .flat_map(|i| [(i % 64 * 3) as u8, (i / 64 * 4) as u8, 80])
+                        .collect(),
+                ),
+            )
+            .unwrap(),
+        );
+        let full = renderer.capture().unwrap().unwrap();
+        renderer.frames.lock().unwrap().view = Some(View::new([64, 48], [16, 8, 32, 24]).unwrap());
+        let cropped = renderer.capture().unwrap().unwrap();
+        assert!(!Arc::ptr_eq(&full, &cropped));
+        let a = full.measurement([64, 48]).unwrap();
+        let b = cropped.measurement([64, 48]).unwrap();
+        for y in 0..48 {
+            for x in 0..64 {
+                assert_eq!(
+                    b.sample(x, y, [64, 48]),
+                    a.sample(16 + (2 * x + 1) / 4, 8 + (2 * y + 1) / 4, [64, 48])
+                );
+            }
+        }
+        let layout = ImageLayout {
+            width: 64,
+            height: 48,
+            stride: 128,
+        };
+        let pixels = cropped.render(layout, 1).unwrap();
+        assert_ne!(pixels, full.render(layout, 1).unwrap());
+        assert_eq!(&*pixels, &scalar_render(&cropped, layout));
+        renderer.frames.lock().unwrap().view = None;
+        assert_eq!(cropped.render(layout, 1).unwrap(), pixels);
+        let restored = Image::from_checkpoint(&cropped.checkpoint().unwrap()).unwrap();
+        assert_eq!(restored.render(layout, 1).unwrap(), pixels);
+        assert_eq!(restored.exposure.view, cropped.exposure.view);
+    }
+
     #[test]
     fn live_gains_are_white_balance_times_digital_gain_times_the_front_end() {
         // 0x12c (Q10) times the fixed 3.78x front end: an X70 lowers 0x12c to

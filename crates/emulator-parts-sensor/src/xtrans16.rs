@@ -3,9 +3,9 @@
 //! and vertical timing. Gain is4095/(4095-code).
 //! Timing/ADC responsivity remain declared physical calibration, not firmware
 //! inspection or a caller signature. The sensor receives actual scan periods.
-use fujimod_emulator_imaging::exposure::{Exposure, ExposureHandle};
-use fujimod_emulator_devices::parts::optics::ApertureHandle;
 use crate::sensor::Controls;
+use fujimod_emulator_devices::parts::optics::ApertureHandle;
+use fujimod_emulator_imaging::exposure::{Exposure, ExposureHandle};
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,6 +27,8 @@ pub struct Options {
     /// receiver sees no frame edge for them.
     #[serde(default)]
     pub mode_change_frames: u8,
+    /// Full preview field containing command 0B..0E's selected rows.
+    pub preview_field: Option<[usize; 2]>,
 }
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -276,6 +278,26 @@ impl Controls for Sensor {
         }
         self.publish()
     }
+    fn preview_view(
+        &self,
+        horizontal: [usize; 2],
+    ) -> Result<Option<fujimod_emulator_imaging::scene::view::View>, String> {
+        let r = &self.state.registers;
+        if r[1] & 1 == 0 {
+            return Ok(None);
+        }
+        let field = self
+            .options
+            .preview_field
+            .ok_or("sensor window has no declared preview field")?;
+        let y = usize::from(r[0x0b]) | (usize::from(r[0x0c] & 15) << 8);
+        let height = 2 * (usize::from(r[0x0d]) | (usize::from(r[0x0e] & 15) << 8));
+        fujimod_emulator_imaging::scene::view::View::new(
+            field,
+            [horizontal[0], y, horizontal[1], height],
+        )
+        .map(Some)
+    }
     fn frame(&mut self) -> Result<bool, String> {
         // Standby stops readout. A configured clock may continue ticking at
         // the receiver, but it cannot consume the sensor's startup interval.
@@ -315,6 +337,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn preview_window_uses_transmitted_coordinates_and_restores_its_command_state() {
+        let exposure = std::sync::Arc::new(std::sync::Mutex::new(Exposure::default()));
+        let aperture = std::sync::Arc::new(std::sync::Mutex::new(4.));
+        let mut sensor = Sensor::new(
+            Options {
+                pixel_clock_hz: 33_000_000,
+                shutter: None,
+                rolling_references: vec![],
+                mode_change_frames: 0,
+                preview_field: Some([2496, 3344]),
+            },
+            exposure,
+            aperture,
+        )
+        .unwrap();
+        assert_eq!(sensor.preview_view([0, 2496]).unwrap(), None);
+        sensor
+            .command(&[
+                0x81, 1, 1, 0, 0, 0, 0, 0, 0x81, 0x0b, 0xf2, 0, 0, 0, 0, 0, 0x81, 0x0c, 3, 0, 0, 0,
+                0, 0, 0x81, 0x0d, 0xaa, 0, 0, 0, 0, 0, 0x81, 0x0e, 2, 0, 0, 0, 0, 0,
+            ])
+            .unwrap();
+        let view = sensor.preview_view([735, 1002]).unwrap().unwrap();
+        assert_eq!(view.field, [2496, 3344]);
+        assert_eq!(view.rectangle, [735, 1010, 1002, 1364]);
+        assert!(sensor.preview_view([2490, 1002]).is_err());
+        let saved = sensor.save();
+        sensor.command(&[0x81, 1, 0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(sensor.preview_view([0, 2496]).unwrap(), None);
+        sensor.restore(&saved).unwrap();
+        assert_eq!(sensor.preview_view([735, 1002]).unwrap(), Some(view));
+    }
+
+    #[test]
     fn reset_counter_spans_whole_scans_inside_the_programmed_window() {
         for (horizontal, vertical, scan, reset, frame) in [
             (706, 9348, 857, 840, 857),
@@ -334,17 +390,41 @@ mod tests {
                         mode: 0xec, horizontal, vertical, lines: scan,
                     }],
                     mode_change_frames: 0,
+                    preview_field: None,
                 },
                 wire.clone(),
                 std::sync::Arc::new(std::sync::Mutex::new(64.)),
             ).unwrap();
             sensor.attach_frame_clock(clock.clone(), 12_000_000).unwrap();
             sensor.timing(horizontal, vertical, None).unwrap();
-            let command = |reset: u32| [
-                0x81, 0, 0xec, 0, 0, 0, 0, 0,
-                0x81, 5, reset as u8, 0, 0, 0, 0, 0,
-                0x81, 6, (reset >> 8) as u8, 0, 0, 0, 0, 0,
-            ];
+            let command = |reset: u32| {
+                [
+                    0x81,
+                    0,
+                    0xec,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0x81,
+                    5,
+                    reset as u8,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0x81,
+                    6,
+                    (reset >> 8) as u8,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                ]
+            };
             sensor.command(&command(reset)).unwrap();
             sensor.frame().unwrap();
             assert!((wire.lock().unwrap().seconds
@@ -373,6 +453,7 @@ mod tests {
                 shutter: None,
                 rolling_references: vec![],
                 mode_change_frames: 0,
+                preview_field: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -428,6 +509,7 @@ mod tests {
                     lines: 857,
                 }],
                 mode_change_frames: 0,
+                preview_field: None,
             },
             exposure.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -476,6 +558,7 @@ mod tests {
                 shutter: None,
                 rolling_references: vec![],
                 mode_change_frames: 0,
+                preview_field: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -512,6 +595,7 @@ mod tests {
                     lines: 1000,
                 }],
                 mode_change_frames: 0,
+                preview_field: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -553,6 +637,7 @@ mod tests {
                 shutter: None,
                 rolling_references: vec![],
                 mode_change_frames: 2,
+                preview_field: None,
             },
             wire,
             std::sync::Arc::new(std::sync::Mutex::new(8.)),

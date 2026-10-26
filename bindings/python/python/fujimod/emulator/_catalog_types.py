@@ -4755,6 +4755,7 @@ class SensorProjection(TypedDict, total=False):
 class SensorRadiometry(TypedDict, total=False):
     mode_change_frames: Required[int]
     period_ticks: Required[int]
+    preview_field: NotRequired[list[int] | None]
     projection: Required[SensorProjection]
     rolling_references: Required[list[SensorRollingReference]]
     saturation_lux_seconds: Required[int]

@@ -1,9 +1,9 @@
-use fujimod_emulator_devices::exr2::irq_routes::Irq;
-use fujimod_emulator_exr2_isp_output::output::{self, OutputChannel};
 use crate::*;
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_imaging::exr2_isp::*;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::test_host::*;
+use fujimod_emulator_exr2_isp_output::output::{self, OutputChannel};
+use fujimod_emulator_imaging::exr2_isp::*;
 
 #[test]
 fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
@@ -333,6 +333,7 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
                         shutter: None,
                         rolling_references: vec![],
                         mode_change_frames: 2,
+                        preview_field: None,
                     },
                     wire.clone(),
                     iris.clone(),

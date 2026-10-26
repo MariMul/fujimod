@@ -213,11 +213,12 @@ pub struct SensorFrames {
     pub current: Arc<Frame>,
     pub latched: Arc<Frame>,
     pub edge: Option<FrameEdge>,
+    pub view: Option<super::view::View>,
 }
 pub type SensorFramesHandle = Arc<Mutex<SensorFrames>>;
 impl SensorFrames {
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"current":self.current.fingerprint(),"latched":self.latched.fingerprint(),"edge":self.edge})
+        serde_json::json!({"current":self.current.fingerprint(),"latched":self.latched.fingerprint(),"edge":self.edge,"view":self.view})
     }
     pub fn new(frame: Frame) -> Self {
         let frame = Arc::new(frame);
@@ -225,6 +226,7 @@ impl SensorFrames {
             current: frame.clone(),
             latched: frame,
             edge: None,
+            view: None,
         }
     }
     pub fn set_frame(&mut self, frame: Frame) {

@@ -79,6 +79,7 @@ pub struct ExposedFrame {
     response: [[u16; 256]; 3],
     pub(super) response_scale: [f64; 3],
     pub focus_shift_mm: Option<f64>,
+    pub view: Option<fujimod_emulator_imaging::scene::view::View>,
     pub(super) filtered: Option<Filtered>,
 }
 impl ExposedFrame {
@@ -86,6 +87,7 @@ impl ExposedFrame {
     /// frame-edge numbering and physical metadata that do not change pixels.
     pub fn same_samples(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.frame, &other.frame)
+            && self.view == other.view
             && self.response == other.response
             && self.focus_shift_mm == other.focus_shift_mm
             && self.aperture_squared == other.aperture_squared
@@ -172,6 +174,7 @@ impl ExposedFrame {
             response,
             response_scale,
             focus_shift_mm: None,
+            view: None,
             filtered: None,
         })
     }
@@ -191,6 +194,7 @@ impl ExposedFrame {
                 response,
                 self.response_scale,
                 self.focus_shift_mm,
+                self.view,
                 self.filtered.as_ref().map(|p| match p {
                     Filtered::Grid(dimensions, _) | Filtered::BinnedReadout(dimensions, _) => {
                         *dimensions
@@ -210,6 +214,7 @@ impl ExposedFrame {
             response,
             response_scale,
             focus_shift_mm,
+            view,
             filtered,
         ): (
             Exposure,
@@ -218,6 +223,7 @@ impl ExposedFrame {
             Vec<u16>,
             [f64; 3],
             Option<f64>,
+            Option<fujimod_emulator_imaging::scene::view::View>,
             Option<[usize; 2]>,
         ) = saved.decode("exposed-frame")?;
         if !exposure.seconds.is_finite()
@@ -260,28 +266,35 @@ impl ExposedFrame {
             response: std::array::from_fn(|c| std::array::from_fn(|i| response[c * 256 + i])),
             response_scale,
             focus_shift_mm,
+            view,
             filtered,
         })
     }
     #[inline]
     pub fn sample(&self, x: usize, y: usize, grid: [usize; 2]) -> [u16; 3] {
         if let Some(Filtered::BinnedReadout([width, height], pixels)) = &self.filtered {
-            let sx = ((2 * x + 1) * width / (2 * grid[0])).min(width - 1);
-            let sy = ((2 * y + 1) * height / (2 * grid[1])).min(height - 1);
+            let sx = self.coordinate(0, x, grid[0], *width);
+            let sy = self.coordinate(1, y, grid[1], *height);
             return pixels.sample(sx, sy);
         }
         if let Some(Filtered::Grid([width, height], pixels)) = &self.filtered {
-            let sx = ((2 * x + 1) * width / (2 * grid[0])).min(width - 1);
-            let sy = ((2 * y + 1) * height / (2 * grid[1])).min(height - 1);
+            let sx = self.coordinate(0, x, grid[0], *width);
+            let sy = self.coordinate(1, y, grid[1], *height);
             let at = (sy * width + sx) * 6;
             return std::array::from_fn(|c| {
                 u16::from_le_bytes([pixels[at + c * 2], pixels[at + c * 2 + 1]])
             });
         }
         let f = &self.frame;
-        let sx = ((2 * x + 1) * f.width / (2 * grid[0])).min(f.width - 1);
-        let sy = ((2 * y + 1) * f.height / (2 * grid[1])).min(f.height - 1);
+        let sx = self.coordinate(0, x, grid[0], f.width);
+        let sy = self.coordinate(1, y, grid[1], f.height);
         self.sample_source(sx, sy)
+    }
+    fn coordinate(&self, axis: usize, value: usize, grid: usize, source: usize) -> usize {
+        self.view.map_or_else(
+            || ((2 * value + 1) * source / (2 * grid)).min(source - 1),
+            |view| view.coordinate(axis, value, grid, source),
+        )
     }
     /// Sample a coordinate already mapped into the immutable source raster.
     /// Raster consumers can compute their row/column maps once per frame.
@@ -337,16 +350,30 @@ impl ExposedFrame {
         let [x, y, w, h] = window;
         match &self.filtered {
             Some(Filtered::Readout(p) | Filtered::BinnedReadout(_, p)) => {
-                p.sample_offsets(grid, window, step)
+                if self.view.is_none() {
+                    p.sample_offsets(grid, window, step)
+                } else {
+                    let full = p.sample_offsets([width, height], [0, 0, width, height], 1)?;
+                    Some(SampleOffsets {
+                        pixels: full.pixels,
+                        columns: (x..(x + w).min(grid[0]))
+                            .step_by(step)
+                            .map(|v| full.columns[self.coordinate(0, v, grid[0], width)])
+                            .collect(),
+                        rows: (y..(y + h).min(grid[1]))
+                            .map(|v| full.rows[self.coordinate(1, v, grid[1], height)])
+                            .collect(),
+                    })
+                }
             }
             Some(Filtered::Full(p) | Filtered::Grid(_, p)) => Some(SampleOffsets {
                 pixels: p.clone(),
                 columns: (x..(x + w).min(grid[0]))
                     .step_by(step)
-                    .map(|x| ((2 * x + 1) * width / (2 * grid[0])).min(width - 1) * 6)
+                    .map(|x| self.coordinate(0, x, grid[0], width) * 6)
                     .collect(),
                 rows: (y..(y + h).min(grid[1]))
-                    .map(|y| ((2 * y + 1) * height / (2 * grid[1])).min(height - 1) * width * 6)
+                    .map(|y| self.coordinate(1, y, grid[1], height) * width * 6)
                     .collect(),
             }),
             None => None,
@@ -373,7 +400,7 @@ impl ExposedFrame {
         let response: Vec<u16> = self.response.iter().flatten().copied().collect();
         serde_json::json!({"frame":self.frame.fingerprint(),"exposure":self.exposure,
             "aperture_squared":self.aperture_squared,"color_sample_weights":self.color_sample_weights,
-            "focus_shift_mm":self.focus_shift_mm,"response_scale":self.response_scale,
+            "focus_shift_mm":self.focus_shift_mm,"view":self.view,"response_scale":self.response_scale,
             "filtered":self.filtered.as_ref().map(|pixels|fujimod_emulator_devices::fingerprint::bytes(&pixels.materialize())),
             "sample_dimensions":self.sample_dimensions(),
             "response":fujimod_emulator_devices::fingerprint::words16(&response)})

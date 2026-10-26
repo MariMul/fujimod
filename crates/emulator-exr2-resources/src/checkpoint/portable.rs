@@ -33,6 +33,7 @@ impl ResourceSnapshot {
                 .map(|(name, frames)| SensorRecord {
                     name: name.clone(),
                     edge: frames.0.edge(),
+                    view: frames.0.view(),
                     shared: frames.0.shared(),
                 })
                 .collect(),
@@ -92,12 +93,9 @@ impl Resources {
         let statistics = group(metadata.statistics)?;
         let nands = group(metadata.nands)?;
         let media = next()?;
-        let (wires, image_wires) = all_wires.into_iter().partition(|(name, _)| {
-            !self
-                .images
-                .as_ref()
-                .is_some_and(|part| part.has_wire(name))
-        });
+        let (wires, image_wires) = all_wires
+            .into_iter()
+            .partition(|(name, _)| !self.images.as_ref().is_some_and(|part| part.has_wire(name)));
         let mut sensors = BTreeMap::new();
         for record in &metadata.sensors {
             if record.edge.is_some_and(|edge| edge.index == 0) {

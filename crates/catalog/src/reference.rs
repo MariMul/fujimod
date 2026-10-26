@@ -1093,6 +1093,8 @@ pub struct SensorRadiometry {
     pub rolling_references: Vec<SensorRollingReference>,
     /// Invalid readouts while a sensor drive-mode change acquires sync.
     pub mode_change_frames: u8,
+    /// Full preview readout field in sensor command-window coordinates.
+    pub preview_field: Option<[u32; 2]>,
     /// Lens projection onto the sensor.
     pub projection: SensorProjection,
 }

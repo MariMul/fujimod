@@ -6,6 +6,7 @@ pub mod frames;
 pub mod mosaic;
 pub mod optics;
 mod recorded;
+pub mod view;
 
 pub use cadence::{FrameCadence, FrameEdge, FramePhases};
 pub use frames::{ImageFrames, StatisticsFrames, StatisticsSpan};
