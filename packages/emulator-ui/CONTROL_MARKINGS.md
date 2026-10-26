@@ -21,6 +21,14 @@ control's appearance by matching its manual name.
   (`COMMAND`, `FRONT DIAL`, `REAR DIAL`, `MAIN DIAL`, `SUB DIAL`, `EV`, `SPEED`,
   `APERTURE`, `FOCUS`, `MODE`, `DRIVE`, `ZOOM`).
 
+`ControlBehavior::Rocker { decrease, increase, press }` is a control tipped
+left or right that springs back to center, with an optional center press: the
+X70's command control. It is not a dial; a dial turns continuously through
+detents. A rocker wires one contact per direction, where a dial's rotation runs
+through an encoder. Every control modeled as a stepping `dial` is checked
+against its manual (rotate versus press left or right) and its wiring, and
+recorded as one or the other.
+
 The catalog check fails when a non-mechanical, non-touch control has none of
 `face`, `icon` or `short_name`, and when any field breaks the limits above.
 
@@ -48,6 +56,7 @@ export type ControlPart =
   | { kind: 'key'; marking: Marking }
   | { kind: 'shutter'; marking: Marking; stage?: 'half' | 'full' }
   | { kind: 'command'; marking: Marking; held?: 'press' | 'decrease' | 'increase' }
+  | { kind: 'rocker'; marking: Marking; held?: 'press' | 'decrease' | 'increase' }
   | { kind: 'pad'; marking: Marking; held?: 'up' | 'down' | 'left' | 'right' | 'press' }
   | { kind: 'positions'; marking: Marking; position?: string };
 
@@ -60,6 +69,7 @@ export function controlPart(control: PhysicalControl, action?: string, stage?: s
 | `button` | `key` | none |
 | `shutter` | `shutter` | `stage` |
 | `dial`, `ring` with steps | `command` | the action after `.` (`press`, `decrease`, `increase`) |
+| `rocker` | `rocker` | the action after `.` (`press`, `decrease`, `increase`) |
 | `pad` | `pad` | the direction or `press` |
 | `switch`, `lever`, positional `dial` or `ring` | `positions` | the position |
 
@@ -71,13 +81,19 @@ not located.
 
 The live components in `src/ui/controls.tsx` split into a drawing part and an
 interactive wrapper. The drawing parts move to `src/ui/control-faces.tsx`:
-`KeyFace`, `ShutterFace`, `CommandFace`, `PadFace` and `PositionsFace`. Each
+`KeyFace`, `ShutterFace`, `CommandFace`, `RockerFace`, `PadFace` and
+`PositionsFace`. Each
 takes a `ControlPart` and a `size: 'panel' | 'mini'`, and draws the held part
 with the panel's `glow` highlight, the one that marks a combo's controls when
 the combo is hovered. A key glows as a whole; a command control glows only at
 its held side, a D-pad only at the held direction. A mini command control
 whose press is held is drawn as its own icon instead: the knurled wheel seen
-edge-on with an arrow pushing into it, without the turn arrows. The panel's `Key`, `Shutter`, `Dial` and
+edge-on with an arrow pushing into it, without the turn arrows.
+
+`RockerFace` follows the owner's manual drawing of a rocker: a knurled band
+with a smooth tab at its center. On the panel, its left and right halves tip it
+and the tab presses it. A mini with its press held adds a solid arrow pushing
+into the tab; with a direction held, a curved arrow pointing to that side. The panel's `Key`, `Shutter`, `Dial` and
 D-pad/command nodes wrap these with `ControlSession` handlers, so a change to
 how a control looks reaches every place it appears.
 
@@ -142,7 +158,8 @@ layouts" section of `apps/web/EMULATOR_UI.md` is rewritten to point here.
 - Unit tests map every boot hold of every body through `controlPart` without
   error and cover each row of the mapping table.
 - Component tests draw the X70's `sd` and `firmware_update` sequence: the
-  pressed command dial with `COMMAND` beside it, the record key,
+  rocker with the push arrow into its tab and `COMMAND` beside it, the record
+  key,
   the DISP/BACK key, and the power switch at ON.
 - A development-only page at `/review/power-combos/` draws every body's SD
   sequence at phone width for visual review, titled with each body's model
