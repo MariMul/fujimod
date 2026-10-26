@@ -12,6 +12,7 @@ const controlKinds = [
   'divider',
   'space',
   'command',
+  'rocker',
   'dpad',
 ] as const;
 export const CONTROL_VARIANTS = ['dial', 'ticks', 'segment', 'shutter', 'key', 'record'] as const;

@@ -27,7 +27,7 @@ X70's command control. It is not a dial; a dial turns continuously through
 detents. A rocker wires one contact per direction, where a dial's rotation runs
 through an encoder. Every control modeled as a stepping `dial` is checked
 against its manual (rotate versus press left or right) and its wiring, and
-recorded as one or the other.
+recorded as one or the other. See the [completed mechanism review](../../catalog/CONTROL_MECHANISMS.md).
 
 The catalog check fails when a non-mechanical, non-touch control has none of
 `face`, `icon` or `short_name`, and when any field breaks the limits above.

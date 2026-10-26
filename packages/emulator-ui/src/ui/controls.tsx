@@ -6,7 +6,7 @@ import type { ControlNode, DevicePanel, NodePath, PowerCombo } from './layout';
 import type { LayoutEditor } from './layout-editor';
 import type { PhysicalControls } from 'fujimod';
 import type { JSX } from '@solidjs/web';
-import { KeyFace, ShutterFace, CommandFace, PadFace, PositionsFace } from './control-faces';
+import { KeyFace, ShutterFace, ControlFace, PositionsFace } from './control-faces';
 import { marking, type Marking } from './control-part';
 import { PowerComboKeys } from './power-combo';
 import type { DetentSound } from '../feedback/detent-sound';
@@ -721,7 +721,13 @@ function Node(props: {
       <Match when={props.node.kind === 'space'}>
         <div class="sp" />
       </Match>
-      <Match when={props.node.kind === 'command' || props.node.kind === 'dpad'}>
+      <Match
+        when={
+          props.node.kind === 'command' ||
+          props.node.kind === 'rocker' ||
+          props.node.kind === 'dpad'
+        }
+      >
         <div
           class="control-cluster"
           data-layout-path={layoutPath()}
@@ -745,36 +751,25 @@ function Node(props: {
               );
             };
             return (
-              <Show
-                when={props.node.kind === 'command'}
-                fallback={
-                  <PadFace
-                    part={{
-                      kind: 'pad',
-                      marking: panelMarking(
-                        props.session,
-                        props.node.bindings?.center ?? props.node.bindings?.up ?? '',
-                        props.node,
-                      ),
-                    }}
-                    size="panel"
-                    renderKey={renderKey}
-                  />
-                }
-              >
-                <CommandFace
-                  part={{
-                    kind: 'command',
-                    marking: panelMarking(
-                      props.session,
-                      props.node.bindings?.left ?? '',
-                      props.node,
-                    ),
-                  }}
-                  size="panel"
-                  renderKey={renderKey}
-                />
-              </Show>
+              <ControlFace
+                part={{
+                  kind:
+                    props.node.kind === 'dpad'
+                      ? 'pad'
+                      : props.node.kind === 'rocker'
+                        ? 'rocker'
+                        : 'command',
+                  marking: panelMarking(
+                    props.session,
+                    props.node.kind === 'dpad'
+                      ? (props.node.bindings?.center ?? props.node.bindings?.up ?? '')
+                      : (props.node.bindings?.left ?? ''),
+                    props.node,
+                  ),
+                }}
+                size="panel"
+                renderKey={renderKey}
+              />
             );
           })()}
         </div>

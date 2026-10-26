@@ -148,23 +148,19 @@
       "role": "command_control",
       "mechanical": false,
       "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": {
-            "kind": "debug_key",
-            "name": "CMD_LEFT"
-          },
-          "increase": {
-            "kind": "debug_key",
-            "name": "CMD_RIGHT"
-          }
+        "kind": "rocker",
+        "decrease": {
+          "kind": "debug_key",
+          "name": "CMD_LEFT"
+        },
+        "increase": {
+          "kind": "debug_key",
+          "name": "CMD_RIGHT"
         },
         "press": {
           "kind": "debug_key",
           "name": "CMD_PUSH"
-        },
-        "endless": true
+        }
       },
       "pushable": true,
       "positions": [],

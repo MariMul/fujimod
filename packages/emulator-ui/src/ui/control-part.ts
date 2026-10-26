@@ -8,6 +8,7 @@ export interface Marking {
 export type ControlPart =
   | { kind: 'key'; marking: Marking }
   | { kind: 'shutter'; marking: Marking; stage?: 'half' | 'full' }
+  | { kind: 'rocker'; marking: Marking; held?: 'press' | 'decrease' | 'increase' }
   | { kind: 'command'; marking: Marking; held?: 'press' | 'decrease' | 'increase' }
   | { kind: 'pad'; marking: Marking; held?: 'up' | 'down' | 'left' | 'right' | 'press' }
   | { kind: 'positions'; marking: Marking; position?: string };
@@ -51,6 +52,16 @@ export function controlPart(
         kind: 'pad',
         marking: mark,
         held: action as Extract<ControlPart, { kind: 'pad' }>['held'],
+      };
+    case 'rocker':
+      if (action === 'press') {
+        if (!behavior.press && !control.pushable) throw invalid();
+      } else if (action !== undefined && action !== 'decrease' && action !== 'increase')
+        throw invalid();
+      return {
+        kind: 'rocker',
+        marking: mark,
+        held: action as Extract<ControlPart, { kind: 'rocker' }>['held'],
       };
     case 'dial':
     case 'ring':

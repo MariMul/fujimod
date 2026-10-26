@@ -161,8 +161,8 @@
           "className": "c2",
           "children": [
             {
-              "kind": "command",
-              "caption": "CMD",
+              "kind": "rocker",
+              "caption": "COMMAND",
               "bindings": {
                 "left": "command_control.decrease",
                 "center": "command_control.press",

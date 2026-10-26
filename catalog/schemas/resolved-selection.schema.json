@@ -4336,6 +4336,51 @@
         },
         {
           "additionalProperties": false,
+          "description": "A spring-centered control with separate left and right contacts.",
+          "properties": {
+            "decrease": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "increase": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "const": "rocker",
+              "type": "string"
+            },
+            "press": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/InputBinding"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "A dial with positions or relative steps.",
           "properties": {
             "endless": {

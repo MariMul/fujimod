@@ -23,12 +23,14 @@ try {
   assert.equal(await page.locator('[data-body="xt5"] h2').innerText(), 'X-T5');
   assert.equal(await page.locator('[data-body="xt30ii"] h2').innerText(), 'X-T30 II');
   assert.equal(await page.locator('[data-body="xq"] h2').innerText(), 'XQ1 / XQ2');
-  assert.equal(await page.locator('[data-body="x70"] .knurl .side.glow').count(), 0);
+  assert.equal(await page.locator('[data-body="x70"] .rocker .side.glow').count(), 0);
   const glow = await page
-    .locator('[data-body="x70"] .knurl .tab.glow')
+    .locator('[data-body="x70"] .rocker .tab.glow')
     .evaluate((element) => getComputedStyle(element).boxShadow);
   assert.ok(glow.includes('255, 255, 255'), glow);
-  assert.equal(await page.locator('[data-body="x70"] .knurl .tab.glow').count(), 1);
+  assert.equal(await page.locator('[data-body="x70"] .rocker .tab.glow').count(), 1);
+  assert.equal(await page.locator('[data-body="x70"] .rocker-arrow .push').count(), 1);
+  assert.equal(await page.locator('[data-body="x70"] .dial-press').count(), 0);
   assert.equal(await page.locator('[data-body="x70"] .key.rec').count(), 1);
   assert.equal(await page.locator('[data-body="x70"] .seg .on').innerText(), 'ON');
   const overflow = await page.evaluate(() =>

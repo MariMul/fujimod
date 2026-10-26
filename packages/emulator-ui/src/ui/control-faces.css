@@ -611,3 +611,52 @@
   background: linear-gradient(#c7c7cc, #686870);
   color: #fff;
 }
+
+.rocker {
+  display: inline-block;
+  width: 168px;
+  position: relative;
+}
+.rocker .knurl {
+  border-radius: 45% 45% 46% 46% / 20% 20% 75% 75%;
+  height: 38px;
+  overflow: visible;
+}
+.rocker .knurl .side {
+  height: 38px;
+  background: transparent;
+}
+.rocker .knurl .tab {
+  height: 32px;
+  width: 38px;
+  border-radius: 3px 3px 8px 8px;
+  align-self: end;
+  margin-bottom: -3px;
+}
+.rocker .knurl .side.l {
+  border-radius: 50% 0 0 80%;
+}
+.rocker .knurl .side.r {
+  border-radius: 0 50% 80% 0;
+}
+.rocker.with-arrow {
+  padding-bottom: 36px;
+}
+.rocker-arrow {
+  position: absolute;
+  width: 168px;
+  height: 34px;
+  left: 0;
+  bottom: 0;
+  fill: #fff;
+  stroke: #141416;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.rocker-arrow.left {
+  transform: scaleX(-1);
+}
+.rocker .knurl .side.active,
+.rocker .knurl .tab.active {
+  background-color: #252528;
+}

@@ -275,6 +275,13 @@ pub enum ControlBehavior {
         #[serde(default)]
         press: Option<InputBinding>,
     },
+    /// A spring-centered control with separate left and right contacts.
+    Rocker {
+        decrease: Option<InputBinding>,
+        increase: Option<InputBinding>,
+        #[serde(default)]
+        press: Option<InputBinding>,
+    },
     /// A dial with positions or relative steps.
     Dial {
         /// Documented positions or relative step directions.
@@ -770,6 +777,15 @@ impl PhysicalControls {
                         bindings.push((id.clone(), binding));
                     }
                 }
+                ControlBehavior::Rocker {
+                    decrease,
+                    increase,
+                    press,
+                } => {
+                    for binding in [decrease, increase, press].into_iter().flatten() {
+                        bindings.push((id.clone(), binding));
+                    }
+                }
                 ControlBehavior::Button { press } => {
                     if let Some(press) = press {
                         bindings.push((id.clone(), press));
@@ -913,10 +929,14 @@ impl PhysicalControls {
                 if input.id.ends_with(".press")
                     && !matches!(
                         control.behavior,
-                        Some(ControlBehavior::Dial { .. } | ControlBehavior::Ring { .. })
+                        Some(
+                            ControlBehavior::Dial { .. }
+                                | ControlBehavior::Ring { .. }
+                                | ControlBehavior::Rocker { .. }
+                        )
                     )
                 {
-                    return Err(format!("{} is not a dial press", input.id));
+                    return Err(format!("{} has no center press", input.id));
                 }
                 if let Some(stage) = &input.stage {
                     if !matches!(&control.behavior, Some(ControlBehavior::Shutter { stages }) if stages.contains_key(&format!("{stage}_press")))
@@ -1125,7 +1145,9 @@ impl ControlBehavior {
                 Some(direction) => directions.get(&direction).and_then(Option::as_ref),
                 None => press.as_ref(),
             },
-            Self::Dial { press, .. } | Self::Ring { press, .. } => press.as_ref(),
+            Self::Dial { press, .. } | Self::Ring { press, .. } | Self::Rocker { press, .. } => {
+                press.as_ref()
+            }
             _ => None,
         };
         match operation {
@@ -1192,6 +1214,9 @@ impl ControlBehavior {
                 | Self::Ring {
                     motion: ControlMotion::Steps { decrease, increase },
                     ..
+                }
+                | Self::Rocker {
+                    decrease, increase, ..
                 } => Ok((
                     vec![
                         (if *delta < 0 { decrease } else { increase })
@@ -1582,6 +1607,49 @@ mod tests {
                 )
                 .is_err()
         );
+    }
+
+    #[test]
+    fn rocker_steps_and_center_use_independent_contacts() {
+        let binding = |name: &str| InputBinding::DebugKey { name: name.into() };
+        let rocker = ControlBehavior::Rocker {
+            decrease: Some(binding("LEFT")),
+            increase: Some(binding("RIGHT")),
+            press: Some(binding("PUSH")),
+        };
+        for (delta, name) in [(-3, "LEFT"), (2, "RIGHT")] {
+            let (inputs, asserted, count) = rocker
+                .bindings(None, &ControlOperation::Step { delta })
+                .unwrap();
+            assert_eq!(inputs, vec![&binding(name)]);
+            assert!(asserted);
+            assert_eq!(count, delta.unsigned_abs());
+        }
+        for (operation, expected) in [
+            (ControlOperation::Press, true),
+            (ControlOperation::Release, false),
+        ] {
+            let (inputs, asserted, count) = rocker.bindings(None, &operation).unwrap();
+            assert_eq!(inputs, vec![&binding("PUSH")]);
+            assert_eq!(asserted, expected);
+            assert_eq!(count, 1);
+        }
+        assert!(
+            rocker
+                .bindings(None, &ControlOperation::Step { delta: 0 })
+                .is_err()
+        );
+        let unbound = ControlBehavior::Rocker {
+            decrease: None,
+            increase: None,
+            press: None,
+        };
+        assert!(
+            unbound
+                .bindings(None, &ControlOperation::Step { delta: -1 })
+                .is_err()
+        );
+        assert!(unbound.bindings(None, &ControlOperation::Press).is_err());
     }
 
     #[test]

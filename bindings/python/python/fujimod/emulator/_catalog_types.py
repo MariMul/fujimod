@@ -1110,6 +1110,7 @@ type ControlBehavior = (
     | ControlBehaviorVariant5
     | ControlBehaviorVariant6
     | ControlBehaviorVariant7
+    | ControlBehaviorVariant8
 )
 
 
@@ -1130,31 +1131,38 @@ class ControlBehaviorVariant2(TypedDict, total=False):
 
 
 class ControlBehaviorVariant3(TypedDict, total=False):
+    decrease: NotRequired[InputBinding | None]
+    increase: NotRequired[InputBinding | None]
+    kind: Required[Literal["rocker"]]
+    press: NotRequired[InputBinding | None]
+
+
+class ControlBehaviorVariant4(TypedDict, total=False):
     endless: NotRequired[bool | None]
     kind: Required[Literal["dial"]]
     motion: Required[ControlMotion]
     press: NotRequired[InputBinding | None]
 
 
-class ControlBehaviorVariant4(TypedDict, total=False):
+class ControlBehaviorVariant5(TypedDict, total=False):
     endless: NotRequired[bool | None]
     kind: Required[Literal["ring"]]
     motion: Required[ControlMotion]
     press: NotRequired[InputBinding | None]
 
 
-class ControlBehaviorVariant5(TypedDict, total=False):
+class ControlBehaviorVariant6(TypedDict, total=False):
     kind: Required[Literal["switch"]]
     positions: Required[list[BoundPosition]]
 
 
-class ControlBehaviorVariant6(TypedDict, total=False):
+class ControlBehaviorVariant7(TypedDict, total=False):
     kind: Required[Literal["lever"]]
     momentary: NotRequired[bool | None]
     positions: Required[list[BoundPosition]]
 
 
-class ControlBehaviorVariant7(TypedDict, total=False):
+class ControlBehaviorVariant8(TypedDict, total=False):
     kind: Required[Literal["touch"]]
 
 

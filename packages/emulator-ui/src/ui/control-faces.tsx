@@ -14,7 +14,7 @@ interface FaceProps {
 function partLabel(part: ControlPart): string {
   const label = part.marking.face?.join('/') ?? part.marking.icon ?? part.marking.shortName ?? '';
   const held =
-    part.kind === 'command' || part.kind === 'pad'
+    part.kind === 'command' || part.kind === 'rocker' || part.kind === 'pad'
       ? part.held
       : part.kind === 'shutter'
         ? part.stage
@@ -183,6 +183,53 @@ function CommandKnurl(props: FaceProps) {
     </span>
   );
 }
+/** The manual's bowed knurled band and smooth center tab, with three contact targets. */
+export function RockerFace(props: FaceProps) {
+  const held = (action: string) => props.part.kind === 'rocker' && props.part.held === action;
+  return (
+    <span
+      class={`control-face ${props.size}`}
+      data-part="rocker"
+      role={props.size === 'mini' ? 'img' : undefined}
+      aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
+    >
+      <span
+        class={`rocker ${props.size === 'mini' && props.part.kind === 'rocker' && props.part.held ? 'with-arrow' : ''}`}
+      >
+        <span class="knurl">
+          <For each={['decrease', 'press', 'increase']}>
+            {(action) => (
+              <Actuator
+                render={props.renderKey}
+                action={action}
+                class={`key ${action === 'press' ? 'tab' : `side ${action === 'decrease' ? 'l' : 'r'}`} ${held(action) ? 'glow' : ''}`}
+              >
+                <Show when={action === 'press'}>
+                  <PrintedMark marking={props.part.marking} />
+                </Show>
+              </Actuator>
+            )}
+          </For>
+        </span>
+        <Show when={props.size === 'mini' && props.part.kind === 'rocker' && props.part.held}>
+          <svg
+            class={`rocker-arrow ${held('decrease') ? 'left' : ''}`}
+            viewBox="0 0 168 34"
+            aria-hidden="true"
+          >
+            <Show
+              when={held('press')}
+              fallback={<path class="curve" d="M40 5 Q84 34 128 5 L122 23 L119 13 Q84 38 40 15Z" />}
+            >
+              <path class="push" d="M84 1 68 18H77V32H91V18H100Z" />
+            </Show>
+          </svg>
+        </Show>
+      </span>
+      <ShortName {...props} />
+    </span>
+  );
+}
 export function PadFace(props: FaceProps) {
   const held = (action: string) => props.part.kind === 'pad' && props.part.held === action;
   const keys = [
@@ -274,6 +321,9 @@ export function ControlFace(props: FaceProps) {
       </Match>
       <Match when={props.part.kind === 'command'}>
         <CommandFace {...props} />
+      </Match>
+      <Match when={props.part.kind === 'rocker'}>
+        <RockerFace {...props} />
       </Match>
       <Match when={props.part.kind === 'pad'}>
         <PadFace {...props} />

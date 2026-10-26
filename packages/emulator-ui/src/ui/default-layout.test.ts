@@ -77,9 +77,9 @@ test('direction groups become one D-pad, centered on press or MENU/OK', () => {
   expect(x70[0]!.face).toEqual(['MENU', 'OK']);
 });
 
-test('step groups become command controls', () => {
+test('step groups distinguish rockers from command dials', () => {
   const x70 = nodes(defaultLayout(bodies['x70-110']!, physical('x70')).layout).find(
-    (n) => n.kind === 'command',
+    (n) => n.kind === 'rocker',
   );
   expect(x70!.bindings).toEqual({
     left: 'command_control.decrease',

@@ -729,13 +729,9 @@
       "role": null,
       "mechanical": false,
       "behavior": {
-        "kind": "pad",
-        "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
-        },
+        "kind": "rocker",
+        "decrease": null,
+        "increase": null,
         "press": null
       },
       "positions": [],

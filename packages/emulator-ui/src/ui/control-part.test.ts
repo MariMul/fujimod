@@ -29,13 +29,13 @@ test('each mechanism maps to its drawing and held part', () => {
     stage: 'full',
   });
   expect(controlPart(control('command_control'), 'press')).toEqual({
-    kind: 'command',
+    kind: 'rocker',
     marking: { shortName: 'COMMAND' },
     held: 'press',
   });
   for (const action of ['decrease', 'increase'])
     expect(controlPart(control('command_control'), action)).toMatchObject({
-      kind: 'command',
+      kind: 'rocker',
       held: action,
     });
   expect(controlPart(control('selector'), 'up')).toMatchObject({ kind: 'pad', held: 'up' });
@@ -52,22 +52,24 @@ test('each mechanism maps to its drawing and held part', () => {
     kind: 'positions',
     position: 'A',
   });
-  const dial = control('command_control').behavior;
-  if (dial?.kind !== 'dial') throw Error('Expected dial');
-  const ring: PhysicalControl = {
-    ...control('command_control'),
-    behavior: {
-      ...dial,
-      kind: 'ring',
-    },
-  };
-  expect(controlPart(ring, 'increase')).toMatchObject({ kind: 'command', held: 'increase' });
+  for (const kind of ['dial', 'ring'] as const) {
+    const rotating: PhysicalControl = {
+      ...control('command_control'),
+      behavior: {
+        kind,
+        motion: { kind: 'steps', decrease: null, increase: null },
+        press: null,
+        endless: true,
+      },
+    };
+    expect(controlPart(rotating, 'increase')).toMatchObject({ kind: 'command', held: 'increase' });
+  }
   expect(marking(control('disp_back_button'))).toEqual({ face: ['DISP', 'BACK'] });
 });
 
 test('unlocated pushable centers are admitted; undeclared actions and ids are refused', () => {
   const command = structuredClone(control('command_control'));
-  if (command.behavior?.kind !== 'dial') throw Error('Expected dial');
+  if (command.behavior?.kind !== 'rocker') throw Error('Expected rocker');
   command.behavior.press = null;
   expect(controlPart(command, 'press')).toMatchObject({ held: 'press' });
   command.pushable = false;

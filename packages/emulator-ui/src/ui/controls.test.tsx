@@ -371,11 +371,44 @@ test('the live panel uses catalog markings and runs combos through the session',
   );
   expect(host.querySelector('button[data-id="playback_button"] .key svg')).not.toBeNull();
   expect(host.textContent).not.toContain('OTHER');
-  expect(host.querySelector('.combo .dial-press.glow')).not.toBeNull();
+  expect(host.querySelector('.combo .rocker .tab.glow')).not.toBeNull();
   expect(host.querySelector('.combo .control-short-name')?.textContent).toBe('COMMAND');
   const button = host.querySelector<HTMLButtonElement>('.combo')!;
   button.dispatchEvent(new Event('pointerenter'));
   expect(session.active).toEqual(item.inputs.map((input) => input.id));
   button.click();
   expect(combo).toHaveBeenCalledWith(item);
+});
+
+test('rocker halves and tab send separate native contact presses and releases', async () => {
+  const ids = ['command_control.decrease', 'command_control.press', 'command_control.increase'];
+  const { host, engine, session } = mount(
+    ids.map((id) => ({ id, label: id, kind: 'button', supported: true })),
+    {
+      schema: 1,
+      body: 'x70',
+      combos: [],
+      layout: [{ kind: 'rocker', bindings: { left: ids[0]!, center: ids[1]!, right: ids[2]! } }],
+    },
+    undefined,
+    x70 as PhysicalControls,
+  );
+  const stop = session.listen();
+  session.powered = true;
+  flush();
+  expect(host.querySelector('[data-part="rocker"] .knurl')).toBeTruthy();
+  for (const [index, id] of ids.entries()) {
+    const button = host.querySelector<HTMLButtonElement>(`button[data-id="${id}"]`)!;
+    button.setPointerCapture = vi.fn();
+    button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    expect(engine.press).toHaveBeenLastCalledWith(id, undefined);
+    button.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }));
+    expect(engine.release).toHaveBeenLastCalledWith(id);
+    session.feedback([id], true);
+    flush();
+    expect(host.querySelectorAll('.rocker .glow')).toHaveLength(1);
+    expect(host.querySelector('.rocker .glow')?.getAttribute('data-id')).toBe(ids[index]);
+  }
+  expect(engine.rotate).not.toHaveBeenCalled();
+  stop();
 });

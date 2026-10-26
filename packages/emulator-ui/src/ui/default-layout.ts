@@ -16,7 +16,7 @@ export type InputGroup =
       center?: ControlInput;
     }
   | {
-      kind: 'command';
+      kind: 'command' | 'rocker';
       id: string;
       decrease: ControlInput;
       increase: ControlInput;
@@ -68,13 +68,20 @@ export function groupInputs(
     const increase = members.get('increase');
     if (
       behavior &&
-      (behavior.kind === 'dial' || behavior.kind === 'ring') &&
-      behavior.motion.kind === 'steps' &&
+      (behavior.kind === 'rocker' ||
+        ((behavior.kind === 'dial' || behavior.kind === 'ring') &&
+          behavior.motion.kind === 'steps')) &&
       decrease &&
       increase
     ) {
       const press = members.get('press');
-      groups.set(prefix, { kind: 'command', id: prefix, decrease, increase, press });
+      groups.set(prefix, {
+        kind: behavior.kind === 'rocker' ? 'rocker' : 'command',
+        id: prefix,
+        decrease,
+        increase,
+        press,
+      });
       for (const input of [decrease, increase, press]) if (input) grouped.add(input.id);
     }
   }
@@ -135,7 +142,7 @@ function groupNode(
     };
   }
   return {
-    kind: 'command',
+    kind: group.kind,
     caption: mark.shortName,
     face: mark.face,
     icon: mark.icon,

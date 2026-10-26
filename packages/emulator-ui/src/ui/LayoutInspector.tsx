@@ -128,7 +128,7 @@ function ControlSheet(props: { session: ControlSession; editor: LayoutEditor }) 
           <div class="sheet-title">Inputs</div>
           <div class="sheet-group">
             <Show
-              when={node().kind === 'dpad' || node().kind === 'command'}
+              when={node().kind === 'dpad' || node().kind === 'command' || node().kind === 'rocker'}
               fallback={
                 <InputPicker
                   label="Input"
