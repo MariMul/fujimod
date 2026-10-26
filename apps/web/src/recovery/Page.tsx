@@ -239,30 +239,6 @@ export default function Recovery() {
                     .
                   </p>
                   <p>Insert the card into the camera.</p>
-                  <aside class="recovery-led">
-                    <p>
-                      If the system image won’t boot, use this image to check your SD card boot
-                      instructions. It only turns on the rear green LED. If the light comes on, your
-                      camera is booting from the SD card.
-                    </p>
-                    <button
-                      class="launcher-button recovery-download recovery-led-download"
-                      disabled={building() || !card().greenLedFiles.length}
-                      onClick={() => {
-                        const firmware = chosen();
-                        if (firmware) void download(firmware, 'green-led');
-                      }}
-                    >
-                      {building() && downloadType() === 'green-led'
-                        ? 'Building…'
-                        : 'Download green LED image'}
-                    </button>
-                    <Show when={!card().greenLedFiles.length}>
-                      <p class="recovery-error">
-                        Green LED bindings are not available for the {card().model} yet.
-                      </p>
-                    </Show>
-                  </aside>
                 </>
               )}
             </Show>
@@ -305,6 +281,30 @@ export default function Recovery() {
                       />
                     )}
                   </Show>
+                  <aside class="recovery-led">
+                    <p>
+                      If the system image won’t boot, use this image to check your SD card boot
+                      instructions. It only turns on the rear green LED. If the light comes on, your
+                      camera is booting from the SD card. Remove the battery to turn the camera off.
+                    </p>
+                    <button
+                      class="launcher-button recovery-download recovery-led-download"
+                      disabled={building() || !result().greenLedFiles.length}
+                      onClick={() => {
+                        const firmware = chosen();
+                        if (firmware) void download(firmware, 'green-led');
+                      }}
+                    >
+                      {building() && downloadType() === 'green-led'
+                        ? 'Building…'
+                        : 'Download green LED image'}
+                    </button>
+                    <Show when={!result().greenLedFiles.length}>
+                      <p class="recovery-error">
+                        Green LED bindings are not available for the {result().model} yet.
+                      </p>
+                    </Show>
+                  </aside>
                 </>
               )}
             </Show>
