@@ -4,6 +4,7 @@ use crate::{
     rom_sd::{call, sequence},
 };
 use serde::Deserialize;
+pub mod lamp;
 const PROGRAM: &[u8] = include_bytes!("../assets/section-reader.generated.bin");
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

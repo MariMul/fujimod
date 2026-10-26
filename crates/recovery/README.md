@@ -50,6 +50,12 @@ EXR II's remaining preloaded section-5 read uses the source bytes appended to
 redirecting that call. The stock indexed reader and per-camera storage calls
 retain their original code.
 
+X-T1 5.52 cards light the green status LED at entry to the SD-loaded image,
+before the stock loader starts. Checked GPIO defaults and endpoint-call hooks
+keep it enabled until stock system initialization reports completion in the
+normal or update mode. The marker then turns green off and releases control
+to the stock LED driver. ROM loading precedes this marker.
+
 X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
 complete RAM image as `ffboot.bin`. The locator follows the update's single
 or initial/trained DDR-copy helper to choose the header. Three checked

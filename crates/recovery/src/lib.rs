@@ -8,6 +8,7 @@ mod exr_load_maps;
 pub mod rom_sd;
 pub use exr::Exr;
 mod exr2;
+pub use exr2::lamp::StartupLamp;
 pub mod xpp;
 mod xp4;
 mod xp5;
@@ -118,6 +119,8 @@ pub struct Recipe {
     pub plan: Option<Plan>,
     pub packaging: Option<Packaging>,
     pub exr: Option<Exr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup_lamp: Option<StartupLamp>,
     pub setup: Option<Setup>,
     pub xp5: Option<Xp5Setup>,
     pub cold_start: Option<ColdStart>,
@@ -348,6 +351,9 @@ impl Recipe {
                     let mut ram = image::transform(&inverted, plan)?;
                     if matches!(self.generation, Generation::Exr2) {
                         exr2::install(&inverted, plan, &mut ram)?;
+                        if let Some(lamp) = &self.startup_lamp {
+                            lamp.install(plan, &mut ram)?;
+                        }
                     } else {
                         xpp::install(&inverted, plan, &mut ram)?;
                     }

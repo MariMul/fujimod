@@ -10453,7 +10453,85 @@
         "sha256": "6eda63c0d8bcc5da7d388ccafa49cc5da2e0e5b0050890d3efa666f4d8777a83"
       }
     },
-    "missing": []
+    "missing": [],
+    "startup_lamp": {
+      "gpio": 4294480832,
+      "pin": 2,
+      "reset_vector": 32,
+      "reset": {
+        "address": 6144,
+        "size": 84,
+        "sha256": "cff034ce20b35f10d953901fa6be12ad5afcae96e2d00d0911e556619763b9e7"
+      },
+      "descriptor": {
+        "address": 10958636,
+        "size": 56,
+        "sha256": "b306f02a9171e1843017fe6c62a754b8aeb7444446360c3bb845c1c07bdc471d"
+      },
+      "writer": {
+        "address": 8892612,
+        "size": 400,
+        "sha256": "ff1f84b30a2eff030c3ed902a9221fdda924d0520f015d4e1d4a765fd5ce4097"
+      },
+      "ready": [
+        {
+          "address": 9587984,
+          "size": 168,
+          "sha256": "e18b983ec1541d8985e28afcb53bd62de29ab763916b7c43353272b87f6ea7b2"
+        },
+        {
+          "address": 9588204,
+          "size": 68,
+          "sha256": "c5710ecf4effe4180c2dd967fe5464aa5f928d6f69a04c83a7fc91152ea43347"
+        }
+      ],
+      "ready_slots": [
+        11387624,
+        11387632
+      ],
+      "writes": [
+        8893264,
+        8893660,
+        8893688,
+        8893700,
+        8893720,
+        8893732,
+        8893756,
+        8893772,
+        8894060,
+        8894104,
+        8894444,
+        8894700,
+        8894900,
+        8894920,
+        8894968,
+        8894988,
+        8895036,
+        8895056,
+        8895260,
+        8895312,
+        8895348,
+        8895396,
+        8895416,
+        8895492,
+        8895540,
+        8895576,
+        8895656,
+        8895712,
+        8895748,
+        8895952,
+        8896036,
+        8896072
+      ],
+      "gpio_edits": [
+        {
+          "address": 7336,
+          "old": 4294901773,
+          "new": 4294901769,
+          "what": "Keep the green LED low during loader GPIO initialization"
+        }
+      ]
+    }
   },
   {
     "firmware_id": "xt10-131",
