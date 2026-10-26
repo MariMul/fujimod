@@ -60,7 +60,15 @@ banner above them reads "Add base firmware to continue" with an arrow toward
 Base firmware. On a phone, the banner and rows are hidden until firmware is
 chosen.
 
-**Right, top: Base firmware.** Heading "Base firmware", description
+Run rows resume the most recently used saved camera made from the selected
+firmware with the same FujiMod setting (`CameraRecord.modEnabled`), or start a
+new one. When such a camera exists, the row's subtitle ends with a
+"Start fresh" link that starts a new camera instead. The separate Resume/New
+camera lists and the pop-up choice dialog are removed.
+
+**Right, top: Base firmware.** One component, `FirmwarePicker`, shared with
+the Recovery page: saved firmware rows, the drop zone and file input, adding
+to the shared firmware library and selecting. Heading "Base firmware", description
 "FujiMod is assembled in your browser by patching official firmware you
 provide". Saved firmware uses Recovery's radio rows with the subtitle
 "Saved in your browser • Remove". Below the group, a separate rounded drop
