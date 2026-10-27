@@ -79,7 +79,7 @@ for (const type of [chromium, webkit]) {
     if (type === chromium) {
       const session = await context.newCDPSession(page);
       // Swipe on the steps: the supported-camera list scrolls on its own.
-      const steps = (await page.locator('.firmware-drop').boundingBox())!;
+      const steps = (await page.locator('.file-drop').boundingBox())!;
       const x = steps.x + 8;
       const y = steps.y + steps.height / 2;
       await session.send('Input.dispatchTouchEvent', {
@@ -99,7 +99,7 @@ for (const type of [chromium, webkit]) {
     await page.waitForFunction((previous) => scrollY > previous + 50, before);
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     const chooser = page.waitForEvent('filechooser');
-    await page.locator('label.firmware-choose').click();
+    await page.locator('label.file-drop-choose').click();
     await (await chooser).setFiles([]);
     await page.screenshot({ path: new URL(`${type.name()}-idle.png`, output).pathname });
 

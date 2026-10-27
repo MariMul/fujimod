@@ -1,6 +1,7 @@
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import type { FirmwareLibrary } from './firmware-library';
+import { FileDrop } from '../ui/file-drop';
 import './firmware-picker.css';
 
 export function FirmwarePicker(props: {
@@ -10,7 +11,6 @@ export function FirmwarePicker(props: {
   heading?: string;
   description?: string;
 }) {
-  const [dragging, setDragging] = createSignal(false);
   const disabled = () => props.disabled || props.library.busy();
   return (
     <section class="base-firmware-picker" aria-label={props.heading ?? 'Base firmware'}>
@@ -58,48 +58,16 @@ export function FirmwarePicker(props: {
           </For>
         </div>
       </Show>
-      <div
-        class={{
-          'firmware-drop': true,
-          'firmware-drop-empty': !props.library.entries().length,
-          dragging: dragging(),
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setDragging(false);
-          if (!disabled()) void props.library.add(event.dataTransfer?.files[0]);
-        }}
-      >
-        <span class="firmware-add-icon">
-          <Icon name="plus" size={20} />
-        </span>
-        <strong>{props.library.busy() ? 'Checking firmware…' : 'Add official firmware'}</strong>
-        <span>
-          Drop a Fujifilm .DAT file here, or{' '}
-          <label class="firmware-choose" for={props.inputId}>
-            choose a file
-          </label>
-        </span>
-        <input
-          class="visually-hidden"
-          id={props.inputId}
-          type="file"
-          accept=".dat,.DAT,application/octet-stream"
-          aria-label="Choose official Fujifilm firmware"
-          disabled={disabled()}
-          onChange={(event) => {
-            void props.library.add(event.currentTarget.files?.[0]);
-            event.currentTarget.value = '';
-          }}
-        />
-      </div>
+      <FileDrop
+        inputId={props.inputId}
+        title={props.library.busy() ? 'Checking firmware…' : 'Add official firmware'}
+        prompt="Drop a Fujifilm .DAT file here, or"
+        accept=".dat,.DAT,application/octet-stream"
+        label="Choose official Fujifilm firmware"
+        highlighted={!props.library.entries().length}
+        disabled={disabled()}
+        onFile={(file) => void props.library.add(file)}
+      />
       <Show when={props.library.error()}>
         <p class="firmware-error" role="alert">
           {props.library.error()}

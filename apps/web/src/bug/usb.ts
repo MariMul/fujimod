@@ -1,6 +1,15 @@
 import { initialize, usb, type Device, type Session } from 'fujimod';
 import { retrieveReport, removeReport } from './transfer';
 import type { ReportLink } from './report-link';
+/** Whole-range reads and writes, split into commands no larger than the
+ * camera's advertised packet size (256 bytes on the issue QR screen). */
+function memory(session: Session) {
+  return {
+    read: (address: number, count: number) => usb.memory.readRange(session, address, count),
+    write: (address: number, bytes: Uint8Array<ArrayBuffer>) =>
+      usb.memory.writeRange(session, address, bytes),
+  };
+}
 /** The camera chosen for a report, with its ff80 interfaces. */
 export interface CameraChoice {
   name: string;
@@ -51,14 +60,7 @@ export class ReportUsb implements ReportConnection {
     }
     const session = this.session;
     try {
-      const report = await retrieveReport(
-        {
-          read: (address, count) => session.readMemory(address, count),
-          write: (address, bytes) => session.writeMemory(address, bytes),
-        },
-        link,
-        progress,
-      );
+      const report = await retrieveReport(memory(session), link, progress);
       this.verified = { ...link };
       return report;
     } catch (error) {
@@ -79,13 +81,7 @@ export class ReportUsb implements ReportConnection {
     )
       throw Error('Read and verify this report before deleting it.');
     if (!session) throw Error('Camera disconnected.');
-    await removeReport(
-      {
-        read: (address, count) => session.readMemory(address, count),
-        write: (address, bytes) => session.writeMemory(address, bytes),
-      },
-      link,
-    );
+    await removeReport(memory(session), link);
     this.verified = undefined;
   }
   /** Close this page's report session so Dev Tools can take the camera. */

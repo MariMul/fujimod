@@ -4,6 +4,7 @@ import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { catalog as reference, initialize } from 'fujimod';
 import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 
 import { recoveryCameras, recoveryPlan } from './identify';
 import type { LibraryFirmware } from '../cameras/store';
@@ -21,10 +22,6 @@ import './recovery.css';
 import { firmwareDownloadName } from '../firmware-download';
 
 declare const __FUJIMOD_BUILD_SHA__: string;
-
-function message(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export default function Recovery() {
   const library = createFirmwareLibrary();
@@ -57,7 +54,7 @@ export default function Recovery() {
         setCameras(recoveryCameras());
         setCatalogReady(true);
       })
-      .catch((caught: unknown) => setError(message(caught)));
+      .catch((caught: unknown) => setError(shownError(caught)));
     setSystem(detectSystem(navigator.userAgent));
   });
 
@@ -85,7 +82,7 @@ export default function Recovery() {
         ),
       );
     } catch (caught) {
-      setBuildError(message(caught));
+      setBuildError(shownError(caught));
     } finally {
       setBuilding(false);
     }

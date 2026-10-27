@@ -38,6 +38,7 @@
     "./ui/local-reports": "./src/ui/local-reports.ts",
     "./ui/report-delivery": "./src/ui/report-delivery.ts",
     "./ui/segmented-control.css": "./src/ui/segmented-control.css",
+    "./ui/shown-error": "./src/ui/shown-error.ts",
     "./ui/simulator-feedback": "./src/ui/simulator-feedback.ts",
     "./ui/speed": "./src/ui/speed.tsx",
     "./viewer/Overlays": "./src/viewer/Overlays.tsx",

@@ -23,7 +23,7 @@ try {
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
   const chooser = page.waitForEvent('filechooser');
-  await page.locator('label.firmware-choose').click();
+  await page.locator('label.file-drop-choose').click();
   await (await chooser).setFiles(dat);
   await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
   async function ready() {

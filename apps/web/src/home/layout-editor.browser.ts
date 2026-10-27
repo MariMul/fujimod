@@ -24,7 +24,7 @@ async function ready(page: Page, timeout = 240000) {
       live: document.querySelector('#live-label')?.textContent,
       status: document.querySelector('#status')?.textContent,
       fault: document.querySelector('#fault-raw')?.textContent,
-      prompt: document.querySelector('label.firmware-choose')?.textContent,
+      prompt: document.querySelector('label.file-drop-choose')?.textContent,
       dialogs: [...document.querySelectorAll('dialog')].map((dialog) => ({
         open: dialog.open,
         text: dialog.innerText,
@@ -178,7 +178,7 @@ try {
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
   const chooser = page.waitForEvent('filechooser');
-  await page.locator('label.firmware-choose').click();
+  await page.locator('label.file-drop-choose').click();
   await (await chooser).setFiles(firmwarePath);
   await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
   await ready(page, 60000);

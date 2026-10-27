@@ -76,7 +76,7 @@ try {
       await page.goto(url);
       console.log(`${firmware.id}: choosing DAT`);
       const chooser = page.waitForEvent('filechooser');
-      await page.locator('label.firmware-choose').click();
+      await page.locator('label.file-drop-choose').click();
       await (await chooser).setFiles(files[firmware.id]);
       await page
         .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
