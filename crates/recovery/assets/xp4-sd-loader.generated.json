@@ -94,16 +94,16 @@
       ]
     ]
   },
-  "card": {
+  "preloaded": {
     "address": 1703936,
     "offset": 916,
-    "size": 548,
+    "size": 888,
     "symbols": {
-      "card_firmware_copy": 0,
-      "card_firmware_bytes": 320,
-      "card_firmware_bootstrap": 276,
-      "card_firmware_config": 516,
-      "card_firmware_indexed": 352
+      "preloaded_copy_bytes": 0,
+      "preloaded_config": 680,
+      "preloaded_bytes": 392,
+      "preloaded_discard": 384,
+      "preloaded_indexed": 476
     }
   }
 }
