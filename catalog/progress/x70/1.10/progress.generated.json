@@ -5,8 +5,8 @@
   "model": "X70",
   "version": "1.10",
   "facts": {
-    "located": 35,
-    "total": 35
+    "located": 36,
+    "total": 36
   },
   "boot_rom": "X70",
   "stages": {
@@ -17,9 +17,9 @@
     "camera-identity": "pass",
     "camera-snapshot": "pass",
     "camera-menu": "pass",
-    "mod-target": "not-run",
-    "mod-build": "not-run",
-    "sd-image": "not-run",
+    "mod-target": "pass",
+    "mod-build": "pass",
+    "sd-image": "pass",
     "sd-boot": "not-run"
   },
   "stock": {
@@ -29,18 +29,24 @@
       "total": 1
     },
     "record-movie": {
-      "result": "stale"
+      "result": "fail",
+      "passed": 0,
+      "total": 2
     },
     "control-input": {
       "result": "partial",
-      "passed": 78,
-      "total": 84
+      "passed": 77,
+      "total": 78
     },
     "focus": {
-      "result": "stale"
+      "result": "partial",
+      "passed": 3,
+      "total": 4
     },
     "lens": {
-      "result": "stale"
+      "result": "fail",
+      "passed": 0,
+      "total": 3
     },
     "film-simulations": {
       "result": "fail",
@@ -48,15 +54,19 @@
       "total": 11
     },
     "playback-picture": {
-      "result": "partial",
-      "passed": 2,
+      "result": "pass",
+      "passed": 3,
       "total": 3
     },
     "playback-movie": {
-      "result": "stale"
+      "result": "fail",
+      "passed": 0,
+      "total": 4
     },
     "develop-raw": {
-      "result": "stale"
+      "result": "fail",
+      "passed": 0,
+      "total": 3
     },
     "sd": {
       "result": "pass",
@@ -64,7 +74,9 @@
       "total": 2
     },
     "control-layout": {
-      "result": "pass"
+      "result": "partial",
+      "passed": 20,
+      "total": 21
     }
   },
   "mods": {
@@ -81,10 +93,12 @@
     "film-editor": "not-run",
     "highlight-meter": "not-run",
     "raw-view": "not-run",
+    "f-log": "not-run",
     "raw-exposure": "not-run",
     "hdmi-rec": "not-run",
     "controls": "not-run",
     "menu-theme": "not-run",
+    "overlay-opacity": "not-run",
     "menu-tap": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
