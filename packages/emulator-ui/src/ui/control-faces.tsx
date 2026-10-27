@@ -109,7 +109,7 @@ export function KeyFace(props: FaceProps & { hint?: string }) {
     </span>
   );
 }
-export function ShutterFace(props: FaceProps & { left?: string }) {
+export function ShutterFace(props: FaceProps) {
   const stage = () => (props.part.kind === 'shutter' ? props.part.stage : undefined);
   return (
     <span
@@ -119,14 +119,26 @@ export function ShutterFace(props: FaceProps & { left?: string }) {
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
     >
-      <span class={`slide ${stage() ?? ''}`}>
-        <span
-          class={['thumb', { glow: props.size === 'mini' && props.held }]}
-          style={{ left: props.left }}
-        >
-          {stage()?.toUpperCase()}
+      <span class="seg wide">
+        <span class="vals">
+          <For each={['half', 'full'] as const}>
+            {(value) => (
+              <Actuator
+                render={props.renderKey}
+                action={value}
+                // A rendered panel key styles its own stage; a changing class here
+                // would rebuild that key and drop the pointer holding it.
+                class={
+                  props.renderKey || stage() !== value
+                    ? ''
+                    : `on ${props.size === 'mini' && props.held ? 'glow' : ''}`
+                }
+              >
+                {value.toUpperCase()}
+              </Actuator>
+            )}
+          </For>
         </span>
-        <span class="end">FULL</span>
       </span>
       <ShortName {...props} />
     </span>

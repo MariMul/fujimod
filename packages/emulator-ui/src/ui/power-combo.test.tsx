@@ -35,7 +35,7 @@ test('service sequence draws USB, the held selector direction, and full shutter 
   flush();
   expect(host.querySelector('[aria-label="USB connected"]')).toBeTruthy();
   expect(host.querySelector('.dpad .u.glow')).toBeTruthy();
-  expect(host.querySelector('.slide.full')).toBeTruthy();
+  expect(host.querySelector('[data-part="shutter"] [data-action="full"].on')).toBeTruthy();
   dispose();
 });
 

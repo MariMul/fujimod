@@ -267,61 +267,6 @@
     0 1px 0 #6e6e73 inset,
     0 2px 4px rgba(0, 0, 0, 0.6);
 }
-.slide {
-  position: relative;
-  height: 38px;
-  border-radius: 11px;
-  background: #141416;
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.85),
-    inset 0 -1px 0 #2a2a2d;
-}
-.slide .end {
-  position: absolute;
-  right: 14px;
-  top: 0;
-  bottom: 0;
-  display: grid;
-  place-items: center;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #5a5a5e;
-}
-.slide .thumb {
-  position: absolute;
-  left: 3px;
-  top: 3px;
-  bottom: 3px;
-  width: 64px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  z-index: 1;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #fff;
-  background: linear-gradient(#e5e5ea, #a1a1a6);
-  box-shadow:
-    0 1px 0 #fff inset,
-    0 2px 5px rgba(0, 0, 0, 0.6);
-}
-.slide.half .thumb {
-  background: linear-gradient(#a1a1a6, #c7c7cc);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
-  color: #1c1c1e;
-}
-.slide.full .thumb {
-  left: auto;
-  right: 3px;
-  background: linear-gradient(#a1a1a6, #c7c7cc);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
-  color: #1c1c1e;
-}
-.slide.full .end {
-  opacity: 0;
-}
 .key.rec i {
   width: 18px;
   height: 18px;
@@ -374,18 +319,6 @@
 }
 .dial.ticks .vals {
   width: 100%;
-}
-.slide {
-  touch-action: none;
-  user-select: none;
-  cursor: ew-resize;
-}
-.slide .thumb {
-  color: #1c1c1e;
-}
-.slide .thumb,
-.slide .end {
-  pointer-events: none;
 }
 .key.wifi {
   position: relative;
@@ -472,10 +405,6 @@
 .control-face .dpad {
   display: inline-block;
 }
-.control-face .slide {
-  display: inline-block;
-  width: 142px;
-}
 .control-face .dial {
   display: block;
   width: 100%;
@@ -484,9 +413,6 @@
 .control-face[data-size='panel'][data-part='positions'],
 .control-face[data-size='panel'][data-part='shutter'] {
   display: flex;
-  width: 100%;
-}
-.control-face[data-size='panel'] .slide {
   width: 100%;
 }
 .key-wrapper {
@@ -509,8 +435,7 @@
 .key-wrapper.glow .key {
   outline: 2px solid #fff;
 }
-.dial-wrapper,
-.shutter-wrapper {
+.dial-wrapper {
   width: 100%;
   touch-action: none;
   cursor: ew-resize;
@@ -548,6 +473,13 @@
 }
 .control-face .seg button {
   cursor: pointer;
+}
+/* Shutter stages act while held: no text selection, scrolling or long-press menu. */
+.control-face[data-part='shutter'] .seg button {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .control-face .seg button:disabled {
   opacity: 0.35;
