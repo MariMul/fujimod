@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Camera, CameraModel } from '../camera-model';
-import { bulkSelection, captureRanges, contiguous, type CaptureSet } from './capture';
+import { bulkSelection, canceled, captureRanges, contiguous, type CaptureSet } from './capture';
 import { controlDiff, type ControlDiff } from './mapping';
 import { CapturePanel, emptySet } from './CapturePanel';
 import { slug, type AddFile } from '../../files/shelf';
@@ -36,6 +36,7 @@ export function MapControls(props: {
   const [running, setRunning] = createSignal(false);
   const [progress, setProgress] = createSignal({ done: 0, total: 1 });
   const [failure, setFailure] = createSignal('');
+  let abort: AbortController | undefined;
   const [result, setResult] = createSignal<{ name: string; base: number; diff: ControlDiff }>();
   const set = () => props.set ?? emptySet(selection()!.firmware.id);
   const name = () => {
@@ -57,9 +58,17 @@ export function MapControls(props: {
     if (!camera || !current || !firmwareId || !name() || !available()) return;
     setRunning(true);
     setFailure('');
+    abort = new AbortController();
+    const signal = abort.signal;
     try {
       const read = await props.model.withSession(camera.id, 'Map controls', (session) =>
-        captureRanges(session, firmwareId, current, (done, total) => setProgress({ done, total })),
+        captureRanges(
+          session,
+          firmwareId,
+          current,
+          (done, total) => setProgress({ done, total }),
+          signal,
+        ),
       );
       const taken = [...captures(), contiguous(read)];
       if (taken.length < STEPS.length) {
@@ -116,7 +125,7 @@ export function MapControls(props: {
       setCustom('');
       setNote('');
     } catch (error) {
-      setFailure(shownError(error));
+      if (!canceled(error)) setFailure(shownError(error));
     } finally {
       setRunning(false);
     }
@@ -228,6 +237,9 @@ export function MapControls(props: {
           <Show when={step() === 'held'}>
             <span class="cap-dim">Keep holding</span>
           </Show>
+          <button class="wb-btn" onClick={() => abort?.abort()}>
+            Cancel
+          </button>
         </div>
       </Show>
       <div class="wb-pair">
