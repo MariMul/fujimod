@@ -209,6 +209,7 @@ FUJIMOD_PATCHES=/path/to/patch-release/artifacts
 FUJIMOD_RELEASE_NOTES=/path/to/editable/release-notes
 FUJIMOD_DAT=/path/to/local/FPUPDATE.DAT
 FUJIMOD_REVIEW_DIR=/absolute/path/outside/this/repository/reviews
+FUJIMOD_MEDIA_ROOT=/absolute/path/to/recording-workspace
 ```
 
 `FUJIMOD_RELEASE_NOTES` serves `<release-tag>.md` directly from that directory
@@ -220,6 +221,17 @@ A missing configured notes file returns an error instead of serving the artifact
 server only. Keep review files outside the repository; the build rejects
 `public/review/`. `node --test scripts/local-review-files.test.ts` checks the
 mount and production build guard.
+
+`FUJIMOD_MEDIA_ROOT` enables development media from a recording workspace.
+The homepage previews `media/frontier/site` when available, otherwise
+`media/current`, and reloads when the manifest changes. The server exposes
+`/media/frontier/`, `/media/current/`, `/media/builds/<id>/` and recording output
+files at their workspace-relative paths. Recording directories are identified
+by `guide.json` or a retained `.inputs/receipt.json`; captured input trees stay
+unserved. Media is read directly and video requests support byte ranges.
+`FUJIMOD_MEDIA` remains an explicit standalone media directory for staging and
+builds. `node --test scripts/local-media.test.ts` checks the development routes
+and manifest refresh.
 
 The staged runtime directory contains `catalog.json` and firmware-ID folders
 with `camera.wasm`, `camera.mjs`, `wasm.json` and
