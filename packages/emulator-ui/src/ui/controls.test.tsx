@@ -410,7 +410,7 @@ test('rocker halves and tab send separate native contact presses and releases', 
   const stop = session.listen();
   session.powered = true;
   flush();
-  expect(host.querySelector('[data-part="rocker"] .rocker-panel-drawing')).toBeTruthy();
+  expect(host.querySelector('[data-part="rocker"] .knurl')).toBeTruthy();
   for (const [index, id] of ids.entries()) {
     const button = host.querySelector<HTMLButtonElement>(`button[data-id="${id}"]`)!;
     button.setPointerCapture = vi.fn();
@@ -420,8 +420,10 @@ test('rocker halves and tab send separate native contact presses and releases', 
     expect(engine.release).toHaveBeenLastCalledWith(id);
     session.feedback([id], true);
     flush();
-    expect(host.querySelectorAll('.rocker-panel .glow')).toHaveLength(1);
-    expect(host.querySelector('.rocker-panel .glow')?.getAttribute('data-id')).toBe(ids[index]);
+    expect(host.querySelectorAll('[data-part="rocker"] .glow')).toHaveLength(1);
+    expect(host.querySelector('[data-part="rocker"] .glow')?.getAttribute('data-id')).toBe(
+      ids[index],
+    );
   }
   expect(engine.rotate).not.toHaveBeenCalled();
   stop();

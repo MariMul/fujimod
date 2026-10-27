@@ -2,7 +2,7 @@ import { For, Show, Switch, Match } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from './icons';
 import type { ControlPart, Marking } from './control-part';
-import { CommandDialDrawing, RockerDrawing, RockerPanelDrawing } from './control-drawings';
+import { CommandDialDrawing, RockerDrawing } from './control-drawings';
 import './control-faces.css';
 
 type RenderKey = (action: string, className: string, content: JSX.Element) => JSX.Element;
@@ -149,7 +149,8 @@ export function CommandFace(props: FaceProps) {
   );
 }
 function CommandKnurl(props: FaceProps) {
-  const held = (action: string) => props.part.kind === 'command' && props.part.held === action;
+  const held = (action: string) =>
+    (props.part.kind === 'command' || props.part.kind === 'rocker') && props.part.held === action;
   return (
     <span class="cmd">
       <span class="knurl">
@@ -174,9 +175,8 @@ function CommandKnurl(props: FaceProps) {
     </span>
   );
 }
-/** A rocker: on the panel, three contact targets; as a mini, the manual's drawing. */
+/** A rocker: on the panel, the command control's knurl with its sides and tab; as a mini, the manual's drawing. */
 export function RockerFace(props: FaceProps) {
-  const held = (action: string) => props.part.kind === 'rocker' && props.part.held === action;
   return (
     <span
       class="control-face"
@@ -185,23 +185,7 @@ export function RockerFace(props: FaceProps) {
       role={props.size === 'mini' ? 'img' : undefined}
       aria-label={props.size === 'mini' ? partLabel(props.part) : undefined}
     >
-      <Show
-        when={props.size === 'mini'}
-        fallback={
-          <span class="rocker-panel control-drawing">
-            <RockerPanelDrawing />
-            <For each={['decrease', 'press', 'increase']}>
-              {(action) => (
-                <Actuator
-                  render={props.renderKey}
-                  action={action}
-                  class={`zone zone-${action} ${held(action) ? 'glow' : ''}`}
-                />
-              )}
-            </For>
-          </span>
-        }
-      >
+      <Show when={props.size === 'mini'} fallback={<CommandKnurl {...props} />}>
         <RockerDrawing held={props.part.kind === 'rocker' ? props.part.held : undefined} />
       </Show>
       <ShortName {...props} />
