@@ -13,6 +13,15 @@ pub enum TransferStage {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("the camera already has an open service session")]
+    SessionAlreadyOpen,
+    #[error("callback slot restoration failed: {0}")]
+    CallbackRestoration(Box<Error>),
+    #[error("callback invocation failed: {source}; slot restoration failure: {restoration:?}")]
+    CallbackInvocation {
+        source: Box<Error>,
+        restoration: Option<Box<Error>>,
+    },
     #[error(transparent)]
     Proxy(#[from] fujimod_usb_proxy::Error),
     #[error("USB device access failed: {0}")]

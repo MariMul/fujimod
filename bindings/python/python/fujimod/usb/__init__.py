@@ -69,6 +69,46 @@ if TYPE_CHECKING:
     from .data import UploadReply
 
 
+# Native-only USB operations; the browser adapter has its own connection owner.
+if TYPE_CHECKING:
+
+    class Connection:
+        @staticmethod
+        async def open(
+            device: Device,
+            interface: InterfaceSelection,
+            *,
+            timeout_ms: int = 5000,
+            max_reply_bytes: int = 8388608,
+        ) -> Connection: ...
+        async def reclaim_session(self) -> bool: ...
+        async def begin_session(
+            self,
+            limits: FirmwareLimits,
+            *,
+            trace: tracing.Trace | None = None,
+        ) -> Session: ...
+
+    class CallbackInvocation:
+        def __init__(
+            self,
+            slot_address: int,
+            required: Buffer,
+            value: Buffer,
+            trigger: research.Request,
+            limits: FirmwareLimits,
+            *,
+            replies: Sequence[Buffer] | None = None,
+        ) -> None: ...
+        def require(
+            self, address: int, length: int, accepted: Sequence[Buffer]
+        ) -> None: ...
+        def write(
+            self, address: int, accepted: Sequence[Buffer], data: Buffer
+        ) -> None: ...
+        def synchronize(self, commands: CommandSequence) -> None: ...
+
+
 class CommandSequence(Handle["JsCommandSequence"]):
     def __init__(self) -> None:
         self._js = call(jsusb.CommandSequence.new)
@@ -242,6 +282,12 @@ class Session(Handle["JsSession"]):
         return decode(
             await await_result(call(method, *args, **kwargs), self._js.cancelPending)
         )
+
+    if TYPE_CHECKING:
+
+        async def invoke_callback(
+            self, invocation: CallbackInvocation
+        ) -> bytes | None: ...
 
     async def ping(self) -> bytes:
         return await self._call(self._js.ping, buffer_out)

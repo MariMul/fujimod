@@ -8,7 +8,9 @@ use std::{
     task::{Context, Poll},
 };
 
+mod callback;
 mod commands;
+pub(super) mod connection;
 mod install;
 mod operations;
 mod reader;
@@ -182,11 +184,10 @@ async fn interfaces(device: Device) -> PyResult<Vec<InterfaceSelection>> {
         })
         .map_err(error)
 }
-pub(super) fn register(
-    py: Python<'_>,
-    module: &Bound<'_, PyModule>,
-) -> PyResult<()> {
+pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<AsyncSession>()?;
+    callback::register(module)?;
+    connection::register(module)?;
     module.add_class::<sequence::CommandSequence>()?;
     install::register(module)?;
     module.add_class::<reader::Reader>()?;
