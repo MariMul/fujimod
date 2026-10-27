@@ -14,6 +14,7 @@ pub(super) mod connection;
 mod install;
 mod operations;
 mod reader;
+mod runtime;
 mod sequence;
 mod workflows;
 
@@ -187,6 +188,7 @@ async fn interfaces(device: Device) -> PyResult<Vec<InterfaceSelection>> {
 pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<AsyncSession>()?;
     callback::register(module)?;
+    runtime::register(module)?;
     connection::register(module)?;
     module.add_class::<sequence::CommandSequence>()?;
     install::register(module)?;

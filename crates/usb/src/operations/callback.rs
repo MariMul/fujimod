@@ -38,6 +38,13 @@ pub struct CallbackSlot {
 pub enum ExpectedOutcome {
     /// Exact accepted raw replies, including the common command header.
     Reply(Vec<Vec<u8>>),
+    /// A common-header-validated reply whose body starts with the supplied bytes.
+    /// None accepts any completed device status; an explicit list pins statuses.
+    Completed {
+        body_prefix: Vec<u8>,
+        statuses: Option<Vec<(u32, u32)>>,
+        length: Option<u32>,
+    },
     /// Only a failed reply transfer after the trigger was sent qualifies.
     NoReply,
 }
@@ -137,6 +144,23 @@ impl Invocation {
                 .map_err(|_| Error::InvalidLength)?,
             fujimod_usb_proxy::protocol::MAX_TRANSFER as u32,
         )?;
+        if let ExpectedOutcome::Completed {
+            body_prefix,
+            statuses,
+            length,
+        } = &self.expected
+        {
+            if body_prefix.len() > self.trigger.reply_capacity().get() as usize - 16
+                || statuses.as_ref().is_some_and(|s| s.is_empty())
+                || length.is_some_and(|n| {
+                    n < 16
+                        || n > self.trigger.reply_capacity().get()
+                        || body_prefix.len() > (n - 16) as usize
+                })
+            {
+                return Err(Error::InvalidLength);
+            }
+        }
         if let ExpectedOutcome::Reply(replies) = &self.expected {
             if replies.is_empty() {
                 return Err(Error::InvalidLength);
@@ -248,6 +272,31 @@ pub async fn invoke(session: &mut Session, invocation: &Invocation) -> Result<Op
         match (&p.expected, reply) {
             (ExpectedOutcome::NoReply, Err(error)) if missing_reply(&error) => Ok(None),
             (ExpectedOutcome::Reply(accepted), Ok(raw)) if accepted.contains(&raw) => Ok(Some(raw)),
+            (
+                ExpectedOutcome::Completed {
+                    body_prefix,
+                    statuses,
+                    length,
+                },
+                Ok(raw),
+            ) => {
+                let reply = p.trigger.decode(raw.clone())?;
+                let status = match reply.status {
+                    crate::ff80::commands::diagnostic::CommandStatus::Success => (0, 0),
+                    crate::ff80::commands::diagnostic::CommandStatus::DeviceError {
+                        primary,
+                        secondary,
+                    } => (primary, secondary),
+                };
+                if length.is_none_or(|n| raw.len() == n as usize)
+                    && reply.body().starts_with(body_prefix)
+                    && statuses.as_ref().is_none_or(|s| s.contains(&status))
+                {
+                    Ok(Some(raw))
+                } else {
+                    Err(ProtocolError::ExpectationMismatch.into())
+                }
+            }
             (_, Ok(_)) => Err(ProtocolError::ExpectationMismatch.into()),
             (_, Err(error)) => Err(error),
         }
@@ -256,7 +305,21 @@ pub async fn invoke(session: &mut Session, invocation: &Invocation) -> Result<Op
     if matches!(result, Ok(None)) {
         return result;
     }
-    let restoration = verified(session, p.slot.address, &p.slot.required, p.limits).await;
+    let restoration = async {
+        // Never overwrite a slot acquired by another writer during the callback.
+        guard(
+            session,
+            slot,
+            &[p.slot.required.clone(), p.slot.value.clone()],
+            p.limits,
+        )
+        .await?;
+        verified(session, p.slot.address, &p.slot.required, p.limits).await
+    }
+    .await;
+    if restoration.is_err() {
+        session.invalidate_completion();
+    }
     match (result, restoration) {
         (Ok(reply), Ok(())) => Ok(reply),
         (Err(source), restoration) => Err(Error::CallbackInvocation {

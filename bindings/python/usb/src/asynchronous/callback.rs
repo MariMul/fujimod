@@ -38,6 +38,25 @@ impl CallbackInvocation {
             },
         }
     }
+    #[staticmethod]
+    #[pyo3(signature=(slot_address,required,value,trigger,limits,body_prefix,*,statuses=None))]
+    fn completed(
+        slot_address: u32,
+        required: Vec<u8>,
+        value: Vec<u8>,
+        trigger: research::Request,
+        limits: FirmwareLimits,
+        body_prefix: Vec<u8>,
+        statuses: Option<Vec<(u32, u32)>>,
+    ) -> Self {
+        let mut plan = Self::new(slot_address, required, value, trigger, limits, None);
+        plan.inner.expected = operation::ExpectedOutcome::Completed {
+            body_prefix,
+            statuses,
+            length: None,
+        };
+        plan
+    }
     fn require(&mut self, address: u32, length: u32, accepted: Vec<Vec<u8>>) -> PyResult<()> {
         let range = MemoryRange::new(Address(address), nz(length)?).map_err(error)?;
         self.inner

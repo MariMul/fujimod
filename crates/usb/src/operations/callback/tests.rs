@@ -103,6 +103,7 @@ fn ordered_guarded_writes_sync_trigger_and_restoration() {
     let mut s = prepared(&p);
     let reply = p.trigger.encode();
     command(&mut s, p.trigger.encode(), reply.clone());
+    read(&mut s, &p, 0x300, p.slot.value.clone());
     write(&mut s, &p, 0x300, vec![0; 8]);
     let script = Script::new(s);
     let mut session = block_on(script.begin_session(256, None)).unwrap();
@@ -121,6 +122,7 @@ fn any_reply_instead_of_no_reply_restores_and_fails() {
             maximum: 32,
             data: reply,
         };
+        read(&mut s, &p, 0x300, p.slot.value.clone());
         write(&mut s, &p, 0x300, vec![0; 8]);
         let script = Script::new(s);
         let mut session = block_on(script.begin_session(256, None)).unwrap();
@@ -232,6 +234,7 @@ fn unexpected_reply_when_reply_expected_restores_slot() {
     let p = plan();
     let mut s = prepared(&p);
     command(&mut s, p.trigger.encode(), vec![0; 32]);
+    read(&mut s, &p, 0x300, p.slot.value.clone());
     write(&mut s, &p, 0x300, vec![0; 8]);
     let script = Script::new(s);
     let mut session = block_on(script.begin_session(256, None)).unwrap();
@@ -253,6 +256,7 @@ fn failed_publication_readback_restores_without_trigger() {
         panic!()
     };
     *data.last_mut().unwrap() = 0;
+    read(&mut s, &p, 0x300, p.slot.value.clone());
     write(&mut s, &p, 0x300, vec![0; 8]);
     let script = Script::new(s);
     let mut session = block_on(script.begin_session(256, None)).unwrap();
@@ -264,4 +268,47 @@ fn failed_publication_readback_restores_without_trigger() {
         })
     ));
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn foreign_callback_is_preserved_and_session_fenced() {
+    let p = plan();
+    let mut s = prepared(&p);
+    command(&mut s, p.trigger.encode(), p.trigger.encode());
+    read(&mut s, &p, 0x300, vec![0xff; 8]);
+    let script = Script::new(s);
+    let mut session = block_on(script.begin_session(256, None)).unwrap();
+    assert!(matches!(
+        block_on(invoke(&mut session, &p)),
+        Err(Error::CallbackRestoration(_))
+    ));
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn completed_reply_checks_header_prefix_and_optional_statuses() {
+    for accept_status in [true, false] {
+        let mut p = plan();
+        p.expected = ExpectedOutcome::Completed {
+            body_prefix: 5u32.to_le_bytes().to_vec(),
+            length: Some(32),
+            statuses: if accept_status {
+                None
+            } else {
+                Some(vec![(0, 0)])
+            },
+        };
+        let mut reply = p.trigger.encode();
+        reply[4..8].copy_from_slice(&9u32.to_le_bytes());
+        reply[16..20].copy_from_slice(&5u32.to_le_bytes());
+        let mut s = prepared(&p);
+        command(&mut s, p.trigger.encode(), reply);
+        read(&mut s, &p, 0x300, p.slot.value.clone());
+        write(&mut s, &p, 0x300, p.slot.required.clone());
+        let script = Script::new(s);
+        let mut session = block_on(script.begin_session(256, None)).unwrap();
+        assert_eq!(block_on(invoke(&mut session, &p)).is_ok(), accept_status);
+        assert_eq!(script.remaining(), 0);
+    }
 }

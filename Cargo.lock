@@ -2673,6 +2673,7 @@ dependencies = [
  "fujimod-firmware",
  "fujimod-python-usb-base",
  "fujimod-recovery",
+ "fujimod-runtime-install",
  "fujimod-usb",
  "fujimod-workflows",
  "fujimod-workspace-hack",
@@ -2746,6 +2747,17 @@ dependencies = [
  "futures-lite",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fujimod-runtime-install"
+version = "0.1.0"
+dependencies = [
+ "fujimod-usb",
+ "futures-lite",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

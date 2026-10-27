@@ -68,7 +68,7 @@ async def test_callback_reply_restores_slot(expect_reply: bool) -> None:
     steps += read(0x200, b"\x02") + read(0x300, b"\0") + read(0x100, bytes(8))
     steps += read(0x300, b"\0") + write(0x300, b"\x03")
     steps += read(0x100, bytes(8)) + write(0x100, b"\x09" * 8)
-    steps += command(raw, raw) + write(0x100, bytes(8))
+    steps += command(raw, raw) + read(0x100, b"\x09" * 8) + write(0x100, bytes(8))
     session, script = await testing.session(steps, LIMITS)
     if expect_reply:
         assert await session.invoke_callback(invocation) == raw
