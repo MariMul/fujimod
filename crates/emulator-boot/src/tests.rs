@@ -910,3 +910,6 @@ fn browser_graphs_select_portable_encoding_on_every_host() {
         );
     }
 }
+
+#[path = "tests/pwic.rs"]
+mod pwic;
