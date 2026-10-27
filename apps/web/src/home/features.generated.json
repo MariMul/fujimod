@@ -140,6 +140,61 @@
       }
     },
     {
+      "id": "jpeg_max",
+      "group": "pictures",
+      "icon": "aspect",
+      "title": "IMAGE QUALITY",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose ULTRA FINE to save JPEGs with finer compression.",
+      "card": "image_quality",
+      "media_cards": ["image_quality"],
+      "controls": [
+        {
+          "title": "IMAGE QUALITY",
+          "primary": true,
+          "card": "image_quality",
+          "choices": [
+            {
+              "label": "FINE",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "NORMAL",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "FINE+RAW",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "NORMAL+RAW",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "RAW",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "ULTRA FINE",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "raw_view",
       "group": "pictures",
       "icon": "highlight",
@@ -581,6 +636,84 @@
       }
     },
     {
+      "id": "overlay_opacity",
+      "group": "handling",
+      "icon": "theme",
+      "title": "Overlay Opacity",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Set menu and shooting indicator opacity independently.",
+      "card": null,
+      "media_cards": ["opacity_menu_item", "opacity_indicators_item"],
+      "controls": [
+        {
+          "title": "MENU OPACITY",
+          "primary": false,
+          "card": "opacity_menu_item",
+          "choices": [
+            {
+              "label": "25%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "50%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "75%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "100%",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        },
+        {
+          "title": "INDICATOR OPACITY",
+          "primary": false,
+          "card": "opacity_indicators_item",
+          "choices": [
+            {
+              "label": "0%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "25%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "50%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "75%",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "100%",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "menu_tap",
       "group": "handling",
       "icon": "touch",
@@ -803,6 +936,22 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "image_quality": {
+      "title": "IMAGE QUALITY",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {
+        "ULTRA FINE": "Save a JPEG with finer compression than FINE."
+      },
+      "related": [],
+      "changes": "Adds ULTRA FINE JPEG quality.",
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -1215,6 +1364,45 @@
       "path": ["SET-UP"],
       "summary": "Choose the appearance of the menus.",
       "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "opacity_menu_item": {
+      "title": "MENU OPACITY",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Set the opacity of menus over live view.",
+      "choices": {
+        "25%": "25% opacity.",
+        "50%": "50% opacity.",
+        "75%": "75% opacity.",
+        "100%": "Fully opaque."
+      },
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "opacity_indicators_item": {
+      "title": "INDICATOR OPACITY",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "summary": "Set the opacity of shooting indicators.",
+      "choices": {
+        "0%": "Hide shooting indicators.",
+        "25%": "25% opacity.",
+        "50%": "50% opacity.",
+        "75%": "75% opacity.",
+        "100%": "Fully opaque."
+      },
       "related": [],
       "changes": null,
       "credits": {
