@@ -34,3 +34,49 @@ export const hash = (value = link) =>
       }),
     ),
   );
+/** A USTAR report like the camera writes: `files`, then a manifest with each file's CRC32. */
+export function reportTar(files: Record<string, Uint8Array>, capturedAt?: string) {
+  const encoder = new TextEncoder();
+  const hex = (value: number) => value.toString(16).padStart(8, '0');
+  const manifest = encoder.encode(
+    JSON.stringify({
+      format_version: 1,
+      firmware: 'x70-110',
+      ...(capturedAt === undefined ? {} : { captured_at: capturedAt }),
+      files: Object.entries(files).map(([path, data]) => ({
+        path,
+        bytes: data.length,
+        crc32: hex(crc32(data)),
+        status: 0,
+      })),
+    }),
+  );
+  const parts: Uint8Array[] = [];
+  for (const [name, data] of [...Object.entries(files), ['manifest.json', manifest] as const]) {
+    const header = new Uint8Array(512);
+    const field = (offset: number, text: string) => header.set(encoder.encode(text), offset);
+    field(0, name);
+    field(100, '0000644\0');
+    field(124, data.length.toString(8).padStart(11, '0') + '\0');
+    field(136, '00000000000\0');
+    header[156] = 48;
+    field(257, 'ustar\0');
+    header.fill(32, 148, 156);
+    field(
+      148,
+      header
+        .reduce((sum, byte) => sum + byte, 0)
+        .toString(8)
+        .padStart(6, '0') + '\0 ',
+    );
+    parts.push(header, data, new Uint8Array((512 - (data.length % 512)) % 512));
+  }
+  parts.push(new Uint8Array(1024));
+  const bytes = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.length;
+  }
+  return bytes;
+}

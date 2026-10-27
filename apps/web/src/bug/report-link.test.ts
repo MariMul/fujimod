@@ -1,7 +1,15 @@
 import { expect, test } from 'vite-plus/test';
 import { crc32 } from '@fujimod/emulator-ui/archive';
-import { parseReportLink, validateReport, decode64, base64url } from './report-link';
-import { tar, link, hash } from './fixtures.test-helper';
+import {
+  parseReportLink,
+  validateReport,
+  decode64,
+  base64url,
+  listedReport,
+  reportDetails,
+  reportEntries,
+} from './report-link';
+import { tar, link, hash, reportTar } from './fixtures.test-helper';
 test('decodes the fragment locally and preserves the entire inline TAR', async () => {
   const value = { ...link, archive: base64url(tar) };
   expect(parseReportLink(hash(value))).toEqual(value);
@@ -51,4 +59,24 @@ test('the camera QR carries only compact retrieval metadata', () => {
         '#?report=' + base64url(new TextEncoder().encode(JSON.stringify({ ...wire, ...changes }))),
       ),
     ).toThrow();
+});
+test('a listed report is checked against its manifest and named by its file', () => {
+  const screen = Uint8Array.of(0x42, 0x4d, 1, 2, 3);
+  const bytes = reportTar(
+    { 'screen.bmp': screen, 'state.json': Uint8Array.of(123, 125) },
+    '2026-10-27T14:04:05',
+  );
+  const { link: listed } = listedReport(bytes, link, 'R00000AB.TAR');
+  expect(listed.path).toBe('A:\\FUJIMOD\\REPORTS\\R00000AB.TAR');
+  expect(listed.bytes).toBe(bytes.length);
+  const entries = reportEntries(bytes, listed);
+  const details = reportDetails(bytes, entries);
+  expect(details.capturedAt).toBe('2026-10-27T14:04:05');
+  expect(
+    bytes.subarray(details.screen!.offset, details.screen!.offset + details.screen!.bytes),
+  ).toEqual(screen);
+  const damaged = bytes.slice();
+  damaged[details.screen!.offset + 2] ^= 1;
+  expect(() => listedReport(damaged, link, 'R00000AB.TAR')).toThrow('incomplete or damaged');
+  expect(() => listedReport(bytes, link, 'NOTES.TXT')).toThrow();
 });

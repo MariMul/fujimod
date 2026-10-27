@@ -30,6 +30,8 @@ export function ContributeDialog(props: {
   onClose: () => void;
   /** Extra choices or notices shown above the message, such as the bug report's public notice. */
   children?: JSX.Element;
+  /** Offered after a successful upload, such as contributing the next report. */
+  next?: { label: string; run: () => void };
 }) {
   let dialog!: HTMLDialogElement;
   const [message, setMessage] = createSignal('');
@@ -169,6 +171,13 @@ export function ContributeDialog(props: {
                 <button type="button" class="cd-btn" onClick={() => props.onClose()}>
                   Close
                 </button>
+                <Show when={props.next}>
+                  {(next) => (
+                    <button type="button" class="cd-btn primary" onClick={() => next().run()}>
+                      {next().label}
+                    </button>
+                  )}
+                </Show>
               </>
             }
           >

@@ -1,5 +1,6 @@
 import { initialize, usb, type Device, type Memory, type Session } from 'fujimod';
-import { retrieveReport, removeReport } from './transfer';
+import { listReports, retrieveListed, retrieveReport, removeReport } from './transfer';
+import type { DeviceFileEntry } from '../device-files';
 import type { ReportLink } from './report-link';
 /** The last USB exchanges as text lines, oldest first, for an error's details. */
 function traceLines(trace: InstanceType<typeof usb.tracing.Trace>) {
@@ -28,6 +29,13 @@ export interface ReportConnection {
   initialize(): Promise<void>;
   choose(): Promise<CameraChoice | undefined>;
   read(id: number, link: ReportLink, progress: (bytes: number) => void): Promise<Blob>;
+  /** Every report on the camera, after `read` opened the session. */
+  list?(): Promise<DeviceFileEntry[]>;
+  /** Read a listed report; it becomes the report `remove` may delete. */
+  readListed?(
+    entry: DeviceFileEntry,
+    progress: (bytes: number) => void,
+  ): Promise<{ blob: Blob; link: ReportLink }>;
   remove?(link: ReportLink): Promise<void>;
   handOff(): Promise<void>;
   onDisconnect?(callback: () => void): () => void;
@@ -40,6 +48,8 @@ export class ReportUsb implements ReportConnection {
   private session?: Session;
   private memory?: Memory;
   private verified?: ReportLink;
+  /** The QR code's report, which names the camera's file service. */
+  private service?: ReportLink;
   private choice?: CameraChoice;
   async initialize() {
     await initialize();
@@ -75,6 +85,7 @@ export class ReportUsb implements ReportConnection {
       this.memory = await session.memory(link.firmware);
       const report = await retrieveReport(this.memory, link, progress);
       this.verified = { ...link };
+      this.service = { ...link };
       return report;
     } catch (error) {
       if (error instanceof Error) Object.assign(error, { usbTrace: traceLines(trace) });
@@ -86,6 +97,17 @@ export class ReportUsb implements ReportConnection {
       this.session = undefined;
       throw error;
     }
+  }
+  async list() {
+    if (!this.memory || !this.service) throw Error('Camera disconnected.');
+    return listReports(this.memory, this.service);
+  }
+  async readListed(entry: DeviceFileEntry, progress: (bytes: number) => void) {
+    if (!this.memory || !this.service) throw Error('Camera disconnected.');
+    this.verified = undefined;
+    const report = await retrieveListed(this.memory, this.service, entry, progress);
+    this.verified = { ...report.link };
+    return report;
   }
   async remove(link: ReportLink) {
     const memory = this.memory;
@@ -135,6 +157,7 @@ export class ReportUsb implements ReportConnection {
   }
   dispose() {
     this.verified = undefined;
+    this.service = undefined;
     this.session?.abandon();
     this.session?.free();
     this.session = undefined;

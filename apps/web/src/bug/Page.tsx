@@ -16,9 +16,14 @@ import {
   validateReport,
   reportName,
   reportEntries,
+  reportDetails,
+  capturedText,
+  type ReportDetails,
   type ReportEntry,
   type ReportLink,
 } from './report-link';
+import type { DeviceFileEntry } from '../device-files';
+import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { prepareDownload } from './download';
 import { ReportUsb, type CameraChoice, type ReportConnection } from './usb';
 import '../home/site.css';
@@ -37,6 +42,12 @@ export default function BugReport(props: {
     untrack(() => props.supported) ??
     (typeof window !== 'undefined' && isSecureContext && 'usb' in navigator);
   const [link, setLink] = createSignal<ReportLink>();
+  /** The loaded report: the QR code's, or one listed on the camera. */
+  const [current, setCurrent] = createSignal<ReportLink>();
+  const [details, setDetails] = createSignal<ReportDetails>({});
+  const [screen, setScreen] = createSignal<string>();
+  const [others, setOthers] = createSignal<DeviceFileEntry[]>([]);
+  const [contributed, setContributed] = createSignal<ReadonlySet<string>>(new Set());
   const [archive, setArchive] = createSignal<Blob>();
   const [download, setDownload] = createSignal<{ blob: Blob; name: string }>();
   const [choice, setChoice] = createSignal<CameraChoice>();
@@ -79,6 +90,8 @@ export default function BugReport(props: {
     });
     return () => {
       stop?.();
+      const url = untrack(screen);
+      if (url) URL.revokeObjectURL(url);
       if (!handedOff) connection.dispose();
     };
   });
@@ -86,30 +99,81 @@ export default function BugReport(props: {
     setError(shownError(cause));
     setBusy(false);
   }
-  async function acceptArchive(blob: Blob, current: ReportLink) {
-    setEntries(reportEntries(new Uint8Array(await blob.arrayBuffer()), current));
+  async function acceptArchive(blob: Blob, report: ReportLink) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const found = reportEntries(bytes, report);
+    const shown = reportDetails(bytes, found);
+    const previous = screen();
+    if (previous) URL.revokeObjectURL(previous);
+    setScreen(
+      shown.screen
+        ? URL.createObjectURL(
+            new Blob(
+              [bytes.subarray(shown.screen.offset, shown.screen.offset + shown.screen.bytes)],
+              {
+                type: 'image/bmp',
+              },
+            ),
+          )
+        : undefined,
+    );
+    setDetails(shown);
+    setEntries(found);
+    setCurrent(report);
     setArchive(blob);
     setReceipt(undefined);
     uploadId = crypto.randomUUID();
     setDownload(undefined);
     setStatus('Preparing download…');
-    setDownload(await prepareDownload(blob, reportName(current)));
+    setDownload(await prepareDownload(blob, reportName(report)));
   }
+  async function refreshList() {
+    if (!connection.list) return;
+    try {
+      setOthers(await connection.list());
+    } catch (cause) {
+      setOthers([]);
+      setError(`Could not list other reports: ${shownError(cause)}`);
+    }
+  }
+  async function openListed(entry: DeviceFileEntry) {
+    if (!connection.readListed || busy()) return;
+    setBusy(true);
+    setError('');
+    setStatus('Reading report…');
+    try {
+      const report = await connection.readListed(entry, (bytes) =>
+        setStatus(`Reading report… ${Math.floor((bytes / entry.bytes) * 100)}%`),
+      );
+      await acceptArchive(report.blob, report.link);
+      setFromUsb(true);
+      setStatus('Report retrieved from camera.');
+    } catch (cause) {
+      problem(cause);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const loadedName = () => (current() ? reportName(current()!) : undefined);
+  /** The next listed report not yet contributed from this page. */
+  const nextReport = () =>
+    others().find((entry) => entry.name !== loadedName() && !contributed().has(entry.name));
   async function read(id: number) {
     setBusy(true);
     setError('');
     setStatus('Reading report…');
-    const current = link()!;
+    const report = link()!;
     try {
       await acceptArchive(
-        await connection.read(id, current, (bytes) =>
-          setStatus(`Reading report… ${Math.floor((bytes / current.bytes) * 100)}%`),
+        await connection.read(id, report, (bytes) =>
+          setStatus(`Reading report… ${Math.floor((bytes / report.bytes) * 100)}%`),
         ),
-        current,
+        report,
       );
       setConnected(true);
       setFromUsb(true);
       setStatus('Report retrieved from camera.');
+      await refreshList();
     } catch (cause) {
       problem(cause);
     } finally {
@@ -152,22 +216,25 @@ export default function BugReport(props: {
   }
   /** The Contribute dialog's upload: the issue report, then deletion from the camera if chosen. */
   async function contribute(message: string, progress: (fraction: number) => void) {
-    if (!archive() || !link()) throw Error('No report is loaded.');
+    const report = current();
+    if (!archive() || !report) throw Error('No report is loaded.');
     setBusy(true);
     setError('');
     progress(0);
     try {
-      const result = await upload(archive()!, link()!, message, uploadId);
+      const result = await upload(archive()!, report, message, uploadId);
       progress(1);
       setReceipt(result);
+      setContributed((names) => new Set([...names, reportName(report)]));
       const confirmation = result.issueURL
         ? 'Report uploaded and GitHub issue created.'
         : 'Report uploaded. GitHub issue creation is pending.';
       setStatus(confirmation);
       if (fromUsb() && connected() && remove() && connection.remove) {
         try {
-          await connection.remove(link()!);
+          await connection.remove(report);
           setStatus(confirmation + ' Deleted from camera.');
+          await refreshList();
         } catch (cause) {
           shownError(cause);
           setError('Your report was uploaded, but could not be deleted from the camera.');
@@ -344,8 +411,22 @@ export default function BugReport(props: {
                         </ul>
                       }
                     >
+                      <Show when={details().capturedAt}>
+                        {(time) => <p class="bug-captured">Captured {capturedText(time())}</p>}
+                      </Show>
+                      <Show when={screen()}>
+                        {(url) => (
+                          <img
+                            class="bug-screen"
+                            src={url()}
+                            width="720"
+                            height="480"
+                            alt="Camera screen when the report was captured"
+                          />
+                        )}
+                      </Show>
                       <p class="bug-file">
-                        {reportName(value())} · {archive()!.size.toLocaleString()} bytes
+                        {loadedName()} · {archive()!.size.toLocaleString()} bytes
                       </p>
                       <FileList
                         items={entries().map((entry) => ({
@@ -391,6 +472,21 @@ export default function BugReport(props: {
                       }))}
                       upload={contribute}
                       onClose={() => setContributing(false)}
+                      next={
+                        nextReport() && connected()
+                          ? {
+                              label: 'Next report',
+                              run: () => {
+                                const entry = nextReport()!;
+                                setContributing(false);
+                                void openListed(entry).then(() => {
+                                  if (current() && reportName(current()!) === entry.name)
+                                    setContributing(true);
+                                });
+                              },
+                            }
+                          : undefined
+                      }
                     >
                       <p class="cd-public">Your message will be posted publicly on GitHub.</p>
                       <Show when={fromUsb() && connected() && connection.remove}>
@@ -420,6 +516,42 @@ export default function BugReport(props: {
                       </button>
                     </Show>
                   </section>
+                  <Show when={connected() && others().length > 1}>
+                    <section class="bug-card bug-others" aria-label="Reports on this camera">
+                      <h2>Reports on this camera</h2>
+                      <ul>
+                        <For each={others()}>
+                          {(entry) => (
+                            <li>
+                              <span class="bug-file">{entry.name}</span>
+                              <span class="bug-dim">{formatBytes(entry.bytes)}</span>
+                              <Show
+                                when={entry.name !== loadedName()}
+                                fallback={<span class="bug-dim">Showing</span>}
+                              >
+                                <Show
+                                  when={!contributed().has(entry.name)}
+                                  fallback={
+                                    <span class="bug-dim">
+                                      <Icon name="check" size={13} /> Contributed
+                                    </span>
+                                  }
+                                >
+                                  <button
+                                    class="pill"
+                                    disabled={busy()}
+                                    onClick={() => void openListed(entry)}
+                                  >
+                                    Open
+                                  </button>
+                                </Show>
+                              </Show>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </section>
+                  </Show>
                 </>
               )}
             </Show>

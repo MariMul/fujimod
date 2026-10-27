@@ -1,5 +1,5 @@
-import { DeviceFiles, type FileMemory } from '../device-files';
-import { type ReportLink, validateReport } from './report-link';
+import { DeviceFiles, type DeviceFileEntry, type FileMemory } from '../device-files';
+import { REPORT_FILE, type ReportLink, listedReport, validateReport } from './report-link';
 /** X70 1.10 policy belongs here, outside the shared file protocol. */
 function files(memory: FileMemory, link: ReportLink) {
   function range(address: number, count: number) {
@@ -36,4 +36,30 @@ export async function retrieveReport(
 }
 export async function removeReport(memory: FileMemory, link: ReportLink): Promise<void> {
   await files(memory, link).remove(link.path);
+}
+/** Every report file in the folder holding `service`'s report, in the camera's directory order. */
+export async function listReports(
+  memory: FileMemory,
+  service: ReportLink,
+): Promise<DeviceFileEntry[]> {
+  const access = files(memory, service);
+  const pattern = service.path.replace(/[^\\]*$/, 'R*.TAR');
+  const found: DeviceFileEntry[] = [];
+  for (;;) {
+    const page = await access.list(pattern, found.length);
+    if (!page.length) break;
+    found.push(...page);
+  }
+  return found.filter((entry) => REPORT_FILE.test(entry.name));
+}
+/** Read a listed report and check it against its own manifest. */
+export async function retrieveListed(
+  memory: FileMemory,
+  service: ReportLink,
+  entry: DeviceFileEntry,
+  progress: (bytes: number) => void,
+): Promise<{ blob: Blob; link: ReportLink }> {
+  const path = service.path.replace(/[^\\]*$/, entry.name);
+  const bytes = await files(memory, service).read(path, entry.bytes, progress);
+  return listedReport(bytes, service, entry.name);
 }

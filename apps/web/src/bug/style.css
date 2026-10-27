@@ -132,3 +132,52 @@
 .bug-platform svg {
   flex-shrink: 0;
 }
+
+.bug-screen {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+  height: auto;
+  margin: 0 0 12px;
+  border-radius: 8px;
+  background: #000;
+}
+.bug-dim {
+  color: var(--dim);
+  font-size: 13px;
+}
+.bug-others {
+  margin-top: 24px;
+}
+.bug-others ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bug-others li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 112px;
+  justify-items: end;
+  align-items: center;
+  gap: 16px;
+  min-height: 40px;
+  border-top: 1px solid var(--edge);
+}
+.bug-others li > :first-child {
+  justify-self: start;
+}
+.bug-others li:first-child {
+  border-top: 0;
+}
+.bug-others .pill {
+  margin: 0;
+}
+.bug-others .bug-dim {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bug-card .bug-captured {
+  margin: 0 0 12px;
+  font-weight: 600;
+}
