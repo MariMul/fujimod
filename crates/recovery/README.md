@@ -188,10 +188,21 @@ small `ffboot.bin`; X-Processor 4 uses only `ffinit.bin`, and X-Processor 5 uses
 only `marble_init.bin`.
 
 `green_led::filenames` reports availability independently of updater support.
-`green_led::build` verifies the supplied update and output-descriptor source
-proofs before binding the GPIO writes. The compiled ARM and AArch64 programs
-need no stack, heap, timers, firmware calls or DDR initialization. The catalog
-holds each body's polarity, register writes and source proofs.
+`green_led::build` verifies the supplied update and referenced source spans
+before constructing the GPIO writes. The compiled ARM and AArch64 programs
+need no stack, heap, timers, firmware calls or DDR initialization.
+
+For EXR through X-Processor 4, the builder reads the two output descriptors
+and the selected ports' stock initialization records. Every selected pin
+gets its extended function, split function, control, output latch and direction
+configured. Missing records, incomplete field masks and pins configured for
+another function reject the build. X-Processor 5 requires its clock, reset,
+port gates and complete pad setup.
+
+The catalog cannot provide register-write lists. The builder creates the full
+sequence from these checked inputs, so an omitted setup step cannot be
+represented by a partial catalog program. Both the CLI and browser use this
+same builder.
 
 The offline CLI builds the same LED card with
 `cargo run -p fujimod-recovery -- green-led FIRMWARE DAT NEW_DIRECTORY`.

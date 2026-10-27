@@ -5,19 +5,15 @@ use crate::{
 };
 use serde::Deserialize;
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Write {
-    address: u32,
-    clear: u32,
-    value: u32,
-}
+mod initialization;
+use initialization::Initialization;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Binding {
     firmware_id: String,
     proofs: Vec<Xp5SourceProof>,
-    writes: Vec<Write>,
+    initialization: Initialization,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,13 +62,14 @@ pub fn build(recipe: &Recipe, source: &[u8]) -> Result<Vec<File>> {
     let binding = binding(&recipe.firmware_id)?
         .ok_or_else(|| image::Error::Invalid("Missing green LED binding".into()))?;
     let inverted = fujimod_firmware::invert(source);
+    let mut verified = Vec::new();
     for proof in &binding.proofs {
         let bytes = proof.source.read(&inverted)?;
-        image::hash(
-            image::extent(&bytes, proof.offset, proof.size)?,
-            &proof.sha256,
-        )?;
+        let span = image::extent(&bytes, proof.offset, proof.size)?;
+        image::hash(span, &proof.sha256)?;
+        verified.push(span.to_vec());
     }
+    let writes = binding.writes(recipe, &verified)?;
     let aarch64 = matches!(recipe.generation, Generation::Xp5);
     let (program, layout) = if aarch64 {
         (
@@ -91,8 +88,8 @@ pub fn build(recipe: &Recipe, source: &[u8]) -> Result<Vec<File>> {
         layout.schema == 1
             && layout.size == program.len()
             && layout.capacity == 24
-            && !binding.writes.is_empty()
-            && binding.writes.len() <= layout.capacity,
+            && !writes.is_empty()
+            && writes.len() <= layout.capacity,
         "Invalid green LED program layout",
     )?;
     let mut program = program.to_vec();
@@ -102,8 +99,8 @@ pub fn build(recipe: &Recipe, source: &[u8]) -> Result<Vec<File>> {
             .all(|v| *v == 0),
         "Green LED configuration is not empty",
     )?;
-    put(&mut program, layout.config, binding.writes.len() as u32)?;
-    for (index, write) in binding.writes.iter().enumerate() {
+    put(&mut program, layout.config, writes.len() as u32)?;
+    for (index, write) in writes.iter().enumerate() {
         require(
             write.address >= 0xf0000000 && write.address < 0xfffff000 && write.address % 4 == 0,
             "Invalid green LED register",
