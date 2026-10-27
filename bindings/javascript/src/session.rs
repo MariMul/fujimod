@@ -122,6 +122,27 @@ pub struct Session {
     max_reply_bytes: u32,
 }
 impl Session {
+    /// Another handle on the same session ownership slot.
+    pub(crate) fn share(&self) -> Self {
+        Self {
+            owner: self.owner.clone(),
+            limits: self.limits,
+            info: self.info,
+            max_reply_bytes: self.max_reply_bytes,
+        }
+    }
+    fn single_packet(&self, length: impl TryInto<u32>) -> Result<(), JsValue> {
+        let packet = self.info.advertised_packet_bytes.get();
+        match length.try_into() {
+            Ok(length) if length <= packet => Ok(()),
+            _ => Err(fail(
+                ErrorKind::InvalidArgument,
+                &format!(
+                    "one packet holds at most {packet} bytes; use session.memory(firmwareId) for larger ranges"
+                ),
+            )),
+        }
+    }
     pub fn wrap(native: ff80::Session, limits: FirmwareLimits) -> Self {
         let info = native.info();
         let max_reply_bytes = native.max_reply_bytes().get();
@@ -283,14 +304,16 @@ impl Session {
 
         self.call(Operation::Info(selector))
     }
-    #[wasm_bindgen(js_name=readMemory,unchecked_return_type="Promise<Uint8Array>")]
-    pub fn read_memory(
+    /// One memory command, at most `packetBytes` long. Use `memory()` for larger ranges.
+    #[wasm_bindgen(js_name=readSinglePacket,unchecked_return_type="Promise<Uint8Array>")]
+    pub fn read_single_packet(
         &self,
         #[wasm_bindgen(unchecked_param_type = "number")] address: JsValue,
         #[wasm_bindgen(unchecked_param_type = "number")] length: JsValue,
     ) -> Result<js_sys::Promise, JsValue> {
         let address = error::integer(address, u32::MAX)?;
         let length = error::integer(length, u32::MAX)?;
+        self.single_packet(length)?;
 
         self.call(Operation::ReadMemory(
             ReadMemory::new(
@@ -300,8 +323,9 @@ impl Session {
             .map_err(error)?,
         ))
     }
-    #[wasm_bindgen(js_name=writeMemory,unchecked_return_type="Promise<void>")]
-    pub fn write_memory(
+    /// One memory command, at most `packetBytes` long. Use `memory()` for larger ranges.
+    #[wasm_bindgen(js_name=writeSinglePacket,unchecked_return_type="Promise<void>")]
+    pub fn write_single_packet(
         &self,
         #[wasm_bindgen(unchecked_param_type = "number")] address: JsValue,
         #[wasm_bindgen(unchecked_param_type = "Uint8Array")] data: JsValue,
@@ -309,6 +333,7 @@ impl Session {
         let data = error::buffer(data)?;
 
         let address = error::integer(address, u32::MAX)?;
+        self.single_packet(data.len())?;
 
         self.call(Operation::WriteMemory(
             WriteMemory::new(Address(address), data, self.limits.memory).map_err(error)?,
@@ -557,12 +582,7 @@ pub(crate) enum Operation {
         fujimod_usb_app80_types::Request,
     ),
     Service(fujimod_usb_app80::operations::Invocation),
-    ReadRange(MemoryRange, usb::ff80::commands::memory::DebugMemoryLimits),
-    WriteRange(
-        Address,
-        Vec<u8>,
-        usb::ff80::commands::memory::DebugMemoryLimits,
-    ),
+    Memory(Box<crate::memory::MemoryOperation>),
 }
 impl Operation {
     async fn run(self, lease: &mut Lease) -> Result<JsValue, JsValue> {
@@ -584,6 +604,7 @@ impl Operation {
         match self {
             Self::Workflow(workflow) => return workflow.run(s).await,
             Self::Bulk(read) => return read.run(s).await,
+            Self::Memory(operation) => return operation.run(s).await,
             Self::StateDump(dump) => return dump.run(s).await,
             Self::FlashBackup(backup) => return backup.run(s).await,
             Self::UploadOwned(image, destination, limits) => image
@@ -669,14 +690,6 @@ impl Operation {
                 .execute(s)
                 .await
                 .map(|inner| service::App80CommandReply { inner }.into()),
-            Self::ReadRange(range, limits) => usb::operations::memory::read_range(s, range, limits)
-                .await
-                .map(bytes),
-            Self::WriteRange(address, data, limits) => {
-                usb::operations::memory::write_range(s, address, &data, limits)
-                    .await
-                    .map(|_| JsValue::UNDEFINED)
-            }
         }
         .map_err(error)
     }
@@ -740,39 +753,4 @@ impl Session {
             self.limits.memory,
         ))
     }
-}
-#[wasm_bindgen(js_name=readMemoryRange,unchecked_return_type="Promise<Uint8Array>")]
-pub fn read_memory_range(
-    session: &Session,
-    #[wasm_bindgen(unchecked_param_type = "number")] address: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "number")] length: JsValue,
-) -> Result<js_sys::Promise, JsValue> {
-    let address = error::integer(address, u32::MAX)?;
-    let length = error::integer(length, u32::MAX)?;
-
-    session.call(Operation::ReadRange(
-        MemoryRange::new(Address(address), nz(length)?).map_err(error)?,
-        session.limits.memory,
-    ))
-}
-#[wasm_bindgen(js_name=writeMemoryRange,unchecked_return_type="Promise<void>")]
-pub fn write_memory_range(
-    session: &Session,
-    #[wasm_bindgen(unchecked_param_type = "number")] address: JsValue,
-    #[wasm_bindgen(unchecked_param_type = "Uint8Array")] data: JsValue,
-) -> Result<js_sys::Promise, JsValue> {
-    let data = error::buffer(data)?;
-
-    let address = error::integer(address, u32::MAX)?;
-
-    MemoryRange::new(
-        Address(address),
-        nz(u32::try_from(data.len()).map_err(|_| error(usb::Error::InvalidLength))?)?,
-    )
-    .map_err(error)?;
-    session.call(Operation::WriteRange(
-        Address(address),
-        data,
-        session.limits.memory,
-    ))
 }

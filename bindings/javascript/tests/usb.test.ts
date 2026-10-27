@@ -113,7 +113,7 @@ await test('one direct read, immutable metadata and raw close acknowledgment', a
     // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
     session.packetBytes = 128;
   }, TypeError);
-  assert.deepEqual(await session.readMemory(0x12345678, 4), expected);
+  assert.deepEqual(await session.readSinglePacket(0x12345678, 4), expected);
   assert.deepEqual(await session.close(), new Uint8Array([0xaa, 0xbb]));
   assert.equal(session.state, usb.SessionState.Closed);
   session.abandon();
@@ -129,7 +129,7 @@ await test('one direct read, immutable metadata and raw close acknowledgment', a
 
 await test('asynchronous failures carry the stack of the call that started them', async () => {
   const { session } = await opened([]);
-  const failure = await session.readMemory(0x1000, 4).then(
+  const failure = await session.readSinglePacket(0x1000, 4).then(
     () => assert.fail('the unscripted read succeeded'),
     (error: unknown) => error,
   );
@@ -138,12 +138,34 @@ await test('asynchronous failures carry the stack of the call that started them'
   session.abandon();
 });
 
+await test('single-packet commands refuse lengths beyond the advertised packet', async () => {
+  const { session, script } = await opened([]);
+  assert.throws(() => session.readSinglePacket(0x1000, 5), (error: unknown) => {
+    assert.ok(usb.isError(error));
+    assert.equal(error.kind, usb.ErrorKind.InvalidArgument);
+    assert.match(error.message, /at most 4 bytes; use session\.memory\(firmwareId\)/);
+    return true;
+  });
+  assert.throws(
+    () => session.writeSinglePacket(0x1000, new Uint8Array(5)),
+    kind(usb.ErrorKind.InvalidArgument),
+  );
+  assert.equal(script.remaining, 0);
+  session.abandon();
+});
+
 await test('range ownership spans chunks and for-await break performs no next read', async () => {
   const { session, script } = await opened([
-    ...readMemory(0x1000, new Uint8Array([1, 2, 3, 4])),
+    E.control(env(0xe1, 4, 0)),
+    E.read(4, new Uint8Array([1, 2, 3, 4])),
     ...closeSteps(),
   ]);
-  const reader = usb.memory.readChunks(session, 0x1000, 12);
+  const reader = usb.data.readChunks(
+    session,
+    new usb.DataWindow(0x1000, 0x1000, 12, 4, usb.OffsetMode.Checked),
+    0x1000,
+    12,
+  );
   assert.equal(session.state, usb.SessionState.ReadingRange);
   assert.throws(() => session.ping(), kind(usb.ErrorKind.Busy));
   for await (const data of reader) {
@@ -331,7 +353,7 @@ await test('invalid enum choices and address types fail before reserving or disp
     assert.throws(() => session.prepareDataWrite(1, value), kind(usb.ErrorKind.InvalidArgument));
   }
   // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
-  assert.throws(() => session.readMemory('0x1000', 1), kind(usb.ErrorKind.InvalidArgument));
+  assert.throws(() => session.readSinglePacket('0x1000', 1), kind(usb.ErrorKind.InvalidArgument));
   for (const bytes of [
     '1234',
     [1, 2, 3, 4],
@@ -340,7 +362,7 @@ await test('invalid enum choices and address types fail before reserving or disp
     null,
   ] as const) {
     // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
-    assert.throws(() => session.writeMemory(0x1000, bytes), kind(usb.ErrorKind.InvalidArgument));
+    assert.throws(() => session.writeSinglePacket(0x1000, bytes), kind(usb.ErrorKind.InvalidArgument));
   }
   assert.equal(script.remaining, 0);
   assert.equal(session.state, usb.SessionState.Ready);

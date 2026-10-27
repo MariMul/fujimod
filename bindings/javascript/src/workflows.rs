@@ -15,7 +15,7 @@ pub(crate) struct Workflow {
     limits: Limits,
     action: Action,
 }
-fn workflow_error(message: impl std::fmt::Display) -> JsValue {
+pub(crate) fn workflow_error(message: impl std::fmt::Display) -> JsValue {
     fail(ErrorKind::Workflow, &message.to_string())
 }
 impl Session {

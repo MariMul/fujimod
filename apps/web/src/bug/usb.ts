@@ -1,17 +1,6 @@
-import { initialize, usb, type Device, type Session } from 'fujimod';
+import { initialize, usb, type Device, type Memory, type Session } from 'fujimod';
 import { retrieveReport, removeReport } from './transfer';
 import type { ReportLink } from './report-link';
-/** File-service memory for one session: reads larger than one command use the
- * firmware's stock bulk path; descriptor words and command writes stay small. */
-function memory(session: Session, firmwareId: string) {
-  return {
-    read: async (address: number, count: number) =>
-      count > session.packetBytes
-        ? (await session.readBulk(firmwareId, address, count)).data
-        : session.readMemory(address, count),
-    write: (address: number, bytes: Uint8Array<ArrayBuffer>) => session.writeMemory(address, bytes),
-  };
-}
 /** The last USB exchanges as text lines, oldest first, for an error's details. */
 function traceLines(trace: InstanceType<typeof usb.tracing.Trace>) {
   const batch = trace.drain();
@@ -49,6 +38,7 @@ export class ReportUsb implements ReportConnection {
   private device?: Device;
   private interfaces: Awaited<ReturnType<Device['interfaces']>> = [];
   private session?: Session;
+  private memory?: Memory;
   private verified?: ReportLink;
   private choice?: CameraChoice;
   async initialize() {
@@ -82,7 +72,8 @@ export class ReportUsb implements ReportConnection {
     }
     const session = this.session;
     try {
-      const report = await retrieveReport(memory(session, link.firmware), link, progress);
+      this.memory = await session.memory(link.firmware);
+      const report = await retrieveReport(this.memory, link, progress);
       this.verified = { ...link };
       return report;
     } catch (error) {
@@ -90,12 +81,14 @@ export class ReportUsb implements ReportConnection {
       // No close command or mode change after an unknown/wrong camera reply.
       session.abandon();
       session.free();
+      this.memory?.free();
+      this.memory = undefined;
       this.session = undefined;
       throw error;
     }
   }
   async remove(link: ReportLink) {
-    const session = this.session;
+    const memory = this.memory;
     if (
       !this.verified ||
       ['files', 'path', 'bytes', 'crc32', 'commit'].some(
@@ -103,17 +96,21 @@ export class ReportUsb implements ReportConnection {
       )
     )
       throw Error('Read and verify this report before deleting it.');
-    if (!session) throw Error('Camera disconnected.');
-    await removeReport(memory(session, link.firmware), link);
+    if (!memory) throw Error('Camera disconnected.');
+    await removeReport(memory, link);
     this.verified = undefined;
   }
   /** Close this page's report session so Dev Tools can take the camera. */
   async handOff(): Promise<void> {
-    const session = this.session;
+    const session = this.session,
+      memory = this.memory;
     this.session = undefined;
+    this.memory = undefined;
     try {
+      await memory?.close();
       await session?.close();
     } finally {
+      memory?.free();
       session?.free();
       this.dispose();
     }
@@ -141,6 +138,8 @@ export class ReportUsb implements ReportConnection {
     this.session?.abandon();
     this.session?.free();
     this.session = undefined;
+    this.memory?.free();
+    this.memory = undefined;
     for (const item of this.interfaces) item.free();
     this.interfaces = [];
     this.device?.free();
