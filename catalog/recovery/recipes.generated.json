@@ -2122,25 +2122,25 @@
             "address": 17988660,
             "old": 122695680,
             "new": 68300800,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 17989340,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 17989344,
             "old": 3812628304,
             "new": 3812627474,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 22122732,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -2160,7 +2160,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 68288512,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 655360,
@@ -2212,7 +2212,64 @@
             "address": 69107712,
             "size": 5242880
           }
-        ]
+        ],
+        "defaults": {
+          "address": 68288512,
+          "size": 655360,
+          "flag": 22122732,
+          "initialize": {
+            "address": 17989124,
+            "size": 416,
+            "sha256": "b05da980cc15f65460b611a2a366f852bc8842a9280f33c687be37f735ab569c"
+          },
+          "calls": [
+            {
+              "address": 18155460,
+              "size": 4,
+              "sha256": "0807d27e23eb4e795cad0dcd5e76adc49bea93ef06a56a97ef06a24b5123a058"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 18068088,
+            "size": 212,
+            "sha256": "0796331738c151614d086c3223189ae3cf0e6e9f9e7925da05fb941d4e677cce"
+          },
+          "table_cell": 25495984,
+          "table_address": 13763584,
+          "drive_map": 25500596,
+          "read": {
+            "address": 18068300,
+            "size": 72,
+            "sha256": "5a55df5642d4b367aa76094cb03dac0e0bfcdf03e78d8b54ff85aef6b0e747d2"
+          },
+          "close": {
+            "address": 18068444,
+            "size": 72,
+            "sha256": "7544f6231a7763e6e4b1133c69ea251ff4811db060f4a9d8a74049c054c03aa2"
+          },
+          "seek": {
+            "address": 18068604,
+            "size": 108,
+            "sha256": "ff2cfa90535f0429641815077e4e9c10c87d03b367d5eb23bf54b9445839769f"
+          },
+          "create_semaphore": {
+            "address": 18076380,
+            "size": 212,
+            "sha256": "273b7e8e8a88a3011675ba1c59352dd1b2c9ec555caf2677523208203f4c82a1"
+          },
+          "wait_semaphore": {
+            "address": 18076744,
+            "size": 80,
+            "sha256": "c38dc4f5659f0e036b3fda451300b843116deb018c83694fc7a5e9cc2c7df8f1"
+          },
+          "signal_semaphore": {
+            "address": 18076824,
+            "size": 108,
+            "sha256": "fc3ef55a82e02523915ba570ae590f2682092139bc9ad2e5895453eee8c1253a"
+          }
+        }
       }
     },
     "file_api": {
@@ -6561,25 +6618,25 @@
             "address": 19344208,
             "old": 122695680,
             "new": 14299136,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19344812,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19344816,
             "old": 3812628304,
             "new": 3812626650,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 23828652,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -6599,7 +6656,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 14286848,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -6663,7 +6720,64 @@
             "address": 73826304,
             "size": 4718592
           }
-        ]
+        ],
+        "defaults": {
+          "address": 14286848,
+          "size": 524288,
+          "flag": 23828652,
+          "initialize": {
+            "address": 19344668,
+            "size": 412,
+            "sha256": "532b1d3a03f898aedbac00b9cd718dcaf0967d9891968b6a75f1ea672f89f105"
+          },
+          "calls": [
+            {
+              "address": 19514124,
+              "size": 4,
+              "sha256": "2b423b51c25daf378ea68e6b6c2f1c84703fc03477f18ddd886933c954d0978e"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 19422608,
+            "size": 220,
+            "sha256": "b5510e1464c3bbfa20b539716c3c1a50c21d16d414d05ff054defe8440ec1d77"
+          },
+          "table_cell": 25636336,
+          "table_address": 14812160,
+          "drive_map": 25635868,
+          "read": {
+            "address": 19422828,
+            "size": 72,
+            "sha256": "684563280e0fb4a34c6021b69da96b0937148fb20a4f88669542d5fdfff14403"
+          },
+          "close": {
+            "address": 19422972,
+            "size": 72,
+            "sha256": "86a69de440a35eabb23d5315edd88cefb4e3433f831a24a3531a56398bb1e583"
+          },
+          "seek": {
+            "address": 19423132,
+            "size": 108,
+            "sha256": "4e61eeaa690b164b4f6fe182e1adf175a8838708957a79419f2090ee80a521a6"
+          },
+          "create_semaphore": {
+            "address": 19434600,
+            "size": 212,
+            "sha256": "56ad52ec6cfa0cd0f9fc15d44587bf67b4e685b4f07f7a312047f3df5481ff03"
+          },
+          "wait_semaphore": {
+            "address": 19434964,
+            "size": 80,
+            "sha256": "86053ef5fdae45bd0483cf61de490b1ff46442c1e81b7ae051a6ffb40739ed6a"
+          },
+          "signal_semaphore": {
+            "address": 19435044,
+            "size": 108,
+            "sha256": "1ead47919086931559ce16ac5ee608cf2ae31ab7d4172ad802ae81ac6fcbd754"
+          }
+        }
       }
     },
     "file_api": {
@@ -9757,25 +9871,25 @@
             "address": 18064880,
             "old": 122695680,
             "new": 13250560,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 18065484,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 18065488,
             "old": 3812628304,
             "new": 3812626634,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 23380204,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -9795,7 +9909,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 13238272,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -9859,7 +9973,64 @@
             "address": 68583424,
             "size": 4718592
           }
-        ]
+        ],
+        "defaults": {
+          "address": 13238272,
+          "size": 524288,
+          "flag": 23380204,
+          "initialize": {
+            "address": 18065340,
+            "size": 412,
+            "sha256": "9e973568eee150472e5561240c0cb9edbd2ee062e757cf5d2eee817ae0c3a984"
+          },
+          "calls": [
+            {
+              "address": 18233156,
+              "size": 4,
+              "sha256": "7654524bae62741eff6070e2d05317992f9545ea7b808f2aba346051b074a736"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 18145136,
+            "size": 212,
+            "sha256": "de8586c2965188531f3919e0119df61a87c1df47036d7496923a300c9c141815"
+          },
+          "table_cell": 26817852,
+          "table_address": 13763584,
+          "drive_map": 26822416,
+          "read": {
+            "address": 18145348,
+            "size": 84,
+            "sha256": "776ab6b9a7863c1a34df17c7cf633b4f5c40111e74a1cde2fae69f5fc182a2e0"
+          },
+          "close": {
+            "address": 18145516,
+            "size": 84,
+            "sha256": "308e365e0ca65625cf4117585b7f9ff66b185b2312a9b167d00724f50e7863c6"
+          },
+          "seek": {
+            "address": 18145700,
+            "size": 100,
+            "sha256": "43acd1659739d6aa9a10a57d9db4b3a07f37a61603571310d479e067a8cfebb6"
+          },
+          "create_semaphore": {
+            "address": 18154000,
+            "size": 212,
+            "sha256": "6dd3ba5a8f12fd072d57b754fcacb1acca12222aff30f7018d5d91cdc71e62f3"
+          },
+          "wait_semaphore": {
+            "address": 18154364,
+            "size": 80,
+            "sha256": "e5cc07379f2f72ecc905faaefbfd22fb06f182b7a6ddb86740e3da8521c1bf7e"
+          },
+          "signal_semaphore": {
+            "address": 18154444,
+            "size": 108,
+            "sha256": "4d79b002617c8c8ff87673f758ad591157c96f9048cd3564ebdb68567f5fc9a6"
+          }
+        }
       }
     },
     "file_api": {
@@ -11015,25 +11186,25 @@
             "address": 19456968,
             "old": 122695680,
             "new": 14299136,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19457572,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19457576,
             "old": 3812628304,
             "new": 3812626650,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 24878256,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -11053,7 +11224,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 14286848,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -11117,7 +11288,64 @@
             "address": 73302016,
             "size": 4718592
           }
-        ]
+        ],
+        "defaults": {
+          "address": 14286848,
+          "size": 524288,
+          "flag": 24878256,
+          "initialize": {
+            "address": 19457428,
+            "size": 412,
+            "sha256": "1115d38674f14995bbc245978cad5cc2227553c11efdc3fa03d6720a5ecfc237"
+          },
+          "calls": [
+            {
+              "address": 19632524,
+              "size": 4,
+              "sha256": "5619f280a8921d98b25c1432eb2e7af963b98257206bbabccb77f39e76576533"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 19536160,
+            "size": 220,
+            "sha256": "98976a8d72f3bfd23100ea92f45e0ad0b0aa03bccfbcaf2c732b8ab91f423b1a"
+          },
+          "table_cell": 26722168,
+          "table_address": 14812160,
+          "drive_map": 26721696,
+          "read": {
+            "address": 19536380,
+            "size": 72,
+            "sha256": "dc55f9b4e7c3b65dddc7ac22664f6df649bfe65daddb7e040a1242aa91915d52"
+          },
+          "close": {
+            "address": 19536524,
+            "size": 72,
+            "sha256": "6ea840b2edc60f986b739fe06e7b521e2116d13d630b99d3db8b5c64521700ef"
+          },
+          "seek": {
+            "address": 19536684,
+            "size": 108,
+            "sha256": "cde29764071763f9a330eebcef67b580fc200f4d5f900c6644ff082e55ce311b"
+          },
+          "create_semaphore": {
+            "address": 19552996,
+            "size": 212,
+            "sha256": "92ef8b865a1cd97baf9ea8e79f28541c1204bc0004db5b603501c4e29874a472"
+          },
+          "wait_semaphore": {
+            "address": 19553360,
+            "size": 80,
+            "sha256": "04c2ab1ae06e9f601f487e9cd8c0da5ae8b317b12e40c457a132daf66abebc6f"
+          },
+          "signal_semaphore": {
+            "address": 19553440,
+            "size": 108,
+            "sha256": "19e02b2f409c28b66932ffdc7957241d4978462635916f15ba148a6d3ed7d0a0"
+          }
+        }
       }
     },
     "file_api": {
@@ -12766,25 +12994,25 @@
             "address": 17952388,
             "old": 122695680,
             "new": 13250560,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 17952992,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 17952996,
             "old": 3812628304,
             "new": 3812626634,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 22040748,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -12804,7 +13032,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 13238272,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -12868,7 +13096,64 @@
             "address": 65437696,
             "size": 4718592
           }
-        ]
+        ],
+        "defaults": {
+          "address": 13238272,
+          "size": 524288,
+          "flag": 22040748,
+          "initialize": {
+            "address": 17952848,
+            "size": 412,
+            "sha256": "1addfaaa382b8920d96009f929eadd2449a40a8afe81e362927b776dc032f851"
+          },
+          "calls": [
+            {
+              "address": 18119820,
+              "size": 4,
+              "sha256": "63925b27ee7e74696e67054b9980f653ab4bc3659b3042a4af6f5df25372b088"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 18031912,
+            "size": 212,
+            "sha256": "69e3877cb8a8312c30b24488eb266216ad80125c9cceaa39d8df2631da9f264f"
+          },
+          "table_cell": 25224416,
+          "table_address": 13763584,
+          "drive_map": 25229076,
+          "read": {
+            "address": 18032124,
+            "size": 84,
+            "sha256": "65a850e7c3fba4e3390a1bea888603e1e7397b03d2736e8a2698ae69f59b9c3e"
+          },
+          "close": {
+            "address": 18032292,
+            "size": 84,
+            "sha256": "b275915f407f7855b92b93c30d0c2dc1c6984ac2ab4757db77b3b43cc3779ed1"
+          },
+          "seek": {
+            "address": 18032476,
+            "size": 100,
+            "sha256": "be83639a234f30d819934ce73f3b3f4a43a9064acb07e04e03ad0319fa51604a"
+          },
+          "create_semaphore": {
+            "address": 18040880,
+            "size": 212,
+            "sha256": "a49f1c33883a7045ca2cf3730eff525f4eb5d42f02bbc8daf85b19ab8e2da228"
+          },
+          "wait_semaphore": {
+            "address": 18041244,
+            "size": 80,
+            "sha256": "c1d4ed2d57cff9743e7f4e80c75c5f6f876782bc5888f533a85d9402565da70a"
+          },
+          "signal_semaphore": {
+            "address": 18041324,
+            "size": 108,
+            "sha256": "f6c45be2c257b71901b272d7603da360b6d6a8289467f15ac5909a7b46bb27e9"
+          }
+        }
       }
     },
     "file_api": {
@@ -13298,25 +13583,25 @@
             "address": 17878712,
             "old": 122695680,
             "new": 13250560,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 17879316,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 17879320,
             "old": 3812628304,
             "new": 3812626634,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 21651244,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -13336,7 +13621,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 13238272,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -13400,7 +13685,64 @@
             "address": 68583424,
             "size": 4718592
           }
-        ]
+        ],
+        "defaults": {
+          "address": 13238272,
+          "size": 524288,
+          "flag": 21651244,
+          "initialize": {
+            "address": 17879172,
+            "size": 412,
+            "sha256": "e9b184d93c666ba2e0ccc7c95be1c33cf316d28f9d4c9f93ebc1c76f7f2ba2ff"
+          },
+          "calls": [
+            {
+              "address": 18042688,
+              "size": 4,
+              "sha256": "5d5d29aa26ebcf7befead685337416adb07f6a1ff448251ff912b711d09946ed"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 17955588,
+            "size": 212,
+            "sha256": "8c728e668f1dd59a7884eba7c38be018c64035c81917c5af9a920c074b6add6b"
+          },
+          "table_cell": 24848744,
+          "table_address": 13763584,
+          "drive_map": 24853056,
+          "read": {
+            "address": 17955800,
+            "size": 72,
+            "sha256": "60b8e85b54acb5d1cd44323b1000d59a670719b6af15e146c073a516dccb2ac5"
+          },
+          "close": {
+            "address": 17955944,
+            "size": 72,
+            "sha256": "50c38d80d8268252c5351cd5e97cf7d4926fffc63387bf034fdb105aa7542e86"
+          },
+          "seek": {
+            "address": 17956104,
+            "size": 108,
+            "sha256": "e0ce0ecce4f899e72073ca507861e80730ace7781e36a3391b4a5c41256523b6"
+          },
+          "create_semaphore": {
+            "address": 17963880,
+            "size": 212,
+            "sha256": "d0e35d9927f688f2896f924619e9305fefdea9ca9776beb57f1d9e1895d1cbc8"
+          },
+          "wait_semaphore": {
+            "address": 17964244,
+            "size": 80,
+            "sha256": "b0a94ad9287aefb41230dc7405df5524ecd649745d6f77458cf8d68b6e3ac9fe"
+          },
+          "signal_semaphore": {
+            "address": 17964324,
+            "size": 108,
+            "sha256": "ccaf63e2caa87441b7f5898568684dd3ac095bb3ad861af0d4258a0ff590cc9a"
+          }
+        }
       }
     },
     "file_api": {
@@ -13840,25 +14182,25 @@
             "address": 19345780,
             "old": 122695680,
             "new": 14299136,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19346384,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19346388,
             "old": 3812628304,
             "new": 3812626650,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 24258476,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -13878,7 +14220,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 14286848,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -13942,7 +14284,64 @@
             "address": 73826304,
             "size": 4718592
           }
-        ]
+        ],
+        "defaults": {
+          "address": 14286848,
+          "size": 524288,
+          "flag": 24258476,
+          "initialize": {
+            "address": 19346240,
+            "size": 412,
+            "sha256": "1aa01a3983491fee23a3cbd92cd7a04b6de917f08ba15f9a5a1e04618af73088"
+          },
+          "calls": [
+            {
+              "address": 19515384,
+              "size": 4,
+              "sha256": "ef7aa58b7c7d28678ea7248d1181a70457ca5872f6dae70e092d1f5e8979588b"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 19424128,
+            "size": 220,
+            "sha256": "8dfadfc47450aadbabed9377472480131bd78c1b17fa29160a4bda3b13c1564b"
+          },
+          "table_cell": 26095344,
+          "table_address": 14812160,
+          "drive_map": 26094876,
+          "read": {
+            "address": 19424348,
+            "size": 72,
+            "sha256": "6379540fd98497482b5d98b2be56bfd9e084bfc25744ddc468d80c4e4e733ec4"
+          },
+          "close": {
+            "address": 19424492,
+            "size": 72,
+            "sha256": "329e4914f1f17c2925c07b35279f3de65ed54a043a61ea53b8f6d3d0da330599"
+          },
+          "seek": {
+            "address": 19424652,
+            "size": 108,
+            "sha256": "69ecaa31e69ce9c2fb1fe154e055ba118c341d4d09ea2d77c3fbb1dab5d9b2dc"
+          },
+          "create_semaphore": {
+            "address": 19436140,
+            "size": 212,
+            "sha256": "8ca55a828bd5bc590fe5bd4d53cc6d59d13c7dd46dc29997b006a89212975894"
+          },
+          "wait_semaphore": {
+            "address": 19436504,
+            "size": 80,
+            "sha256": "399d8605f3154eb52c45066fc57043a64848e46c52282b36ba82828ee53cfac7"
+          },
+          "signal_semaphore": {
+            "address": 19436584,
+            "size": 108,
+            "sha256": "a396438e034f673d2130e90c4965b019981c2ca61717ea17f72b9ee1b83862bf"
+          }
+        }
       }
     },
     "file_api": {
@@ -15128,25 +15527,25 @@
             "address": 19283316,
             "old": 122695680,
             "new": 14299136,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19283920,
             "old": 3808432128,
             "new": 3808432128,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 19283924,
             "old": 3812628304,
             "new": 3812626650,
-            "what": "resident defaults source"
+            "what": "startup defaults source"
           },
           {
             "address": 24317168,
             "old": 1,
             "new": 0,
-            "what": "select resident configuration defaults"
+            "what": "select startup configuration defaults"
           }
         ],
         "placements": [
@@ -15166,7 +15565,7 @@
           {
             "name": "configuration defaults",
             "offset": 786432,
-            "address": 14286848,
+            "address": null,
             "source": {
               "dat_offset": 787060,
               "size": 524288,
@@ -15230,7 +15629,64 @@
             "address": 73302016,
             "size": 4980736
           }
-        ]
+        ],
+        "defaults": {
+          "address": 14286848,
+          "size": 524288,
+          "flag": 24317168,
+          "initialize": {
+            "address": 19283776,
+            "size": 412,
+            "sha256": "419547312e921f7b10e0e3d92cf0e8c24621a3ae4345a9fc63acd4b078aaf782"
+          },
+          "calls": [
+            {
+              "address": 19470160,
+              "size": 4,
+              "sha256": "d520d602884ecb062dc91c96aae934080339a19c2257e4342d04b24c61cd4041"
+            }
+          ]
+        },
+        "native_file": {
+          "open": {
+            "address": 19373632,
+            "size": 220,
+            "sha256": "23fb54cfba5e4f75a16f8158161f4c5b7257870b3729678e5097cf2b5cb9f080"
+          },
+          "table_cell": 26127576,
+          "table_address": 14812160,
+          "drive_map": 26126892,
+          "read": {
+            "address": 19373852,
+            "size": 84,
+            "sha256": "9a6dd384d2516b8583e6b2033cf59b2311e38b638727fa96bad48ebbc3db5bde"
+          },
+          "close": {
+            "address": 19374020,
+            "size": 84,
+            "sha256": "ed20d9a1be7693c8ca0b5799b2ba8bfb2ee4be7cc271944d1fca01e9cec2388a"
+          },
+          "seek": {
+            "address": 19374204,
+            "size": 100,
+            "sha256": "2786601eb9f0a520fe73f8cb7d541fbf8c11cccbfc98f7928914193ace1198be"
+          },
+          "create_semaphore": {
+            "address": 19390948,
+            "size": 212,
+            "sha256": "e067f3cdcbb13296d5a7fa4e275fadb6d7b36c689ba0c9d3cedc32162f042239"
+          },
+          "wait_semaphore": {
+            "address": 19391312,
+            "size": 80,
+            "sha256": "c35a8c2edbb2b85d48997b2514d02cb37b71a639d5b5e20e79de4145680f8cbb"
+          },
+          "signal_semaphore": {
+            "address": 19391392,
+            "size": 108,
+            "sha256": "725c6a6e0ec15e3e3408661499e3fac1e5960ed44c7fa29782fc3577e1af1195"
+          }
+        }
       }
     },
     "file_api": {

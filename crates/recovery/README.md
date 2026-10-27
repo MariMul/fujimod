@@ -36,13 +36,18 @@ FFINIT with the update's DDR setup and relocated tables, the Topaz filesystem
 ABI, and a cold preloaded RAM image. Reset mode remains cold; three checked
 comparisons select the preloaded table, images, and worker bypass.
 
-XP4 also removes redundant application/overlay scratch transfers and resource
-reloads. Defaults and fixed resources are placed directly in RAM; selectable
-language/font banks and fallback slices have explicit resident source ranges.
-The stock RAM-defaults path consumes the placed defaults. Remaining bank reads
-resolve only those ranges and reject unavailable offsets. There is no complete
-update mirror, primary-loader copy, or top-of-DRAM backing allocation. Settings,
-calibration and the updater's independent DAT reads retain their own drivers.
+XP4 removes redundant application/overlay scratch transfers and resource
+reloads. Fixed outputs start at their runtime destinations. Early defaults use
+transient staging that is wiped once after configuration initialization; the
+stock storage-default selector is then restored. Selectable language/font
+banks, fallback slices and subsequent defaults requests read bounded ranges
+from the separate `ffdata.bin` through the native asynchronous filesystem SDK.
+Each request uses one serialized open/seek/read/close transaction and checks
+its actual byte count. SDK initialization and SD0 routing must match; short
+reads, errors and unavailable offsets fail. Fixed outputs cannot be used as
+copy sources for other destinations. No persistent data-bank RAM backing or
+late boot-ROM controller access is installed. Settings, calibration and the
+updater's independent DAT reads retain their own drivers.
 
 EXR and EXR Pro use EXR's 512-byte `ffsys.bin` header and a small
 `ffboot.bin`. That SD loader copies itself to SRAM and uses the ROM's u16 read

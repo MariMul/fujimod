@@ -464,7 +464,11 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
                     output_filenames.push("ffuser.bin".into());
                 }
             }
-            Generation::Xp4 => output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()]),
+            Generation::Xp4 => output_filenames.extend([
+                "ffinit.bin".into(),
+                "ffboot.bin".into(),
+                "ffdata.bin".into(),
+            ]),
             Generation::Xp5 => {
                 output_filenames.extend(["marble_init.bin".into(), "ffboot.bin".into()])
             }
