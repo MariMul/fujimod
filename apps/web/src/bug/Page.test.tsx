@@ -5,7 +5,6 @@ import { expect, test, vi } from 'vite-plus/test';
 import BugReport from './Page';
 import { base64url } from './report-link';
 import { tar, link, hash, reportTar } from './fixtures.test-helper';
-import { crc32 } from '@fujimod/emulator-ui/archive';
 import { listedReport } from './report-link';
 import type { UploadReport } from './upload';
 import type { ReportConnection } from './usb';
@@ -177,11 +176,7 @@ test("USB reports show their screen and time, list the camera's others and offer
   URL.createObjectURL ??= () => 'blob:screen';
   URL.revokeObjectURL ??= () => {};
   const first = reportTar({ 'screen.bmp': Uint8Array.of(0x42, 0x4d, 1) }, '2026-10-27T14:04:05');
-  const qr = {
-    ...link,
-    bytes: first.length,
-    crc32: crc32(first).toString(16).padStart(8, '0'),
-  };
+  const qr = { ...link, bytes: first.length };
   const second = reportTar({ 'state.json': Uint8Array.of(123, 125) }, '2026-10-26T09:30:00');
   const listing = [
     { name: 'R1234567.TAR', bytes: first.length },

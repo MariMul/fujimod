@@ -1,6 +1,5 @@
 // TAR fixture created with Python tarfile (USTAR), gzip mtime=0.
 import { gunzipSync } from 'node:zlib';
-import { crc32 } from '@fujimod/emulator-ui/archive';
 import { base64url, type ReportLink } from './report-link';
 export const tar = Uint8Array.from(
   gunzipSync(
@@ -16,7 +15,6 @@ export const link: ReportLink = {
   commit: 'a'.repeat(8),
   path: 'A:\\FUJIMOD\\REPORTS\\R1234567.TAR',
   bytes: tar.length,
-  crc32: crc32(tar).toString(16).padStart(8, '0'),
   files: '403a0000',
 };
 export const hash = (value = link) =>
@@ -28,16 +26,14 @@ export const hash = (value = link) =>
         b: value.commit,
         r: value.path.match(/R([a-fA-F0-9]{7})\.TAR$/)?.[1] ?? '',
         n: value.bytes,
-        c: value.crc32,
         f: value.files,
         a: value.archive,
       }),
     ),
   );
-/** A USTAR report like the camera writes: `files`, then a manifest with each file's CRC32. */
+/** A USTAR report like the camera writes: `files`, then a manifest. */
 export function reportTar(files: Record<string, Uint8Array>, capturedAt?: string) {
   const encoder = new TextEncoder();
-  const hex = (value: number) => value.toString(16).padStart(8, '0');
   const manifest = encoder.encode(
     JSON.stringify({
       format_version: 1,
@@ -46,7 +42,6 @@ export function reportTar(files: Record<string, Uint8Array>, capturedAt?: string
       files: Object.entries(files).map(([path, data]) => ({
         path,
         bytes: data.length,
-        crc32: hex(crc32(data)),
         status: 0,
       })),
     }),

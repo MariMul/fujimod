@@ -113,7 +113,7 @@ export class ReportUsb implements ReportConnection {
     const memory = this.memory;
     if (
       !this.verified ||
-      ['files', 'path', 'bytes', 'crc32', 'commit'].some(
+      ['files', 'path', 'bytes', 'commit'].some(
         (key) => this.verified![key as keyof ReportLink] !== link[key as keyof ReportLink],
       )
     )

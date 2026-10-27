@@ -4,14 +4,6 @@ import { runtime } from './test-runtime.ts';
 const origin = 'https://justjake.github.io';
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const tar = new Uint8Array(1024);
-function crc32(bytes: Uint8Array) {
-  let crc = 0xffffffff;
-  for (const b of bytes) {
-    crc ^= b;
-    for (let n = 0; n < 8; n++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-  }
-  return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0');
-}
 async function submission(overrides: Record<string, unknown> = {}) {
   const body = new FormData();
   body.set('report', new Blob([tar]), 'R1234567.TAR');
@@ -24,7 +16,6 @@ async function submission(overrides: Record<string, unknown> = {}) {
       commit: 'a'.repeat(8),
       path: 'A:\\FUJIMOD\\REPORTS\\R1234567.TAR',
       bytes: 1024,
-      crc32: crc32(tar),
       files: '403a0000',
       ...overrides,
     }),

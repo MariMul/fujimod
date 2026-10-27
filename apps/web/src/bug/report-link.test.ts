@@ -1,5 +1,4 @@
 import { expect, test } from 'vite-plus/test';
-import { crc32 } from '@fujimod/emulator-ui/archive';
 import {
   parseReportLink,
   validateReport,
@@ -22,17 +21,14 @@ test('rejects malformed descriptors and damaged archives', () => {
     { ...link, v: 2 },
     { ...link, bytes: -1 },
     { ...link, path: 'A:\\SECRET.TAR' },
-    { ...link, crc32: 'wrong' },
   ])
     expect(() => parseReportLink(hash(value as typeof link))).toThrow();
   const damaged = tar.slice();
   damaged[512] ^= 1;
-  expect(() => validateReport(damaged, link)).toThrow('incomplete');
+  expect(validateReport(damaged, link).size).toBe(tar.length);
   const invalid = tar.slice();
   invalid[0] ^= 1;
-  expect(() =>
-    validateReport(invalid, { ...link, crc32: crc32(invalid).toString(16).padStart(8, '0') }),
-  ).toThrow('checksum');
+  expect(() => validateReport(invalid, link)).toThrow('checksum');
 });
 
 test('the camera QR carries only compact retrieval metadata', () => {
@@ -43,7 +39,6 @@ test('the camera QR carries only compact retrieval metadata', () => {
     b: link.commit,
     r: '1234567',
     n: tar.length,
-    c: link.crc32,
     f: link.files,
   });
   expect(('https://fujimod.com/bug' + hash()).length).toBeLessThan(190);
@@ -59,8 +54,14 @@ test('the camera QR carries only compact retrieval metadata', () => {
         '#?report=' + base64url(new TextEncoder().encode(JSON.stringify({ ...wire, ...changes }))),
       ),
     ).toThrow();
+  const checksumLink = { v: 1, b: link.commit, r: '1234567', n: tar.length, c: '00000000', f: link.files };
+  expect(() =>
+    parseReportLink(
+      '#?report=' + base64url(new TextEncoder().encode(JSON.stringify(checksumLink))),
+    ),
+  ).toThrow();
 });
-test('a listed report is checked against its manifest and named by its file', () => {
+test('a listed report uses manifest sizes and its file name', () => {
   const screen = Uint8Array.of(0x42, 0x4d, 1, 2, 3);
   const bytes = reportTar(
     { 'screen.bmp': screen, 'state.json': Uint8Array.of(123, 125) },
@@ -77,6 +78,6 @@ test('a listed report is checked against its manifest and named by its file', ()
   ).toEqual(screen);
   const damaged = bytes.slice();
   damaged[details.screen!.offset + 2] ^= 1;
-  expect(() => listedReport(damaged, link, 'R00000AB.TAR')).toThrow('incomplete or damaged');
+  expect(listedReport(damaged, link, 'R00000AB.TAR').link.bytes).toBe(damaged.length);
   expect(() => listedReport(bytes, link, 'NOTES.TXT')).toThrow();
 });
