@@ -538,7 +538,6 @@ impl Session {
 }
 pub(crate) enum Operation {
     Workflow(crate::workflows::Workflow),
-    Bulk(crate::workflows::BulkRead),
     StateDump(crate::workflows::StateDump),
     FlashBackup(Box<crate::workflows::FlashBackup>),
     UploadOwned(
@@ -603,7 +602,6 @@ impl Operation {
         };
         match self {
             Self::Workflow(workflow) => return workflow.run(s).await,
-            Self::Bulk(read) => return read.run(s).await,
             Self::Memory(operation) => return operation.run(s).await,
             Self::StateDump(dump) => return dump.run(s).await,
             Self::FlashBackup(backup) => return backup.run(s).await,

@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Camera, CameraModel } from '../camera-model';
 import { bulkSelection, captureRanges, contiguous, type CaptureSet } from './capture';
@@ -182,7 +183,9 @@ export function MapControls(props: {
                 onClick={() => setControl(control() === id ? undefined : id)}
               >
                 <span>{entry.name}</span>
-                <span class="cap-dim">{mapped(id) ? '✓' : entry.location}</span>
+                <span class="cap-dim">
+                  {mapped(id) ? <Icon name="check" size={13} /> : entry.location}
+                </span>
               </button>
             </li>
           )}

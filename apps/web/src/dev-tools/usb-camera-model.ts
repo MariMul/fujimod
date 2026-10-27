@@ -16,6 +16,7 @@ import type {
   CameraLogEntry,
   CameraModel,
   SessionHolder,
+  ToolMemory,
   ToolSession,
 } from './camera-model';
 import { cameraDefinition, flashReader } from './camera-definition';
@@ -39,7 +40,6 @@ export interface ModelSession extends Pick<
   | 'free'
   | 'abandon'
   | 'state'
-  | 'readBulk'
   | 'backupFlash'
   | 'dumpState'
   | 'readConfiguration'
@@ -50,6 +50,7 @@ export interface ModelSession extends Pick<
   | 'leaveDebugMode'
 > {
   deviceInfo(selector: Parameters<Session['deviceInfo']>[0]): Promise<Reply>;
+  memory(firmwareId: string): Promise<ToolMemory & { free(): void }>;
   configurationGeometry(
     view: Parameters<Session['configurationGeometry']>[0],
   ): Promise<{ capacity: number; pageBytes: number; free(): void }>;
@@ -205,7 +206,22 @@ function toolSession(
     },
     readConfiguration: (offset, length) =>
       session.readConfiguration(usb.ConfigurationView.Ram, 0, offset, length),
-    readBulk: (firmwareId, address, length) => session.readBulk(firmwareId, address, length),
+    async memory(firmwareId) {
+      const memory = await session.memory(firmwareId);
+      return {
+        read: (address, length) => memory.read(address, length),
+        get overwritten() {
+          return memory.overwritten;
+        },
+        async close() {
+          try {
+            await memory.close();
+          } finally {
+            memory.free();
+          }
+        },
+      };
+    },
     async submitConsole(data) {
       await session.submitConsole(data);
     },

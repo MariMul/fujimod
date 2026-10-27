@@ -38,9 +38,15 @@ function mount(component: typeof StateCaptures, reads: () => Uint8Array) {
   const calls: [string, number, number][] = [];
   const test = createTestCameraModel({
     session: () => ({
-      async readBulk(firmware, address, size) {
-        calls.push([firmware, address, size]);
-        return { data: reads().slice(0, size), overwritten: { address: 0x9000, size: 4 } };
+      async memory(firmware) {
+        return {
+          async read(address, size) {
+            calls.push([firmware, address, size]);
+            return reads().slice(0, size);
+          },
+          overwritten: { address: 0x9000, size: 4 },
+          async close() {},
+        };
       },
     }),
   });

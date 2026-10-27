@@ -1,4 +1,5 @@
 import { Show, createSignal, untrack } from 'solid-js';
+import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { JSX } from '@solidjs/web';
 import type {
@@ -274,7 +275,7 @@ function Item(props: { number: number; state: Step; children: JSX.Element }) {
   return (
     <li class="gs-step" data-state={props.state}>
       <span class="gs-number" aria-hidden="true">
-        {props.state === 'done' ? '✓' : props.number}
+        {props.state === 'done' ? <Icon name="check" size={12} /> : props.number}
       </span>
       <div class="gs-row">{props.children}</div>
     </li>

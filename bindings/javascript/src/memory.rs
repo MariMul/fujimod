@@ -163,6 +163,26 @@ impl Memory {
                 limits(&self.session),
             ))))
     }
+    /// Diagnostic scratch the stock bulk setup overwrote, which may lie inside
+    /// bytes this handle reads; null when the setup overwrote nothing.
+    #[wasm_bindgen(
+        getter,
+        unchecked_return_type = "{ address: number; size: number } | null"
+    )]
+    pub fn overwritten(&self) -> JsValue {
+        let Some((address, size)) = self
+            .mapping
+            .borrow()
+            .as_ref()
+            .and_then(BulkMapping::overwritten)
+        else {
+            return JsValue::NULL;
+        };
+        let range = js_sys::Object::new();
+        crate::error::property(&range, "address", address as f64);
+        crate::error::property(&range, "size", size);
+        range.into()
+    }
     /// Restore any bulk source override. Later reads and writes refuse.
     #[wasm_bindgen(unchecked_return_type = "Promise<void>")]
     pub fn close(&self) -> Result<js_sys::Promise, JsValue> {

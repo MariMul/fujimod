@@ -163,7 +163,12 @@ class CameraDevice implements ModelDevice {
         sha256: 'a'.repeat(64),
       }),
       dumpState: async () => {},
-      readBulk: async () => ({ data: Uint8Array.of(1, 2, 3, 4), overwritten: null }),
+      memory: async () => ({
+        read: async () => Uint8Array.of(1, 2, 3, 4),
+        overwritten: null,
+        close: async () => {},
+        free() {},
+      }),
       readConfiguration: async (...args) => {
         this.configurationReads(...args);
         if (this.failDebugRead) throw Error('configuration read failed');
