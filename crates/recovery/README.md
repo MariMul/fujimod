@@ -85,7 +85,9 @@ use an 80-byte compiled preload helper that keeps the stock gates and cache
 publication. It replaces the original raw-section-1 loader body in its existing
 executable storage; the MAIN/raw-section-2 calls point there. No additional RAM
 reservation is needed.
-Stock callers retain BSS handling. Demand resources and per-camera data use
+Stock callers retain BSS handling. Raw images include the complete allocation
+padding that the original rounded block transfers would write. Demand resources
+and per-camera data use
 the stock NOR reader and its locks/controller initialization. Program and erase
 paths retain their stock code. This design recovers executable modifications;
 it depends on the installed demand resources matching the selected firmware.

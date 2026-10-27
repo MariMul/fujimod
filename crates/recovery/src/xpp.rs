@@ -35,6 +35,7 @@ pub struct Reads {
     pub dat_offset: usize,
     pub namespace_size: usize,
     pub preloads: Vec<Preload>,
+    pub padding: Vec<image::Region>,
     pub cache_maintenance: Proof,
     pub enabled_byte: usize,
     pub preloaded_byte: usize,
@@ -272,6 +273,7 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
         count: (count + 0xffff) >> 16,
         output: scratch,
     }];
+    let mut padding = Vec::new();
     for id in [1, 2] {
         let mut raw = Vec::new();
         for region in &plan.regions {
@@ -330,6 +332,34 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
                 }),
             "Agate raw preload source differs",
         )?;
+        let transferred = (allocated + 0xffff) & !0xffff;
+        if transferred > len {
+            let address = dest + len;
+            let size = transferred - len;
+            require(
+                plan.regions.iter().all(|r| {
+                    address + size <= r.address || r.address + r.source.decoded_size <= address
+                }) && plan
+                    .bss
+                    .iter()
+                    .all(|r| address + size <= r.address || r.address + r.size <= address),
+                "Agate raw allocation padding overlaps another image or BSS",
+            )?;
+            let dat_offset = bias + flash + len;
+            let bytes = extent(inverted, dat_offset, size)?;
+            padding.push(image::Region {
+                name: format!("section-{id} allocation padding"),
+                address,
+                source: image::Source {
+                    dat_offset,
+                    size,
+                    compression: image::Compression::Raw,
+                    decoded_size: size,
+                    sha256: fujimod_firmware::sha256(bytes),
+                    initialized_prefix: None,
+                },
+            });
+        }
         preloads.push(Preload {
             caller: pin(ram, raw[0], 0x50)?,
             call: pin(ram, raw[0] + 0x44, 4)?,
@@ -348,6 +378,7 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
         dat_offset: bias,
         namespace_size: limit,
         preloads,
+        padding,
         cache_maintenance: pin(ram, cache, 0x30)?,
         enabled_byte: enabled,
         preloaded_byte: table.address + 8,
@@ -380,6 +411,14 @@ pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result
     hash(extent(ram, address, storage.size)?, &storage.sha256)?;
     for p in &reads.preloads {
         hash(extent(ram, p.call.address, 4)?, &p.call.sha256)?;
+    }
+    for p in &reads.padding {
+        require(
+            extent(ram, p.address, p.source.decoded_size)?
+                .iter()
+                .all(|b| *b == 0),
+            "Agate raw allocation padding is occupied",
+        )?;
     }
     let mut program = IMAGE.to_vec();
     for (i, v) in [
@@ -419,6 +458,10 @@ pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result
         )?;
     }
     ram[address..address + program.len()].copy_from_slice(&program);
+    for p in &reads.padding {
+        let bytes = p.source.read(inverted)?;
+        ram[p.address..p.address + bytes.len()].copy_from_slice(&bytes);
+    }
     Ok(())
 }
 
@@ -430,7 +473,7 @@ mod tests {
         0xeb000000 | (((to as i64 - at as i64 - 8) >> 2) as u32 & 0xffffff)
     }
     fn fixture() -> (Vec<u8>, Plan, Vec<u8>) {
-        let mut input = vec![0x5a; 0x18100];
+        let mut input = vec![0x5a; 0x20100];
         for (off, val) in [(0, 5), (4, 0x200000), (20, 0xf00)] {
             put(&mut input, 0x400 + 0x40 + 5 * 36 + off, val).unwrap();
         }
@@ -585,7 +628,7 @@ mod tests {
             initialized_prefix: None,
         };
         put(&mut ram, 0x200610, branch(0x200610, 0x200880)).unwrap();
-        for (id, at, dest) in [(1, 0x200900, 0x220000), (2, 0x200980, 0x220100)] {
+        for (id, at, dest) in [(1, 0x200900, 0x220000), (2, 0x200980, 0x230000)] {
             for (i, w) in [
                 0xe92d4800,
                 0xe28db004,
@@ -647,7 +690,7 @@ mod tests {
                 },
             ],
         };
-        for dest in [0x220000, 0x220100] {
+        for dest in [0x220000, 0x230000] {
             plan.regions.push(Region {
                 name: format!("raw-{dest:x}"),
                 address: dest,
@@ -659,7 +702,7 @@ mod tests {
         (input, plan, ram)
     }
     #[test]
-    fn only_preloaded_executable_transfers_change_and_stock_data_paths_are_preserved() {
+    fn preloaded_allocations_include_padding_and_preserve_stock_data_paths() {
         let (input, plan, mut ram) = fixture();
         ram[0x100000..0x108000].fill(0xa5);
         let original = ram.clone();
@@ -714,6 +757,13 @@ mod tests {
                 &original[p.address..p.address + p.size]
             );
         }
+        assert_eq!(reads.padding.len(), 2);
+        for p in &reads.padding {
+            let expected = p.source.read(&input).unwrap();
+            assert_eq!(&ram[p.address..p.address + expected.len()], expected);
+            ram[p.address..p.address + expected.len()]
+                .copy_from_slice(&original[p.address..p.address + expected.len()]);
+        }
         let address = reads.preloads[1].caller.address;
         ram[address..address + IMAGE.len()]
             .copy_from_slice(&original[address..address + IMAGE.len()]);
@@ -721,7 +771,7 @@ mod tests {
     }
     #[test]
     fn changed_read_abi_translation_or_raw_loader_body_refuses() {
-        for at in [0x200080, 0x2000c0, 0x200100, 0x200900] {
+        for at in [0x200080, 0x2000c0, 0x200100, 0x200900, 0x220020] {
             let (input, plan, mut ram) = fixture();
             ram[at] ^= 1;
             assert!(install(&input, &plan, &mut ram).is_err(), "{at:x}");
