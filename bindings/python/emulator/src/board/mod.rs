@@ -382,9 +382,16 @@ impl Board {
         }
         let saved = self
             .session()?
-            .checkpoint(previous.as_ref().map(|p| &p.saved))
+            .checkpoint(previous.as_ref().and_then(|p| p.saved.as_ref()))
             .map_err(error)?;
-        Ok(Checkpoint { saved })
+        let ticks = saved.now();
+        let instruction_counts = saved.instruction_counts().to_vec();
+        Ok(Checkpoint {
+            saved: Some(saved),
+            bytes: None,
+            ticks,
+            instruction_counts,
+        })
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> PyResult<()> {
         if self.driver.is_some()
@@ -397,7 +404,15 @@ impl Board {
                 "keyframe requires no active host instrumentation or isolated call",
             ));
         }
-        self.session_mut()?.restore(&saved.saved).map_err(error)
+        if let Some(snapshot) = &saved.saved {
+            return self.session_mut()?.restore(snapshot).map_err(error);
+        }
+        let bytes = saved
+            .bytes
+            .as_deref()
+            .ok_or_else(|| PyValueError::new_err("checkpoint has no saved state"))?;
+        let imported = self.session()?.import_snapshot(bytes).map_err(error)?;
+        self.session_mut()?.restore(&imported).map_err(error)
     }
 
     #[new]
