@@ -40,6 +40,8 @@ pub struct ColdStart {
 }
 
 pub fn package(
+    recipe: &crate::Recipe,
+    source: &[u8],
     inverted: &[u8],
     plan: &Plan,
     cold: &ColdStart,
@@ -53,6 +55,7 @@ pub fn package(
         .as_ref()
         .ok_or_else(|| image::Error::Invalid("Missing XP4 preloaded data map".into()))?;
     preload.install(inverted, &plan, setup.dat_offset, &mut ram)?;
+    crate::green_led::preserve_loader_green(recipe, source, &mut ram)?;
     let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,

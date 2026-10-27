@@ -9,18 +9,18 @@ use std::collections::BTreeSet;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
-pub(super) enum Initialization {
+pub(crate) enum Initialization {
     StockGpio { ports: Vec<Port> },
     Xp5,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Port {
-    port: u32,
-    proof: usize,
+pub(crate) struct Port {
+    pub port: u32,
+    pub proof: usize,
 }
 #[derive(Debug, PartialEq)]
-pub(super) struct Write {
+pub(crate) struct Write {
     pub address: u32,
     pub clear: u32,
     pub value: u32,

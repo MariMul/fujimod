@@ -210,3 +210,20 @@ the CPU sleeps. A wake returns directly to WFE; there is no NOP busy wait.
 
 The offline CLI builds the same LED card with
 `cargo run -p fujimod-recovery -- green-led FIRMWARE DAT NEW_DIRECTORY`.
+
+## Startup indication
+
+Full-system SD cards light the rear LED green at their first executable stage,
+using the same checked GPIO descriptors and complete pin setup as the LED card.
+EXR and EXR Pro light it before reading `ffuser.bin`; X-Processor 4 lights it
+before DDR setup and the `ffboot.bin` read. EXR II and X-Processor Pro light it
+at RAM entry, after the ROM finishes reading `ffboot.bin`. X-Processor 5 keeps
+its entry indication green while setup and loading continue; its failure
+signals remain available.
+
+The ARM entry preserves registers, flags and the incoming stack. The stock
+loader's green GPIO latch default stays asserted. Application GPIO setup and
+ordinary LED writes then take control without an interrupt, timer or persistent
+LED override. Recipes with completion-controlled startup indication retain that
+handoff instead. Terminal LED cards continue to hold green without booting the
+system.
