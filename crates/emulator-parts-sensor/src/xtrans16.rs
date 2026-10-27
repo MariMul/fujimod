@@ -282,10 +282,8 @@ impl Controls for Sensor {
             if b[1] == 0 {
                 let changed = b[2] & 0xfc != self.state.registers[0] & 0xfc;
                 let restarted = b[2] & 1 == 0 && self.state.registers[0] & 1 != 0;
-                if changed {
-                    self.state.global_seconds = None;
-                }
                 if changed || restarted {
+                    self.state.global_seconds = None;
                     self.state.rolling_seconds = None;
                     self.state.settling = self.options.mode_change_frames;
                 }
@@ -713,6 +711,12 @@ mod tests {
         sensor.restore_checkpoint(&saved).unwrap();
         sensor.timing(1278, 3374, None).unwrap();
         assert!((wire.lock().unwrap().seconds - expected).abs() < 1e-12);
+        // Restarting the same drive mode starts a new physical exposure.
+        sensor.command(&command(&[(0, 0x2d), (5, 0x32)])).unwrap();
+        sensor.timing(1278, 645, Some(304321)).unwrap();
+        assert!(!sensor.frame().unwrap());
+        sensor.command(&command(&[(0, 0x2c)])).unwrap();
+        assert!((wire.lock().unwrap().seconds - expected - 1278. / 33_000_000.).abs() < 1e-12);
     }
 
     #[test]
