@@ -3,13 +3,40 @@ import { DurableObject } from 'cloudflare:workers';
 import { putObject } from './bucket.ts';
 import { publishUpload } from './publications.ts';
 import { parseReportMetadata, reportEntries } from '../web/src/bug/report-link.ts';
+import cameraLabelTable from './camera-labels.generated.json' with { type: 'json' };
 const json = (value: object, status = 200) =>
   Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const MAX_UPLOAD = 8 * 1024 * 1024;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
-/** GitHub labels for each camera body's reports; the labels exist in the repository
- * with descriptions (`x70`: "Fujifilm X70 (EXR Processor 2)"). */
-const BODY_LABELS: Record<string, string> = { 'x70-110': 'x70' };
+interface CameraLabel {
+  name: string;
+  description: string;
+}
+/** Generated from the catalog by `npm run generate`. */
+const CAMERA_LABELS: Record<string, CameraLabel> = cameraLabelTable;
+const GITHUB = 'https://api.github.com/repos/justjake/fujimod';
+const github = (token: string) => ({
+  Authorization: `Bearer ${token}`,
+  Accept: 'application/vnd.github+json',
+  'Content-Type': 'application/json',
+  'User-Agent': 'FujiMod-Issue-Reports',
+  'X-GitHub-Api-Version': '2022-11-28',
+});
+/** Create the camera's label with its description the first time that camera
+ * reports, so GitHub never creates it bare. */
+async function ensureLabel(token: string, label: CameraLabel) {
+  const existing = await fetch(`${GITHUB}/labels/${encodeURIComponent(label.name)}`, {
+    headers: github(token),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (existing.status !== 404) return;
+  await fetch(`${GITHUB}/labels`, {
+    method: 'POST',
+    headers: github(token),
+    body: JSON.stringify({ ...label, color: '1d76db' }),
+    signal: AbortSignal.timeout(5000),
+  });
+}
 export async function issueReports(request: Request, env: Env) {
   const origin = request.headers.get('Origin');
   if (
@@ -130,19 +157,17 @@ export class IssueReports extends DurableObject<Env> {
         { httpMetadata: { contentType: 'application/json' } },
       );
       await this.ctx.storage.put(id, { state: 'submitting' });
+      const camera = CAMERA_LABELS[metadata.firmware],
+        token = this.env.GITHUB_ISSUES_TOKEN ?? '';
       try {
-        const response = await fetch('https://api.github.com/repos/justjake/fujimod/issues', {
+        // Without its label GitHub would still apply the name, only without a description.
+        if (camera) await ensureLabel(token, camera).catch((error) => console.error(error));
+        const response = await fetch(`${GITHUB}/issues`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.env.GITHUB_ISSUES_TOKEN}`,
-            Accept: 'application/vnd.github+json',
-            'Content-Type': 'application/json',
-            'User-Agent': 'FujiMod-Issue-Reports',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
+          headers: github(token),
           body: JSON.stringify({
             title: '[Camera] ' + (description.trim().split('\n')[0] || 'Bug report').slice(0, 120),
-            labels: ['bug', 'from-camera', BODY_LABELS[metadata.firmware]],
+            labels: ['bug', 'from-camera', ...(camera ? [camera.name] : [])],
             body: `${description.trim().replaceAll('@', '@\u200b')}\n\nFirmware: ${metadata.firmware}\nFujiMod build: ${metadata.commit}\nReport ID: \`${id}\`\n\nDiagnostic archive stored privately for maintainers.\n\nFiles:\n${entries.map((e) => `- ${e.name} (${e.bytes} bytes)`).join('\n')}`,
           }),
           signal: AbortSignal.timeout(10000),

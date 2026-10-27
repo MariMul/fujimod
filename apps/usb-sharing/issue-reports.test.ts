@@ -43,10 +43,24 @@ async function submission(overrides: Record<string, unknown> = {}) {
   };
 }
 await test('explicit intake saves privately, creates one issue and deduplicates retries', async () => {
-  let issues = 0;
+  let issues = 0,
+    labels = 0;
   const mf = await runtime({
     bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async (request) => {
+      if (request.url === 'https://api.github.com/repos/justjake/fujimod/labels/x70') {
+        assert.equal(request.method, 'GET');
+        return new Response('{}', { status: 404 });
+      }
+      if (request.url === 'https://api.github.com/repos/justjake/fujimod/labels') {
+        assert.deepEqual(await request.json(), {
+          name: 'x70',
+          description: 'Fujifilm X70 (EXR Processor 2)',
+          color: '1d76db',
+        });
+        labels++;
+        return Response.json({}, { status: 201 });
+      }
       assert.equal(request.url, 'https://api.github.com/repos/justjake/fujimod/issues');
       const body = (await request.json()) as { body: string; labels: string[] };
       assert.deepEqual(body.labels, ['bug', 'from-camera', 'x70']);
@@ -72,6 +86,7 @@ await test('explicit intake saves privately, creates one issue and deduplicates 
       200,
     );
     assert.equal(issues, 1);
+    assert.equal(labels, 1);
     const bucket = await mf.getR2Bucket('ISSUE_REPORTS');
     assert.deepEqual(
       new Uint8Array(await (await bucket.get(`${id}/report.tar`))!.arrayBuffer()),
@@ -156,8 +171,8 @@ await test('uncertain GitHub response retains the archive without duplicate issu
   let calls = 0;
   const mf = await runtime({
     bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
-    outboundService: async () => {
-      calls++;
+    outboundService: async (request) => {
+      if (request.url.endsWith('/issues')) calls++;
       return new Response('Unavailable', { status: 502 });
     },
   });

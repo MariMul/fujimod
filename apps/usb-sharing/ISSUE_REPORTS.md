@@ -3,8 +3,11 @@
 `POST /issue-reports` accepts an explicitly selected TAR, its QR descriptor and a
 reporter's description. The browser never sends the URL fragment during page load.
 The description becomes public in `justjake/fujimod`. Issues carry the labels `bug`,
-`from-camera` and the camera body's label (`x70`); the labels exist in the
-repository with descriptions, so GitHub never creates them bare. The archive is stored in
+`from-camera` and the camera's label, such as `x70` ("Fujifilm X70 (EXR
+Processor 2)"). The Worker creates a camera's label with that description the first
+time the camera reports. `camera-labels.generated.json` lists every known
+firmware's label, generated from the catalog and `processor-names.json` by
+`npm run generate`. The archive is stored in
 R2 and a separate read-only share URL is returned to the uploader. Anyone with
 that URL can download the report. No GitHub account or credential is needed in the browser.
 
