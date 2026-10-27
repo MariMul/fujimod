@@ -1,7 +1,8 @@
 /** Qualify generated camera capabilities through the ordinary upload and panel UI. */
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { resolve, sep } from 'node:path';
 import type { Catalog } from '../src/catalog';
 
 declare global {
@@ -15,17 +16,35 @@ const manifest = process.env.FUJIMOD_TEST_CATALOG;
 const files: Record<string, string> = JSON.parse(process.env.FUJIMOD_TEST_FIRMWARE_FILES || '{}');
 const output = process.env.FUJIMOD_TEST_OUTPUT;
 const installed = process.env.FUJIMOD_TEST_INSTALLED_CATALOG === '1';
+const runtime = process.env.FUJIMOD_TEST_RUNTIME;
+if (runtime && installed) throw Error('Choose either a local runtime or installed assets.');
+const browserName = process.env.FUJIMOD_TEST_BROWSER ?? 'chromium';
+if (!['chromium', 'webkit'].includes(browserName)) throw Error('Unknown qualification browser.');
 if (!url || !manifest || !output)
   throw Error('Set the web URL, generated catalog, DAT inputs and output directory.');
 const catalog: Catalog = JSON.parse(await readFile(manifest, 'utf8'));
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
 let failures = 0;
 try {
   for (const firmware of catalog.firmwares.filter((entry) => entry.emulate)) {
     assert.ok(files[firmware.id], `Missing DAT input for ${firmware.id}`);
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await context.routeWebSocket('**/*', () => {});
+    // This workflow captures errors directly; the preview's diagnostic collector is separate.
+    await context.route('**/__browser-diagnostics.js', (route) =>
+      route.fulfill({ contentType: 'text/javascript', body: '' }),
+    );
+    await context.route('**/__browser-diagnostics', (route) => route.fulfill({ status: 204 }));
+    if (runtime) {
+      const directory = resolve(runtime);
+      await context.route('**/runtime/**', async (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        const file = resolve(directory, decodeURIComponent(pathname.split('/runtime/')[1]!));
+        assert.ok(file.startsWith(directory + sep), 'Runtime request escaped its directory');
+        await route.fulfill({ path: file });
+      });
+    }
     if (!installed)
       await context.route('**/runtime/catalog.json', (route) => route.fulfill({ json: catalog }));
     await context.route('**/local/firmware/**', (route) => route.fulfill({ status: 404 }));
@@ -158,6 +177,7 @@ try {
         `${output}/${firmware.id}-browser.json`,
         JSON.stringify({
           firmware: firmware.id,
+          browser: browserName,
           sha256: firmware.sha256,
           pixels: { shooting, menu, selection },
           passed: true,

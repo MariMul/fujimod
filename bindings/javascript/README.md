@@ -87,6 +87,12 @@ manifests remain the caller's responsibility. Guest conformance scripts can run 
 `npm run test:emulator:guest` and `npm run test:emulator:devices`; each accepts
 an optional path to `camera.mjs`.
 
+The final module is optimized with the pinned SDK's Binaryen, using WebAssembly
+GC support to refine indirect-call types. The optimizer validates the module
+and preserves its import/export interface before replacing the linked file.
+`build.json` records the optimizer version, flags, sizes and hashes. Runtime
+browsers must support WebAssembly GC, shared memory and exception handling.
+
 Run the emulator in a dedicated browser worker. The runtime uses shared Wasm
 memory and two persistent device threads; serve the page and runtime assets with
 `Cross-Origin-Opener-Policy: same-origin` and
