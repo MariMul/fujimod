@@ -670,6 +670,11 @@ impl Decompressor {
                     self.set(o, v);
                     return Ok(());
                 }
+                // The loader masks the shared IRQ before resetting the engine.
+                (0x8c, 0, Phase::Released) => {
+                    self.set(o, v);
+                    return Ok(());
+                }
                 (0, 0, Phase::Released) => self.state.resize = None,
                 _ => {
                     return Err(
@@ -805,7 +810,7 @@ impl Decompressor {
                     resize.phase,
                     Phase::Active | Phase::Completed | Phase::Acknowledged | Phase::Released
                 ) && self.options.resize != ResizeMode::DeclaredPackedPyramid
-                || resize.phase == Phase::Released && r(0x8c) != u32::MAX
+                || resize.phase == Phase::Released && !matches!(r(0x8c), 0 | u32::MAX)
                 || resize.enabled && resize.phase != Phase::Released && r(0x8c) != 1
                 || !matches!(resize.phase, Phase::Configuring | Phase::Configured) && r(4) != 1
                 || resize.phase == Phase::Completed && r(0x88) != 1

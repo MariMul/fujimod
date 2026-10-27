@@ -299,6 +299,35 @@ fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_complet
 }
 
 #[test]
+fn released_resize_can_disable_irq_before_reset_and_lz_start() {
+    let (mut d, mut h, mut c) = setup();
+    reset(&mut d, &mut h);
+    enabled(&mut c, &mut h, 1, true);
+    let source = 0x10000usize;
+    let stage = PYRAMID[0];
+    let source_len = stage[0] as usize * (stage[1] >> 16) as usize;
+    h.bytes[source..source + source_len].fill(0x5a);
+    configure(&mut d, &mut h, stage, 0);
+    put(&mut d, &mut h, 4, 1).unwrap();
+    let due = d.next_deadline(h.now).unwrap();
+    tick(&mut d, &mut h, due).unwrap();
+    put(&mut d, &mut h, 0x88, 1).unwrap();
+    put(&mut d, &mut h, 0x8c, u32::MAX).unwrap();
+
+    put(&mut d, &mut h, 0x8c, 0).unwrap();
+    assert_eq!(d.r(0x8c), 0);
+    let checkpoint = d.checkpoint().unwrap();
+    d.validate_checkpoint(&checkpoint).unwrap();
+
+    reset(&mut d, &mut h);
+    h.bytes[0x4000..0x4002].copy_from_slice(&[1, 42]);
+    lz(&mut d, &mut h, 0x4000, 0x8000, 2);
+    let due = d.next_deadline(h.now).unwrap();
+    tick(&mut d, &mut h, due).unwrap();
+    assert_eq!(h.bytes[0x8000], 42);
+}
+
+#[test]
 fn scalar_half_fir_samples_pixels_and_replicated_edges_without_writing_pitch_padding() {
     // A declared numerical FIR law with explicitly bounded precision.
     let (mut d, mut h, mut c) = setup();
