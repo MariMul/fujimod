@@ -254,3 +254,6 @@ mod interception_tests {
         cpu.remove_hook(hook).unwrap();
     }
 }
+
+#[cfg(test)]
+mod accounting_tests;
