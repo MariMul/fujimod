@@ -156,7 +156,11 @@ export async function serveObject(
     'Content-Type': download ? 'application/octet-stream' : type!,
     'Content-Disposition': download ? disposition(filename(key)) : 'inline',
     'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': "default-src 'none'; sandbox",
+    // A sandbox blocks WebKit's native video controls. Other responses stay sandboxed.
+    'Content-Security-Policy':
+      !download && type?.toLowerCase().startsWith('video/')
+        ? "default-src 'none'; media-src 'self'"
+        : "default-src 'none'; sandbox",
     'Referrer-Policy': 'no-referrer',
     'Cache-Control': 'public, max-age=300',
     'Accept-Ranges': 'bytes',

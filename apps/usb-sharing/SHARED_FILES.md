@@ -14,8 +14,9 @@ is escaped as text, including attributes in the initial Open Graph markup.
 `/file/<key>?direct=true` streams any `image/*` or `video/*` object using its
 uploaded Content-Type, including MIME parameters. `/media/<key>` serves the same
 media for viewer elements and Open Graph. Both use `nosniff`, a restrictive
-sandbox CSP and single byte-range support. The sandbox blocks scripts when an
-SVG is opened directly. Non-media direct requests return 415.
+CSP and single byte-range support. Images and downloads use a sandbox to block
+scripts when an SVG is opened directly. Video policy permits same-origin media
+so browsers' native players can load the video. Non-media direct requests return 415.
 `/download/<key>` always uses
 an attachment disposition and `application/octet-stream`. Stored upload headers
 are displayed but never replayed as response policy; media Content-Encoding is

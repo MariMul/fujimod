@@ -164,6 +164,12 @@ await test('direct media preserves uploaded MIME types, ranges and HEAD', async 
       const response = await mf.dispatchFetch(url, { headers: { Range: 'bytes=2-5' } });
       assert.equal(response.status, 206);
       assert.equal(response.headers.get('Content-Type'), type);
+      assert.match(response.headers.get('Content-Security-Policy')!, /default-src 'none'/);
+      if (type.toLowerCase().startsWith('video/'))
+        assert.equal(
+          response.headers.get('Content-Security-Policy'),
+          "default-src 'none'; media-src 'self'",
+        );
       assert.equal(response.headers.get('Content-Range'), 'bytes 2-5/10');
       assert.equal(await response.text(), '2345');
       const head = await mf.dispatchFetch(url, { method: 'HEAD' });
