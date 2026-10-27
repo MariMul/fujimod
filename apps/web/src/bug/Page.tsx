@@ -175,6 +175,7 @@ export default function BugReport(props: {
       }
       return {
         id: result.id,
+        shareUrl: result.shareUrl,
         link: result.issueURL ? { href: result.issueURL, label: 'View GitHub issue' } : undefined,
       };
     } finally {

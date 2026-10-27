@@ -12,6 +12,7 @@ vi.mock('../dev-tools/Page', () => ({
 }));
 const receipt = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  shareUrl: 'https://share.fujimod.com/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   issueURL: 'https://github.com/justjake/fujimod/issues/123',
 };
 function mount(props: Parameters<typeof BugReport>[0]) {
