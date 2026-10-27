@@ -4,7 +4,7 @@ import { validateReleaseInfo, type ReleaseInfo } from './releases.ts';
 export interface LoadedRelease extends PatchIndex, ReleaseInfo {
   /** Absolute same-origin /releases/<tag>/ URL, also passed to the patch worker. */
   assetBase: string;
-  /** Verified UTF-8 Markdown. Absent when the index has no notes. */
+  /** Release Markdown, read directly from editable source during development. */
   notesText?: string;
 }
 /** A missing release is normal; upstream and integrity failures remain errors. */
@@ -27,9 +27,11 @@ export async function loadRelease(
   if (index.release !== info.tag) throw Error('The release index does not match its tag.');
   const [notesText] = await Promise.all([
     index.notes
-      ? asset(index.notes.name).then(async (response) =>
-          verifyNotes(index.notes!, new Uint8Array(await response.arrayBuffer())),
-        )
+      ? asset(index.notes.name).then(async (response) => {
+          if (import.meta.env.DEV && response.headers.get('X-FujiMod-Editable-Notes') === 'true')
+            return response.text();
+          return verifyNotes(index.notes!, new Uint8Array(await response.arrayBuffer()));
+        })
       : undefined,
     // The index alone cannot prove that an installable output exists.
     ...index.firmwares

@@ -206,9 +206,15 @@ absolute paths in ignored `.env.local`:
 ```text
 FUJIMOD_RUNTIME=/path/to/staged/runtime
 FUJIMOD_PATCHES=/path/to/patch-release/artifacts
+FUJIMOD_RELEASE_NOTES=/path/to/editable/release-notes
 FUJIMOD_DAT=/path/to/local/FPUPDATE.DAT
 FUJIMOD_REVIEW_DIR=/absolute/path/outside/this/repository/reviews
 ```
+
+`FUJIMOD_RELEASE_NOTES` serves `<release-tag>.md` directly from that directory
+on every request. The development client reads these editable notes as text;
+editing notes does not require rebuilding patches or updating their metadata.
+A missing configured notes file returns an error instead of serving the artifact copy.
 
 `FUJIMOD_REVIEW_DIR` serves standalone files at `/review/` in the development
 server only. Keep review files outside the repository; the build rejects

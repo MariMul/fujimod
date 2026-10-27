@@ -242,7 +242,10 @@ export default defineConfig(({ mode, command }) => ({
   plugins: [
     isolationHeaders(),
     localReviewFiles(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_REVIEW_DIR),
-    localReleases(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_PATCHES),
+    localReleases({
+      artifacts: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_PATCHES,
+      notes: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_RELEASE_NOTES,
+    }),
     watchWorkspacePackages(),
     solid({
       start: {
