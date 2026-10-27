@@ -329,7 +329,7 @@ export class CameraStore {
       throw error;
     }
     if (published.previous?.schema === 1)
-      await removeDurable(published.previous.durable).catch(() => {});
+      await removeDurable(published.previous.durable).catch((error) => console.error(error));
     return published.record;
   }
   saveLayout(id: string, layout: DevicePanel): Promise<CameraRecord> {

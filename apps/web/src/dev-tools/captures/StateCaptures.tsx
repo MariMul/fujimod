@@ -1,9 +1,10 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Camera, CameraModel } from '../camera-model';
 import { MIB, bulkSelection, captureRanges, stateScope, type CaptureSet } from './capture';
 import { slug, type AddFile } from '../../files/shelf';
 import { CAPTURE_STATES, type CaptureState } from './states';
-import { CapturePanel, emptySet, message } from './CapturePanel';
+import { CapturePanel, emptySet } from './CapturePanel';
 import './captures.css';
 
 /** Capture RAM in states the person sets with the camera's own controls. */
@@ -68,7 +69,7 @@ export function StateCaptures(props: {
       props.onSet({ ...previous, states: [...previous.states, capture] });
       if (state.named) setNames((all) => ({ ...all, [state.id]: '' }));
     } catch (error) {
-      setFailure(message(error));
+      setFailure(shownError(error));
     } finally {
       setRunning(undefined);
     }

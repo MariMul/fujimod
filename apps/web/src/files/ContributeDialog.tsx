@@ -1,6 +1,7 @@
 import { Show, createEffect, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { FileList, type FileListItem } from '@fujimod/emulator-ui/ui/file-list';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import './files.css';
 
 export interface ContributeReceipt {
@@ -53,7 +54,7 @@ export function ContributeDialog(props: {
       );
       setPhase({ kind: 'done', receipt });
     } catch (error) {
-      setPhase({ kind: 'failed', error: error instanceof Error ? error.message : String(error) });
+      setPhase({ kind: 'failed', error: shownError(error) });
     }
   }
   return (

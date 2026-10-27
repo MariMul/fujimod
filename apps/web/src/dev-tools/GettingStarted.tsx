@@ -1,4 +1,5 @@
 import { Show, createSignal, untrack } from 'solid-js';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { JSX } from '@solidjs/web';
 import type {
   Camera,
@@ -26,9 +27,6 @@ export interface PathResults {
 
 type Step = 'todo' | 'running' | 'done' | 'skipped' | 'locked';
 
-function message(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 function hex(value: number) {
   return `0x${value.toString(16).padStart(8, '0')}`;
 }
@@ -84,7 +82,7 @@ export function GettingStarted(props: {
         return operation(session, firmware);
       });
     } catch (error) {
-      setFailure(message(error));
+      setFailure(shownError(error));
     } finally {
       setRunning(undefined);
       setProgress('');
@@ -167,7 +165,7 @@ export function GettingStarted(props: {
       await props.debug.enter(firmware, setProgress);
       props.onResults((results) => ({ ...results, debugSaved: true }));
     } catch (error) {
-      setFailure(message(error));
+      setFailure(shownError(error));
     } finally {
       setRunning(undefined);
       setProgress('');

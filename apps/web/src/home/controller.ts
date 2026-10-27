@@ -23,6 +23,7 @@ import { cachedFetch } from '../asset-cache';
 import type { CardFile, BootMedia } from '@fujimod/emulator-ui/engine/api';
 import type { ReplayScenario } from '../scenarios';
 import { DEVICE_PANEL_SCHEMA, type DevicePanel } from '@fujimod/emulator-ui/ui/layout';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import type { HomeState, PreviewCredit } from './state';
@@ -89,7 +90,7 @@ export function startHome(
     ready: () => updateModButtons(false),
     cameraSaved(event) {
       if (event.error) {
-        storageStatus(`Camera not saved · ${event.error}`, true);
+        storageStatus(`Camera not saved · ${shownError(event.error)}`, true);
         return;
       }
       if (activeCamera && event.revision !== undefined) {
@@ -108,7 +109,7 @@ export function startHome(
         });
       }
       storageStatus('');
-      void refreshCameras().catch((error) => storageStatus(String(error), true));
+      void refreshCameras().catch((error) => storageStatus(shownError(error), true));
     },
   });
   const { showFault, progress } = session;
@@ -240,7 +241,7 @@ export function startHome(
       try {
         await session.saveCamera();
       } catch (error) {
-        storageStatus(String(error), true);
+        storageStatus(shownError(error), true);
         return;
       }
     }
@@ -382,7 +383,10 @@ export function startHome(
         }
       }
     } catch (error) {
-      if (current === generation && !(error instanceof EngineError)) showFault(faultFrom(error));
+      if (current === generation && !(error instanceof EngineError)) {
+        shownError(error);
+        showFault(faultFrom(error));
+      }
     }
   }
   function storageStatus(message: string, error = false) {
@@ -410,7 +414,7 @@ export function startHome(
       const read = async () => new File([await cameras.firmware(source.sha256)], source.fileName);
       await processFile(await read(), false, undefined, camera ? undefined : read, camera, enabled);
     } catch (error) {
-      storageStatus(String(error), true);
+      storageStatus(shownError(error), true);
     } finally {
       setState((s) => {
         s.cameraBusy = false;
@@ -463,7 +467,7 @@ export function startHome(
       storageStatus('');
       await refreshCameras();
     } catch (error) {
-      storageStatus(String(error), true);
+      storageStatus(shownError(error), true);
     } finally {
       setState((s) => {
         s.cameraBusy = false;
@@ -476,7 +480,7 @@ export function startHome(
         s.savedCamerasRead = true;
       });
     const read = refreshCameras()
-      .catch((error) => storageStatus(`Browser storage unavailable · ${String(error)}`, true))
+      .catch((error) => storageStatus(`Browser storage unavailable · ${shownError(error)}`, true))
       .finally(markRead);
     // Browser storage can stall (seen on iOS); the launcher and catalog never wait on it past a second.
     await Promise.race([read, new Promise((resolve) => setTimeout(resolve, 1000))]);
@@ -496,7 +500,7 @@ export function startHome(
         release = await loadRelease(document.baseURI);
       } catch (error) {
         release = undefined;
-        storageStatus(String(error), true);
+        storageStatus(shownError(error), true);
       }
       if (disposed) return;
       setState((s) => {
@@ -548,6 +552,7 @@ export function startHome(
         }
       }
     } catch (error) {
+      shownError(error);
       showFault(faultFrom(error));
     }
   }
@@ -564,7 +569,7 @@ export function startHome(
       });
       storageStatus('');
     } catch (error) {
-      storageStatus(`Camera not saved · ${String(error)}`, true);
+      storageStatus(`Camera not saved · ${shownError(error)}`, true);
     }
   }
 
@@ -574,7 +579,7 @@ export function startHome(
     if (document.visibilityState === 'hidden' && activeCamera && !session.hasFault())
       void session
         .saveCamera()
-        .catch((error) => storageStatus(`Camera not saved · ${String(error)}`, true));
+        .catch((error) => storageStatus(`Camera not saved · ${shownError(error)}`, true));
   };
   document.addEventListener('visibilitychange', saveHidden);
   const unload = session.unload;

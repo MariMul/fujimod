@@ -1,8 +1,9 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Camera, CameraModel } from '../camera-model';
 import { bulkSelection, captureRanges, contiguous, type CaptureSet } from './capture';
 import { controlDiff, type ControlDiff } from './mapping';
-import { CapturePanel, emptySet, message } from './CapturePanel';
+import { CapturePanel, emptySet } from './CapturePanel';
 import { slug, type AddFile } from '../../files/shelf';
 import './captures.css';
 
@@ -114,7 +115,7 @@ export function MapControls(props: {
       setCustom('');
       setNote('');
     } catch (error) {
-      setFailure(message(error));
+      setFailure(shownError(error));
     } finally {
       setRunning(false);
     }

@@ -1,5 +1,6 @@
 import { For, Show, createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { CameraSupport } from '../home/state';
 import bodies from '../../data/cameras.json';
 import type { CameraRecord, LibraryFirmware } from './store';
@@ -128,7 +129,7 @@ export function CameraLauncher(props: {
       await props.download(target.firmware, target.format);
     } catch (error) {
       if (modal() === target)
-        setDownloadError(error instanceof Error ? error.message : String(error));
+        setDownloadError(shownError(error));
     } finally {
       setDownloading(false);
     }

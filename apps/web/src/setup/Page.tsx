@@ -1,6 +1,7 @@
 import { For, Show, createSignal, onSettled } from 'solid-js';
 import type { Timeline } from 'animejs';
 import { cameras, type Camera } from './cameras';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { buildScene, initialRig, type Rig } from './scene';
 import { beatAt, stepTimeline, steps } from './steps';
 import '../home/site.css';
@@ -63,7 +64,7 @@ export default function Setup() {
       if (!device) return setLink({ state: 'idle' });
       setLink({ state: 'connected', name: device.productName || 'Fujifilm camera' });
     } catch (cause) {
-      setLink({ state: 'failed', message: cause instanceof Error ? cause.message : String(cause) });
+      setLink({ state: 'failed', message: shownError(cause) });
     }
   }
 

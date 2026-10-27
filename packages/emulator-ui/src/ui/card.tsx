@@ -4,6 +4,7 @@ import type { CardEntry, CardState } from 'fujimod/emulator';
 import { zipBlob } from '../archive';
 import { FileList, type FileListItem } from './file-list';
 import { downloadBlob } from './download';
+import { shownError } from './shown-error';
 
 function visibleEntries(
   entries: CardEntry[],
@@ -91,7 +92,7 @@ export function CardBrowser(props: {
             setTree({ revision: value.revision, entries: value.entries });
           })
           .catch((error) => {
-            if (current === generation && observed === observation) setStatus(String(error));
+            if (current === generation && observed === observation) setStatus(shownError(error));
           })
           .finally(() => {
             if (pendingRevision === revision) pendingRevision = undefined;
@@ -108,7 +109,7 @@ export function CardBrowser(props: {
     try {
       await task();
     } catch (error) {
-      if (current === generation) setStatus(String(error));
+      if (current === generation) setStatus(shownError(error));
     }
   }
   async function download(entry: CardEntry) {

@@ -2,6 +2,7 @@ import { Show, createEffect, createSignal, onSettled } from 'solid-js';
 import { catalog, initialize, type PhysicalControls } from 'fujimod';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { Steps, Step, FileList } from '../recovery/Steps';
 import type { FirmwareDownloadFormat } from '../firmware-download';
 import type { LibraryFirmware } from './store';
@@ -35,7 +36,7 @@ export function DownloadModal(props: {
         setControls(physical);
       })
       .catch((error: unknown) => {
-        if (!disposed) setControlsError(error instanceof Error ? error.message : String(error));
+        if (!disposed) setControlsError(shownError(error));
       });
     return () => {
       disposed = true;

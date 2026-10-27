@@ -1,5 +1,6 @@
 import { createSignal, onSettled } from 'solid-js';
 import { initialize } from 'fujimod';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { identify } from '../recovery/identify';
 import { CameraStore, type IdentifiedFirmware, type LibraryFirmware } from './store';
 
@@ -12,8 +13,7 @@ export function createFirmwareLibrary(identifyFile?: (file: File) => Promise<Ide
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
   const chosen = () => entries().find((entry) => entry.sha256 === selected());
-  const report = (caught: unknown) =>
-    setError(caught instanceof Error ? caught.message : String(caught));
+  const report = (caught: unknown) => setError(shownError(caught));
   async function refresh() {
     const library = await store.library();
     setEntries(library);
