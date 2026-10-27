@@ -1,12 +1,23 @@
+import { createSignal, onSettled } from 'solid-js';
+
+export function projectAge(date: Date) {
+  const today = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.max(0, Math.floor((today - Date.UTC(2026, 9, 3)) / 86_400_000));
+}
+
 export function PersonalNote() {
+  const [age, setAge] = createSignal(() => projectAge(new Date()));
+  onSettled(() => {
+    setAge(projectAge(new Date()));
+  });
   return (
     <aside class="personal-note" aria-label="A note from Jake">
       <p>Hey,</p>
       <p>
-        FujiMod is a 23-day-old vibe-coded firmware modification made to unlock the full potential
-        of every Fujifilm camera as a creative tool. We’re starting with the X70 and have concepts
-        of a master plan to bring FujiMod to the rest of the EXR II bodies (X-T1, X-E2/X-E2S, …) and
-        beyond.
+        FujiMod is a <span id="project-age">{age()}</span>-day-old vibe-coded firmware modification
+        made to unlock the full potential of every Fujifilm camera as a creative tool. We’re
+        starting with the X70 and have concepts of a master plan to bring FujiMod to the rest of the
+        EXR II bodies (X-T1, X-E2/X-E2S, …) and beyond.
       </p>
       <p>
         I haven't tested every feature on camera yet (there are so many!), but most tests pass in
