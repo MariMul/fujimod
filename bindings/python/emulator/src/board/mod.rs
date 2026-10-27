@@ -1194,6 +1194,39 @@ impl Board {
             .sensor_rgb(name, width, height, rgb, white_luminance)
             .map_err(error)
     }
+    fn sensor_rgb_noise(
+        &self,
+        name: &str,
+        width: usize,
+        height: usize,
+        rgb: &[u8],
+        white_luminance: f64,
+        seed: u64,
+        realization: u64,
+        full_well_electrons: f64,
+        read_noise_electrons: f64,
+    ) -> PyResult<()> {
+        self.session()?
+            .sensor_rgb_noise(
+                name, width, height, rgb, white_luminance,
+                serde_json::json!({"seed":seed,"realization":realization,
+                    "full_well_electrons":full_well_electrons,"read_noise_electrons":read_noise_electrons}),
+            )
+            .map_err(error)
+    }
+    fn sensor_sample_rgb<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        width: usize,
+        height: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        let samples = self
+            .session()?
+            .sensor_sample_rgb(name, width, height)
+            .map_err(error)?;
+        Ok(PyBytes::new(py, &samples))
+    }
     fn sensor_raw16(&self, name: &str, width: usize, height: usize, raw16: &[u8]) -> PyResult<()> {
         self.session()?
             .sensor_raw16(name, width, height, raw16)
