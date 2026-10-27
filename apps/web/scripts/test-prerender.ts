@@ -8,6 +8,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
+import { routes } from './prerender.ts';
 const root = resolve(process.argv[2] || 'dist/client');
 for (const file of await readdir(root, { recursive: true })) {
   assert.ok(
@@ -39,6 +40,7 @@ const server = createServer(async (req, res) => {
         '.wasm': 'application/wasm',
         '.svg': 'image/svg+xml',
         '.png': 'image/png',
+        '.webp': 'image/webp',
       }[extname(path)] || 'application/octet-stream',
     );
     res.end(bytes);
@@ -53,8 +55,45 @@ try {
     const browser = await type.launch({ headless: true });
     try {
       const noJs = await browser.newContext({ javaScriptEnabled: false });
+      for (const route of routes) {
+        const page = await noJs.newPage();
+        assert.equal((await page.goto(base + route))?.status(), 200);
+        const title = await page.title();
+        const description = await page.locator('meta[name="description"]').getAttribute('content');
+        assert.ok(description);
+        assert.equal(
+          await page.locator('meta[property="og:title"]').getAttribute('content'),
+          title,
+        );
+        assert.equal(
+          await page.locator('meta[name="twitter:title"]').getAttribute('content'),
+          title,
+        );
+        for (const selector of [
+          'meta[property="og:description"]',
+          'meta[name="twitter:description"]',
+        ])
+          assert.equal(await page.locator(selector).getAttribute('content'), description);
+        const canonical = 'https://fujimod.com' + route;
+        assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'), canonical);
+        assert.equal(
+          await page.locator('meta[property="og:url"]').getAttribute('content'),
+          canonical,
+        );
+        if (route.startsWith('/dev-tools/')) assert.ok(title.startsWith('Dev Tools: '));
+        const image = await page.locator('meta[property="og:image"]').getAttribute('content');
+        assert.ok(image);
+        assert.equal(new URL(image).origin, 'https://fujimod.com');
+        assert.equal((await noJs.request.get(base + new URL(image).pathname)).status(), 200);
+        assert.equal(
+          await page.locator('meta[name="twitter:image"]').getAttribute('content'),
+          image,
+        );
+        await page.close();
+      }
+      assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'start testing FujiMod for X70 dual booting from the SD card'],
+        ['/', 'start testing FujiMod by dual booting from the SD card'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -141,8 +180,8 @@ try {
       const note = page.locator('.personal-note');
       assert.match(await note.innerText(), /dual booting from the SD card/);
       assert.equal(await note.locator('mark, em, strong, b, svg').count(), 0);
-      assert.equal(await note.locator('a').count(), 2);
-      await note.getByRole('link', { name: 'SOFTWARE', exact: true }).click();
+      assert.equal(await note.locator('a').count(), 1);
+      await note.getByRole('link', { name: 'Head on down', exact: true }).click();
       assert.equal(new URL(page.url()).hash, '#software');
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
