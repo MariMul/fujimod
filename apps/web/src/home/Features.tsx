@@ -53,10 +53,10 @@ type Target = { card: string; choice?: string; anchor: HTMLElement };
 const catalog = catalogData as Catalog;
 const CARDS = catalog.cards;
 const GROUP_TITLES: Record<string, string> = {
-  pictures: 'Making pictures',
-  movies: 'Making movies',
-  handling: 'Handling and display',
-  problems: 'When something goes wrong',
+  photography: 'Photography',
+  videography: 'Videography',
+  recipes: 'Recipes',
+  system: 'System & Setup',
 };
 const MEDIA = '/artifacts/docs/';
 const media = featureMedia();
