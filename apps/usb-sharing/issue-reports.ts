@@ -1,6 +1,7 @@
 import type { Env, BudgetRecord } from './env.ts';
 import { DurableObject } from 'cloudflare:workers';
 import { putObject } from './bucket.ts';
+import { publishUpload } from './publications.ts';
 import { parseReportMetadata, reportEntries } from '../web/src/bug/report-link.ts';
 const json = (value: object, status = 200) =>
   Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -39,6 +40,13 @@ export async function issueReports(request: Request, env: Env) {
  * bucket; public issues contain an ID for maintainer retrieval, never a download URL.
  * Persisting `submitting` before GitHub prevents duplicate issues on uncertain replies. */
 export class IssueReports extends DurableObject<Env> {
+  private async receipt(id: string, issueURL?: string) {
+    const shareUrl = await publishUpload(this.env, `issue:${id}`, [
+      { key: `${id}/report.tar`, name: 'report.tar' },
+      { key: `${id}/metadata.json`, name: 'metadata.json' },
+    ]);
+    return { id, issueURL, shareUrl };
+  }
   async fetch(request: Request) {
     return this.ctx.blockConcurrencyWhile(async () => {
       const id = request.headers.get('Idempotency-Key');
@@ -53,7 +61,7 @@ export class IssueReports extends DurableObject<Env> {
       const previous = await this.ctx.storage.get<{ state: string; issueURL?: string }>(id);
       // Unconfirmed GitHub attempts are not automatically retried. The archive
       // is durable, and its ID lets maintainers reconcile an ambiguous API reply.
-      if (previous) return json({ id, issueURL: previous.issueURL });
+      if (previous) return json(await this.receipt(id, previous.issueURL));
       let metadata, description, archive, entries;
       try {
         // Bound actual bytes as well as the declared length before parsing multipart.
@@ -141,13 +149,13 @@ export class IssueReports extends DurableObject<Env> {
             /^https:\/\/github\.com\/justjake\/fujimod\/issues\/[1-9][0-9]*$/.test(issue.html_url)
           ) {
             await this.ctx.storage.put(id, { state: 'submitted', issueURL: issue.html_url });
-            return json({ id, issueURL: issue.html_url }, 201);
+            return json(await this.receipt(id, issue.html_url), 201);
           }
         }
       } catch {
         /* Retain the durable archive and the attempt for reconciliation. */
       }
-      return json({ id }, 202);
+      return json(await this.receipt(id), 202);
     });
   }
 }

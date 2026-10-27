@@ -76,9 +76,19 @@ await test('explicit intake saves privately, creates one issue and deduplicates 
       new Uint8Array(await (await bucket.get(`${id}/report.tar`))!.arrayBuffer()),
       tar,
     );
-    const rows = await (await mf.getD1Database('REPORTS_INDEX'))
+    const rows = await (
+      await mf.getD1Database('REPORTS_INDEX')
+    )
       .prepare('SELECT key, kind, id, state, bytes, summary, metadata FROM objects ORDER BY key')
-      .all<{ key: string; kind: string; id: string; state: string; bytes: number; summary: string; metadata: string }>();
+      .all<{
+        key: string;
+        kind: string;
+        id: string;
+        state: string;
+        bytes: number;
+        summary: string;
+        metadata: string;
+      }>();
     assert.deepEqual(
       rows.results.map(({ key, kind, state, summary }) => [key, kind, state, summary]),
       [
@@ -156,7 +166,9 @@ await test('uncertain GitHub response retains the archive without duplicate issu
       await submission(),
     );
     assert.equal(response.status, 202);
-    assert.deepEqual(await response.json(), { id });
+    const receipt = (await response.json()) as { id: string; shareUrl: string };
+    assert.equal(receipt.id, id);
+    assert.match(receipt.shareUrl, /^https:\/\/share.fujimod.com\/contribution\//);
     await mf.dispatchFetch('https://worker.example/issue-reports', await submission());
     assert.equal(calls, 1);
     assert.ok(await (await mf.getR2Bucket('ISSUE_REPORTS')).get(`${id}/report.tar`));
