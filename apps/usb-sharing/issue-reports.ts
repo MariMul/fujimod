@@ -7,6 +7,9 @@ const json = (value: object, status = 200) =>
   Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const MAX_UPLOAD = 8 * 1024 * 1024;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+/** GitHub labels for each camera body's reports; the labels exist in the repository
+ * with descriptions (`x70`: "Fujifilm X70 (EXR Processor 2)"). */
+const BODY_LABELS: Record<string, string> = { 'x70-110': 'x70' };
 export async function issueReports(request: Request, env: Env) {
   const origin = request.headers.get('Origin');
   if (
@@ -139,6 +142,7 @@ export class IssueReports extends DurableObject<Env> {
           },
           body: JSON.stringify({
             title: '[Camera] ' + (description.trim().split('\n')[0] || 'Bug report').slice(0, 120),
+            labels: ['bug', 'from-camera', BODY_LABELS[metadata.firmware]],
             body: `${description.trim().replaceAll('@', '@\u200b')}\n\nFirmware: ${metadata.firmware}\nFujiMod build: ${metadata.commit}\nReport ID: \`${id}\`\n\nDiagnostic archive stored privately for maintainers.\n\nFiles:\n${entries.map((e) => `- ${e.name} (${e.bytes} bytes)`).join('\n')}`,
           }),
           signal: AbortSignal.timeout(10000),

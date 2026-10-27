@@ -48,7 +48,8 @@ await test('explicit intake saves privately, creates one issue and deduplicates 
     bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
     outboundService: async (request) => {
       assert.equal(request.url, 'https://api.github.com/repos/justjake/fujimod/issues');
-      const body = (await request.json()) as { body: string };
+      const body = (await request.json()) as { body: string; labels: string[] };
+      assert.deepEqual(body.labels, ['bug', 'from-camera', 'x70']);
       assert.match(body.body, /Menu froze/);
       assert.match(body.body, /stored privately/);
       assert.equal(body.body.includes('/report.tar'), false);

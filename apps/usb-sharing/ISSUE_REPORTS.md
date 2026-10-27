@@ -2,7 +2,9 @@
 
 `POST /issue-reports` accepts an explicitly selected TAR, its QR descriptor and a
 reporter's description. The browser never sends the URL fragment during page load.
-The description becomes public in `justjake/fujimod`. The archive is stored in
+The description becomes public in `justjake/fujimod`. Issues carry the labels `bug`,
+`from-camera` and the camera body's label (`x70`); the labels exist in the
+repository with descriptions, so GitHub never creates them bare. The archive is stored in
 R2 and a separate read-only share URL is returned to the uploader. Anyone with
 that URL can download the report. No GitHub account or credential is needed in the browser.
 
