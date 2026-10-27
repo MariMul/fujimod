@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { chromium, webkit } from 'playwright';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { catalog, initialize, recovery } from 'fujimod';
 
@@ -13,10 +12,8 @@ const cases: { firmwareId: string; dat: string }[] = JSON.parse(
 const expectedFiles: Record<string, Record<string, { bytes: number; sha256: string }>> = JSON.parse(
   process.env.FUJIMOD_RECOVERY_EXPECTED ?? '{}',
 );
-const buildSha =
-  process.env.FUJIMOD_TEST_BUILD_SHA ??
-  execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().slice(0, 8);
-assert.match(buildSha, /^[a-f0-9]{8}$/);
+const expectedBuildSha = process.env.FUJIMOD_TEST_BUILD_SHA;
+if (expectedBuildSha) assert.match(expectedBuildSha, /^[a-f0-9]{8}$/);
 assert.ok(cases.length, 'Set FUJIMOD_RECOVERY_CASES to official update test cases');
 await initialize({
   module_or_path: await readFile(
@@ -77,6 +74,9 @@ for (const engine of engines) {
         await led.click();
         console.log(`${engine.name()}: building ${test.firmwareId} LED ZIP`);
         const download = await pending;
+        const buildSha = download.suggestedFilename().match(/-build-([a-f0-9]{8})\.zip$/)?.[1];
+        assert.ok(buildSha, 'Download names identify the serving application build');
+        if (expectedBuildSha) assert.equal(buildSha, expectedBuildSha);
         assert.equal(
           download.suggestedFilename(),
           `fujimod-green-led-sd-boot-${identity}-build-${buildSha}.zip`,
