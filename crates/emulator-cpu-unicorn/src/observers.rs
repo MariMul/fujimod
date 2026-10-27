@@ -1,10 +1,13 @@
 //! Passive callbacks indexed by kind and disjoint address spans. Mutations
 //! happen only while stopped; execution looks up one span instead of scanning
 //! every installed observer. Entries retain hook installation order.
-use super::*;
+use fujimod_emulator_cpu::{Hook, HookRange};
+use std::collections::BTreeMap;
+#[cfg(test)]
+use std::ffi::c_void;
 
 #[derive(Default)]
-pub(super) struct Ranges(BTreeMap<u64, Vec<(usize, Hook)>>);
+pub(crate) struct Ranges(BTreeMap<u64, Vec<(usize, Hook)>>);
 
 impl Ranges {
     pub fn at(&self, address: u64) -> &[(usize, Hook)] {
@@ -90,7 +93,7 @@ impl Ranges {
 }
 
 #[derive(Default)]
-pub(super) struct Index {
+pub(crate) struct Index {
     pub instructions: Ranges,
     pub blocks: Ranges,
     pub stores: Ranges,

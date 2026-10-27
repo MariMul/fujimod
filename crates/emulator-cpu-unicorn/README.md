@@ -38,6 +38,19 @@ a legacy per-instruction counting reference, and checks matching final integer
 registers and RAM. Only execution is timed; mapping and verification are outside
 the samples.
 
+## A-profile board execution
+
+The board factory wraps AArch64 Unicorn processors in `aprofile::Core`.
+Ordinary instructions advance exact budgets in native translated blocks;
+framework register accesses and WFE/WFI/SEV instructions exit before entry so
+the board supplies their values, effects, and guest time. Device accesses
+expose the entered instruction count and can shorten the current deadline.
+Interrupts enter at the next exact instruction boundary, including after
+mask changes and exception returns. The adapter shares code-write coherence,
+accounting, and observer indexing with the R-profile adapter through the
+`memory`, `accounting`, and `observers` modules. Instruction points and completed
+store observers retain exact entry and completion boundaries.
+
 ## Exact loop execution
 
 Exact board runs use `LoopMode::Accelerate` by default. Select

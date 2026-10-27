@@ -305,6 +305,7 @@ enum Command {
         until: u64,
     },
     State,
+    MemoryFingerprint,
     Progress,
     InstructionPoints { core: usize, addresses: Vec<u64> },
     InstructionEvent,
@@ -604,11 +605,14 @@ impl Worker {
         )?;
         for (core, controller) in controllers.into_iter().enumerate() {
             if let Some(c) = controller {
-                board.configure_aprofile(core, c)?;
+                board.configure_aprofile(core, c)
+                    .map_err(|error| format!("CPU{core} A-profile: {error}"))?;
             }
         }
         for (address, image) in images {
-            board.write_memory(0, address, &image)?;
+            board.write_memory(0, address, &image).map_err(|error| {
+                format!("Image {address:#x}+{:#x}: {error}", image.len())
+            })?;
         }
         Ok(Self {
             board,
@@ -656,6 +660,7 @@ impl Worker {
                 points.event().map(|address| json!({"core":core,"address":address}))
             }).unwrap_or(Value::Null)),
             Command::State => Ok(self.state()),
+            Command::MemoryFingerprint => self.board.memory_fingerprint(),
             Command::ReadMemory {
                 core,
                 address,

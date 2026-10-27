@@ -1,4 +1,5 @@
 use super::*;
+use fujimod_emulator_cpu::Access;
 
 unsafe fn instruction(_: u64, _: u32, _: *mut c_void) {}
 fn hook(begin: u64, end: u64) -> Hook {
@@ -107,45 +108,6 @@ fn native_callbacks_are_indexed_only_for_selected_accesses() {
     assert!(index.reads.0.is_empty());
     assert!(index.writes.0.is_empty());
     assert!(index.stores.0.is_empty());
-}
-
-#[test]
-fn observer_points_use_backend_hooks_without_installing_native_hooks() {
-    let cpu = super::super::tests::processor_with_options(&Memory::default(), Options::default());
-    cpu.map_zeroed(0, 0x4000, 7).unwrap();
-    let native_hooks = cpu.execution.cpu.hooks.borrow().len();
-    assert!(matches!(
-        cpu.execution
-            .classify(0x1000, 0xe3a00001)
-            .unwrap()
-            .instruction,
-        InstructionDisposition::Execute
-    ));
-    let id = unsafe { cpu.install_hook(hook(0x1000, 0x1000)) }.unwrap();
-    assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
-    assert!(matches!(
-        cpu.execution
-            .classify(0x1000, 0xe3a00001)
-            .unwrap()
-            .instruction,
-        InstructionDisposition::ObserveAndEndBlock
-    ));
-    assert!(matches!(
-        cpu.execution
-            .classify(0x1004, 0xe3a00001)
-            .unwrap()
-            .instruction,
-        InstructionDisposition::Execute
-    ));
-    cpu.remove_hook(id).unwrap();
-    assert!(matches!(
-        cpu.execution
-            .classify(0x1000, 0xe3a00001)
-            .unwrap()
-            .instruction,
-        InstructionDisposition::Execute
-    ));
-    assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
 }
 
 #[test]

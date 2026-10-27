@@ -4,6 +4,10 @@
 use fujimod_unicorn_sys as _;
 #[cfg(target_os = "emscripten")]
 mod available_memory;
+pub mod accounting;
+pub mod aprofile;
+pub mod memory;
+mod observers;
 pub mod rprofile;
 #[cfg(test)]
 mod test_support;

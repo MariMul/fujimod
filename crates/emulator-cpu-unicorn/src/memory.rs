@@ -1,9 +1,13 @@
 //! Shared backing identities, translated bytes and alias-coherent code writes.
 //! Only the CPU backend uses this execution mechanism. It never supplies a
 //! device with program inspection or private RAM predicates.
-use super::core::Execution;
+pub(crate) trait CodeOwner {
+    fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String>;
+    fn invalidate_code_page(&self, address: u64) -> Result<(), String>;
+    fn prepare_code_write(&self) -> Result<(), String>;
+}
+use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_cpu::exclusive;
-use fujimod_emulator_cpu::{Cpu, ExecutionPolicy};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
@@ -131,20 +135,20 @@ impl SharedMemory {
 }
 #[derive(Default)]
 struct Local {
-    cores: RefCell<HashMap<usize, Weak<Execution>>>,
+    cores: RefCell<HashMap<usize, Weak<dyn CodeOwner>>>,
     active: Cell<Option<usize>>,
 }
 #[derive(Clone)]
 pub struct Memory {
     shared: SharedMemory,
     local: Rc<Local>,
-    pub(super) monitors: exclusive::Shared,
+    pub(crate) monitors: exclusive::Shared,
 }
-pub(super) struct RunReservation<'a> {
+pub(crate) struct RunReservation<'a> {
     memory: &'a Memory,
     core: usize,
 }
-pub(super) struct OwnerBarrierLease {
+pub(crate) struct OwnerBarrierLease {
     shared: SharedMemory,
     core: usize,
 }
@@ -181,13 +185,13 @@ impl Memory {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
-    pub(super) fn require_stopped(&self) -> Result<(), String> {
+    pub(crate) fn require_stopped(&self) -> Result<(), String> {
         if !Self::quiescent(&self.state()) {
-            return Err("R-profile memory mapping requires all processors to be stopped".into());
+            return Err("memory mapping requires all processors to be stopped".into());
         }
         Ok(())
     }
-    pub(super) fn acquire_owner_barrier(&self, core: usize) -> Option<OwnerBarrierLease> {
+    pub(crate) fn acquire_owner_barrier(&self, core: usize) -> Option<OwnerBarrierLease> {
         let mut state = self.state();
         let has_peer = state
             .cores
@@ -222,7 +226,7 @@ impl Memory {
             .iter()
             .all(|core| Some(*core) == allowed || state.parked.get(core).copied().unwrap_or(0) != 0)
     }
-    pub(super) fn set_parked(&self, core: usize, parked: bool) -> Result<(), String> {
+    pub(crate) fn set_parked(&self, core: usize, parked: bool) -> Result<(), String> {
         let mut state = self.state();
         if !parked && state.owner_barrier.is_some_and(|owner| owner != core) {
             return Err(
@@ -230,7 +234,7 @@ impl Memory {
             );
         }
         if !state.active.contains(&core) {
-            return Err("cannot park an R-profile processor outside a run".into());
+            return Err("cannot park a processor outside a run".into());
         }
         if parked {
             *state.parked.entry(core).or_default() += 1;
@@ -238,7 +242,7 @@ impl Memory {
             let depth = state
                 .parked
                 .get_mut(&core)
-                .ok_or("R-profile processor is not parked")?;
+                .ok_or("processor is not parked")?;
             *depth -= 1;
             if *depth == 0 {
                 state.parked.remove(&core);
@@ -246,7 +250,7 @@ impl Memory {
         }
         Ok(())
     }
-    pub(super) fn reserve_run(
+    pub(crate) fn reserve_run(
         &self,
         core: usize,
         policy: ExecutionPolicy,
@@ -254,10 +258,10 @@ impl Memory {
     ) -> Result<RunReservation<'_>, String> {
         let mut state = self.state();
         if state.owner_barrier.is_some_and(|owner| owner != core) {
-            return Err("a peer R-profile run is held at an owner synchronization barrier".into());
+            return Err("a peer run is held at an owner synchronization barrier".into());
         }
         if state.run_policies.contains_key(&core) {
-            return Err("R-profile processor is already running".into());
+            return Err("processor is already running".into());
         }
         if !state.run_policies.is_empty()
             && (policy != ExecutionPolicy::Interactive
@@ -268,13 +272,13 @@ impl Memory {
                     .any(|(active, parallel)| *active != ExecutionPolicy::Interactive || !parallel))
         {
             return Err(
-                "concurrent R-profile processor runs require interactive execution policy and parallel TCG on every processor".into(),
+                "concurrent processor runs require interactive execution policy and parallel TCG on every processor".into(),
             );
         }
         state.run_policies.insert(core, (policy, parallel_tcg));
         Ok(RunReservation { memory: self, core })
     }
-    pub(super) fn run_reserved(&self, core: usize) -> bool {
+    pub(crate) fn run_reserved(&self, core: usize) -> bool {
         self.state().run_policies.contains_key(&core)
     }
     fn finish_run(&self, core: usize) {
@@ -286,26 +290,26 @@ impl Memory {
         state.run_policies.remove(&core);
         state.parked.remove(&core);
     }
-    pub(super) fn register(&self, core: Weak<Execution>) -> usize {
+    pub(crate) fn register(&self, core: Weak<dyn CodeOwner>) -> usize {
         let mut s = self.state();
         let id = s.cores.len();
         s.cores.push(true);
         self.local.cores.borrow_mut().insert(id, core);
         id
     }
-    pub(super) fn start(&self, core: usize) -> Result<(), String> {
+    pub(crate) fn start(&self, core: usize) -> Result<(), String> {
         let mut state = self.state();
         if !state.run_policies.contains_key(&core) {
-            return Err("R-profile processor run was not reserved".into());
+            return Err("processor run was not reserved".into());
         }
         if !state.active.insert(core) {
-            return Err("R-profile processor is already running".into());
+            return Err("processor is already running".into());
         }
         state.parked.remove(&core);
         self.local.active.set(Some(core));
         Ok(())
     }
-    pub(super) fn end(&self) {
+    pub(crate) fn end(&self) {
         let active = self.local.active.replace(None);
         let mut state = self.state();
         if let Some(active) = active {
@@ -313,7 +317,7 @@ impl Memory {
             state.parked.remove(&active);
         }
     }
-    pub(super) fn validate_mapping(
+    pub(crate) fn validate_mapping(
         &self,
         pointer: usize,
         bytes: usize,
@@ -343,7 +347,7 @@ impl Memory {
         }
         Ok(())
     }
-    pub(super) fn declare(
+    pub(crate) fn declare(
         &self,
         core: usize,
         address: u64,
@@ -363,10 +367,10 @@ impl Memory {
         let len = s.views.len();
         s.views.reserve(capacity.saturating_sub(len));
     }
-    pub(super) fn undeclare(&self, core: usize, address: u64, bytes: usize) {
+    pub(crate) fn undeclare(&self, core: usize, address: u64, bytes: usize) {
         Self::remove_range(&mut self.state().bindings, core, address, bytes);
     }
-    pub(super) fn forget(&self, core: usize) {
+    pub(crate) fn forget(&self, core: usize) {
         let mut s = self.state();
         s.views.retain(|v| v.core != core);
         s.bindings.retain(|v| v.core != core);
@@ -397,7 +401,7 @@ impl Memory {
             }
         }
     }
-    pub(super) fn map(
+    pub(crate) fn map(
         &self,
         core: usize,
         address: u64,
@@ -431,7 +435,7 @@ impl Memory {
         let len = s.watches.len();
         s.watches.reserve(capacity.saturating_sub(len));
     }
-    pub(super) fn unmap(&self, core: usize, address: u64, bytes: usize) {
+    pub(crate) fn unmap(&self, core: usize, address: u64, bytes: usize) {
         Self::remove_range(&mut self.state().views, core, address, bytes);
     }
     fn remove_range(views: &mut Vec<View>, core: usize, address: u64, bytes: usize) {
@@ -508,15 +512,15 @@ impl Memory {
             }
         })
     }
-    pub(super) fn canonical(&self, core: usize, address: u64, bytes: usize) -> Result<u64, String> {
+    pub(crate) fn canonical(&self, core: usize, address: u64, bytes: usize) -> Result<u64, String> {
         let s = self.state();
         let (pointer, _) = Chunks::new(&s.views, core, address, bytes, true)?
             .next()
-            .ok_or("empty R-profile exclusive range")??;
+            .ok_or("empty exclusive range")??;
         Self::canonical_pointer(&s.bindings, pointer, bytes)
-            .ok_or("R-profile exclusive is outside checked physical RAM views".into())
+            .ok_or("exclusive is outside checked physical RAM views".into())
     }
-    pub(super) fn watch_exclusive(
+    pub(crate) fn watch_exclusive(
         &self,
         core: usize,
         address: u64,
@@ -526,7 +530,7 @@ impl Memory {
             let mut s = self.state();
             let (pointer, _) = Chunks::new(&s.views, core, address, bytes, true)?
                 .next()
-                .ok_or("empty R-profile exclusive range")??;
+                .ok_or("empty exclusive range")??;
             let State { views, watches, .. } = &mut *s;
             for page in ((pointer & !4095)..=((pointer + bytes - 1) & !4095)).step_by(4096) {
                 Self::aliases(views, page, watches);
@@ -537,7 +541,7 @@ impl Memory {
     /// The 4 KiB guest pages of `[begin, end)` that hold translated code, or
     /// None when part of the range has no owned memory (code there is not
     /// tracked). A bounded code observer re-translates just these pages.
-    pub(super) fn translated_pages(&self, core: usize, begin: u64, end: u64) -> Option<Vec<u64>> {
+    pub(crate) fn translated_pages(&self, core: usize, begin: u64, end: u64) -> Option<Vec<u64>> {
         let s = self.state();
         let bytes = end.checked_sub(begin)? as usize;
         let mut guest = begin;
@@ -557,7 +561,7 @@ impl Memory {
         }
         Some(pages.into_iter().collect())
     }
-    pub(super) fn note_code(
+    pub(crate) fn note_code(
         &self,
         core: usize,
         address: u64,
@@ -629,7 +633,7 @@ impl Memory {
             offset += count;
         }
     }
-    pub(super) fn apply_watches(&self) -> Result<(), String> {
+    pub(crate) fn apply_watches(&self) -> Result<(), String> {
         loop {
             let next = {
                 let local = self.local.cores.borrow();
@@ -644,14 +648,14 @@ impl Memory {
                 return Ok(());
             };
             if let Some(core) = core {
-                core.cpu.watch_stores(page, 4096)?;
+                core.watch_code(page, 4096)?;
             }
         }
     }
-    pub(super) fn written(&self, core: usize, address: u64, bytes: usize) -> Result<bool, String> {
+    pub(crate) fn written(&self, core: usize, address: u64, bytes: usize) -> Result<bool, String> {
         self.record_write(core, address, bytes, true)
     }
-    pub(super) fn guest_store(
+    pub(crate) fn guest_store(
         &self,
         core: usize,
         address: u64,
@@ -696,7 +700,7 @@ impl Memory {
         }
         Ok(changed)
     }
-    pub(super) fn backing_written(
+    pub(crate) fn backing_written(
         &self,
         physical: u64,
         pointer: usize,
@@ -759,14 +763,14 @@ impl Memory {
         }
         changed
     }
-    pub(super) fn flush_pending(&self) -> bool {
+    pub(crate) fn flush_pending(&self) -> bool {
         let local = self.local.cores.borrow();
         self.state()
             .invalidations
             .iter()
             .any(|invalidation| local.contains_key(&invalidation.core))
     }
-    pub(super) fn prepare_external_write(&self) -> Result<(), String> {
+    pub(crate) fn prepare_external_write(&self) -> Result<(), String> {
         let state = self.state();
         if !Self::quiescent_except(&state, self.local.active.get()) {
             return Err(
@@ -777,13 +781,13 @@ impl Memory {
         drop(state);
         for id in active {
             if let Some(core) = self.local.cores.borrow().get(&id).and_then(Weak::upgrade) {
-                core.prepare_flush()?;
+                core.prepare_code_write()?;
             }
         }
         self.flush()?;
         Ok(())
     }
-    pub(super) fn flush(&self) -> Result<(), String> {
+    pub(crate) fn flush(&self) -> Result<(), String> {
         if let Some(core) = self.local.active.get() {
             let state = self.state();
             if !state.active.contains(&core)
@@ -815,8 +819,7 @@ impl Memory {
                 break;
             };
             if let Some(core) = core {
-                core.cpu
-                    .invalidate_code(Some((invalidation.address, invalidation.address + 4096)))?;
+                core.invalidate_code_page(invalidation.address)?;
             }
             let mut s = self.state();
             if !s
