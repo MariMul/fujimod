@@ -377,12 +377,12 @@ export function FeatureCatalog() {
       <Entry
         path={props.feature.path}
         title={
-          <h4>
+          <h3>
             <Icon name={props.feature.icon} />
             <Show when={props.feature.card} fallback={<span>{props.feature.title}</span>}>
               {(card) => <Ref card={card()}>{props.feature.title}</Ref>}
             </Show>
-          </h4>
+          </h3>
         }
         credits={props.feature.credits}
         description={
@@ -395,11 +395,11 @@ export function FeatureCatalog() {
           {(control) => (
             <Show when={!control.primary} fallback={<Chips control={control} />}>
               <div class="catalog-sub">
-                <h5>
+                <h4>
                   <Show when={control.card} fallback={control.title}>
                     {(card) => <Ref card={card()}>{control.title}</Ref>}
                   </Show>
-                </h5>
+                </h4>
                 <Chips control={control} />
               </div>
             </Show>
@@ -410,18 +410,17 @@ export function FeatureCatalog() {
   );
 
   return (
-    <section class="catalog" id="features" aria-labelledby="catalog-heading">
-      <h2 id="catalog-heading">Features</h2>
+    <div class="catalog" id="features">
       <For each={catalog.groups.filter((group) => catalog.features.some((f) => f.group === group))}>
         {(group) => (
-          <>
-            <h3>{GROUP_TITLES[group]}</h3>
+          <section class="catalog-group" aria-labelledby={`catalog-${group}-heading`}>
+            <h2 id={`catalog-${group}-heading`}>{GROUP_TITLES[group]}</h2>
             <div class="catalog-grid">
               <For each={catalog.features.filter((f) => f.group === group)}>
                 {(feature) => <Tile feature={feature} />}
               </For>
             </div>
-          </>
+          </section>
         )}
       </For>
       <div
@@ -436,6 +435,6 @@ export function FeatureCatalog() {
       >
         <Show when={target()}>{(current) => <CardBody target={current()} />}</Show>
       </div>
-    </section>
+    </div>
   );
 }
