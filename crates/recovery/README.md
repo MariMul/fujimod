@@ -184,3 +184,6 @@ only `marble_init.bin`.
 proofs before binding the GPIO writes. The compiled ARM and AArch64 programs
 need no stack, heap, timers, firmware calls or DDR initialization. The catalog
 holds each body's polarity, register writes and source proofs.
+
+The offline CLI builds the same LED card with
+`cargo run -p fujimod-recovery -- green-led FIRMWARE DAT NEW_DIRECTORY`.
