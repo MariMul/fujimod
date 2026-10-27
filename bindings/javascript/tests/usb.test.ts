@@ -127,6 +127,17 @@ await test('one direct read, immutable metadata and raw close acknowledgment', a
   assert.ok(batch.events.every((e) => e.timestampMs > 1_500_000_000_000));
 });
 
+await test('asynchronous failures carry the stack of the call that started them', async () => {
+  const { session } = await opened([]);
+  const failure = await session.readMemory(0x1000, 4).then(
+    () => assert.fail('the unscripted read succeeded'),
+    (error: unknown) => error,
+  );
+  assert.ok(usb.isError(failure));
+  assert.match(failure.stack ?? '', /--- operation started ---\n[^]*usb\.test\.ts/);
+  session.abandon();
+});
+
 await test('range ownership spans chunks and for-await break performs no next read', async () => {
   const { session, script } = await opened([
     ...readMemory(0x1000, new Uint8Array([1, 2, 3, 4])),

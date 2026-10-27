@@ -1,14 +1,34 @@
 import { initialize, usb, type Device, type Session } from 'fujimod';
 import { retrieveReport, removeReport } from './transfer';
 import type { ReportLink } from './report-link';
-/** Whole-range reads and writes, split into commands no larger than the
- * camera's advertised packet size (256 bytes on the issue QR screen). */
-function memory(session: Session) {
+/** File-service memory for one session: reads larger than one command use the
+ * firmware's stock bulk path; descriptor words and command writes stay small. */
+function memory(session: Session, firmwareId: string) {
   return {
-    read: (address: number, count: number) => usb.memory.readRange(session, address, count),
-    write: (address: number, bytes: Uint8Array<ArrayBuffer>) =>
-      usb.memory.writeRange(session, address, bytes),
+    read: async (address: number, count: number) =>
+      count > session.packetBytes
+        ? (await session.readBulk(firmwareId, address, count)).data
+        : session.readMemory(address, count),
+    write: (address: number, bytes: Uint8Array<ArrayBuffer>) => session.writeMemory(address, bytes),
   };
+}
+/** The last USB exchanges as text lines, oldest first, for an error's details. */
+function traceLines(trace: InstanceType<typeof usb.tracing.Trace>) {
+  const batch = trace.drain();
+  const lines = [
+    ...batch.protocolEvents.map((event) => ({
+      sequence: event.sequence,
+      time: event.timestampMs,
+      text: `command 0x${event.command.toString(16)} ${usb.tracing.Phase[event.phase]}${event.failureMessage ? `: ${event.failureMessage}` : ''}`,
+    })),
+    ...batch.events.map((event) => ({
+      sequence: event.sequence,
+      time: event.timestampMs,
+      text: `${usb.tracing.Stage[event.stage]} ${usb.tracing.Phase[event.phase]} requested ${event.requested ?? '-'} transferred ${event.transferred ?? '-'}${event.failureMessage ? `: ${event.failureMessage}` : ''}`,
+    })),
+  ].sort((a, b) => (a.sequence < b.sequence ? -1 : 1));
+  const end = lines.at(-1)?.time ?? 0;
+  return lines.map((line) => `${(line.time - end).toFixed(0)} ms ${line.text}`);
 }
 /** The camera chosen for a report, with its ff80 interfaces. */
 export interface CameraChoice {
@@ -51,7 +71,9 @@ export class ReportUsb implements ReportConnection {
   async read(id: number, link: ReportLink, progress: (bytes: number) => void) {
     if (!this.device || !this.interfaces[id]) throw Error('Choose a camera interface.');
     const limits = new usb.FirmwareLimits(16384, 32, 16384, 4096),
-      options = new usb.TransferOptions(5000, 65536);
+      options = new usb.TransferOptions(5000, 65536),
+      trace = new usb.tracing.Trace(40, 262144);
+    options.setTrace(trace);
     try {
       this.session = await usb.Session.open(this.device, this.interfaces[id], limits, options);
     } finally {
@@ -60,10 +82,11 @@ export class ReportUsb implements ReportConnection {
     }
     const session = this.session;
     try {
-      const report = await retrieveReport(memory(session), link, progress);
+      const report = await retrieveReport(memory(session, link.firmware), link, progress);
       this.verified = { ...link };
       return report;
     } catch (error) {
+      if (error instanceof Error) Object.assign(error, { usbTrace: traceLines(trace) });
       // No close command or mode change after an unknown/wrong camera reply.
       session.abandon();
       session.free();
@@ -81,7 +104,7 @@ export class ReportUsb implements ReportConnection {
     )
       throw Error('Read and verify this report before deleting it.');
     if (!session) throw Error('Camera disconnected.');
-    await removeReport(memory(session), link);
+    await removeReport(memory(session, link.firmware), link);
     this.verified = undefined;
   }
   /** Close this page's report session so Dev Tools can take the camera. */

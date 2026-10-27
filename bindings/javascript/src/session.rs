@@ -143,6 +143,7 @@ impl Session {
             resource: LeasedSession::Open(native),
             owner: self.owner.clone(),
         };
+        let caller = js_sys::Error::new("operation started");
         Ok(wasm_bindgen_futures::future_to_promise(async move {
             // Dropping the command future invokes the core's conservative
             // cancellation state. Abandoning sends no firmware cleanup.
@@ -156,6 +157,7 @@ impl Session {
                 operation.run(&mut lease),
             )
             .await
+            .map_err(|error| error::with_caller(error, &caller))
         }))
     }
 }
@@ -173,34 +175,39 @@ impl Session {
         let trace = options.trace.clone();
         let options = options.inner;
         let limits = *limits;
+        let caller = js_sys::Error::new("operation started");
 
         wasm_bindgen_futures::future_to_promise(async move {
-            let mut claim = proxy
-                .as_ref()
-                .map(|proxy| proxy.acquire(tool.clone()))
-                .transpose()
-                .map_err(|e| error(e.into()))?;
-            let connection = usb::connection::Connection::open(&info, interface, options).await;
-            let mut connection = match connection {
-                Ok(connection) => connection,
-                Err(failure) => {
-                    if let Some(claim) = &mut claim {
-                        claim.release();
+            async {
+                let mut claim = proxy
+                    .as_ref()
+                    .map(|proxy| proxy.acquire(tool.clone()))
+                    .transpose()
+                    .map_err(|e| error(e.into()))?;
+                let connection = usb::connection::Connection::open(&info, interface, options).await;
+                let mut connection = match connection {
+                    Ok(connection) => connection,
+                    Err(failure) => {
+                        if let Some(claim) = &mut claim {
+                            claim.release();
+                        }
+                        return Err(error(failure));
                     }
-                    return Err(error(failure));
+                };
+                if let Some(tool) = tool {
+                    connection.set_tool(tool);
                 }
-            };
-            if let Some(tool) = tool {
-                connection.set_tool(tool);
+                if let Some(claim) = claim {
+                    connection.observe_remote(claim);
+                }
+                Ok(Self::wrap(
+                    connection.begin_session(trace).await.map_err(error)?,
+                    limits,
+                )
+                .into())
             }
-            if let Some(claim) = claim {
-                connection.observe_remote(claim);
-            }
-            Ok(Self::wrap(
-                connection.begin_session(trace).await.map_err(error)?,
-                limits,
-            )
-            .into())
+            .await
+            .map_err(|failure: JsValue| error::with_caller(failure, &caller))
         })
     }
 }
