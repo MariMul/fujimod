@@ -329,8 +329,7 @@ pub fn stroke_with_style(
             for (point, tangent, direction) in ends {
                 if draw.cap == 1 {
                     polygon(circle_points(point))?;
-                } else if draw.cap == 0 {
-                    // Hardware code zero extends this cap by the stroke radius.
+                } else if draw.cap == 2 {
                     let (tx, ty) = (
                         tangent.0 * radius * direction,
                         tangent.1 * radius * direction,
@@ -347,4 +346,34 @@ pub fn stroke_with_style(
         }
     }
     Ok(polygons)
+}
+
+#[cfg(test)]
+mod cap_tests {
+    use super::*;
+    #[test]
+    fn butt_and_square_cap_codes_have_distinct_extents() {
+        let paths = vec![(vec![(0., 0.), (4., 0.)], false)];
+        for (cap, expected) in [(0, (0., 4.)), (2, (-1., 5.))] {
+            let polygons = stroke_with_style(
+                &paths,
+                &StrokeStyle {
+                    radius: 1.,
+                    matrix: [1., 0., 0., 0., 1., 0.],
+                    device_radius: true,
+                    cap,
+                    join: 0,
+                },
+            )
+            .unwrap();
+            let xs: Vec<_> = polygons.iter().flatten().map(|p| p.0).collect();
+            assert_eq!(
+                (
+                    xs.iter().copied().fold(f64::INFINITY, f64::min),
+                    xs.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+                ),
+                expected
+            );
+        }
+    }
 }
