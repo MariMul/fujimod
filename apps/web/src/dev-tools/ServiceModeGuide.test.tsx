@@ -118,7 +118,11 @@ test('Disable debug mode persists debug access off for the camera firmware', asy
       expect(p.button('Open workbench')).toBeTruthy();
     });
     p.button('Open workbench')!.click();
-    flush();
+    // The bug-report scan holds the session briefly when the workbench opens.
+    await vi.waitFor(() => {
+      flush();
+      expect(p.button('Disable debug mode')!.disabled).toBe(false);
+    });
     p.button('Disable debug mode')!.click();
     flush();
     p.host.querySelector<HTMLButtonElement>('.dm-huge')!.click();

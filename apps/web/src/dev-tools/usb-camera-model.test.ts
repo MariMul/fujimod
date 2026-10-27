@@ -165,6 +165,7 @@ class CameraDevice implements ModelDevice {
       dumpState: async () => {},
       memory: async () => ({
         read: async () => Uint8Array.of(1, 2, 3, 4),
+        write: async () => {},
         overwritten: null,
         close: async () => {},
         free() {},

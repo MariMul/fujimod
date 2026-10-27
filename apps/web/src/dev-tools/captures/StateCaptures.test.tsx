@@ -50,6 +50,9 @@ function mount(
             await gate();
             return reads().slice(0, size);
           },
+          async write() {
+            throw Error('Captures only read.');
+          },
           overwritten: { address: 0x9000, size: 4 },
           async close() {
             closed++;

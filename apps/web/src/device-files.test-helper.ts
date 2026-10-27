@@ -1,5 +1,11 @@
 import type { FileMemory } from './device-files';
-export function fileDevice(file: Uint8Array, tag = 0xaaaaaaaa, version = 1) {
+/** A fake file service: reads return `file`; listing (op 8) returns `listing` records. */
+export function fileDevice(
+  file: Uint8Array,
+  tag = 0xaaaaaaaa,
+  version = 1,
+  listing: Uint8Array = file,
+) {
   const address = 0x403a0000,
     bytes = new Map<number, number>(),
     commands: number[] = [],
@@ -49,7 +55,7 @@ export function fileDevice(file: Uint8Array, tag = 0xaaaaaaaa, version = 1) {
         cursor += chunk.length;
       } else if (op === 8) {
         const capacity = new DataView(read(pointers[0], 4).buffer).getUint32(0, true);
-        const chunk = file.slice(size * 24, size * 24 + Math.floor(capacity / 24) * 24);
+        const chunk = listing.slice(size * 24, size * 24 + Math.floor(capacity / 24) * 24);
         store(pointers[6], chunk);
         word(pointers[4], chunk.length);
       } else if (op === 3 || op === 4) word(pointers[9], 0xffffffff);

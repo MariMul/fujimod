@@ -210,6 +210,7 @@ function toolSession(
       const memory = await session.memory(firmwareId);
       return {
         read: (address, length) => memory.read(address, length),
+        write: (address, data) => memory.write(address, data),
         get overwritten() {
           return memory.overwritten;
         },

@@ -14,6 +14,7 @@ import type { CameraModel } from './camera-model';
 import { CameraDetails } from './CameraDetails';
 import { CameraStrip } from './CameraStrip';
 import { CameraTools } from './CameraTools';
+import { BugReports } from './reports/BugReports';
 import { Wizard, toolAt, toolPath } from './routes';
 import { ConsoleLog } from './ConsoleLog';
 import { ToolDeck, type SavedCamera } from './ToolDeck';
@@ -259,6 +260,11 @@ export function Workbench(props: {
                         onFile={fileFor(current().id)}
                         debug={operations()}
                         onWizard={setWizard}
+                      />
+                      <BugReports
+                        camera={current()}
+                        model={props.model}
+                        onFile={fileFor(current().id)}
                       />
                       <CameraTools
                         camera={current()}

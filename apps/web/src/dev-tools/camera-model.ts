@@ -84,9 +84,10 @@ export interface CameraLogEntry {
   detail?: string;
 }
 
-/** Reads through one qualified bulk path. Close it to restore the camera's bulk source. */
+/** Reads through one qualified bulk path, and writes. Close it to restore the camera's bulk source. */
 export interface ToolMemory {
   read(address: number, length: number): Promise<Uint8Array>;
+  write(address: number, data: Uint8Array<ArrayBuffer>): Promise<void>;
   /** Diagnostic scratch the stock setup overwrote, which may lie inside read bytes. */
   readonly overwritten: { address: number; size: number } | null;
   close(): Promise<void>;
