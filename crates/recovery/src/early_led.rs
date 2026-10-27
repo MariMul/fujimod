@@ -108,6 +108,7 @@ pub(crate) fn stage(
     source: &[u8],
     bytes: &mut Vec<u8>,
     base: u32,
+    entry: usize,
     limit: usize,
 ) -> Result<()> {
     let writes = green_led::verified_writes(recipe, source)?;
@@ -116,10 +117,10 @@ pub(crate) fn stage(
         at + PROGRAM.len() <= limit,
         "Early LED exceeds first-stage reservation",
     )?;
-    let first = word(bytes, 0)?;
+    let first = word(bytes, entry)?;
     let (instruction, target, literal) = if first >> 24 == 0xea {
         let delta = ((first & 0xffffff) as i32) << 8 >> 6;
-        let offset = 8i64 + i64::from(delta);
+        let offset = entry as i64 + 8 + i64::from(delta);
         require(
             offset >= 0 && (offset as usize) < bytes.len(),
             "First-stage branch escapes image",
@@ -128,6 +129,7 @@ pub(crate) fn stage(
     } else {
         require(
             matches!(recipe.generation, Generation::Exr | Generation::ExrPro)
+                && entry == 0
                 && first & 0xfffff000 == 0xe59f0000,
             "Changed first-stage entry",
         )?;
@@ -141,5 +143,10 @@ pub(crate) fn stage(
     bytes.resize(at, 0);
     bytes.extend_from_slice(&program);
     require(at < 0x2000000, "Early LED branch exceeds ARM range")?;
-    put(bytes, 0, 0xea000000 | (((at as u32 - 8) >> 2) & 0xffffff))
+    let delta = at as i64 - entry as i64 - 8;
+    require(
+        (-0x2000000..0x2000000).contains(&delta),
+        "Early LED branch exceeds ARM range",
+    )?;
+    put(bytes, entry, 0xea000000 | ((delta >> 2) as u32 & 0xffffff))
 }

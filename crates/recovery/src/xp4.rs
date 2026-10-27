@@ -39,6 +39,20 @@ pub struct ColdStart {
     pub preload: Option<preload::Preload>,
 }
 
+/// The indication runs only after FFINIT's primary-core and endian setup.
+pub(crate) fn indicator_entry() -> Result<usize> {
+    let asset = &sd_loader::LAYOUT.ffinit;
+    let code = asset.text.bytes();
+    let mut calls = Vec::new();
+    for site in (asset.symbols["ffinit_entry"]..asset.symbols["ffinit_dram_ready"]).step_by(4) {
+        if word(code, site)? >> 24 == 0xea && branch(code, site, 0xea)? == asset.symbols["ffinit_prepare"] {
+            calls.push(site);
+        }
+    }
+    require(calls.len() == 1, "No unique primary FFINIT prepare branch")?;
+    Ok(0x4000 + calls[0])
+}
+
 pub fn package(
     recipe: &crate::Recipe,
     source: &[u8],

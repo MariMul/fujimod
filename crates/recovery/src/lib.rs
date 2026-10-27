@@ -219,7 +219,7 @@ impl Recipe {
             base,
             Some(workspace),
         )?;
-        early_led::stage(self, source, &mut bytes, base, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
+        early_led::stage(self, source, &mut bytes, base, xp4::indicator_entry()?, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
         let mut layout = xp4::layout(setup, api, base);
         layout["workspace"] = workspace.into();
         layout["file_api"] = serde_json::json!(api);
@@ -351,7 +351,7 @@ impl Recipe {
                         plan,
                         ram,
                     )?;
-                    early_led::stage(self, source, &mut files[1].bytes, 0, 0xffff)?;
+                    early_led::stage(self, source, &mut files[1].bytes, 0, 0, 0xffff)?;
                     files
                 }
                 Generation::Exr2 | Generation::Xpp => {
@@ -388,7 +388,7 @@ impl Recipe {
                         image::Error::Invalid("Missing Topaz filesystem ABI".into())
                     })?;
                     let mut files = xp4::package(self, source, &inverted, plan, cold, setup, api)?;
-                    early_led::stage(self, source, &mut files[0].bytes, api.load_address,
+                    early_led::stage(self, source, &mut files[0].bytes, api.load_address, xp4::indicator_entry()?,
                         ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
                     files
                 }
