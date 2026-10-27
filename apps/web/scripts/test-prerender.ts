@@ -67,8 +67,8 @@ try {
             `${type.name()} ${route}: static content`,
           );
         else {
-          assert.equal(await page.locator('main.bug-report').count(), 1);
-          assert.equal(await page.getByRole('img', { name: 'FujiMod', exact: true }).count(), 1);
+          assert.equal(await page.locator('.shell.bug-report').count(), 1);
+          assert.equal(await page.getByRole('img', { name: 'Fujimod', exact: true }).count(), 1);
         }
         if (route === '/') {
           assert.equal(await page.locator('#workspace').count(), 1);
