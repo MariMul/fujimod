@@ -72,18 +72,23 @@ update header before installing the source-compiled reader. NAND initialization,
 bad-block mapping and per-camera storage retain their stock behavior.
 
 X-Processor Pro uses Agate's 2 KiB DDR configuration as `ffsys.bin` and the
-complete RAM image as `ffboot.bin`. The locator follows the update's single
+resident RAM image as `ffboot.bin`. The locator follows the update's single
 or initial/trained DDR-copy helper to choose the header. Three checked
 comparisons select the stock preloaded table, header and image paths while
-retaining cold reset mode. Its plain and progress read paths share a checked
-read-only descriptor reader. Calls to that reader fetch update-installed
-addresses from the firmware namespace appended to `ffboot.bin`, using Agate
-ROM file I/O. The reader keeps the ROM-selected drive, seeks through the FAT
-chain, and leaves the caller's IRQ mask intact. ROM metadata calls use the ROM
-SRAM stack; payload DMA uses an aligned sector buffer and copies only requested
-bytes into the caller's destination. Other addresses delegate to the unchanged stock reader. Program
-and erase paths retain their stock code. Both families use rooted section tables and checked
-source mappings; unrecognized table or update-device layouts refuse.
+retaining cold reset mode. Three complete checked MAIN/raw caller contracts
+use an 80-byte compiled preload helper that keeps the stock gates and cache
+publication. It replaces the original raw-section-1 loader body in its existing
+executable storage; the MAIN/raw-section-2 calls point there. No additional RAM
+reservation is needed.
+Stock callers retain BSS handling. Demand resources and per-camera data use
+the stock NOR reader and its locks/controller initialization. Program and erase
+paths retain their stock code. This design recovers executable modifications;
+it depends on the installed demand resources matching the selected firmware.
+
+No runtime ROM file I/O, custom SD/FAT implementation, appended update namespace,
+or second source mirror is installed. The stock boot ROM loads the resident
+image before entry. Both families use rooted section tables and checked source
+mappings; unrecognized table or update-device layouts refuse.
 
 XP5 emits raw `marble_init.bin` with the update's setup at byte zero. Its
 entry loader preserves registers and stack, applies the checked header carried
@@ -144,20 +149,6 @@ of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
 second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
-
-X-Processor Pro cards use checked stock preloaded paths for MAIN and the two
-raw executable sections. Their original callers retain BSS handling and cache
-publication without rereading initialized executables. A compact source map
-preserves the entire original firmware namespace: erased runs are represented
-by fill records and other bytes are retained once in the card file. Demand
-reads use the stock ROM FAT implementation and the latched boot drive, with
-an SRAM stack and aligned sector DMA buffer. No additional full-update RAM
-mirror or new FAT implementation is introduced.
-
-The ROM adapter serializes its own calls. Exclusive ownership and handback
-between ROM I/O and the native SD driver remain unqualified during OS execution.
-The isolated caller and ROM-loading checks do not establish physical startup
-or updater entry.
 
 The XP4 compiled SD loader is `assets/xp4-sd-loader.generated.bin`; its companion
 `assets/xp4-sd-loader.generated.json` describes segment offsets, symbols and ARM

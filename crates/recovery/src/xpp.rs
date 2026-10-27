@@ -1,24 +1,20 @@
-//! Agate's read-only descriptor path and card-file namespace.
+//! Agate's resident executable transfers and unchanged stock data-read paths.
 use crate::{
     Proof,
     image::{self, Plan, Result, extent, hash, put, require, word},
     rom_sd::{call, sequence},
 };
 use serde::{Deserialize, Serialize};
-mod namespace;
-const IMAGE: &[u8] = include_bytes!("../assets/xpp-reader.generated.bin");
+const IMAGE: &[u8] = include_bytes!("../assets/xpp-preloaded.generated.bin");
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Layout {
     schema: usize,
-    address: usize,
+    link_address: usize,
     size: usize,
-    entry: usize,
     config: usize,
     preloaded: usize,
-    preloads: usize,
-    ranges: usize,
-    range_capacity: usize,
+    config_reference: usize,
 }
 #[derive(Debug, Serialize)]
 pub struct Preload {
@@ -38,7 +34,6 @@ pub struct Reads {
     pub pointer_sites: Vec<Proof>,
     pub dat_offset: usize,
     pub namespace_size: usize,
-    pub retained_source_bytes: usize,
     pub preloads: Vec<Preload>,
     pub cache_maintenance: Proof,
     pub enabled_byte: usize,
@@ -308,6 +303,11 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
             raw.len() == 1,
             "No unique Agate raw-section preload contract",
         )?;
+        require(
+            raw[0] >= section.address
+                && raw[0] + 0x50 <= section.address + section.source.decoded_size,
+            "Agate raw loader is outside resident executable storage",
+        )?;
         let row = table.source.dat_offset + 0x40 + id as usize * 36;
         let dest = word(inverted, row + 4)? as usize;
         let len = word(inverted, row + 8)? as usize;
@@ -338,7 +338,6 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
             output: dest,
         });
     }
-    let namespace = namespace::build(&inverted[bias..], limit, plan.size)?;
     Ok(Reads {
         byte_reader: pin(ram, found[0], 68)?,
         translator: pin(ram, translator, 24)?,
@@ -348,7 +347,6 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
         pointer_sites: pointers,
         dat_offset: bias,
         namespace_size: limit,
-        retained_source_bytes: namespace.bytes.len(),
         preloads,
         cache_maintenance: pin(ram, cache, 0x30)?,
         enabled_byte: enabled,
@@ -360,67 +358,33 @@ pub fn locate(inverted: &[u8], plan: &Plan) -> Result<Reads> {
 }
 pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result<()> {
     let reads = locate_ram(inverted, plan, ram)?;
-    let layout: Layout = serde_json::from_str(include_str!("../assets/xpp-reader.generated.json"))
-        .map_err(|e| image::Error::Invalid(e.to_string()))?;
+    let storage = &reads.preloads[1].caller;
+    let address = storage.address;
+    let layout: Layout =
+        serde_json::from_str(include_str!("../assets/xpp-preloaded.generated.json"))
+            .map_err(|e| image::Error::Invalid(e.to_string()))?;
     require(
-        layout.schema == 2
-            && layout.address == 0x100000
+        layout.schema == 4
+            && layout.link_address == 0x100000
             && layout.size == IMAGE.len()
-            && layout.entry < IMAGE.len()
-            && layout.config + 68 <= IMAGE.len()
+            && layout.config + 12 <= IMAGE.len()
             && layout.preloaded < IMAGE.len()
-            && layout.preloads + 36 <= IMAGE.len()
-            && layout.range_capacity == 512
-            && layout.ranges + layout.range_capacity * 16 <= IMAGE.len()
-            && IMAGE.len() <= 0x4000,
-        "Invalid Agate card reader layout",
+            && layout.config_reference + 4 <= IMAGE.len()
+            && IMAGE.len() <= storage.size
+            && word(IMAGE, layout.config_reference)? as usize
+                == layout.link_address + layout.config,
+        "Invalid Agate preload helper layout",
     )?;
-    for region in &plan.regions {
-        require(
-            layout.address + IMAGE.len() <= region.address
-                || region.address + region.source.decoded_size <= layout.address,
-            "Agate card reader overlaps initialized firmware",
-        )?;
+    // Reuse the original raw-section-1 loader's executable storage. Its full
+    // stock body is pinned above; no free-gap or allocator reservation is used.
+    hash(extent(ram, address, storage.size)?, &storage.sha256)?;
+    for p in &reads.preloads {
+        hash(extent(ram, p.call.address, 4)?, &p.call.sha256)?;
     }
-    for region in &plan.bss {
-        require(
-            layout.address + IMAGE.len() <= region.address
-                || region.address + region.size <= layout.address,
-            "Agate card reader overlaps firmware BSS",
-        )?;
-    }
-    require(
-        extent(ram, layout.address, IMAGE.len())?
-            .iter()
-            .all(|b| *b == 0),
-        "Agate card reader reservation is occupied",
-    )?;
-    let tail = (ram.len() + 3) & !3;
-    let namespace = namespace::build(&inverted[reads.dat_offset..], reads.namespace_size, tail)?;
-    let total = tail + namespace.bytes.len();
-    require(
-        namespace.ranges.len() <= layout.range_capacity,
-        "Agate compact source map exceeds reservation",
-    )?;
     let mut program = IMAGE.to_vec();
-    // Agate ROM's drive-number ABI and mounted Petit-FatFs object.
     for (i, v) in [
-        0xfff02548,
-        0xfff027b8,
-        0xfff02880,
-        0xfff0df0c,
-        tail,
-        reads.namespace_size,
-        total,
-        reads.descriptor_reader.address,
-        0xfff01eb4,
-        0xfff0a000,
-        0xfff0de00,
         reads.cache_maintenance.address,
         reads.enabled_byte,
-        namespace.ranges.len(),
-        namespace.logical_size,
-        layout.address + IMAGE.len(),
         reads.preloaded_byte,
     ]
     .into_iter()
@@ -430,29 +394,20 @@ pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result
             &mut program,
             layout.config + i * 4,
             u32::try_from(v).map_err(|_| {
-                image::Error::Invalid("Agate reader configuration exceeds ARM32".into())
+                image::Error::Invalid("Agate preload configuration exceeds ARM32".into())
             })?,
         )?;
     }
-    for (i, r) in namespace.ranges.iter().enumerate() {
-        for (j, v) in [r.offset, r.size, r.address, r.value as usize]
-            .into_iter()
-            .enumerate()
-        {
-            put(
-                &mut program,
-                layout.ranges + i * 16 + j * 4,
-                u32::try_from(v)
-                    .map_err(|_| image::Error::Invalid("Agate source map exceeds ARM32".into()))?,
-            )?;
-        }
-    }
+    put(
+        &mut program,
+        layout.config_reference,
+        (address + layout.config) as u32,
+    )?;
     for (i, p) in reads.preloads.iter().enumerate() {
-        for (j, v) in [p.block, p.count, p.output].into_iter().enumerate() {
-            put(&mut program, layout.preloads + i * 12 + j * 4, v as u32)?;
+        if i == 1 {
+            continue; // Its entire original body becomes the compiled helper.
         }
-        hash(extent(ram, p.call.address, 4)?, &p.call.sha256)?;
-        let delta = (layout.address + layout.preloaded) as i64 - p.call.address as i64 - 8;
+        let delta = (address + layout.preloaded) as i64 - p.call.address as i64 - 8;
         require(
             delta % 4 == 0 && (-0x2000000..0x2000000).contains(&delta),
             "Agate preload hook is out of BL range",
@@ -463,25 +418,7 @@ pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut Vec<u8>) -> Result
             0xeb000000 | ((delta >> 2) as u32 & 0xffffff),
         )?;
     }
-    let entry = layout.address + layout.entry;
-    for site in &reads.call_sites {
-        hash(extent(ram, site.address, site.size)?, &site.sha256)?;
-        let delta = entry as i64 - site.address as i64 - 8;
-        require(
-            delta % 4 == 0 && (-0x2000000..0x2000000).contains(&delta),
-            "Agate read hook is out of BL range",
-        )?;
-        let opcode = word(ram, site.address)? & 0xff000000;
-        put(ram, site.address, opcode | ((delta >> 2) as u32 & 0xffffff))?;
-    }
-    for site in &reads.pointer_sites {
-        hash(extent(ram, site.address, 4)?, &site.sha256)?;
-        put(ram, site.address, entry as u32)?;
-    }
-    ram[layout.address..layout.address + program.len()].copy_from_slice(&program);
-    ram.resize(tail, 0);
-    ram.extend_from_slice(&namespace.bytes);
-    require(ram.len() == total, "Agate compact source length differs")?;
+    ram[address..address + program.len()].copy_from_slice(&program);
     Ok(())
 }
 
@@ -494,7 +431,7 @@ mod tests {
     }
     fn fixture() -> (Vec<u8>, Plan, Vec<u8>) {
         let mut input = vec![0x5a; 0x18100];
-        for (off, val) in [(0, 5), (4, 0x210000), (20, 0x2000)] {
+        for (off, val) in [(0, 5), (4, 0x200000), (20, 0xf00)] {
             put(&mut input, 0x400 + 0x40 + 5 * 36 + off, val).unwrap();
         }
         let mut ram = vec![0; 0x240000];
@@ -699,19 +636,14 @@ mod tests {
             }],
             regions: vec![
                 Region {
-                    name: "application".into(),
-                    address: 0x200000,
-                    source: source(0x1000, 0xc00),
-                },
-                Region {
                     name: "section-table".into(),
                     address: 0x80000,
                     source: source(0x400, 0x400),
                 },
                 Region {
                     name: "section-5".into(),
-                    address: 0x210000,
-                    source: source(0x2100, 32),
+                    address: 0x200000,
+                    source: source(0x1000, 0xc00),
                 },
             ],
         };
@@ -723,13 +655,13 @@ mod tests {
             });
         }
         ram[0x80000..0x80400].copy_from_slice(&input[0x400..0x800]);
-        ram[0x210000..0x210020].copy_from_slice(&input[0x2100..0x2120]);
         input[0x1000..0x1c00].copy_from_slice(&ram[0x200000..0x200c00]);
         (input, plan, ram)
     }
     #[test]
-    fn all_descriptor_references_redirect_while_the_stock_reader_and_other_code_are_preserved() {
+    fn only_preloaded_executable_transfers_change_and_stock_data_paths_are_preserved() {
         let (input, plan, mut ram) = fixture();
+        ram[0x100000..0x108000].fill(0xa5);
         let original = ram.clone();
         let reads = locate_ram(&input, &plan, &ram).unwrap();
         assert_eq!(reads.dat_offset, 0x100);
@@ -745,54 +677,51 @@ mod tests {
         assert_eq!(reads.pointer_sites[0].address, 0x200300);
         install(&input, &plan, &mut ram).unwrap();
         let layout: Layout =
-            serde_json::from_str(include_str!("../assets/xpp-reader.generated.json")).unwrap();
-        let c: Vec<_> = (0..17)
-            .map(|i| word(&ram, layout.address + layout.config + i * 4).unwrap() as usize)
+            serde_json::from_str(include_str!("../assets/xpp-preloaded.generated.json")).unwrap();
+        assert_eq!(ram.len(), original.len());
+        let c: Vec<_> = (0..3)
+            .map(|i| {
+                word(
+                    &ram,
+                    reads.preloads[1].caller.address + layout.config + i * 4,
+                )
+                .unwrap() as usize
+            })
             .collect();
-        assert_eq!(c[4], original.len());
-        assert_eq!(c[6], ram.len());
-        let mut restored = Vec::new();
-        for i in 0..c[13] {
-            let at = layout.address + layout.ranges + i * 16;
-            let off = word(&ram, at).unwrap() as usize;
-            let len = word(&ram, at + 4).unwrap() as usize;
-            let address = word(&ram, at + 8).unwrap() as usize;
-            assert_eq!(restored.len(), off);
-            if address == namespace::FILL {
-                restored.extend(std::iter::repeat_n(255, len));
-            } else {
-                restored.extend_from_slice(&ram[address..address + len]);
-            }
-        }
         assert_eq!(
-            &restored[..input.len() - reads.dat_offset],
-            &input[reads.dat_offset..]
-        );
-        assert!(
-            restored[input.len() - reads.dat_offset..]
-                .iter()
-                .all(|v| *v == 255)
+            c,
+            vec![
+                reads.cache_maintenance.address,
+                reads.enabled_byte,
+                reads.preloaded_byte
+            ]
         );
         assert_eq!(reads.preloads.len(), 3);
-        for p in &reads.preloads {
-            assert_eq!(
-                call(&ram, p.call.address).unwrap(),
-                layout.address + layout.preloaded
-            );
+        for (index, p) in reads.preloads.iter().enumerate() {
+            if index != 1 {
+                assert_eq!(
+                    call(&ram, p.call.address).unwrap(),
+                    reads.preloads[1].caller.address + layout.preloaded
+                );
+            }
             ram[p.call.address..p.call.address + 4]
                 .copy_from_slice(&original[p.call.address..p.call.address + 4]);
         }
         assert_eq!(&ram[0x2000c0..0x200100], &original[0x2000c0..0x200100]);
         for p in reads.call_sites.iter().chain(&reads.pointer_sites) {
-            ram[p.address..p.address + 4].copy_from_slice(&original[p.address..p.address + 4]);
+            assert_eq!(
+                &ram[p.address..p.address + p.size],
+                &original[p.address..p.address + p.size]
+            );
         }
-        ram[0x100000..0x100000 + IMAGE.len()]
-            .copy_from_slice(&original[0x100000..0x100000 + IMAGE.len()]);
+        let address = reads.preloads[1].caller.address;
+        ram[address..address + IMAGE.len()]
+            .copy_from_slice(&original[address..address + IMAGE.len()]);
         assert_eq!(&ram[..original.len()], original);
     }
     #[test]
-    fn changed_read_abi_translation_or_occupied_program_refuses() {
-        for at in [0x200080, 0x2000c0, 0x200100, 0x100000] {
+    fn changed_read_abi_translation_or_raw_loader_body_refuses() {
+        for at in [0x200080, 0x2000c0, 0x200100, 0x200900] {
             let (input, plan, mut ram) = fixture();
             ram[at] ^= 1;
             assert!(install(&input, &plan, &mut ram).is_err(), "{at:x}");
