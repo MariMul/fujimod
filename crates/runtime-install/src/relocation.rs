@@ -11,6 +11,7 @@ pub enum Kind {
     ArmCall,
     ArmJump24,
     ArmMov32,
+    Aarch64Abs32,
     Aarch64Abs64,
     Aarch64Call26,
     Aarch64Jump26,
@@ -60,7 +61,9 @@ pub fn encode(kind: Kind, word: u64, value: u64, place: u64) -> Result<u64> {
     use Kind::*;
     let w = word as u32;
     let result = match kind {
-        ArmAbs32 => u32::try_from(value).map_err(|_| Error::Invalid("ABS32 overflow"))?,
+        ArmAbs32 | Aarch64Abs32 => {
+            u32::try_from(value).map_err(|_| Error::Invalid("ABS32 overflow"))?
+        }
         ArmRel32 => (i128::from(value) - i128::from(place)) as u32,
         ArmCall | ArmJump24 => {
             require(

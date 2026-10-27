@@ -19,13 +19,14 @@ fn image() -> RuntimeImage {
             new: 2,
         }],
         relocations: vec![],
-        hook_table_offset: None,
+        hook_table: None,
         control: ControlLayout {
             control_offset: 0,
             state_offset: 64,
             magic_offset: 0,
             nonce_offset: 4,
             token_offset: 8,
+            operation_offset: None,
             inits_done_offset: 12,
             installed_offset: 16,
             magic: 0x12345678,
@@ -409,4 +410,56 @@ fn mov_hook_pair_moves_downward_and_round_trips() {
     assert_eq!(placed.hooks[0].new, 0xe3020010);
     let restored = placed.relocate(0x4000).unwrap();
     assert_eq!(restored.hooks, i.hooks);
+}
+
+#[test]
+fn lp64_hook_table_and_pointer_relocation_round_trip() {
+    let mut i = image();
+    i.hooks = vec![
+        HookWord {
+            address: 0x1_0000_3000,
+            old: 1,
+            new: 0x1080,
+        },
+        HookWord {
+            address: 0x1_0000_3004,
+            old: 2,
+            new: 0,
+        },
+    ];
+    i.hook_table = Some(HookTable {
+        offset: 160,
+        address_bytes: 8,
+    });
+    i.relocations.push(Relocation {
+        destination: D::Hook(0),
+        kind: K::Aarch64Abs64,
+        value: 0x1080,
+        moves: true,
+        pair: None,
+    });
+    let placed = i.relocate(0x1_0000_1000).unwrap();
+    assert_eq!(placed.hooks[0].new, 0x1080);
+    assert_eq!(placed.hooks[1].new, 1);
+    assert_eq!(&placed.bytes[160..168], &0x1_0000_3000u64.to_le_bytes());
+    assert_eq!(&placed.bytes[172..176], &0x1080u32.to_le_bytes());
+    assert_eq!(&placed.bytes[188..192], &1u32.to_le_bytes());
+    assert_eq!(placed.relocate(0x1000).unwrap().hooks, i.hooks);
+    i.hooks[1].address += 4;
+    assert!(i.validate().is_err());
+}
+
+#[test]
+fn request_cell_is_written_and_cannot_overlap_ownership() {
+    let mut i = image();
+    i.control.operation_offset = Some(20);
+    let mut memory = Memory::default();
+    let mut installer = Installer::plan(i.clone()).unwrap();
+    block_on(installer.install(&mut memory, Placement::Relocate, 9)).unwrap();
+    let state = installer.image.link_base + 64;
+    assert_eq!(memory.get(state + 20, 4), 4u32.to_le_bytes());
+    i.control.operation_offset = Some(4);
+    assert!(i.validate().is_err());
+    i.control.operation_offset = Some(224);
+    assert!(i.validate().is_err());
 }

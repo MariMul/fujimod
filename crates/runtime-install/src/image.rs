@@ -43,6 +43,8 @@ pub struct ControlLayout {
     pub magic_offset: u32,
     pub nonce_offset: u32,
     pub token_offset: u32,
+    /// Optional host-written request cell for callbacks with a fixed argument ABI.
+    pub operation_offset: Option<u32>,
     pub inits_done_offset: u32,
     pub installed_offset: u32,
     pub magic: u32,
@@ -58,6 +60,13 @@ pub struct ControlLayout {
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct HookTable {
+    pub offset: u32,
+    /// Address width in bytes; followed by old and new u32 values.
+    pub address_bytes: u32,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RuntimeImage {
     pub version: u32,
     #[serde(skip)]
@@ -68,8 +77,7 @@ pub struct RuntimeImage {
     pub hooks: Vec<HookWord>,
     pub control: ControlLayout,
     pub relocations: Vec<Relocation>,
-    /// Optional image table of {address, old, new} ARM32 words.
-    pub hook_table_offset: Option<u32>,
+    pub hook_table: Option<HookTable>,
 }
 impl RuntimeImage {
     pub fn validate(&self) -> Result<()> {
@@ -128,6 +136,17 @@ impl RuntimeImage {
             }
             fields.push((u64::from(offset), end));
         }
+        if let Some(offset) = c.operation_offset {
+            let end = u64::from(offset) + 4;
+            if offset % 4 != 0
+                || u64::from(c.state_offset) + end > self.bytes.len() as u64
+                || fields
+                    .iter()
+                    .any(|&(start, stop)| u64::from(offset) < stop && start < end)
+            {
+                return Err(bad("invalid operation request cell"));
+            }
+        }
         let mut operations = BTreeSet::new();
         for op in [
             c.operations.install,
@@ -171,8 +190,13 @@ impl RuntimeImage {
                 return Err(bad("invalid or duplicate hook address"));
             }
         }
-        if let Some(offset) = self.hook_table_offset {
-            if offset % 4 != 0 || offset as usize + self.hooks.len() * 12 > self.bytes.len() {
+        if let Some(table) = &self.hook_table {
+            if ![4, 8].contains(&table.address_bytes)
+                || table.offset % table.address_bytes != 0
+                || u64::from(table.offset)
+                    + self.hooks.len() as u64 * u64::from(table.address_bytes + 8)
+                    > self.bytes.len() as u64
+            {
                 return Err(bad("hook table outside image"));
             }
         }
@@ -214,15 +238,29 @@ impl RuntimeImage {
                 Ok(u64::from_le_bytes(word))
             }
             Destination::Hook(index) => {
-                if width != 4 {
-                    return Err(Error::Invalid("hook relocation width"));
-                }
-                Ok(u64::from(
-                    self.hooks
+                let high = if width == 8 {
+                    let low = self
+                        .hooks
                         .get(index as usize)
-                        .ok_or(Error::Invalid("relocation outside hooks"))?
-                        .new,
-                ))
+                        .ok_or(Error::Invalid("relocation outside hooks"))?;
+                    let high = self
+                        .hooks
+                        .get(index as usize + 1)
+                        .ok_or(Error::Invalid("relocation outside hooks"))?;
+                    if low.address % 8 != 0 || high.address != low.address + 4 {
+                        return Err(Error::Invalid("noncontiguous 64-bit hook"));
+                    }
+                    u64::from(high.new) << 32
+                } else {
+                    0
+                };
+                Ok(high
+                    | u64::from(
+                        self.hooks
+                            .get(index as usize)
+                            .ok_or(Error::Invalid("relocation outside hooks"))?
+                            .new,
+                    ))
             }
         }
     }
@@ -230,7 +268,12 @@ impl RuntimeImage {
         match destination {
             Destination::Image(offset) => self.bytes[offset as usize..offset as usize + width]
                 .copy_from_slice(&value.to_le_bytes()[..width]),
-            Destination::Hook(index) => self.hooks[index as usize].new = value as u32,
+            Destination::Hook(index) => {
+                self.hooks[index as usize].new = value as u32;
+                if width == 8 {
+                    self.hooks[index as usize + 1].new = (value >> 32) as u32;
+                }
+            }
         }
     }
     pub fn relocate(&self, base: u64) -> Result<Self> {
@@ -268,15 +311,17 @@ impl RuntimeImage {
                 );
             }
         }
-        if let Some(offset) = self.hook_table_offset {
+        if let Some(table) = &self.hook_table {
             for (index, hook) in result.hooks.iter().enumerate() {
-                let address = u32::try_from(hook.address)
-                    .map_err(|_| Error::Invalid("ARM32 hook address overflow"))?;
-                let start = offset as usize + index * 12;
-                for (i, word) in [address, hook.old, hook.new].into_iter().enumerate() {
-                    result.bytes[start + i * 4..start + i * 4 + 4]
-                        .copy_from_slice(&word.to_le_bytes());
+                if table.address_bytes == 4 && hook.address > u64::from(u32::MAX) {
+                    return Err(Error::Invalid("hook table address overflow"));
                 }
+                let start = table.offset as usize + index * (table.address_bytes as usize + 8);
+                let end = start + table.address_bytes as usize;
+                result.bytes[start..end]
+                    .copy_from_slice(&hook.address.to_le_bytes()[..table.address_bytes as usize]);
+                result.bytes[end..end + 4].copy_from_slice(&hook.old.to_le_bytes());
+                result.bytes[end + 4..end + 8].copy_from_slice(&hook.new.to_le_bytes());
             }
         }
         // Keep records relative to this placement so subsequent moves are valid.

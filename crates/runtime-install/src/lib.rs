@@ -263,6 +263,14 @@ impl Installer {
             vec![0xa5; c.mailbox.size as usize],
         )
         .await?;
+        if let Some(offset) = c.operation_offset {
+            self.set(
+                body,
+                state + u64::from(offset),
+                op.code(&self.image).to_le_bytes().to_vec(),
+            )
+            .await?;
+        }
         body.synchronize(self.range()).await?;
         // Even unknown completion can have exposed hooks. Never free afterward.
         if op == Operation::Install {

@@ -15,9 +15,9 @@ def image():
     struct.pack_into('<2I', data, 64, 0x12345678, 7)
     return usb.RuntimeImage(data, json.dumps(dict(
         version=1, link_base=0x1000, alignment=32, capacity=256,
-        hooks=[dict(address=0x3000, old=1, new=2)], relocations=[], hook_table_offset=None,
+        hooks=[dict(address=0x3000, old=1, new=2)], relocations=[], hook_table=None,
         control=dict(control_offset=0, state_offset=64, magic_offset=0, nonce_offset=4,
-            token_offset=8, inits_done_offset=12, installed_offset=16, magic=0x12345678, nonce=7, core=3,
+            token_offset=8, operation_offset=None, inits_done_offset=12, installed_offset=16, magic=0x12345678, nonce=7, core=3,
             init_count=2, operations=dict(install=1, rollback=2, status=3, init=4),
             read_alias=0, code_size=64, mailbox=dict(offset=32, size=36, nonce=0,
                 operation=4, status=8, result=12, words_new=16, words_old=20,
