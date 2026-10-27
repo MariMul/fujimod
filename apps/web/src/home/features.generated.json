@@ -1376,13 +1376,8 @@
     "opacity_menu_item": {
       "title": "MENU OPACITY",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "summary": "Set the opacity of menus over live view.",
-      "choices": {
-        "25%": "25% opacity.",
-        "50%": "50% opacity.",
-        "75%": "75% opacity.",
-        "100%": "Fully opaque."
-      },
+      "summary": "Applies to Q and shooting menus. SET-UP and playback menus stay opaque.",
+      "choices": {},
       "related": [],
       "changes": null,
       "credits": {
@@ -1395,14 +1390,8 @@
     "opacity_indicators_item": {
       "title": "INDICATOR OPACITY",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "summary": "Set the opacity of shooting indicators.",
-      "choices": {
-        "0%": "Hide shooting indicators.",
-        "25%": "25% opacity.",
-        "50%": "50% opacity.",
-        "75%": "75% opacity.",
-        "100%": "Fully opaque."
-      },
+      "summary": "Applies to the shooting overlay, including text, frames and guides.",
+      "choices": {},
       "related": [],
       "changes": null,
       "credits": {
