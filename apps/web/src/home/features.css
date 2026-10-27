@@ -46,6 +46,15 @@
   opacity: 0;
   pointer-events: none;
 }
+/* Hairline above the still and the playing preview. */
+.catalog-tile-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: inherit;
+  pointer-events: none;
+}
 .catalog-tile-video.playing {
   opacity: 1;
 }
@@ -265,6 +274,7 @@
   aspect-ratio: 3 / 2;
   object-fit: contain;
   background: #000;
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
   border-radius: 13px 13px 0 0;
 }
 .catalog-card-title {
