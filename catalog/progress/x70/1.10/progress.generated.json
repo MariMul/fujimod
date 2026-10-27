@@ -17,10 +17,10 @@
     "camera-identity": "pass",
     "camera-snapshot": "pass",
     "camera-menu": "pass",
-    "mod-target": "pass",
-    "mod-build": "pass",
-    "sd-image": "pass",
-    "sd-boot": "not-run"
+    "mod-target": "stale",
+    "mod-build": "stale",
+    "sd-image": "stale",
+    "sd-boot": "pass"
   },
   "stock": {
     "record-picture": {
