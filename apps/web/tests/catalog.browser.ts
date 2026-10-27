@@ -96,6 +96,7 @@ try {
         false,
         await page.locator('#status').innerText(),
       );
+      console.log(`${firmware.id}: cold boot completed`);
       async function settled() {
         await page.waitForFunction(() => {
           const queue = window.catalogState?.inputQueue;
@@ -112,6 +113,7 @@ try {
         assert.equal(await page.evaluate(() => window.catalogError), undefined);
       }
       async function press(id: string) {
+        console.log(`${firmware.id}: pressing ${id}`);
         const before = await page.evaluate(() => window.catalogState?.inputQueue?.completed ?? 0);
         await page.locator(`#controls button[data-id="${id}"]`).click();
         await page.waitForFunction(
@@ -124,7 +126,9 @@ try {
         await waitTicks(6_000_000);
       }
       await settled();
+      console.log(`${firmware.id}: input queue settled`);
       await waitTicks(6_000_000);
+      console.log(`${firmware.id}: initial guest interval completed`);
       const menuId = await page
         .locator(
           '#controls button[data-id="menu_ok_button"], #controls button[data-id="selector.press"]',
