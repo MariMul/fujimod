@@ -3,18 +3,23 @@
 The sharing Worker serves `/file/<R2 key>` from the `fujimod-shared-files` bucket.
 Uploading an object there publishes it at that URL without a website deployment.
 The bucket itself does not need a public R2 domain. There is no public upload API
-or bucket listing. Administration uses authenticated Wrangler commands.
+or bucket listing. Administration uses the authenticated publishing command.
 
 The viewer shows the file, its stored HTTP/custom metadata and a Download button.
 Supported image and video MIME types use native media elements. `?type=download`
 forces a download-only page; `?type=image` and `?type=video` cannot change the
-object's media type. HTML, SVG and unknown types remain download-only. Metadata
+object's media type. HTML and other non-media types remain download-only. Metadata
 is escaped as text, including attributes in the initial Open Graph markup.
 
-`/media/<key>` streams allowlisted media with a controlled MIME type, `nosniff`,
-a restrictive CSP and single byte-range support. `/download/<key>` always uses
+`/file/<key>?direct=true` streams any `image/*` or `video/*` object using its
+uploaded Content-Type, including MIME parameters. `/media/<key>` serves the same
+media for viewer elements and Open Graph. Both use `nosniff`, a restrictive
+sandbox CSP and single byte-range support. The sandbox blocks scripts when an
+SVG is opened directly. Non-media direct requests return 415.
+`/download/<key>` always uses
 an attachment disposition and `application/octet-stream`. Stored upload headers
-are displayed but never replayed as response policy. These routes read only the
+are displayed but never replayed as response policy; media Content-Encoding is
+preserved to describe the stored representation. These routes read only the
 shared-files bucket, not the report/contribution bucket.
 
 Image pages include Open Graph image metadata. For video previews in Discord,
@@ -24,14 +29,21 @@ The initial HTML contains all tags; no browser JavaScript is needed.
 
 ## Publish a file
 
-From this directory, after signing in with `cf auth login`:
+From the repository root, after signing in with `cf auth login`:
 
 ```sh
-node ../../scripts/cloudflare/wrangler.ts r2 object put fujimod-shared-files/clips/demo.mp4 --remote --file /path/to/demo.mp4 --content-type video/mp4
-node ../../scripts/cloudflare/wrangler.ts r2 object put fujimod-shared-files/clips/demo.mp4.poster.png --remote --file /path/to/poster.png --content-type image/png
+mise run share -- /path/to/demo.mp4
+mise run share -- /path/to/image.png --direct
+mise run share -- /path/to/demo.mp4 --key clips/demo.mp4 --poster /path/to/poster.png
 ```
 
-Share `https://share.fujimod.com/file/clips/demo.mp4?type=video`.
+The command prints the public URL. It uses `file` to detect MIME types; override
+with `--content-type MIME`. Default keys include the complete SHA-256 and file
+name, so different bytes do not overwrite a previous share. `--key` chooses an
+explicit object key and replaces any existing object there. Videos get a PNG
+poster from `ffmpeg` unless `--poster` supplies one. `--direct` prints a direct
+image/video URL instead of a viewer URL. Any regular file can be published;
+non-media files get the metadata/download viewer.
 
 ## Contribution links
 
@@ -55,6 +67,7 @@ Create `fujimod-shared-files` once with the authenticated Wrangler wrapper's
 ```sh
 node ../../scripts/cloudflare/wrangler.ts d1 migrations apply fujimod-reports --remote
 npm test
+npm run test:media:browser
 npm run check
 npm run deploy
 ```

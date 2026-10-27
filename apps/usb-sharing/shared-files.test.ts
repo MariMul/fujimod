@@ -127,7 +127,14 @@ await test('hostile metadata is escaped; active documents and private reports ha
     await bucket.put('image.svg', '<svg onload="alert(1)"></svg>', {
       httpMetadata: { contentType: 'image/svg+xml' },
     });
-    assert.equal((await mf.dispatchFetch('https://worker.example/media/image.svg')).status, 415);
+    const svg = await mf.dispatchFetch('https://worker.example/file/image.svg?direct=true');
+    assert.equal(svg.status, 200);
+    assert.equal(svg.headers.get('Content-Type'), 'image/svg+xml');
+    assert.equal(svg.headers.get('Content-Security-Policy'), "default-src 'none'; sandbox");
+    assert.equal(
+      (await mf.dispatchFetch(`https://worker.example/file/${path}?direct=true`)).status,
+      415,
+    );
     await (await mf.getR2Bucket('ISSUE_REPORTS')).put('secret/report.tar', 'private');
     for (const route of ['file', 'download'])
       assert.equal(
@@ -142,6 +149,28 @@ await test('hostile metadata is escaped; active documents and private reports ha
       405,
     );
     assert.equal((await mf.dispatchFetch('https://worker.example/health')).status, 200);
+  } finally {
+    await mf.dispose();
+  }
+});
+
+await test('direct media preserves uploaded MIME types, ranges and HEAD', async () => {
+  const mf = await runtime();
+  try {
+    const bucket = await mf.getR2Bucket('SHARED_FILES');
+    for (const type of ['video/ogg; codecs="theora"', 'image/bmp', 'IMAGE/TIFF']) {
+      await bucket.put('file', '0123456789', { httpMetadata: { contentType: type } });
+      const url = 'https://worker.example/file/file?direct=true';
+      const response = await mf.dispatchFetch(url, { headers: { Range: 'bytes=2-5' } });
+      assert.equal(response.status, 206);
+      assert.equal(response.headers.get('Content-Type'), type);
+      assert.equal(response.headers.get('Content-Range'), 'bytes 2-5/10');
+      assert.equal(await response.text(), '2345');
+      const head = await mf.dispatchFetch(url, { method: 'HEAD' });
+      assert.equal(head.headers.get('Content-Type'), type);
+      assert.equal(head.headers.get('Content-Length'), '10');
+      assert.equal(await head.text(), '');
+    }
   } finally {
     await mf.dispose();
   }

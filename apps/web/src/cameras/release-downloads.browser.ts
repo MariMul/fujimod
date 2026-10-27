@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
 import { chromium, webkit } from 'playwright';
 import { unzipSync } from 'fflate';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { sha256 } from '../patch/patcher.ts';
 import type { Catalog } from '../catalog';
 import type { PatchIndex } from '../patch/catalog';
@@ -10,7 +12,11 @@ import type { PatchIndex } from '../patch/catalog';
 const base = process.env.FUJIMOD_WEB_URL;
 assert.ok(base, 'Set FUJIMOD_WEB_URL to the development server.');
 const output = new URL('../../build/release-downloads/', import.meta.url);
-const review = new URL('../../public/review/release-downloads/', import.meta.url);
+assert.ok(
+  process.env.FUJIMOD_REVIEW_DIR,
+  'Set FUJIMOD_REVIEW_DIR to an external review directory.',
+);
+const review = pathToFileURL(join(process.env.FUJIMOD_REVIEW_DIR, 'release-downloads') + '/');
 await mkdir(output, { recursive: true });
 await mkdir(review, { recursive: true });
 const source = new Uint8Array([1, 2, 3, 4]);

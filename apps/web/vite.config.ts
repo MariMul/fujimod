@@ -7,9 +7,9 @@ import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { localReleases } from './scripts/local-releases.ts';
+import { localReviewFiles } from './scripts/local-review-files.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { bugReportRoute } from './src/bug/route.ts';
-import { powerComboReview } from './scripts/power-combo-review';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
@@ -241,8 +241,8 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     isolationHeaders(),
+    localReviewFiles(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_REVIEW_DIR),
     localReleases(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_PATCHES),
-    powerComboReview(),
     watchWorkspacePackages(),
     solid({
       start: {

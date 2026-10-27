@@ -1,16 +1,6 @@
 import type { Env } from './env.ts';
 import { sharedFilesStyle } from './shared-files-style.ts';
 
-const mediaTypes = new Map([
-  ['image/png', 'image'],
-  ['image/jpeg', 'image'],
-  ['image/gif', 'image'],
-  ['image/webp', 'image'],
-  ['image/avif', 'image'],
-  ['video/mp4', 'video'],
-  ['video/webm', 'video'],
-  ['video/quicktime', 'video'],
-]);
 const origin = 'https://share.fujimod.com';
 const pagePolicy =
   "default-src 'none'; style-src 'self'; img-src 'self'; media-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
@@ -38,10 +28,13 @@ export function fileError(message: string, status: number, extra?: HeadersInit):
 }
 
 function mediaType(object: R2Object): string | undefined {
-  const encoding = object.httpMetadata?.contentEncoding;
-  if (encoding && encoding !== 'identity') return undefined;
-  const type = object.httpMetadata?.contentType?.split(';')[0].trim().toLowerCase();
-  return type && mediaTypes.has(type) ? type : undefined;
+  const type = object.httpMetadata?.contentType;
+  const essence = type?.split(';')[0].trim();
+  return type &&
+    !/[\r\n]/.test(type) &&
+    /^(image|video)\/[!#$%&'*+.^_`|~a-z0-9-]+$/i.test(essence ?? '')
+    ? type
+    : undefined;
 }
 
 export function htmlPage(body: string, title: string, meta = ''): Response {
@@ -70,7 +63,7 @@ export function filePage(
 ): Response {
   const name = filename(object.key);
   const type = mediaType(object);
-  const kind = type ? mediaTypes.get(type) : undefined;
+  const kind = type?.split('/')[0].toLowerCase();
   const preview = requested !== 'download' && kind && (!requested || requested === kind);
   const tag = (key: string, value: string) => `<meta property="${key}" content="${escape(value)}">`;
   let meta =
@@ -148,7 +141,7 @@ function range(header: string, size: number): { offset: number; length: number }
   return { offset, length: Math.min(end, size - 1) - offset + 1 };
 }
 
-/** Media types and download headers are controlled here, never replayed from upload metadata. */
+/** Only image/video MIME types render inline; response policy stays controlled here. */
 export async function serveObject(
   request: Request,
   bucket: R2Bucket,
@@ -170,6 +163,8 @@ export async function serveObject(
     ETag: object.httpEtag,
     'Last-Modified': object.uploaded.toUTCString(),
   });
+  if (!download && object.httpMetadata?.contentEncoding)
+    headers.set('Content-Encoding', object.httpMetadata.contentEncoding);
   const noneMatch = request.headers.get('If-None-Match');
   const modified = Date.parse(request.headers.get('If-Modified-Since') ?? '');
   if (
@@ -236,13 +231,15 @@ export async function sharedFiles(request: Request, env: Env): Promise<Response>
     /[\x00-\x1f\x7f]/.test(key)
   )
     return fileError('Invalid file path', 400);
+  if (match[1] === 'file' && url.searchParams.get('direct') === 'true')
+    return serveObject(request, env.SHARED_FILES, key, false);
   if (match[1] !== 'file')
     return serveObject(request, env.SHARED_FILES, key, match[1] === 'download');
   const object = await env.SHARED_FILES.head(key);
   if (!object) return fileError('Not found', 404);
   const path = encodedKey(key);
   let poster: string | undefined;
-  if (mediaTypes.get(mediaType(object) ?? '') === 'video') {
+  if (mediaType(object)?.toLowerCase().startsWith('video/')) {
     const thumbnail = await env.SHARED_FILES.head(`${key}.poster.png`);
     if (thumbnail && mediaType(thumbnail) === 'image/png') poster = `/media/${path}.poster.png`;
   }

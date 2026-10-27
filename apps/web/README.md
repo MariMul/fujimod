@@ -207,7 +207,13 @@ absolute paths in ignored `.env.local`:
 FUJIMOD_RUNTIME=/path/to/staged/runtime
 FUJIMOD_PATCHES=/path/to/patch-release/artifacts
 FUJIMOD_DAT=/path/to/local/FPUPDATE.DAT
+FUJIMOD_REVIEW_DIR=/absolute/path/outside/this/repository/reviews
 ```
+
+`FUJIMOD_REVIEW_DIR` serves standalone files at `/review/` in the development
+server only. Keep review files outside the repository; the build rejects
+`public/review/`. `node --test scripts/local-review-files.test.ts` checks the
+mount and production build guard.
 
 The staged runtime directory contains `catalog.json` and firmware-ID folders
 with `camera.wasm`, `camera.mjs`, `wasm.json` and
