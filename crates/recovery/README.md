@@ -204,5 +204,9 @@ sequence from these checked inputs, so an omitted setup step cannot be
 represented by a partial catalog program. Both the CLI and browser use this
 same builder.
 
+After completing the device writes, the program enters Wait For Event (WFE)
+standby with exceptions masked. The GPIO hardware holds the lamp state while
+the CPU sleeps. A wake returns directly to WFE; there is no NOP busy wait.
+
 The offline CLI builds the same LED card with
 `cargo run -p fujimod-recovery -- green-led FIRMWARE DAT NEW_DIRECTORY`.
