@@ -4,10 +4,14 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { chromium, webkit } from 'playwright';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { catalog, initialize, recovery } from 'fujimod';
 
 const cases: { firmwareId: string; dat: string }[] = JSON.parse(
   process.env.FUJIMOD_RECOVERY_CASES ?? '[]',
+);
+const expectedFiles: Record<string, Record<string, { bytes: number; sha256: string }>> = JSON.parse(
+  process.env.FUJIMOD_RECOVERY_EXPECTED ?? '{}',
 );
 const buildSha =
   process.env.FUJIMOD_TEST_BUILD_SHA ??
@@ -31,7 +35,7 @@ for (const engine of engines) {
   console.log(`${engine.name()}: opening recovery page`);
   const browser = await engine.launch();
   try {
-    for (const [index, test] of cases.entries()) {
+    for (const test of cases) {
       const context = await browser.newContext({
         viewport: { width: 390, height: 844 },
         acceptDownloads: true,
@@ -102,7 +106,7 @@ for (const engine of engines) {
           0,
         );
         assert.ok((await page.locator('main').innerText()).includes('the green LED lights:'));
-        if (index === 0) {
+        if (status.canBuild) {
           const pendingSystem = Promise.race([
             page.waitForEvent('download'),
             page
@@ -121,14 +125,37 @@ for (const engine of engines) {
           );
           const files = unzipSync(await readFile((await systemDownload.path())!));
           assert.deepEqual(Object.keys(files).sort(), [...status.outputFilenames].sort());
+          const checked = expectedFiles[test.firmwareId];
+          if (checked) {
+            assert.deepEqual(Object.keys(files).sort(), Object.keys(checked).sort());
+            for (const [name, bytes] of Object.entries(files)) {
+              assert.equal(bytes.length, checked[name].bytes);
+              assert.equal(createHash('sha256').update(bytes).digest('hex'), checked[name].sha256);
+            }
+          }
+          const expectedSystem = recovery.build(test.firmwareId, await readFile(test.dat));
+          try {
+            for (const file of expectedSystem.takeFiles()) {
+              try {
+                assert.deepEqual(files[file.name], file.bytes);
+              } finally {
+                file.free();
+              }
+            }
+          } finally {
+            expectedSystem.free();
+          }
           assert.equal(
             await page.getByRole('heading', { name: 'Flash the firmware as usual' }).count(),
             1,
           );
+        } else {
+          await system.waitFor({ state: 'visible' });
+          assert.equal(await system.isDisabled(), true);
         }
         assert.deepEqual(errors, []);
         console.log(
-          `${engine.name()}: ${test.firmwareId} green LED ZIP${index === 0 ? ' and full system ZIP' : ''}`,
+          `${engine.name()}: ${test.firmwareId} green LED ZIP${status.canBuild ? ' and full system ZIP' : ''}`,
         );
       } finally {
         status.free();
