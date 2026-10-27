@@ -145,6 +145,20 @@ second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
 
+X-Processor Pro cards use checked stock preloaded paths for MAIN and the two
+raw executable sections. Their original callers retain BSS handling and cache
+publication without rereading initialized executables. A compact source map
+preserves the entire original firmware namespace: erased runs are represented
+by fill records and other bytes are retained once in the card file. Demand
+reads use the stock ROM FAT implementation and the latched boot drive, with
+an SRAM stack and aligned sector DMA buffer. No additional full-update RAM
+mirror or new FAT implementation is introduced.
+
+The ROM adapter serializes its own calls. Exclusive ownership and handback
+between ROM I/O and the native SD driver remain unqualified during OS execution.
+The isolated caller and ROM-loading checks do not establish physical startup
+or updater entry.
+
 The XP4 compiled SD loader is `assets/xp4-sd-loader.generated.bin`; its companion
 `assets/xp4-sd-loader.generated.json` describes segment offsets, symbols and ARM
 relocations. The crate loads these inputs with `include_bytes!` and

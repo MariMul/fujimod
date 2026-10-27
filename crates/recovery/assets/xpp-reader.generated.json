@@ -1,7 +1,11 @@
 {
-  "schema": 1,
+  "schema": 2,
   "address": 1048576,
-  "size": 2560,
-  "entry": 736,
-  "config": 1000
+  "size": 11264,
+  "entry": 968,
+  "config": 1620,
+  "preloaded": 1424,
+  "preloads": 1688,
+  "ranges": 1724,
+  "range_capacity": 512
 }
