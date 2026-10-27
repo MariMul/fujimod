@@ -39,39 +39,44 @@ fn extent(size: RegionSize, dram_bytes: u64, label: &str) -> Result<usize, Strin
     usize::try_from(bytes).map_err(|_| format!("{label} extent exceeds host address space"))
 }
 
-/// CPU apertures cover pages; device bus windows retain their register bounds.
+/// CPU apertures cover each processor's mapping pages; device bus windows retain
+/// their register bounds.
 fn peripheral_pages(
+    processors: &[factory::Processor],
     mappings: Vec<factory::Peripheral>,
 ) -> Result<Vec<factory::Peripheral>, String> {
-    const PAGE: u64 = 0x1000;
     let mut pages = BTreeMap::new();
     for mapping in mappings {
-        if mapping.size == 0 || mapping.address % PAGE != mapping.physical % PAGE {
+        let page = processors
+            .get(mapping.core)
+            .ok_or("peripheral mapping names an absent processor")?
+            .mapping_granule();
+        if mapping.size == 0 || mapping.address % page != mapping.physical % page {
             return Err("peripheral mapping requires a nonempty, page-congruent range".into());
         }
-        let start = mapping.address & !(PAGE - 1);
-        let physical = mapping.physical & !(PAGE - 1);
+        let start = mapping.address & !(page - 1);
+        let physical = mapping.physical & !(page - 1);
         let end = mapping
             .address
             .checked_add(mapping.size as u64)
-            .and_then(|end| end.checked_add(PAGE - 1))
+            .and_then(|end| end.checked_add(page - 1))
             .ok_or("peripheral page range overflows")?
-            & !(PAGE - 1);
+            & !(page - 1);
         physical
             .checked_add(end - start)
             .ok_or("peripheral physical page range overflows")?;
-        for address in (start..end).step_by(PAGE as usize) {
+        for address in (start..end).step_by(page as usize) {
             let physical = physical + (address - start);
             if pages
-                .insert((mapping.core, address), physical)
-                .is_some_and(|old| old != physical)
+                .insert((mapping.core, address), (physical, page))
+                .is_some_and(|(old, _)| old != physical)
             {
                 return Err("peripheral page has conflicting physical mappings".into());
             }
         }
     }
     let mut runs: Vec<factory::Peripheral> = Vec::new();
-    for ((core, address), physical) in pages {
+    for ((core, address), (physical, page)) in pages {
         if let Some(last) = runs.last_mut()
             && last.core == core
             && last.address + last.size as u64 == address
@@ -79,14 +84,14 @@ fn peripheral_pages(
         {
             last.size = last
                 .size
-                .checked_add(PAGE as usize)
+                .checked_add(page as usize)
                 .ok_or("peripheral aperture exceeds host address space")?;
         } else {
             runs.push(factory::Peripheral {
                 core,
                 address,
                 physical,
-                size: PAGE as usize,
+                size: page as usize,
             });
         }
     }
@@ -259,7 +264,7 @@ pub fn assemble_with_starts(
             ));
         }
     }
-    let processors = soc
+    let processors: Vec<factory::Processor> = soc
         .processors
         .iter()
         .map(|processor| {
@@ -452,13 +457,14 @@ pub fn assemble_with_starts(
         })
         .collect::<Result<_, String>>()?;
     let (numerator, denominator) = (rate.numerator, rate.denominator);
+    let peripherals = peripheral_pages(&processors, peripherals)?;
     let graph = factory::Graph {
         processors,
         ram,
         dma_mappings,
         decoders,
         mappings,
-        peripherals: peripheral_pages(peripherals)?,
+        peripherals,
         instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(numerator, denominator)?,
     };
     graph.validate()?;
@@ -634,13 +640,29 @@ mod tests {
             physical,
             size,
         };
-        let pages = peripheral_pages(vec![
-            mapping(0, 0x1020, 0x8020, 0x20),
-            mapping(0, 0x1080, 0x8080, 0x1000),
-            mapping(1, 0x5020, 0x8020, 0x20),
-        ])
+        let processor = |model| factory::Processor {
+            model,
+            registers: vec![],
+            released: true,
+            mprofile: None,
+            rprofile: None,
+        };
+        let processors = [
+            processor(Model::CortexR5F),
+            processor(Model::CortexR5F),
+            processor(Model::ArmV8A),
+        ];
+        let pages = peripheral_pages(
+            &processors,
+            vec![
+                mapping(0, 0x1020, 0x8020, 0x20),
+                mapping(0, 0x1080, 0x8080, 0x1000),
+                mapping(1, 0x5020, 0x8020, 0x20),
+                mapping(2, 0x5020, 0x9020, 0x20),
+            ],
+        )
         .unwrap();
-        assert_eq!(pages.len(), 2);
+        assert_eq!(pages.len(), 3);
         assert_eq!(
             (
                 pages[0].core,
@@ -659,15 +681,32 @@ mod tests {
             ),
             (1, 0x5000, 0x8000, 0x1000)
         );
-        assert!(peripheral_pages(vec![mapping(0, 0x1020, 0x8030, 0x20)]).is_err());
+        assert_eq!(
+            (
+                pages[2].core,
+                pages[2].address,
+                pages[2].physical,
+                pages[2].size
+            ),
+            (2, 0x4000, 0x8000, 0x4000)
+        );
+        // The 4 KiB-congruent alias is not congruent within a 16 KiB page.
+        assert!(peripheral_pages(&processors, vec![mapping(2, 0x5020, 0x8020, 0x20)]).is_err());
+        assert!(peripheral_pages(&processors, vec![mapping(3, 0x1000, 0x8000, 0x20)]).is_err());
+        assert!(peripheral_pages(&processors, vec![mapping(0, 0x1020, 0x8030, 0x20)]).is_err());
         assert!(
-            peripheral_pages(vec![
-                mapping(0, 0x1000, 0x8000, 0x20),
-                mapping(0, 0x1020, 0x9020, 0x20)
-            ])
+            peripheral_pages(
+                &processors,
+                vec![
+                    mapping(0, 0x1000, 0x8000, 0x20),
+                    mapping(0, 0x1020, 0x9020, 0x20)
+                ]
+            )
             .is_err()
         );
-        assert!(peripheral_pages(vec![mapping(0, u64::MAX - 15, 0x8ff0, 0x20)]).is_err());
+        assert!(
+            peripheral_pages(&processors, vec![mapping(0, u64::MAX - 15, 0x8ff0, 0x20)]).is_err()
+        );
     }
 
     fn r5(id: &str) -> ProcessorCore {

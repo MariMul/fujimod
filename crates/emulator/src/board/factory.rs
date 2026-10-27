@@ -18,6 +18,16 @@ pub struct Processor {
     pub mprofile: Option<super::mprofile::Config>,
     pub rprofile: Option<fujimod_emulator_cpu_unicorn::rprofile::core::Options>,
 }
+impl Processor {
+    /// Smallest page the processor backend maps.
+    pub fn mapping_granule(&self) -> u64 {
+        if self.model == Model::ArmV8A {
+            0x4000
+        } else {
+            0x1000
+        }
+    }
+}
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Ram {
@@ -216,15 +226,10 @@ impl Graph {
         a: &MemoryMap,
         spans: &[(u64, u64)],
     ) -> Result<(), String> {
-        let grain = if self
+        let grain = self
             .processors
             .get(a.core)
-            .is_some_and(|p| p.model != Model::ArmV8A)
-        {
-            0x1000
-        } else {
-            0x4000
-        };
+            .map_or(0x4000, Processor::mapping_granule);
         if a.core >= self.processors.len()
             || a.size == 0
             || !a.address.is_multiple_of(grain)
