@@ -212,8 +212,8 @@ FUJIMOD_REVIEW_DIR=/absolute/path/outside/this/repository/reviews
 ```
 
 `FUJIMOD_RELEASE_NOTES` serves `<release-tag>.md` directly from that directory
-on every request. The development client reads these editable notes as text;
-editing notes does not require rebuilding patches or updating their metadata.
+on every request. Release notes are fetched as text;
+editing notes does not require rebuilding patches.
 A missing configured notes file returns an error instead of serving the artifact copy.
 
 `FUJIMOD_REVIEW_DIR` serves standalone files at `/review/` in the development
@@ -346,7 +346,7 @@ local filenames. The Worker serves the index and patches from the same origin
 through `/releases/`; they are fetched at runtime and are never website build
 inputs. Each firmware has `downloads: {sd_card, installable}`, both false by
 default; installable requires a verified `fpupdate` patch output. Optional
-`notes: {name, bytes, sha256}` identifies UTF-8 Markdown checked before display.
+`notes: {name}` identifies Markdown fetched as text for display.
 See [the release contract](RELEASE-DOWNLOADS.md).
 
 `report.json` includes the user's comment and the complete issue URL and prefilled

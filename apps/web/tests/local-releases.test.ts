@@ -23,7 +23,7 @@ test('development routes serve the configured release, observe edits, and refuse
         release: 'v2',
         built_utc: '2026-10-26T00:00:00Z',
         patches: { [digest]: 'test.fmpatch' },
-        notes: { name: 'notes.md', bytes: 4, sha256: digest },
+        notes: { name: 'notes.md' },
         firmwares: [
           {
             id: 'test-100',

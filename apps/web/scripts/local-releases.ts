@@ -57,7 +57,6 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
         }
         if (options.notes && route.file === index.notes?.name) {
           data = await readFile(resolve(options.notes, `${index.release}.md`));
-          response.setHeader('X-FujiMod-Editable-Notes', 'true');
         } else {
           data = await readFile(resolve(options.artifacts, route.file));
         }
