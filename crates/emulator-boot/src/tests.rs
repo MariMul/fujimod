@@ -913,3 +913,34 @@ fn browser_graphs_select_portable_encoding_on_every_host() {
 
 #[path = "tests/pwic.rs"]
 mod pwic;
+
+#[test]
+fn statistics_dma_uses_its_selected_latency_instead_of_the_scene_frame_period() {
+    // Owner report (2026-10-26): restarted X70 live view washes out before
+    // AE recovers. A transfer longer than the sensor frame skips metering
+    // samples and breaks the exposure command/readout pipeline's cadence.
+    for (latency, frame) in [(1024, 400000), (321, 480000)] {
+        let mut resolved =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-browser-camera".into()])
+                .unwrap();
+        resolved
+            .configuration
+            .preset
+            .as_mut()
+            .unwrap()
+            .factory_options
+            .producer_data_ticks = Some(latency);
+        run_scene(&mut resolved).frame_period_ticks = frame;
+        let run = prepared(resolved).unwrap();
+        assert_eq!(
+            model(&run, "statistics")["options"]["clock"]["ticks"],
+            latency
+        );
+        assert_eq!(model(&run, "live_frames")["options"]["period_ticks"], frame);
+    }
+    let base = prepare("x70-110-rec", &[]).unwrap();
+    assert_eq!(
+        model(&base, "statistics")["options"]["clock"]["ticks"],
+        400000
+    );
+}

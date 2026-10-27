@@ -2067,6 +2067,15 @@ pub(super) fn assemble(
             scene_input,
             browser.is_some(),
         )?;
+        if rule.name == "statistics" {
+            if let Some(ticks) = configuration
+                .preset
+                .as_ref()
+                .and_then(|p| p.factory_options.producer_data_ticks)
+            {
+                recipe["options"]["clock"]["ticks"] = json!(ticks);
+            }
+        }
         let model: Model = serde_json::from_value(recipe.clone())
             .map_err(|error| format!("X70 node {}: {error}", rule.name))?;
         let windows = rule
