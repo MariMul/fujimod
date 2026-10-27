@@ -24,52 +24,52 @@
   },
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
     "record-movie": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 2
     },
     "control-input": {
-      "result": "partial",
+      "result": "stale",
       "passed": 77,
       "total": 78
     },
     "focus": {
-      "result": "partial",
+      "result": "stale",
       "passed": 3,
       "total": 4
     },
     "lens": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 3
     },
     "film-simulations": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 11
     },
     "playback-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 3,
       "total": 3
     },
     "playback-movie": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 4
     },
     "develop-raw": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 3
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },
@@ -80,32 +80,32 @@
     }
   },
   "mods": {
-    "af": "not-run",
-    "fujimod": "not-run",
-    "aspect-ratio": "not-run",
-    "surround-view": "not-run",
-    "desqueeze": "not-run",
-    "desqueeze-jpeg": "not-run",
+    "af": "stale",
+    "fujimod": "stale",
+    "aspect-ratio": "stale",
+    "surround-view": "stale",
+    "desqueeze": "stale",
+    "desqueeze-jpeg": "stale",
     "jpeg-max": "not-run",
-    "framing-guideline": "not-run",
+    "framing-guideline": "stale",
     "film-sims": "not-run",
-    "card-films": "not-run",
+    "card-films": "stale",
     "film-editor": "not-run",
     "highlight-meter": "not-run",
-    "raw-view": "not-run",
-    "f-log": "not-run",
+    "raw-view": "stale",
+    "f-log": "stale",
     "raw-exposure": "not-run",
-    "hdmi-rec": "not-run",
+    "hdmi-rec": "stale",
     "controls": "not-run",
     "menu-theme": "not-run",
-    "overlay-opacity": "not-run",
-    "menu-tap": "not-run",
+    "overlay-opacity": "stale",
+    "menu-tap": "stale",
     "recipes": "not-run",
-    "snap-focus": "not-run",
-    "usb-debug": "not-run",
-    "af-scene-capture": "not-run",
-    "bug-report": "not-run",
-    "sd-volume-name": "not-run",
-    "date-folders": "not-run"
+    "snap-focus": "stale",
+    "usb-debug": "stale",
+    "af-scene-capture": "stale",
+    "bug-report": "stale",
+    "sd-volume-name": "stale",
+    "date-folders": "stale"
   }
 }
