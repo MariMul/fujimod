@@ -1,19 +1,19 @@
 /** Bring-up progress per camera model, from the catalog's generated progress documents. */
-export type StageProgress = "pass" | "fail" | "stale" | "not-run";
-export type ModProgress = StageProgress | "unavailable";
-export type StockResult = "pass" | "partial" | "fail" | "stale" | "not-run";
+export type StageProgress = 'pass' | 'fail' | 'stale' | 'not-run';
+export type ModProgress = StageProgress | 'unavailable';
+export type StockResult = 'pass' | 'partial' | 'fail' | 'stale' | 'not-run';
 export const STAGES = [
-  "research",
-  "analysis",
-  "rec",
-  "menu",
-  "camera-identity",
-  "camera-snapshot",
-  "camera-menu",
-  "mod-target",
-  "mod-build",
-  "sd-image",
-  "sd-boot",
+  'research',
+  'analysis',
+  'rec',
+  'menu',
+  'camera-identity',
+  'camera-snapshot',
+  'camera-menu',
+  'mod-target',
+  'mod-build',
+  'sd-image',
+  'sd-boot',
 ] as const;
 export type Stage = (typeof STAGES)[number];
 export interface StockProgress {
@@ -50,7 +50,7 @@ export interface Step {
   detail?: string;
 }
 export interface Phase {
-  id: "research" | "emulator" | "camera" | "mods" | "sd-card";
+  id: 'research' | 'emulator' | 'camera' | 'mods' | 'sd-card';
   label: string;
   /** Share of the bar's width. */
   weight: number;
@@ -65,25 +65,25 @@ export interface Phase {
 
 /** Emulator features in table order; boot and menus are the REC and menu stages. */
 const EMULATOR: [string, string][] = [
-  ["boot", "Boot"],
-  ["record-picture", "Record picture"],
-  ["record-movie", "Record movie"],
-  ["control-input", "Control input"],
-  ["control-layout", "Control layout"],
-  ["menus", "Menus"],
-  ["focus", "Focus"],
-  ["lens", "Lens"],
-  ["film-simulations", "Film simulations"],
-  ["playback-picture", "Playback picture"],
-  ["playback-movie", "Playback movie"],
-  ["develop-raw", "Develop RAW"],
-  ["ibis", "IBIS"],
-  ["sd", "SD"],
-  ["card-slots", "Card slots"],
+  ['boot', 'Boot'],
+  ['record-picture', 'Record picture'],
+  ['record-movie', 'Record movie'],
+  ['control-input', 'Control input'],
+  ['control-layout', 'Control layout'],
+  ['menus', 'Menus'],
+  ['focus', 'Focus'],
+  ['lens', 'Lens'],
+  ['film-simulations', 'Film simulations'],
+  ['playback-picture', 'Playback picture'],
+  ['playback-movie', 'Playback movie'],
+  ['develop-raw', 'Develop RAW'],
+  ['ibis', 'IBIS'],
+  ['sd', 'SD'],
+  ['card-slots', 'Card slots'],
 ];
-const pass = (result: string) => Number(result === "pass");
+const pass = (result: string) => Number(result === 'pass');
 function stockStep(label: string, stock: StockProgress): Step {
-  if (stock.result === "partial" && stock.passed !== undefined && stock.total)
+  if (stock.result === 'partial' && stock.passed !== undefined && stock.total)
     return {
       label,
       fraction: stock.passed / stock.total,
@@ -92,7 +92,7 @@ function stockStep(label: string, stock: StockProgress): Step {
   return { label, fraction: pass(stock.result) };
 }
 function phase(
-  id: Phase["id"],
+  id: Phase['id'],
   label: string,
   weight: number,
   steps: Step[],
@@ -103,14 +103,8 @@ function phase(
     id,
     label,
     weight,
-    fraction:
-      steps.reduce((sum, step) => sum + step.fraction, 0) / steps.length,
-    value:
-      done === steps.length
-        ? "Done"
-        : done
-          ? `${done} of ${steps.length}`
-          : "Not yet",
+    fraction: steps.reduce((sum, step) => sum + step.fraction, 0) / steps.length,
+    value: done === steps.length ? 'Done' : done ? `${done} of ${steps.length}` : 'Not yet',
     steps,
     cells,
   };
@@ -127,7 +121,7 @@ export function phases(progress: FirmwareProgress): Phase[] {
     return {
       ...phase,
       fraction: 1,
-      value: phase.id === "mods" ? `${mods} of ${mods}` : "Done",
+      value: phase.id === 'mods' ? `${mods} of ${mods}` : 'Done',
       steps,
     };
   });
@@ -137,55 +131,55 @@ function recordedPhases(progress: FirmwareProgress): Phase[] {
   const { stages, facts } = progress,
     research = pass(stages.research),
     mods = Object.entries(progress.mods),
-    working = mods.filter(([, result]) => result === "pass").length;
+    working = mods.filter(([, result]) => result === 'pass').length;
   const emulator = EMULATOR.flatMap(([feature, label]): Step[] => {
-    if (feature === "boot") return [{ label, fraction: pass(stages.rec) }];
-    if (feature === "menus") return [{ label, fraction: pass(stages.menu) }];
+    if (feature === 'boot') return [{ label, fraction: pass(stages.rec) }];
+    if (feature === 'menus') return [{ label, fraction: pass(stages.menu) }];
     const stock = progress.stock[feature];
     return stock ? [stockStep(label, stock)] : [];
   });
   return [
-    phase("research", "Research", 10, [
-      { label: "Update file registered", fraction: research },
-      { label: "Overlays unpacked", fraction: research },
-      { label: "Corpus exported", fraction: research },
-      { label: "Function index built", fraction: pass(stages.analysis) },
+    phase('research', 'Research', 10, [
+      { label: 'Update file registered', fraction: research },
+      { label: 'Overlays unpacked', fraction: research },
+      { label: 'Corpus exported', fraction: research },
+      { label: 'Function index built', fraction: pass(stages.analysis) },
       facts
         ? {
-            label: "Facts located",
+            label: 'Facts located',
             fraction: facts.located / facts.total,
             detail: `${facts.located} of ${facts.total}`,
           }
-        : { label: "Facts located", fraction: 0 },
+        : { label: 'Facts located', fraction: 0 },
       progress.boot_rom
         ? {
-            label: "Boot ROM",
+            label: 'Boot ROM',
             fraction: 1,
             detail: `${progress.boot_rom} dump`,
           }
-        : { label: "Boot ROM", fraction: 0 },
+        : { label: 'Boot ROM', fraction: 0 },
     ]),
-    phase("emulator", "Emulator", 40, emulator, true),
-    phase("camera", "Camera", 15, [
-      { label: "ff80 identity", fraction: pass(stages["camera-identity"]) },
-      { label: "RAM snapshot", fraction: pass(stages["camera-snapshot"]) },
-      { label: "Remote menu control", fraction: pass(stages["camera-menu"]) },
+    phase('emulator', 'Emulator', 40, emulator, true),
+    phase('camera', 'Camera', 15, [
+      { label: 'ff80 identity', fraction: pass(stages['camera-identity']) },
+      { label: 'RAM snapshot', fraction: pass(stages['camera-snapshot']) },
+      { label: 'Remote menu control', fraction: pass(stages['camera-menu']) },
     ]),
     {
-      ...phase("mods", "Mods", 25, [
-        { label: "Mod target", fraction: pass(stages["mod-target"]) },
-        { label: "FujiMod build", fraction: pass(stages["mod-build"]) },
+      ...phase('mods', 'Mods', 25, [
+        { label: 'Mod target', fraction: pass(stages['mod-target']) },
+        { label: 'FujiMod build', fraction: pass(stages['mod-build']) },
         ...mods.map(([mod, result]) => ({
           label: mod,
           fraction: pass(result),
         })),
       ]),
       fraction: mods.length ? working / mods.length : 0,
-      value: working ? `${working} of ${mods.length}` : "Not yet",
+      value: working ? `${working} of ${mods.length}` : 'Not yet',
     },
-    phase("sd-card", "SD-boot image", 10, [
-      { label: "Image built", fraction: pass(stages["sd-image"]) },
-      { label: "Booted on a camera", fraction: pass(stages["sd-boot"]) },
+    phase('sd-card', 'SD-boot image', 10, [
+      { label: 'Image built', fraction: pass(stages['sd-image']) },
+      { label: 'Booted on a camera', fraction: pass(stages['sd-boot']) },
     ]),
   ];
 }
@@ -194,25 +188,21 @@ function recordedPhases(progress: FirmwareProgress): Phase[] {
 export function started(progress: FirmwareProgress): boolean {
   return (
     !!progress.override?.complete ||
-    STAGES.some((stage) => progress.stages[stage] === "pass") ||
+    STAGES.some((stage) => progress.stages[stage] === 'pass') ||
     Object.values(progress.stock).some(
-      (stock) =>
-        stock.result !== "not-run" &&
-        stock.result !== "fail" &&
-        stock.result !== "stale",
+      (stock) => stock.result !== 'not-run' && stock.result !== 'fail' && stock.result !== 'stale',
     ) ||
-    Object.values(progress.mods).includes("pass")
+    Object.values(progress.mods).includes('pass')
   );
 }
 
 function versionKey(version: string) {
-  return version.split(".").map(Number);
+  return version.split('.').map(Number);
 }
 function newer(a: string, b: string) {
   const [x, y] = [versionKey(a), versionKey(b)];
   for (let index = 0; index < Math.max(x.length, y.length); index++)
-    if ((x[index] ?? 0) !== (y[index] ?? 0))
-      return (x[index] ?? 0) > (y[index] ?? 0);
+    if ((x[index] ?? 0) !== (y[index] ?? 0)) return (x[index] ?? 0) > (y[index] ?? 0);
   return false;
 }
 /** Attach each firmware's publishing override to its generated progress document. */
@@ -220,18 +210,10 @@ export function withOverrides(
   documents: FirmwareProgress[],
   overrides: ProgressOverride[],
 ): FirmwareProgress[] {
-  const byFirmware = new Map(
-    overrides.map((override) => [override.firmware_id, override]),
-  );
+  const byFirmware = new Map(overrides.map((override) => [override.firmware_id, override]));
   for (const override of overrides)
-    if (
-      !documents.some(
-        (document) => document.firmware_id === override.firmware_id,
-      )
-    )
-      throw new Error(
-        `Progress override for unknown firmware ${override.firmware_id}`,
-      );
+    if (!documents.some((document) => document.firmware_id === override.firmware_id))
+      throw new Error(`Progress override for unknown firmware ${override.firmware_id}`);
   return documents.map((document) => {
     const override = byFirmware.get(document.firmware_id);
     return override ? { ...document, override } : document;
@@ -239,14 +221,11 @@ export function withOverrides(
 }
 
 /** One document per model: the newest firmware version with recorded progress. */
-export function byModel(
-  documents: FirmwareProgress[],
-): Record<string, FirmwareProgress> {
+export function byModel(documents: FirmwareProgress[]): Record<string, FirmwareProgress> {
   const result: Record<string, FirmwareProgress> = {};
   for (const document of documents) {
     const known = result[document.model];
-    if (!known || newer(document.version, known.version))
-      result[document.model] = document;
+    if (!known || newer(document.version, known.version)) result[document.model] = document;
   }
   return result;
 }
