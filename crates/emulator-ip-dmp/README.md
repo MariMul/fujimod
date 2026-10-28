@@ -25,8 +25,11 @@ available and the primitive fits its integer bounds. Small primitives and wider
 coordinates use the CPU path. Both execute the same edge equations and top-left
 rule; interpolation, vector execution and fragment arithmetic share a CPU
 implementation. Transcendentals use `libm`. Setting `FUJIMOD_DMP_CPU=1` selects
-CPU scan conversion; WebAssembly uses the CPU path. Host GPU handles stay outside
-emulated state and checkpoints. Diagnostic state reports the selected adapter.
+CPU scan conversion; WebAssembly uses the CPU path. Setting `FUJIMOD_DMP_GPU=1`
+routes native DMP 3D command lists through the host WGSL renderer and checks its
+output against the CPU reference. The default command-list path is unchanged.
+Host GPU handles stay outside emulated state and checkpoints. Diagnostic state
+reports the selected adapter.
 
 Instruction fields follow the vector arithmetic/flow layout described by
 [nihstro's shader bytecode definitions](https://github.com/neobrain/nihstro/blob/a969b1a6849b02679a1858847ba18bedd3a19d44/include/nihstro/shader_bytecode.h).

@@ -1546,6 +1546,14 @@ impl Device for Renderer {
                 0x20f0 if v == 1 => {
                     s.idle()?;
                     let data = words(cx, s.r(0x20e8) as u64 * 8, s.r(0x20e0) as usize * 2)?;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let writes = if std::env::var_os("FUJIMOD_DMP_GPU").is_some() {
+                        s.gles
+                            .execute_host_gpu(&data, &mut |a, n| cx.ram_bytes(a, n))?
+                    } else {
+                        s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?
+                    };
+                    #[cfg(target_arch = "wasm32")]
                     let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
                     s.command_ack = 0;
                     s.regs.insert(o, v);
