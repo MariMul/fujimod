@@ -1223,6 +1223,9 @@ pub struct FlashController {
     pub aperture: u64,
     /// Read aperture size in bytes.
     pub size: u64,
+    /// Interrupt line of the controller status, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_route: Option<u64>,
     /// Declared basis.
     pub basis: String,
 }

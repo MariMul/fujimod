@@ -669,15 +669,38 @@ impl Devices {
             fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
                 self.0.read(address, len)
             }
+            fn writable(&self) -> bool {
+                true
+            }
+            fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+                self.0.store(address, bytes)
+            }
         }
         let aperture = Arc::new(Aperture::new(
             storage.aperture,
             storage.aperture_size,
             image,
         )?);
+        let (array, nor) = match storage.nor {
+            Some(nor) => (
+                Some(nor.array),
+                BTreeMap::from([(
+                    nor.chip_select,
+                    fujimod_emulator_devices::parts::micron_nor::Registers::new(nor.registers)?,
+                )]),
+            ),
+            None => (None, BTreeMap::new()),
+        };
         let controller = FlashController::new(
-            flash::Options {base:storage.flash_controller,transfer_ticks:1},
-            aperture.clone(), BTreeMap::new())?;
+            flash::Options {
+                base: storage.flash_controller,
+                transfer_ticks: 1,
+                irq: storage.irq,
+                array,
+            },
+            aperture.clone(),
+            nor,
+        )?;
         let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
             storage.dma,
             storage.dma_irq_routes,

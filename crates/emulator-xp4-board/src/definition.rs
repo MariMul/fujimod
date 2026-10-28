@@ -112,4 +112,19 @@ pub struct XppStorage {
     pub dma_irq_routes: Vec<u32>,
     pub dma_setup_ticks: u64,
     pub dma_bytes_per_tick: u64,
+    /// Interrupt line of the controller status.
+    #[serde(default)]
+    pub irq: Option<u32>,
+    /// NOR device attached to one chip select, with its array timing.
+    #[serde(default)]
+    pub nor: Option<XppNor>,
+}
+
+/// Declared NOR register device and array behind one X-Processor Pro chip select.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppNor {
+    pub chip_select: u8,
+    pub registers: fujimod_emulator_devices::parts::micron_nor::Options,
+    pub array: fujimod_emulator_xpp::flash::Array,
 }

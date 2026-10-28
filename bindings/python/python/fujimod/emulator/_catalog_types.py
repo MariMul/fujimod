@@ -2341,6 +2341,7 @@ class HardwareFlashController(TypedDict, total=False):
     aperture: Required[int]
     base: Required[int]
     basis: Required[str]
+    irq_route: NotRequired[int | None]
     size: Required[int]
 
 

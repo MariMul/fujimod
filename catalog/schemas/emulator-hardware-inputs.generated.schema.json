@@ -832,11 +832,78 @@
         "contents": {
           "description": "Declared contents.",
           "type": "string"
+        },
+        "nor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetFlashApertureNor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "NOR device that accepts erase and page-program commands, when declared."
         }
       },
       "required": [
         "basis",
         "contents"
+      ],
+      "type": "object"
+    },
+    "ResetFlashApertureNor": {
+      "additionalProperties": false,
+      "description": "Declared NOR register device and array behind one flash-aperture chip select.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "chip_select": {
+          "description": "Chip select, each covering half of the aperture.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "enhanced_volatile_reset": {
+          "description": "Enhanced volatile configuration register value after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "erase_ticks": {
+          "description": "Declared erase ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Declared page bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_ticks": {
+          "description": "Declared page ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_write_ticks": {
+          "description": "Ticks until a register write completes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "chip_select",
+        "enhanced_volatile_reset",
+        "erase_ticks",
+        "page_bytes",
+        "page_ticks",
+        "register_write_ticks"
       ],
       "type": "object"
     },
