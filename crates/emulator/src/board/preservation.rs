@@ -5,12 +5,12 @@ use super::{
     observation::{tcm_overlap, union},
     scalar,
 };
-use fujimod_emulator_cpu::{Cpu, Hook, HookId, HookRange, Model, Register};
+use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register};
 use serde::Serialize;
 use std::{
-    cell::{RefCell, Weak},
+    cell::RefCell,
     ffi::c_void,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 type Span = (u64, u64);
@@ -442,7 +442,7 @@ impl PreservationContext {
     }
 }
 
-unsafe fn write(address: u64, size: i32, value: i64, data: *mut c_void) {
+unsafe fn write(_: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
     let context = unsafe { &*data.cast::<PreservationContext>() };
     context.store(address, size, value);
 }
