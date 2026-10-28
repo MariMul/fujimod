@@ -513,8 +513,8 @@ impl Engine {
         let vertex = shader::execute(self, inputs)?;
         self.vertices_executed += 1;
         self.last_output = Some(vertex);
-        let mode = state.raster.primitive_mode as u32;
-        if mode == 8 {
+        let mode = state.raster.primitive_mode;
+        if mode == draw_state::PrimitiveMode::Points {
             #[cfg(not(target_arch = "wasm32"))]
             if self.gpu_primitives.is_some() {
                 return Err("DMP host GPU draw does not support points".into());
@@ -524,7 +524,7 @@ impl Engine {
         self.vertices.push(vertex);
         let n = self.vertices.len();
         match mode {
-            0 | 3 if n == 3 => {
+            draw_state::PrimitiveMode::Triangles if n == 3 => {
                 let triangle = [self.vertices[0], self.vertices[1], self.vertices[2]];
                 raster::triangle(
                     state,
@@ -536,7 +536,7 @@ impl Engine {
                 self.record_gpu_triangle(state, triangle);
                 self.vertices.clear();
             }
-            1 if n >= 3 => {
+            draw_state::PrimitiveMode::TriangleStrip if n >= 3 => {
                 let t = if self.primitive_index & 1 != 0 {
                     [
                         self.vertices[n - 2],
@@ -557,7 +557,7 @@ impl Engine {
                     self.vertices.remove(0);
                 }
             }
-            2 if n >= 3 => {
+            draw_state::PrimitiveMode::TriangleFan if n >= 3 => {
                 let triangle = [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]];
                 raster::triangle(
                     state,
@@ -569,20 +569,27 @@ impl Engine {
                 self.record_gpu_triangle(state, triangle);
                 self.vertices.remove(1);
             }
-            4 | 5 if n == 2 => {
+            draw_state::PrimitiveMode::Lines | draw_state::PrimitiveMode::LineStrip if n == 2 => {
                 #[cfg(not(target_arch = "wasm32"))]
                 if self.gpu_primitives.is_some() {
                     return Err("DMP host GPU draw does not support lines".into());
                 }
                 raster::line(state, [self.vertices[0], self.vertices[1]], read, out)?;
-                if mode == 4 {
+                if mode == draw_state::PrimitiveMode::Lines {
                     self.vertices.clear();
                 } else {
                     self.vertices.remove(0);
                 }
             }
-            0..=5 => {}
-            _ => return Err(format!("DMP unsupported primitive mode {mode}")),
+            draw_state::PrimitiveMode::Triangles
+            | draw_state::PrimitiveMode::TriangleStrip
+            | draw_state::PrimitiveMode::TriangleFan
+            | draw_state::PrimitiveMode::Lines
+            | draw_state::PrimitiveMode::LineStrip => {}
+            draw_state::PrimitiveMode::Other(code) => {
+                return Err(format!("DMP unsupported primitive mode {code}"));
+            }
+            draw_state::PrimitiveMode::Points => unreachable!(),
         }
         Ok(())
     }
