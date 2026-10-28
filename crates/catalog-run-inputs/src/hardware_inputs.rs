@@ -964,6 +964,10 @@ pub struct SubCpuInputs {
     pub port: u64,
     /// Registers that do not read zero after reset.
     pub registers: Vec<SubCpuRegister>,
+    /// First of sixteen consecutive registers holding the stock user-profile
+    /// header, which a selected profile fills.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_header: Option<u64>,
 }
 
 /// Declared hardware reset facts.

@@ -2208,6 +2208,15 @@
           "minimum": 0,
           "type": "integer"
         },
+        "profile_header": {
+          "description": "First of sixteen consecutive registers holding the stock user-profile\nheader, which a selected profile fills.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "registers": {
           "description": "Registers that do not read zero after reset.",
           "items": {

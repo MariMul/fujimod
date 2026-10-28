@@ -270,7 +270,8 @@
           "value": 16
         }
       ],
-      "basis": "Declared discovery input. Segment 5 reaches the sub-CPU through 16-bit words on serial port 2 (0xc6fb10, 0xc6fbb4; register table 0xed6a0c): bits 14..8 name the register, bit 15 writes the low byte, and the word read back from +0x60 (0xc4b964) carries the register value. Register 0x60 is the power-on cause; 0x10 is the normal start the camera reported (loader handoff word power_on_cause). Registers 0x50-0x5f hold the 16-byte settings header that 0xcdd670 validates; they read zero here, so the firmware loads its defaults and writes the stock header back. Unlisted registers read zero; the register file is not measured beyond these reads."
+      "profile_header": 80,
+      "basis": "Declared discovery input. Segment 5 reaches the sub-CPU through 16-bit words on serial port 2 (0xc6fb10, 0xc6fbb4; register table 0xed6a0c): bits 14..8 name the register, bit 15 writes the low byte, and the word read back from +0x60 (0xc4b964) carries the register value. Register 0x60 is the power-on cause; 0x10 is the normal start the camera reported (loader handoff word power_on_cause). Registers 0x50-0x5f hold the 16-byte settings header that 0xcdd670 validates; a selected user profile places its header there (profile_header); otherwise they read zero, so the firmware loads its defaults and writes the stock header back. Unlisted registers read zero; the register file is not measured beyond these reads."
     }
   }
 }
