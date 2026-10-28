@@ -1153,6 +1153,24 @@
       ]
     },
     {
+      "id": "controls-encoder-3-8-3-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 8,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 3,
+          "pin": 9,
+          "active_level": true
+        }
+      ]
+    },
+    {
       "id": "controls-gpio-3-2",
       "kind": "control",
       "signals": [
