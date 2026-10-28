@@ -848,13 +848,7 @@ fn rectangles(
         }
         let address = get(r, 0x1a4)? as u64;
         if !output.contains_key(&address) {
-            if output
-                .values()
-                .map(|(_, _, bytes)| bytes.len())
-                .sum::<usize>()
-                + count
-                > MAX_BYTES
-            {
+            if output.values().map(|(_, _, b)| b.len()).sum::<usize>() + count > MAX_BYTES {
                 return Err("DMP aggregate output too large".into());
             }
             output.insert(address, (width, height, cx.ram_bytes(address, count)?));
