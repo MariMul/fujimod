@@ -9,7 +9,7 @@ export function PersonalNote() {
       </p>
       <p>
         You can try the first release by dual-booting from an SD card without flashing your camera.
-        I haven’t tested every feature on camera yet—there are a lot!—so I’m sharing it for other
+        I haven’t tested every feature on camera yet (there are a lot!) so I’m sharing it for other
         X70 owners to test and help improve.
       </p>
       <p>
