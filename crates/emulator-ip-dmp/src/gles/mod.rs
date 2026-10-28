@@ -7,6 +7,8 @@ mod capture;
 mod draw_state;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu;
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) mod gpu_fragment;
 mod raster;
 mod shader;
 use draw_state::DrawState;
