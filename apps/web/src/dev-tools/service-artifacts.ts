@@ -2,7 +2,10 @@ import { validateCatalog, type Catalog } from '../catalog';
 
 declare const __FUJIMOD_CATALOG__: string;
 /** Load the generated service workflow selected by a checked firmware identity. */
-export async function serviceWorkflow(firmwareId: string) {
+export async function serviceWorkflow(
+  firmwareId: string,
+  capability: 'setup' | 'persistence' = 'setup',
+) {
   const response = await fetch(new URL(__FUJIMOD_CATALOG__, document.baseURI));
   if (!response.ok) throw Error('Could not load the firmware catalog.');
   const catalog = validateCatalog((await response.json()) as Catalog);
@@ -11,9 +14,15 @@ export async function serviceWorkflow(firmwareId: string) {
     const name = firmware ? `${firmware.model} ${firmware.version}` : firmwareId;
     throw Error(`Service setup is not supported for ${name}.`);
   }
-  const table = await fetch(new URL(firmware.service_workflow, document.baseURI));
-  if (!table.ok) throw Error('Could not load the service workflow.');
-  return [await table.text(), firmware.id, firmware.sha256] as const;
+  const responseWorkflow = await fetch(new URL(firmware.service_workflow, document.baseURI));
+  if (!responseWorkflow.ok) throw Error('Could not load the service workflow.');
+  const text = await responseWorkflow.text();
+  const facts = JSON.parse(text) as { setup?: unknown; persistence?: unknown };
+  if (!facts?.setup || (capability === 'persistence' && !facts.persistence)) {
+    const operation = capability === 'persistence' ? 'Persistent debug mode' : 'Service setup';
+    throw Error(`${operation} is not supported for ${firmware.model} ${firmware.version}.`);
+  }
+  return [text, firmware.id, firmware.sha256] as const;
 }
 
 /** Load the built reader and its checked metadata before starting USB work. */

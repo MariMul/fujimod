@@ -21,7 +21,7 @@ function catalog(
     'fetch',
     vi.fn(async (url: URL) =>
       url.pathname.endsWith('service-workflow.generated.json')
-        ? new Response('{"schema":1}')
+        ? new Response('{"schema":1,"setup":{},"persistence":{}}')
         : Response.json({ schema: 1, firmwares: [entry] }),
     ),
   );
@@ -30,7 +30,11 @@ afterEach(() => vi.unstubAllGlobals());
 
 test('physical-camera workflow resolves without an emulator bundle', async () => {
   catalog();
-  expect(await serviceWorkflow('xt1-552')).toEqual(['{"schema":1}', 'xt1-552', 'a'.repeat(64)]);
+  expect(await serviceWorkflow('xt1-552')).toEqual([
+    '{"schema":1,"setup":{},"persistence":{}}',
+    'xt1-552',
+    'a'.repeat(64),
+  ]);
 });
 
 test('an unavailable workflow reports the selected model and release', async () => {
@@ -61,6 +65,33 @@ test('both debug actions use the generated definition before opening their sessi
   await operations.enter('xt1-552', progress);
   await operations.leave('xt1-552', progress);
   for (const action of [enter, leave])
-    expect(action).toHaveBeenCalledExactlyOnceWith('{"schema":1}', 'xt1-552', 'a'.repeat(64));
+    expect(action).toHaveBeenCalledExactlyOnceWith(
+      '{"schema":1,"setup":{},"persistence":{}}',
+      'xt1-552',
+      'a'.repeat(64),
+    );
   expect(progress.mock.calls).toEqual([['enabled'], ['disabled']]);
+});
+
+test('setup remains available when persistence cannot be located', async () => {
+  catalog();
+  const fetcher = vi.mocked(fetch);
+  fetcher.mockImplementationOnce(async () => Response.json({ schema: 1, firmwares: [firmware] }));
+  fetcher.mockImplementationOnce(async () =>
+    Response.json({ schema: 1, setup: {}, persistence: null }),
+  );
+  await expect(serviceWorkflow('xt1-552')).resolves.toEqual([
+    JSON.stringify({ schema: 1, setup: {}, persistence: null }),
+    'xt1-552',
+    'a'.repeat(64),
+  ]);
+  fetcher.mockImplementationOnce(async () => Response.json({ schema: 1, firmwares: [firmware] }));
+  fetcher.mockImplementationOnce(async () =>
+    Response.json({ schema: 1, setup: {}, persistence: null }),
+  );
+  const run = vi.fn();
+  await expect(debugModeOperations(run).enter('xt1-552', vi.fn())).rejects.toThrow(
+    'Persistent debug mode is not supported for X-T1 5.52.',
+  );
+  expect(run).not.toHaveBeenCalled();
 });

@@ -51,13 +51,15 @@ function workflowSession() {
   const table = JSON.stringify({
     firmware_id: 'x70-110',
     firmware_sha256: 'a'.repeat(64),
+    setup: {},
+    persistence: {},
   });
   vi.stubGlobal(
     'fetch',
     vi.fn(
       async (url: URL) =>
         new Response(
-          url.pathname.endsWith('camera.json')
+          url.pathname.endsWith('service-workflow.generated.json')
             ? table
             : JSON.stringify({
                 schema: 1,
@@ -70,7 +72,7 @@ function workflowSession() {
                     sha256: 'a'.repeat(64),
                     bytes: 42,
                     download_url: 'https://example.org/firmware',
-                    camera_table: 'runtime/x70-110/camera.json',
+                    service_workflow: 'runtime/x70-110/service-workflow.generated.json',
                   },
                 ],
               }),

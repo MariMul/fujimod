@@ -10,7 +10,7 @@ members = [
   "crates/usb-proxy",
   "crates/catalog",
   "crates/catalog-bulk",
-  "crates/catalog-camera",
+  "crates/catalog-workflows",
   "crates/catalog-firmware-identity",
   "crates/catalog-configuration",
   "crates/catalog-resolution",
@@ -122,7 +122,7 @@ fujimod-remote = { path = "crates/remote", version = "0.1.0" }
 fujimod-recording = { path = "crates/recording", version = "0.1.0" }
 fujimod-catalog = { path = "crates/catalog", version = "0.1.0" }
 fujimod-catalog-bulk = { path = "crates/catalog-bulk", version = "0.1.0" }
-fujimod-catalog-camera = { path = "crates/catalog-camera", version = "0.1.0" }
+fujimod-catalog-workflows = { path = "crates/catalog-workflows", version = "0.1.0" }
 fujimod-catalog-firmware-identity = { path = "crates/catalog-firmware-identity", version = "0.1.0" }
 fujimod-catalog-configuration = { path = "crates/catalog-configuration", version = "0.1.0" }
 fujimod-catalog-resolution = { path = "crates/catalog-resolution", version = "0.1.0" }

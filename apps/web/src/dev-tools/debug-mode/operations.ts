@@ -19,7 +19,7 @@ export function debugModeOperations(
     firmwareId: string,
     progress: (line: string) => void,
   ) {
-    const args = await serviceWorkflow(firmwareId);
+    const args = await serviceWorkflow(firmwareId, 'persistence');
     const result = await run(tool, async (debug) =>
       method === 'enterDebugMode' ? debug.enterDebugMode(...args) : debug.leaveDebugMode(...args),
     );
