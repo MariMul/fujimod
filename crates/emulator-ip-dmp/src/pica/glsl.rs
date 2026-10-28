@@ -8,7 +8,7 @@
 //! a program without flow instructions becomes straight code. one with
 //! them becomes runs of instructions between the addresses execution can
 //! come in at, with shade.vert's block stack between them, so calls, ifs,
-//! loops, jumps and breaks behave exactly as interpreted, odd ones too.
+//! loops and jumps behave exactly as interpreted, odd ones too.
 
 use super::isa::OpCode;
 use super::shader::{Op, Operand, PROGRAM_SIZE, Program};
@@ -19,23 +19,18 @@ use std::fmt::Write;
 pub const VERTEX_OUTPUT_SEMANTICS: usize = 24;
 const SEMANTICS: usize = VERTEX_OUTPUT_SEMANTICS;
 
-/// executed instructions after which shade.vert gives up on a program. the
+/// instructions shade.vert can execute in one invocation. the
 /// translation counts a run's at its start, and stops a run that crosses
 /// the limit before it writes an output shade.vert would not have, what it
 /// ran past the limit until then only touching what no one reads after.
-const BUDGET: u32 = 0x10000;
+const BUDGET: u32 = 16_384;
 
-/// the address an end sends execution to, past any block's end.
+/// the address used for invalid control flow in the generated dispatch.
 const FINISHED: u32 = u32::MAX;
 
-/// reachable instructions past which a program stays interpreted. real
-/// ones are far shorter, but execution falling into the words after a
-/// program runs to the end of the program memory, and a shader that long
-/// takes a long while to compile.
-const LONGEST: usize = 1024;
-
-/// the blocks shade.vert's stack holds, pushes past them are dropped.
-const BLOCK_LIMIT: usize = 16;
+/// the block frames shade.vert can hold before the next instruction refuses
+/// the program. One extra slot represents the frame that triggers refusal.
+const BLOCK_LIMIT: usize = 33;
 
 /// the states, where execution is and the blocks open, the translation
 /// follows a program through before it leaves it to the interpreter.
@@ -51,16 +46,6 @@ fn translate(
     semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
 ) -> Result<String, String> {
     let translator = Translator::new(program, entry_point)?;
-    let length: usize = translator
-        .runs
-        .values()
-        .map(|run| run.length() as usize)
-        .sum();
-    if length > LONGEST {
-        return Err(format!(
-            "{length} reachable instructions, more than {LONGEST}"
-        ));
-    }
     Ok(translator.shader(semantics))
 }
 
@@ -139,6 +124,33 @@ impl<'a> Translator<'a> {
         // words of earlier programs left in memory no longer cut up
         let everywhere = starts(ops, entry, 0..ops.len() as u32);
         let first = reachable(ops, &everywhere, entry)?;
+        for run in first.values() {
+            let flow = match run.exit {
+                Exit::Flow(at) => Some(at),
+                _ => None,
+            };
+            for at in run.body.iter().copied().chain(flow) {
+                let op = &ops[at as usize];
+                match op.opcode {
+                    OpCode::Break
+                    | OpCode::BreakC
+                    | OpCode::Emit
+                    | OpCode::SetEmit
+                    | OpCode::LitP
+                    | OpCode::Unknown(_) => {
+                        let opcode = op.instruction.0 >> 26;
+                        return Err(format!("DMP unsupported shader opcode {opcode:#x} at {at}"));
+                    }
+                    OpCode::Cmp => {
+                        let [x, y] = op.instruction.compare_modes();
+                        if x > 5 || y > 5 {
+                            return Err(format!("DMP unsupported shader comparison at {at}"));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         let flows: Vec<u32> = first
             .values()
             .filter_map(|run| match run.exit {
@@ -189,15 +201,23 @@ impl<'a> Translator<'a> {
 
         out.push_str("void main() {\n");
         out.push_str("    for (int i = 0; i < 16; i++) {\n");
-        out.push_str("        temps[i] = vec4(0.0, 0.0, 0.0, 1.0);\n");
+        out.push_str("        temps[i] = vec4(0.0);\n");
         out.push_str("        outputs[i] = vec4(0.0);\n");
         out.push_str("    }\n");
         out.push_str("    address = ivec3(0);\n");
         out.push_str("    condition = bvec2(false);\n");
+        out.push_str("    execution_valid = false;\n");
+        out.push_str("    execution_fault = false;\n");
         if flows {
             out.push_str("    blocks = 0;\n");
         }
         out.push_str("    run();\n");
+        out.push_str("    out_valid = uint(execution_valid && !execution_fault);\n");
+        out.push_str("    for (int i = 0; i < 16; i++) {\n");
+        out.push_str("        if (nonfinite(outputs[i].x) || nonfinite(outputs[i].y) || nonfinite(outputs[i].z) || nonfinite(outputs[i].w)) {\n");
+        out.push_str("            out_valid = 0u;\n");
+        out.push_str("        }\n");
+        out.push_str("    }\n");
         let component = |which: usize, missing: &str| semantic(semantics[which], missing);
         let vector = |range: std::ops::Range<usize>, missing: &str| {
             range
@@ -227,6 +247,10 @@ impl<'a> Translator<'a> {
             }
             match exit {
                 Exit::Fall(next) => at = next,
+                Exit::End => {
+                    out.push_str("    execution_valid = true;\n");
+                    return;
+                }
                 _ => break,
             }
         }
@@ -241,6 +265,9 @@ impl<'a> Translator<'a> {
         out.push_str("    uint budget = 0u;\n");
         out.push_str("    while (true) {\n");
         out.push_str(BLOCK_ENDS);
+        out.push_str("        if (blocks > 32) {\n");
+        out.push_str("            return;\n");
+        out.push_str("        }\n");
         let _ = writeln!(
             out,
             "        if (pc >= {PROGRAM_SIZE}u || budget >= {BUDGET}u) {{"
@@ -274,6 +301,7 @@ impl<'a> Translator<'a> {
                     let _ = writeln!(out, "            pc = {next}u;");
                 }
                 Exit::End => {
+                    out.push_str("            execution_valid = true;\n");
                     let _ = writeln!(out, "            pc = {FINISHED}u;");
                 }
                 Exit::Flow(at) => self.flow(out, at),
@@ -327,14 +355,17 @@ impl<'a> Translator<'a> {
                 let _ = writeln!(out, "{indent}{{");
                 let _ = writeln!(out, "{indent}    ivec4 integer = integers[{integer}];");
                 let _ = writeln!(out, "{indent}    address.z = integer.y;");
-                let _ = writeln!(out, "{indent}    if (blocks < 16) {{");
+                let _ = writeln!(out, "{indent}    if (blocks < {BLOCK_LIMIT}) {{");
                 let _ = writeln!(out, "{indent}        block_end[blocks] = {end}u;");
                 let _ = writeln!(out, "{indent}        block_return[blocks] = {end}u;");
                 let _ = writeln!(
                     out,
                     "{indent}        block_repeat[blocks] = uint(integer.x);"
                 );
-                let _ = writeln!(out, "{indent}        block_increment[blocks] = integer.z;");
+                let _ = writeln!(
+                    out,
+                    "{indent}        block_increment[blocks] = int(uint(integer.z) & 255u);"
+                );
                 let _ = writeln!(out, "{indent}        block_start[blocks] = {next}u;");
                 let _ = writeln!(out, "{indent}        block_loop[blocks] = true;");
                 let _ = writeln!(out, "{indent}        blocks++;");
@@ -394,13 +425,20 @@ impl<'a> Translator<'a> {
             Dp3 => "vec4(dot3(a, b))".to_owned(),
             Dp4 => "vec4(dot4(a, b))".to_owned(),
             // the first source's w taken as one
-            Dph | DphI => "vec4(dot3(a, b) + b.w)".to_owned(),
+            Dph | DphI => {
+                "vec4(multiply(a.x, b.x) + multiply(a.y, b.y) + multiply(a.z, b.z) + b.w)"
+                    .to_owned()
+            }
             Dst | DstI => "vec4(1.0, multiply(a.y, b.y), a.z, b.w)".to_owned(),
             Ex2 => "vec4(exp2(a.x))".to_owned(),
             Lg2 => "vec4(log2(a.x))".to_owned(),
             LitP => {
-                let _ = writeln!(out, "{indent}    condition = bvec2(a.x >= 0.0, a.w >= 0.0);");
-                "vec4(max(a.x, 0.0), clamp(a.y, -127.9961, 127.9961), 0.0, max(a.w, 0.0))".to_owned()
+                let _ = writeln!(
+                    out,
+                    "{indent}    condition = bvec2(a.x >= 0.0, a.w >= 0.0);"
+                );
+                "vec4(max(a.x, 0.0), clamp(a.y, -127.9961, 127.9961), 0.0, max(a.w, 0.0))"
+                    .to_owned()
             }
             Mul => "multiply4(a, b)".to_owned(),
             Sge | SgeI => "vec4(greaterThanEqual(a, b))".to_owned(),
@@ -408,10 +446,14 @@ impl<'a> Translator<'a> {
             Flr => "floor(a)".to_owned(),
             // NaN behaving as on hardware, max(0, NaN) is NaN but
             // max(NaN, 0) is 0
-            Max => "vec4(a.x > b.x ? a.x : b.x, a.y > b.y ? a.y : b.y, a.z > b.z ? a.z : b.z, a.w > b.w ? a.w : b.w)"
-                .to_owned(),
-            Min => "vec4(a.x < b.x ? a.x : b.x, a.y < b.y ? a.y : b.y, a.z < b.z ? a.z : b.z, a.w < b.w ? a.w : b.w)"
-                .to_owned(),
+            Max => {
+                "vec4(maximum(a.x, b.x), maximum(a.y, b.y), maximum(a.z, b.z), maximum(a.w, b.w))"
+                    .to_owned()
+            }
+            Min => {
+                "vec4(minimum(a.x, b.x), minimum(a.y, b.y), minimum(a.z, b.z), minimum(a.w, b.w))"
+                    .to_owned()
+            }
             Rcp => "vec4(1.0 / a.x)".to_owned(),
             Rsq => "vec4(1.0 / sqrt(a.x))".to_owned(),
             Mov => "a".to_owned(),
@@ -569,7 +611,7 @@ fn reachable(ops: &[Op], starts: &BTreeSet<u32>, entry: u32) -> Result<BTreeMap<
     let mut pending = vec![(entry, Vec::new())];
     while let Some((at, open)) = pending.pop() {
         for (at, open) in settle(at, open) {
-            if at as usize >= PROGRAM_SIZE || !seen.insert((at, open.clone())) {
+            if at as usize >= PROGRAM_SIZE || open.len() > 32 || !seen.insert((at, open.clone())) {
                 continue;
             }
             if seen.len() > STATES {
@@ -579,7 +621,7 @@ fn reachable(ops: &[Op], starts: &BTreeSet<u32>, entry: u32) -> Result<BTreeMap<
             match exit {
                 Exit::Fall(next) => pending.push((next, open)),
                 Exit::End => {}
-                Exit::Flow(flow) => pending.extend(follow(&ops[flow as usize], flow, open)),
+                Exit::Flow(flow) => pending.extend(follow(&ops[flow as usize], flow, open)?),
             }
         }
     }
@@ -613,14 +655,17 @@ fn settle(at: u32, open: Vec<Open>) -> Vec<(u32, Vec<Open>)> {
 
 /// where a flow instruction can send execution and the blocks it leaves
 /// open, both ways where its condition decides.
-fn follow(op: &Op, at: u32, open: Vec<Open>) -> Vec<(u32, Vec<Open>)> {
+fn follow(op: &Op, at: u32, open: Vec<Open>) -> Result<Vec<(u32, Vec<Open>)>, String> {
     let (destination, count) = op.instruction.flow_target();
     let next = at + 1;
-    let push = |mut open: Vec<Open>, block: Open| {
-        if open.len() < BLOCK_LIMIT {
-            open.push(block);
+    let push = |mut open: Vec<Open>, block: Open| -> Result<Vec<Open>, String> {
+        if open.len() >= BLOCK_LIMIT {
+            return Err(format!(
+                "DMP shader flow stack exceeds {BLOCK_LIMIT} frames"
+            ));
         }
-        open
+        open.push(block);
+        Ok(open)
     };
     let call = Open {
         end: destination + count,
@@ -628,10 +673,10 @@ fn follow(op: &Op, at: u32, open: Vec<Open>) -> Vec<(u32, Vec<Open>)> {
         start: destination,
         is_loop: false,
     };
-    match op.opcode {
-        OpCode::Call => vec![(destination, push(open, call))],
+    Ok(match op.opcode {
+        OpCode::Call => vec![(destination, push(open, call)?)],
         OpCode::CallC | OpCode::CallU => {
-            vec![(destination, push(open.clone(), call)), (next, open)]
+            vec![(destination, push(open.clone(), call)?), (next, open)]
         }
         OpCode::IfU | OpCode::IfC => {
             let after = destination + count;
@@ -648,8 +693,8 @@ fn follow(op: &Op, at: u32, open: Vec<Open>) -> Vec<(u32, Vec<Open>)> {
                 is_loop: false,
             };
             vec![
-                (next, push(open.clone(), body)),
-                (destination, push(open, otherwise)),
+                (next, push(open.clone(), body)?),
+                (destination, push(open, otherwise)?),
             ]
         }
         OpCode::JmpC | OpCode::JmpU => vec![(destination, open.clone()), (next, open)],
@@ -660,12 +705,12 @@ fn follow(op: &Op, at: u32, open: Vec<Open>) -> Vec<(u32, Vec<Open>)> {
                 start: next,
                 is_loop: true,
             };
-            vec![(next, push(open, block))]
+            vec![(next, push(open, block)?)]
         }
         OpCode::Break => vec![broken(open, next)],
         OpCode::BreakC => vec![broken(open.clone(), next), (next, open)],
         _ => Vec::new(),
-    }
+    })
 }
 
 /// a break, out of the innermost loop and whatever is open inside it, or
@@ -764,6 +809,7 @@ layout(location = 2) out vec2 out_texcoord2;
 layout(location = 3) noperspective out float out_depth;
 layout(location = 4) out vec4 out_quaternion;
 layout(location = 5) out vec3 out_view;
+layout(location = 6) flat out uint out_valid;
 
 layout(std430, set = 0, binding = 6) readonly buffer Shading {
     vec4 floats[96];
@@ -786,14 +832,41 @@ vec4 temps[16];
 vec4 outputs[16];
 ivec3 address;
 bvec2 condition;
+bool execution_valid;
+bool execution_fault;
+
+bool nonfinite(float value) {
+    return (floatBitsToUint(value) & 0x7F800000u) == 0x7F800000u;
+}
 
 float multiply(float a, float b) {
-    float product = a * b;
-    return (product != product) && (a == a) && (b == b) ? 0.0 : product;
+    return a * b;
+}
+
+float maximum(float a, float b) {
+    if (a == 0.0 && b == 0.0) {
+        bool both_negative = (floatBitsToUint(a) & 0x80000000u) != 0u
+            && (floatBitsToUint(b) & 0x80000000u) != 0u;
+        return both_negative ? uintBitsToFloat(0x80000000u) : 0.0;
+    }
+    return a > b ? a : b;
+}
+
+float minimum(float a, float b) {
+    if (a == 0.0 && b == 0.0) {
+        bool either_negative = (floatBitsToUint(a) & 0x80000000u) != 0u
+            || (floatBitsToUint(b) & 0x80000000u) != 0u;
+        return either_negative ? uintBitsToFloat(0x80000000u) : 0.0;
+    }
+    return a < b ? a : b;
 }
 
 int to_int(float value) {
-    return (value != value) ? 0 : int(clamp(value, -2147483648.0, 2147483520.0));
+    if (nonfinite(value) || abs(value) > 65535.0) {
+        execution_fault = true;
+        return 0;
+    }
+    return int(value);
 }
 
 vec4 multiply4(vec4 a, vec4 b) {
@@ -801,15 +874,25 @@ vec4 multiply4(vec4 a, vec4 b) {
 }
 
 float dot3(vec4 a, vec4 b) {
-    return multiply(a.x, b.x) + multiply(a.y, b.y) + multiply(a.z, b.z);
+    float result = 0.0;
+    result += multiply(a.x, b.x);
+    result += multiply(a.y, b.y);
+    result += multiply(a.z, b.z);
+    return result == 0.0 ? 0.0 : result;
 }
 
 float dot4(vec4 a, vec4 b) {
-    return dot3(a, b) + multiply(a.w, b.w);
+    float result = dot3(a, b);
+    result += multiply(a.w, b.w);
+    return result == 0.0 ? 0.0 : result;
 }
 
 vec4 uniform_at(int index) {
-    return index >= 0 && index < 96 ? floats[index] : vec4(0.0);
+    if (index < 0 || index >= 96) {
+        execution_fault = true;
+        return vec4(0.0);
+    }
+    return floats[index];
 }
 
 uint byte_at(uint at) {
@@ -866,16 +949,16 @@ vec4 input_register(uint r) {
 "#;
 
 /// shade.vert's block stack and enter, for programs with flow.
-const BLOCKS: &str = r#"uint block_end[16];
-uint block_return[16];
-uint block_repeat[16];
-int block_increment[16];
-uint block_start[16];
-bool block_loop[16];
+const BLOCKS: &str = r#"uint block_end[33];
+uint block_return[33];
+uint block_repeat[33];
+int block_increment[33];
+uint block_start[33];
+bool block_loop[33];
 int blocks;
 
 uint enter(uint start, uint count, uint return_address) {
-    if (blocks < 16) {
+    if (blocks < 33) {
         block_end[blocks] = start + count;
         block_return[blocks] = return_address;
         block_repeat[blocks] = 0u;

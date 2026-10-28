@@ -289,29 +289,28 @@ fn swizzle(value: [f32; 4], pattern: u32, negate: bool) -> [f32; 4] {
     out
 }
 
-/// decodes the 24-bit float format the shader uses for its uniforms.
+/// decodes the 24-bit float format the DMP shader uses for its uniforms.
 pub fn decode_float24(raw: u32) -> f32 {
     let raw = raw & 0x00FF_FFFF;
-    if raw == 0 {
-        return 0.0;
-    }
-    let sign = (raw >> 23) & 1;
+    let sign = (raw & 0x0080_0000) << 8;
     let exponent = (raw >> 16) & 0x7F;
     let mantissa = raw & 0xFFFF;
 
     if exponent == 0 {
-        // subnormal, the shader treats these as zero.
-        return if sign != 0 { -0.0 } else { 0.0 };
+        return f32::from_bits(sign)
+            + if mantissa == 0 {
+                0.0
+            } else {
+                (if sign == 0 { 1.0 } else { -1.0 })
+                    * (mantissa as f32 / 65_536.0)
+                    * 2.0_f32.powi(-62)
+            };
     }
     if exponent == 0x7F {
-        return if sign != 0 {
-            f32::NEG_INFINITY
-        } else {
-            f32::INFINITY
-        };
+        return f32::from_bits(sign | 0x7F80_0000 | mantissa << 7);
     }
 
-    let bits = (sign << 31) | ((exponent + 64) << 23) | (mantissa << 7);
+    let bits = sign | ((exponent + 64) << 23) | (mantissa << 7);
     f32::from_bits(bits)
 }
 
@@ -330,6 +329,21 @@ mod tests {
         // the sign bit is the top bit of the 24.
         assert_eq!(decode_float24((1 << 23) | (63 << 16)), -1.0);
         assert_eq!(decode_float24(0), 0.0);
+    }
+
+    #[test]
+    fn float24_preserves_dmp_subnormals_signed_zero_and_nan_payloads() {
+        assert_eq!(decode_float24(1).to_bits(), (2.0_f32.powi(-78)).to_bits());
+        assert_eq!(
+            decode_float24((1 << 23) | 1).to_bits(),
+            (-2.0_f32.powi(-78)).to_bits()
+        );
+        assert_eq!(decode_float24(1 << 23).to_bits(), 0.0_f32.to_bits());
+        assert_eq!(decode_float24((127 << 16) | 1).to_bits(), 0x7f80_0080);
+        assert_eq!(
+            decode_float24((1 << 23) | (127 << 16) | 0x1234).to_bits(),
+            0xff89_1a00
+        );
     }
 
     #[test]
