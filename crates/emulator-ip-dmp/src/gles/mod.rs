@@ -10,6 +10,8 @@ mod gpu;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu_draw;
 #[cfg(not(target_arch = "wasm32"))]
+mod gpu_vertex;
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) mod gpu_fragment;
 mod raster;
 mod shader;
@@ -111,6 +113,34 @@ fn upload(bank: &mut Vec<u32>, cursor: &mut usize, value: u32, limit: usize) -> 
     *cursor += 1;
     Ok(())
 }
+
+fn read_guest_draw_memory(
+    read: &mut Reader<'_>,
+    cache: &mut BTreeMap<(u64, usize), Vec<u8>>,
+    address: u64,
+    length: usize,
+) -> Result<Vec<u8>, String> {
+    let key = (address, length);
+    let bytes = read(address, length)?;
+    cache.insert(key, bytes.clone());
+    Ok(bytes)
+}
+
+fn read_cached_draw_memory(
+    cache: &BTreeMap<(u64, usize), Vec<u8>>,
+    address: u64,
+    length: usize,
+) -> Result<Vec<u8>, String> {
+    cache
+        .get(&(address, length))
+        .cloned()
+        .ok_or_else(|| {
+            format!(
+                "DMP host GPU vertex requested uncached guest range {address:#x}+{length:#x}"
+            )
+        })
+}
+
 impl Engine {
     /// Allow host acceleration when a suitable adapter is available.
     pub fn set_host_acceleration(&mut self, enabled: bool) {
@@ -380,13 +410,16 @@ impl Engine {
                 if value != 1 {
                     return Err("DMP invalid draw trigger".into());
                 }
+                let mut draw_dma = BTreeMap::new();
                 let count = self.reg(0x428) as usize;
                 if count > 1_048_576 {
                     return Err("DMP vertex count exceeds bound".into());
                 }
                 let index_addr = self.reg(0x427);
                 let indices = if index == 0x42f {
-                    Some(read(
+                    Some(read_guest_draw_memory(
+                        read,
+                        &mut draw_dma,
                         (self.reg(0x400) as u64 * 8) + (index_addr as u64 & 0x7fffffff),
                         count * if index_addr >> 31 != 0 { 2 } else { 1 },
                     )?)
@@ -399,6 +432,11 @@ impl Engine {
                     return Err("DMP short index DMA".into());
                 }
                 let state = self.draw_state();
+                #[cfg(not(target_arch = "wasm32"))]
+                let mut interpreter_outputs = self
+                    .gpu_primitives
+                    .as_ref()
+                    .map(|_| Vec::with_capacity(count));
                 for n in 0..count {
                     let vertex = if let Some(ref bytes) = indices {
                         if index_addr >> 31 != 0 {
@@ -409,8 +447,29 @@ impl Engine {
                     } else {
                         n + self.reg(0x42a) as usize
                     };
-                    let inputs = self.fetch(vertex, &state, read)?;
+                    let inputs = self.fetch(vertex, &state, &mut |address, length| {
+                        read_guest_draw_memory(read, &mut draw_dma, address, length)
+                    })?;
                     self.vertex(&inputs, &state, read, out)?;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(outputs) = interpreter_outputs.as_mut() {
+                        outputs.push(
+                            self.last_output
+                                .ok_or("DMP interpreter produced no vertex output")?,
+                        );
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(expected) = interpreter_outputs {
+                    gpu_vertex::verify_draw(
+                        self,
+                        &state,
+                        index == 0x42f,
+                        &expected,
+                        &mut |address, length| {
+                            read_cached_draw_memory(&draw_dma, address, length)
+                        },
+                    )?;
                 }
             }
             0x45f | 0x431 if value == 1 => {
@@ -509,6 +568,10 @@ impl Engine {
         out: &mut raster::Targets,
     ) -> Result<(), String> {
         let vertex = shader::execute(self, inputs)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.gpu_primitives.is_some() {
+            gpu_vertex::verify_input(self, state, inputs, &vertex)?;
+        }
         self.vertices_executed += 1;
         self.last_output = Some(vertex);
         let mode = state.raster.primitive_mode;

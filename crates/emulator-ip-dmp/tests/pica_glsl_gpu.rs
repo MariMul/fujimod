@@ -244,7 +244,7 @@ fn capture_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("DMP PICA shader uniforms and inputs"),
                 contents: &shading_bytes(case),
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::UNIFORM,
             });
         let input_bytes = self
             .device

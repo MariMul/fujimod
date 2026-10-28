@@ -811,13 +811,14 @@ layout(location = 4) out vec4 out_quaternion;
 layout(location = 5) out vec3 out_view;
 layout(location = 6) flat out uint out_valid;
 
-layout(std430, set = 0, binding = 6) readonly buffer Shading {
+layout(std140, set = 0, binding = 6) uniform Shading {
     vec4 floats[96];
     ivec4 integers[4];
     uint bools;
     uint entry;
-    uint pad[2];
-    uint semantics[24];
+    uint pad0;
+    uint pad1;
+    uvec4 semantics[6];
     vec4 depth_map;
     vec4 viewport;
     uvec4 attributes[16];
