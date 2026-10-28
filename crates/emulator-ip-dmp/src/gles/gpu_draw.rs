@@ -3,9 +3,11 @@
 use super::{
     Reader, Snapshots,
     draw_state::{DrawState, PrimitiveMode},
-    gpu_surfaces::{GpuSurface, SurfaceCache, SurfaceExtent, SurfaceFormat, SurfaceKey},
     raster::{self, RasterVertex},
     shader::Vector,
+};
+use crate::gpu::{
+    GpuContext, GpuSurface, SurfaceExtent, SurfaceFormat, SurfaceKey, SurfaceLayout, context,
 };
 use std::collections::{BTreeMap, HashMap};
 use wgpu::util::DeviceExt;
@@ -71,7 +73,7 @@ pub(super) fn render(
         });
     }
 
-    let mut cache = SurfaceCache::new()?;
+    let cache = context()?;
     let mut surfaces = BTreeMap::<u64, SurfaceKey>::new();
     for (primitive, _) in &geometry {
         let state = &primitive.state;
@@ -84,9 +86,10 @@ pub(super) fn render(
             guest_address: state.targets.color_address,
             format: SurfaceFormat::from_color_code(state.targets.color_format.code())?,
             extent,
+            layout: SurfaceLayout::Morton8x8,
         };
         upload_surface(
-            &mut cache,
+            cache,
             &mut surfaces,
             color_key,
             recorded_reads,
@@ -98,15 +101,20 @@ pub(super) fn render(
             guest_address: state.targets.depth_address,
             format: SurfaceFormat::from_depth_code(state.targets.depth_format.code())?,
             extent,
+            layout: SurfaceLayout::Morton8x8,
         };
         upload_surface(
-            &mut cache,
+            cache,
             &mut surfaces,
             depth_key,
             recorded_reads,
             expected_snapshots,
             read,
         )?;
+    }
+
+    for &key in surfaces.values() {
+        cache.clear_write_masks(key)?;
     }
 
     let shader_source = format!(
@@ -129,7 +137,7 @@ pub(super) fn render(
                 triangle,
                 &shader,
                 &mut pipelines,
-                &mut cache,
+                cache,
                 recorded_reads,
                 read,
             )?;
@@ -181,7 +189,7 @@ pub(super) fn snapshot_mismatch(actual: &Snapshots, expected: &Snapshots) -> Str
 }
 
 fn upload_surface(
-    cache: &mut SurfaceCache,
+    cache: &GpuContext,
     surfaces: &mut BTreeMap<u64, SurfaceKey>,
     key: SurfaceKey,
     recorded_reads: &[(u64, Vec<u8>)],
@@ -202,23 +210,25 @@ fn upload_surface(
         .and_then(|pixels| pixels.checked_mul(key.format.bytes_per_pixel() as usize))
         .ok_or("DMP host GPU surface byte length overflow")?;
     let bytes = if let Some(bytes) = recorded_range(recorded_reads, key.guest_address, byte_len) {
-        bytes
+        Some(bytes)
     } else if expected_snapshots
         .iter()
         .any(|(address, _)| *address == key.guest_address)
     {
-        read(key.guest_address, byte_len)?
+        Some(read(key.guest_address, byte_len)?)
     } else {
-        vec![0; byte_len]
+        None
     };
-    if bytes.len() != byte_len {
-        return Err(format!(
-            "DMP host GPU target {:#x} supplied {} bytes, expected {byte_len}",
-            key.guest_address,
-            bytes.len()
-        ));
+    if let Some(bytes) = &bytes {
+        if bytes.len() != byte_len {
+            return Err(format!(
+                "DMP host GPU target {:#x} supplied {} bytes, expected {byte_len}",
+                key.guest_address,
+                bytes.len()
+            ));
+        }
     }
-    cache.get_or_upload(key, &bytes)?;
+    cache.get_or_create_target(key, bytes.as_deref())?;
     surfaces.insert(key.guest_address, key);
     Ok(())
 }
@@ -240,7 +250,7 @@ fn render_triangle(
     triangle: &[RasterVertex; 3],
     shader: &wgpu::ShaderModule,
     pipelines: &mut HashMap<DrawState, wgpu::RenderPipeline>,
-    cache: &mut SurfaceCache,
+    cache: &GpuContext,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
 ) -> Result<(), String> {
@@ -253,20 +263,22 @@ fn render_triangle(
         guest_address: state.targets.color_address,
         format: SurfaceFormat::from_color_code(state.targets.color_format.code())?,
         extent,
+        layout: SurfaceLayout::Morton8x8,
     };
     let depth_key = SurfaceKey {
         guest_address: state.targets.depth_address,
         format: SurfaceFormat::from_depth_code(state.targets.depth_format.code())?,
         extent,
+        layout: SurfaceLayout::Morton8x8,
     };
     if color_key.guest_address == depth_key.guest_address {
         return Err("DMP host GPU color and depth targets alias".into());
     }
     let color_surface = cache
-        .get(color_key)
+        .get(color_key)?
         .ok_or("DMP color surface is not resident")?;
     let depth_surface = cache
-        .get(depth_key)
+        .get(depth_key)?
         .ok_or("DMP depth surface is not resident")?;
 
     let device = cache.device();
@@ -290,8 +302,8 @@ fn render_triangle(
         contents: &vertex_data,
         usage: wgpu::BufferUsages::VERTEX,
     });
-    let color_input = copy_surface_texture(device, cache.queue(), color_surface, extent);
-    let depth_input = copy_surface_texture(device, cache.queue(), depth_surface, extent);
+    let color_input = copy_surface_texture(device, cache.queue(), &color_surface, extent);
+    let depth_input = copy_surface_texture(device, cache.queue(), &depth_surface, extent);
     let color_input_view = color_input.create_view(&Default::default());
     let depth_input_view = depth_input.create_view(&Default::default());
     let color_view = color_surface.texture().create_view(&Default::default());

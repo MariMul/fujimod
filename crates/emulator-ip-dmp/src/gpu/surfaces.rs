@@ -1,4 +1,4 @@
-//! GPU-resident DMP surfaces with exact Morton-ordered guest-memory transfers.
+//! GPU-resident surfaces with exact guest-memory transfers and byte-write masks.
 //!
 //! Surface texels retain the packed guest pixel bits in an `r32uint` texture.
 //! The format stays in the cache key so later draw pipelines can decode the
@@ -9,7 +9,7 @@
 use std::{
     collections::HashMap,
     future::Future,
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     task::{Context, Poll, Wake},
 };
 
@@ -66,10 +66,17 @@ pub struct SurfaceExtent {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SurfaceLayout {
+    Linear,
+    Morton8x8,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SurfaceKey {
     pub guest_address: u64,
     pub format: SurfaceFormat,
     pub extent: SurfaceExtent,
+    pub layout: SurfaceLayout,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -81,7 +88,7 @@ pub struct PixelWriteMask {
 }
 
 pub struct SurfaceReadback {
-    /// Packed guest bytes in Morton order, suitable for writing at the key's address.
+    /// Packed guest bytes in the layout selected by the surface key.
     pub bytes: Vec<u8>,
     /// Sorted, contiguous byte ranges written since the last upload or clear.
     pub written_ranges: Vec<(u64, usize)>,
@@ -94,6 +101,7 @@ pub struct GpuSurface {
     write_mask_accumulator: wgpu::Buffer,
     pixel_count: usize,
     byte_len: usize,
+    guest_shadow: Mutex<Vec<u8>>,
 }
 
 impl GpuSurface {
@@ -107,7 +115,7 @@ impl GpuSurface {
     }
 
     /// Resolved per-pixel byte masks. Bit `n` marks byte lane `n` as written.
-    /// Call [`SurfaceCache::readback`] to resolve pending atomic writes first.
+    /// Call [`GpuContext::readback`] to resolve pending atomic writes first.
     pub fn write_mask_texture(&self) -> &wgpu::Texture {
         &self.write_mask_texture
     }
@@ -127,64 +135,94 @@ impl GpuSurface {
     }
 }
 
-pub struct SurfaceCache {
-    gpu: Arc<Gpu>,
-    surfaces: HashMap<SurfaceKey, GpuSurface>,
+/// Process-wide host GPU context and persistent guest surface cache.
+pub struct GpuContext {
+    gpu: Gpu,
+    surfaces: Mutex<HashMap<SurfaceKey, Arc<GpuSurface>>>,
 }
 
-impl SurfaceCache {
-    pub fn new() -> Result<Self, String> {
+impl GpuContext {
+    fn new() -> Result<Self, String> {
         Ok(Self {
-            gpu: shared_gpu()?,
-            surfaces: HashMap::new(),
+            gpu: Gpu::new()?,
+            surfaces: Mutex::new(HashMap::new()),
         })
     }
 
-    /// Return a resident surface when present, uploading `guest_bytes` only on
-    /// the first use of this address, format, and extent tuple.
-    pub fn get_or_upload(
-        &mut self,
+    /// Get or create a resident surface, synchronizing it when guest memory changed.
+    ///
+    /// Passing `None` preserves an existing surface or initializes a new one to zero.
+    pub fn get_or_create_target(
+        &self,
         key: SurfaceKey,
-        guest_bytes: &[u8],
-    ) -> Result<&GpuSurface, String> {
-        if !self.surfaces.contains_key(&key) {
-            self.upload(key, guest_bytes)?;
-        }
-        Ok(self.surfaces.get(&key).expect("surface inserted above"))
-    }
-
-    /// Upload guest Morton bytes into the resident texture, replacing an
-    /// existing cache entry when its guest pages have changed.
-    pub fn upload(&mut self, key: SurfaceKey, guest_bytes: &[u8]) -> Result<(), String> {
+        guest_bytes: Option<&[u8]>,
+    ) -> Result<Arc<GpuSurface>, String> {
         let (pixel_count, byte_len) = validate_key(key, &self.gpu)?;
-        if guest_bytes.len() != byte_len {
+        if guest_bytes.is_some_and(|bytes| bytes.len() != byte_len) {
             return Err(format!(
                 "DMP surface upload has {} bytes, expected {byte_len}",
-                guest_bytes.len()
+                guest_bytes.map_or(0, <[u8]>::len)
             ));
         }
-        if !self.surfaces.contains_key(&key) {
-            let surface = create_surface(key, pixel_count, byte_len, &self.gpu);
-            self.surfaces.insert(key, surface);
+        let mut surfaces = self
+            .surfaces
+            .lock()
+            .map_err(|_| "DMP surface cache lock poisoned")?;
+        if let Some(surface) = surfaces.get(&key).cloned() {
+            if let Some(bytes) = guest_bytes {
+                let mut shadow = surface
+                    .guest_shadow
+                    .lock()
+                    .map_err(|_| "DMP surface shadow lock poisoned")?;
+                if shadow.as_slice() != bytes {
+                    self.gpu.upload(&surface, bytes)?;
+                    shadow.clear();
+                    shadow.extend_from_slice(bytes);
+                }
+            }
+            return Ok(surface);
         }
-        let surface = self.surfaces.get(&key).expect("surface inserted above");
-        self.gpu.upload(surface, guest_bytes)
+
+        surfaces.retain(|existing, _| existing.guest_address != key.guest_address);
+        let surface = Arc::new(create_surface(key, pixel_count, byte_len, &self.gpu));
+        let initial_bytes = guest_bytes
+            .map(<[u8]>::to_vec)
+            .unwrap_or_else(|| vec![0; byte_len]);
+        self.gpu.upload(&surface, &initial_bytes)?;
+        *surface
+            .guest_shadow
+            .lock()
+            .map_err(|_| "DMP surface shadow lock poisoned")? = initial_bytes;
+        surfaces.insert(key, Arc::clone(&surface));
+        Ok(surface)
     }
 
-    pub fn get(&self, key: SurfaceKey) -> Option<&GpuSurface> {
-        self.surfaces.get(&key)
+    pub fn get(&self, key: SurfaceKey) -> Result<Option<Arc<GpuSurface>>, String> {
+        self.surfaces
+            .lock()
+            .map(|surfaces| surfaces.get(&key).cloned())
+            .map_err(|_| "DMP surface cache lock poisoned".into())
     }
 
-    pub fn len(&self) -> usize {
-        self.surfaces.len()
+    pub fn len(&self) -> Result<usize, String> {
+        self.surfaces
+            .lock()
+            .map(|surfaces| surfaces.len())
+            .map_err(|_| "DMP surface cache lock poisoned".into())
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.surfaces.is_empty()
+    pub fn is_empty(&self) -> Result<bool, String> {
+        self.surfaces
+            .lock()
+            .map(|surfaces| surfaces.is_empty())
+            .map_err(|_| "DMP surface cache lock poisoned".into())
     }
 
-    pub fn evict(&mut self, key: SurfaceKey) -> bool {
-        self.surfaces.remove(&key).is_some()
+    pub fn evict(&self, key: SurfaceKey) -> Result<bool, String> {
+        self.surfaces
+            .lock()
+            .map(|mut surfaces| surfaces.remove(&key).is_some())
+            .map_err(|_| "DMP surface cache lock poisoned".into())
     }
 
     /// Atomically add byte writes for any pixels. Duplicate coordinates are
@@ -199,7 +237,10 @@ impl SurfaceCache {
         }
         let surface = self
             .surfaces
+            .lock()
+            .map_err(|_| "DMP surface cache lock poisoned")?
             .get(&key)
+            .cloned()
             .ok_or("DMP surface is not resident")?;
         let bytes_per_pixel = key.format.bytes_per_pixel();
         let valid_mask = (1 << bytes_per_pixel) - 1;
@@ -226,45 +267,74 @@ impl SurfaceCache {
             records.extend_from_slice(&write.y.to_le_bytes());
             records.extend_from_slice(&write.byte_mask.to_le_bytes());
         }
-        self.gpu.record_write_masks(surface, &records, writes.len())
+        self.gpu
+            .record_write_masks(&surface, &records, writes.len())
     }
 
     /// Clear the byte-write tracker without changing the resident pixels.
     pub fn clear_write_masks(&self, key: SurfaceKey) -> Result<(), String> {
         let surface = self
             .surfaces
+            .lock()
+            .map_err(|_| "DMP surface cache lock poisoned")?
             .get(&key)
+            .cloned()
             .ok_or("DMP surface is not resident")?;
-        self.gpu.clear_write_masks(surface)
+        self.gpu.clear_write_masks(&surface)
     }
 
-    /// Convert resident pixels back to Morton guest bytes and exact byte ranges.
+    /// Convert resident pixels back to the keyed guest layout and exact byte ranges.
     pub fn readback(&self, key: SurfaceKey) -> Result<SurfaceReadback, String> {
         let surface = self
             .surfaces
+            .lock()
+            .map_err(|_| "DMP surface cache lock poisoned")?
             .get(&key)
+            .cloned()
             .ok_or("DMP surface is not resident")?;
-        self.gpu.readback(surface)
+        let readback = self.gpu.readback(&surface)?;
+        *surface
+            .guest_shadow
+            .lock()
+            .map_err(|_| "DMP surface shadow lock poisoned")? = readback.bytes.clone();
+        Ok(readback)
     }
 
-    pub(super) fn device(&self) -> &wgpu::Device {
+    pub fn device(&self) -> &wgpu::Device {
         &self.gpu.device
     }
 
-    pub(super) fn queue(&self) -> &wgpu::Queue {
+    pub fn queue(&self) -> &wgpu::Queue {
         &self.gpu.queue
     }
 
-    pub(super) fn accumulate_draw_mask(&self, key: SurfaceKey) -> Result<(), String> {
+    pub fn adapter_name(&self) -> &str {
+        &self.gpu.name
+    }
+
+    pub fn accumulate_draw_mask(&self, key: SurfaceKey) -> Result<(), String> {
         let surface = self
             .surfaces
+            .lock()
+            .map_err(|_| "DMP surface cache lock poisoned")?
             .get(&key)
+            .cloned()
             .ok_or("DMP surface is not resident")?;
-        self.gpu.accumulate_draw_mask(surface)
+        self.gpu.accumulate_draw_mask(&surface)
+    }
+}
+
+static GPU_CONTEXT: OnceLock<Result<GpuContext, String>> = OnceLock::new();
+
+pub fn context() -> Result<&'static GpuContext, String> {
+    match GPU_CONTEXT.get_or_init(GpuContext::new) {
+        Ok(context) => Ok(context),
+        Err(error) => Err(error.clone()),
     }
 }
 
 struct Gpu {
+    name: String,
     device: wgpu::Device,
     queue: wgpu::Queue,
     upload_pipeline: wgpu::ComputePipeline,
@@ -285,11 +355,12 @@ impl Gpu {
             ..Default::default()
         }))
         .map_err(|error| format!("DMP host GPU adapter: {error}"))?;
+        let info = adapter.get_info();
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .map_err(|error| format!("DMP host GPU device: {error}"))?;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DMP resident surfaces"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("gpu_surfaces.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("surfaces.wgsl").into()),
         });
         let pipeline = |label, entry_point| {
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -301,14 +372,15 @@ impl Gpu {
                 cache: None,
             })
         };
-        let upload_pipeline = pipeline("DMP Morton upload", "upload_morton");
+        let upload_pipeline = pipeline("DMP surface upload", "upload_morton");
         let clear_mask_pipeline = pipeline("DMP write-mask clear", "clear_write_mask");
         let record_mask_pipeline = pipeline("DMP write-mask record", "record_write_masks");
         let accumulate_draw_mask_pipeline =
             pipeline("DMP rendered write-mask record", "accumulate_draw_mask");
         let resolve_mask_pipeline = pipeline("DMP write-mask resolve", "resolve_write_mask");
-        let readback_pipeline = pipeline("DMP Morton readback", "readback_morton");
+        let readback_pipeline = pipeline("DMP surface readback", "readback_morton");
         Ok(Self {
+            name: format!("{:?}: {} ({:?})", info.backend, info.name, info.device_type),
             device,
             queue,
             upload_pipeline,
@@ -324,7 +396,7 @@ impl Gpu {
         let guest = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP Morton guest bytes"),
+                label: Some("DMP surface guest bytes"),
                 contents: guest_bytes,
                 usage: wgpu::BufferUsages::STORAGE,
             });
@@ -356,7 +428,7 @@ impl Gpu {
             &self.upload_pipeline,
             &upload_bindings,
             surface.key.extent,
-            "DMP Morton upload",
+            "DMP surface upload",
         );
         dispatch_2d(
             &mut encoder,
@@ -467,13 +539,13 @@ impl Gpu {
             .checked_mul(8)
             .ok_or("DMP surface readback size overflow")? as u64;
         let result = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("DMP Morton surface result"),
+            label: Some("DMP surface result"),
             size: result_size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let download = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("DMP Morton readback staging"),
+            label: Some("DMP surface readback staging"),
             size: result_size,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -519,7 +591,7 @@ impl Gpu {
             &self.readback_pipeline,
             &readback_bindings,
             surface.key.extent,
-            "DMP Morton readback",
+            "DMP surface readback",
         );
         encoder.copy_buffer_to_buffer(&result, 0, &download, 0, result_size);
         self.queue.submit([encoder.finish()]);
@@ -569,7 +641,7 @@ impl Gpu {
             surface.key.extent.width / TILE_SIDE,
             surface.key.format.bytes_per_pixel(),
             write_count,
-            0,
+            u32::from(surface.key.layout == SurfaceLayout::Morton8x8),
         ];
         let contents: Vec<u8> = words.into_iter().flat_map(u32::to_le_bytes).collect();
         self.device
@@ -666,6 +738,7 @@ fn create_surface(key: SurfaceKey, pixel_count: usize, byte_len: usize, gpu: &Gp
         write_mask_accumulator: accumulator,
         pixel_count,
         byte_len,
+        guest_shadow: Mutex::new(Vec::new()),
     }
 }
 
@@ -674,7 +747,9 @@ fn validate_key(key: SurfaceKey, gpu: &Gpu) -> Result<(usize, usize), String> {
     if extent.width == 0 || extent.height == 0 {
         return Err("DMP surface extent must be nonzero".into());
     }
-    if extent.width % TILE_SIDE != 0 || extent.height % TILE_SIDE != 0 {
+    if key.layout == SurfaceLayout::Morton8x8
+        && (extent.width % TILE_SIDE != 0 || extent.height % TILE_SIDE != 0)
+    {
         return Err("DMP Morton surface extent must be a multiple of 8 pixels".into());
     }
     if extent.width > gpu.device.limits().max_texture_dimension_2d
@@ -734,11 +809,6 @@ fn byte_ranges(address: u64, written: &[bool]) -> Vec<(u64, usize)> {
     ranges
 }
 
-fn shared_gpu() -> Result<Arc<Gpu>, String> {
-    static GPU: OnceLock<Result<Arc<Gpu>, String>> = OnceLock::new();
-    GPU.get_or_init(|| Gpu::new().map(Arc::new)).clone()
-}
-
 struct ThreadWake(std::thread::Thread);
 
 impl Wake for ThreadWake {
@@ -768,9 +838,9 @@ mod tests {
         height: 8,
     };
 
-    fn surface_cache_or_skip() -> Option<SurfaceCache> {
-        match SurfaceCache::new() {
-            Ok(cache) => Some(cache),
+    fn context_or_skip() -> Option<&'static GpuContext> {
+        match context() {
+            Ok(context) => Some(context),
             Err(error) if error.starts_with("DMP host GPU adapter:") => {
                 eprintln!(
                     "skipping DMP surface test because no host GPU adapter is available: {error}"
@@ -783,7 +853,7 @@ mod tests {
 
     #[test]
     fn guest_upload_and_readback_are_exact_for_every_dmp_format() {
-        let Some(mut cache) = surface_cache_or_skip() else {
+        let Some(context) = context_or_skip() else {
             return;
         };
         let formats = [
@@ -800,14 +870,17 @@ mod tests {
                 guest_address: 0x10000 + index as u64 * 0x1000,
                 format,
                 extent: EXTENT,
+                layout: SurfaceLayout::Morton8x8,
             };
             let byte_len =
                 EXTENT.width as usize * EXTENT.height as usize * format.bytes_per_pixel() as usize;
             let guest_bytes: Vec<u8> = (0..byte_len)
                 .map(|offset| (offset.wrapping_mul(37).wrapping_add(index * 11)) as u8)
                 .collect();
-            cache.get_or_upload(key, &guest_bytes).unwrap();
-            let readback = cache.readback(key).unwrap();
+            context
+                .get_or_create_target(key, Some(&guest_bytes))
+                .unwrap();
+            let readback = context.readback(key).unwrap();
             assert_eq!(readback.bytes, guest_bytes, "{format:?}");
             assert!(readback.written_ranges.is_empty(), "{format:?}");
         }
@@ -815,7 +888,7 @@ mod tests {
 
     #[test]
     fn write_mask_reports_exact_morton_guest_byte_ranges() {
-        let Some(mut cache) = surface_cache_or_skip() else {
+        let Some(context) = context_or_skip() else {
             return;
         };
         let format = SurfaceFormat::D24S8;
@@ -823,10 +896,13 @@ mod tests {
             guest_address: 0x24000,
             format,
             extent: EXTENT,
+            layout: SurfaceLayout::Morton8x8,
         };
         let guest_bytes = vec![0xA5; EXTENT.width as usize * EXTENT.height as usize * 4];
-        cache.get_or_upload(key, &guest_bytes).unwrap();
-        cache
+        context
+            .get_or_create_target(key, Some(&guest_bytes))
+            .unwrap();
+        context
             .record_write_masks(
                 key,
                 &[
@@ -848,7 +924,7 @@ mod tests {
                 ],
             )
             .unwrap();
-        let readback = cache.readback(key).unwrap();
+        let readback = context.readback(key).unwrap();
         assert_eq!(readback.bytes, guest_bytes);
         assert_eq!(
             readback.written_ranges,
@@ -858,5 +934,52 @@ mod tests {
                 (key.guest_address + 8, 4)
             ]
         );
+    }
+
+    #[test]
+    fn resident_surface_reuses_unchanged_guest_bytes_and_uploads_changes() {
+        let Some(context) = context_or_skip() else {
+            return;
+        };
+        let key = SurfaceKey {
+            guest_address: 0x28000,
+            format: SurfaceFormat::Rgba8,
+            extent: EXTENT,
+            layout: SurfaceLayout::Morton8x8,
+        };
+        let original = vec![0x35; EXTENT.width as usize * EXTENT.height as usize * 4];
+        let first = context.get_or_create_target(key, Some(&original)).unwrap();
+        let same = context.get_or_create_target(key, Some(&original)).unwrap();
+        assert!(Arc::ptr_eq(&first, &same));
+
+        let mut changed = original.clone();
+        changed[17] ^= 0xff;
+        let resident = context.get_or_create_target(key, Some(&changed)).unwrap();
+        assert!(Arc::ptr_eq(&first, &resident));
+        assert_eq!(context.readback(key).unwrap().bytes, changed);
+    }
+
+    #[test]
+    fn linear_surface_round_trip_preserves_row_major_bytes() {
+        let Some(context) = context_or_skip() else {
+            return;
+        };
+        let extent = SurfaceExtent {
+            width: 10,
+            height: 7,
+        };
+        let key = SurfaceKey {
+            guest_address: 0x2c000,
+            format: SurfaceFormat::Rgba8,
+            extent,
+            layout: SurfaceLayout::Linear,
+        };
+        let guest_bytes: Vec<u8> = (0..extent.width as usize * extent.height as usize * 4)
+            .map(|offset| (offset.wrapping_mul(29) + 7) as u8)
+            .collect();
+        context
+            .get_or_create_target(key, Some(&guest_bytes))
+            .unwrap();
+        assert_eq!(context.readback(key).unwrap().bytes, guest_bytes);
     }
 }
