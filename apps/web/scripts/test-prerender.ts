@@ -93,7 +93,7 @@ try {
       }
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'start testing FujiMod by dual booting from the SD card'],
+        ['/', 'You can try the first release by dual-booting from an SD card'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -178,10 +178,10 @@ try {
         'hydrate existing homepage nodes',
       );
       const note = page.locator('.personal-note');
-      assert.match(await note.innerText(), /dual booting from the SD card/);
+      assert.match(await note.innerText(), /without flashing your camera/);
       assert.equal(await note.locator('mark, em, strong, b, svg').count(), 0);
       assert.equal(await note.locator('a').count(), 1);
-      await note.getByRole('link', { name: 'Head on down', exact: true }).click();
+      await note.getByRole('link', { name: 'Try FujiMod', exact: true }).click();
       assert.equal(new URL(page.url()).hash, '#software');
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);

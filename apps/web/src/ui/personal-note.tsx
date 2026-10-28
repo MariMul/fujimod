@@ -1,30 +1,23 @@
-import { createSignal, onSettled } from 'solid-js';
-
-export function projectAge(date: Date) {
-  const today = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-  return Math.max(0, Math.floor((today - Date.UTC(2026, 9, 3)) / 86_400_000));
-}
-
 export function PersonalNote() {
-  const [age, setAge] = createSignal(() => projectAge(new Date()));
-  onSettled(() => {
-    setAge(projectAge(new Date()));
-  });
   return (
     <aside class="personal-note" aria-label="A note from Jake">
       <p>Hey,</p>
       <p>
-        FujiMod is a <span id="project-age">{age()}</span>-day-old vibe-coded firmware modification
-        made to unlock the full potential of every Fujifilm camera as a creative tool. We’re
-        starting with the X70 and have concepts of a master plan to bring FujiMod to the rest of the
-        EXR II bodies (X-T1, X-E2/X-E2S, …) and beyond.
+        I’m making FujiMod to unlock your camera’s full potential. We’re starting with the X70, with
+        23 new features and more freedom to make the camera work your way. I’d love to bring it to
+        more Fujifilm cameras over time.
       </p>
       <p>
-        I haven't tested every feature on camera yet (there are so many!), but most tests pass in
-        the emulator, and I feel it's safe for folks to start testing FujiMod by dual booting from
-        the SD card. <a href="#software">Head on down</a> to try it out. Even if you don't have an
-        X70, you can run FujiMod in the emulator on this website, although it's a bit slow. (Enable
-        webcam access and use your imagination 😂.)
+        You can try the first release by dual-booting from an SD card without flashing your camera.
+        I haven’t tested every feature on camera yet—there are a lot!—so I’m sharing it for other
+        X70 owners to test and help improve.
+      </p>
+      <p>
+        Even without an X70, you can try FujiMod in your browser. The emulator is a bit slow, but
+        you can enable webcam input and give it a go.
+      </p>
+      <p>
+        <a href="#software">Try FujiMod</a>
       </p>
       <p class="signature">
         Yours truly,
