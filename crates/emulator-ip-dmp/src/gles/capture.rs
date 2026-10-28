@@ -1,11 +1,12 @@
 use super::{Engine, Snapshots};
+use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const MAGIC: &[u8; 8] = b"FJDMP001";
+const MAGIC: &[u8; 8] = b"FJDMP002";
 const MAX_CAPTURE_BLOB_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_CAPTURE_ITEMS: usize = 1 << 20;
 const MAX_COMMAND_WORDS: usize = 1024 * 1024 / 4;
@@ -34,8 +35,15 @@ struct Record {
     state: Vec<u8>,
     words: Vec<u32>,
     reads: Vec<(u64, Vec<u8>)>,
-    snapshots: Snapshots,
+    snapshots: Vec<SnapshotDigest>,
     written_ranges: Vec<(u64, usize)>,
+}
+
+#[derive(PartialEq, Eq)]
+struct SnapshotDigest {
+    address: u64,
+    length: u64,
+    sha256: [u8; 32],
 }
 
 pub(super) fn capture_directory() -> Option<PathBuf> {
@@ -100,10 +108,13 @@ fn write_record(
         writer.write_all(&word.to_le_bytes())?;
     }
     for (address, bytes) in reads {
-        write_surface(writer, *address, bytes)?;
+        write_reader_range(writer, *address, bytes)?;
     }
     for (address, bytes) in snapshots {
-        write_surface(writer, *address, bytes)?;
+        writer.write_all(&address.to_le_bytes())?;
+        writer.write_all(&(bytes.len() as u64).to_le_bytes())?;
+        let sha256 = Sha256::digest(bytes);
+        writer.write_all(&sha256)?;
     }
     for (address, length) in written_ranges {
         writer.write_all(&address.to_le_bytes())?;
@@ -123,7 +134,7 @@ fn write_blob(writer: &mut impl Write, bytes: &[u8]) -> io::Result<()> {
     writer.write_all(bytes)
 }
 
-fn write_surface(writer: &mut impl Write, address: u64, bytes: &[u8]) -> io::Result<()> {
+fn write_reader_range(writer: &mut impl Write, address: u64, bytes: &[u8]) -> io::Result<()> {
     writer.write_all(&address.to_le_bytes())?;
     write_blob(writer, bytes)
 }
@@ -155,8 +166,37 @@ fn read_blob(reader: &mut impl Read) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn read_surface(reader: &mut impl Read) -> io::Result<(u64, Vec<u8>)> {
+fn read_reader_range(reader: &mut impl Read) -> io::Result<(u64, Vec<u8>)> {
     Ok((read_u64(reader)?, read_blob(reader)?))
+}
+
+fn read_snapshot_digest(reader: &mut impl Read) -> io::Result<SnapshotDigest> {
+    let address = read_u64(reader)?;
+    let length = read_u64(reader)?;
+    if length > MAX_CAPTURE_BLOB_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "snapshot extent exceeds limit",
+        ));
+    }
+    let mut sha256 = [0; 32];
+    reader.read_exact(&mut sha256)?;
+    Ok(SnapshotDigest {
+        address,
+        length,
+        sha256,
+    })
+}
+
+fn snapshot_digests(snapshots: &Snapshots) -> Vec<SnapshotDigest> {
+    snapshots
+        .iter()
+        .map(|(address, bytes)| SnapshotDigest {
+            address: *address,
+            length: bytes.len() as u64,
+            sha256: Sha256::digest(bytes).into(),
+        })
+        .collect()
 }
 
 fn read_record(path: &Path) -> Result<Record, String> {
@@ -188,11 +228,11 @@ fn read_record(path: &Path) -> Result<Record, String> {
     }
     let mut reads = Vec::with_capacity(read_count);
     for _ in 0..read_count {
-        reads.push(read_surface(&mut file).map_err(|error| error.to_string())?);
+        reads.push(read_reader_range(&mut file).map_err(|error| error.to_string())?);
     }
     let mut snapshots = Vec::with_capacity(snapshot_count);
     for _ in 0..snapshot_count {
-        snapshots.push(read_surface(&mut file).map_err(|error| error.to_string())?);
+        snapshots.push(read_snapshot_digest(&mut file).map_err(|error| error.to_string())?);
     }
     let mut written_ranges = Vec::with_capacity(range_count);
     for _ in 0..range_count {
@@ -226,11 +266,11 @@ fn replay_record(path: &Path) -> Result<(), String> {
     let mut read_index = 0;
     let actual_snapshots = engine.execute(&record.words, &mut |address, length| {
         let Some((expected_address, bytes)) = record.reads.get(read_index) else {
-            return Err(format!("{} replay requested an extra surface read", path.display()));
+        return Err(format!("{} replay requested an extra reader range", path.display()));
         };
         if address != *expected_address || length != bytes.len() {
             return Err(format!(
-                "{} surface read {} differed: requested {address:#x}+{length:#x}, recorded {expected_address:#x}+{:#x}",
+                "{} reader range {} differed: requested {address:#x}+{length:#x}, recorded {expected_address:#x}+{:#x}",
                 path.display(),
                 read_index,
                 bytes.len(),
@@ -246,8 +286,8 @@ fn replay_record(path: &Path) -> Result<(), String> {
             record.reads.len(),
         ));
     }
-    if actual_snapshots != record.snapshots {
-        return Err(format!("{} replay snapshots differ", path.display()));
+    if snapshot_digests(&actual_snapshots) != record.snapshots {
+        return Err(format!("{} replay snapshot hashes differ", path.display()));
     }
     if engine.written_ranges() != record.written_ranges {
         return Err(format!("{} replay written ranges differ", path.display()));
@@ -278,4 +318,18 @@ pub(super) fn replay_directory(directory: &Path) -> Result<usize, String> {
         replay_record(path)?;
     }
     Ok(captures.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_record;
+
+    #[test]
+    fn snapshots_are_stored_as_digests() {
+        let snapshots = vec![(0x1000, vec![0xa5; 2 * 1024 * 1024])];
+        let mut capture = Vec::new();
+        write_record(&mut capture, &[], &[], &[], &snapshots, &[]).unwrap();
+
+        assert_eq!(capture.len(), 80);
+    }
 }
