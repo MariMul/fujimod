@@ -72,9 +72,8 @@ export function Workbench(props: {
   const cameras = () => props.model.cameras();
   // Follow the newest camera unless one is chosen; keep a chosen camera even once unplugged.
   createEffect(
-    () => cameras().map((camera) => camera.id),
-    (ids) => {
-      const current = selected();
+    () => ({ ids: cameras().map((camera) => camera.id), current: selected() }),
+    ({ ids, current }) => {
       if (!current || !ids.includes(current)) setSelected(ids.at(-1));
     },
   );
