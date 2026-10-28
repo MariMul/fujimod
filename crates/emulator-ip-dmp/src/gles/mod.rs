@@ -4,10 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 mod capture;
+mod draw_state;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu;
 mod raster;
 mod shader;
+use draw_state::DrawState;
 use shader::Vector;
 pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
@@ -299,7 +301,8 @@ impl Engine {
                     self.attribute_words.clear();
                     if self.attribute_cursor == 15 {
                         self.immediate.push(v);
-                        let n = (self.reg(0x402) >> 28) as usize + 1;
+                        let state = self.draw_state();
+                        let n = state.vertex.immediate_attribute_count as usize;
                         if n > 8 {
                             return Err(
                                 "DMP immediate attribute count exceeds permutation bank".into()
@@ -308,10 +311,10 @@ impl Engine {
                         if self.immediate.len() == n {
                             let mut inputs = self.attributes;
                             for (i, v) in self.immediate.iter().enumerate() {
-                                inputs[(self.reg(0x48b) >> (i * 4) & 15) as usize] = *v;
+                                inputs[state.vertex.input_map[i] as usize] = *v;
                             }
                             self.immediate.clear();
-                            self.vertex(&inputs, read, out)?;
+                            self.vertex(&inputs, &state, read, out)?;
                         }
                     } else {
                         *self
@@ -344,6 +347,7 @@ impl Engine {
                 }) {
                     return Err("DMP short index DMA".into());
                 }
+                let state = self.draw_state();
                 for n in 0..count {
                     let vertex = if let Some(ref bytes) = indices {
                         if index_addr >> 31 != 0 {
@@ -354,8 +358,8 @@ impl Engine {
                     } else {
                         n + self.reg(0x42a) as usize
                     };
-                    let inputs = self.fetch(vertex, read)?;
-                    self.vertex(&inputs, read, out)?;
+                    let inputs = self.fetch(vertex, &state, read)?;
+                    self.vertex(&inputs, &state, read, out)?;
                 }
             }
             0x45f | 0x431 if value == 1 => {
@@ -377,14 +381,16 @@ impl Engine {
         }
         Ok(())
     }
-    fn fetch(&self, vertex: usize, read: &mut Reader<'_>) -> Result<[Vector; 16], String> {
+    fn fetch(
+        &self,
+        vertex: usize,
+        state: &DrawState,
+        read: &mut Reader<'_>,
+    ) -> Result<[Vector; 16], String> {
         let mut slots = self.attributes;
-        for group in 0..8 {
-            let offset = self.reg(0x403 + group * 3) as u64;
-            let order = self.reg(0x404 + group * 3);
-            let extent = self.reg(0x405 + group * 3);
-            let count = extent >> 28;
-            let stride = (extent >> 16 & 4095) as usize;
+        for group in state.vertex.groups {
+            let count = group.attribute_count as u32;
+            let stride = group.stride;
             if count == 0 {
                 continue;
             }
@@ -394,8 +400,8 @@ impl Engine {
             if stride == 0 {
                 return Err("DMP zero vertex fetch stride".into());
             }
-            let address = self.reg(0x400) as u64 * 8
-                + offset
+            let address = state.vertex.base_address
+                + group.byte_offset
                 + (vertex
                     .checked_mul(stride)
                     .ok_or("DMP vertex offset overflow")? as u64);
@@ -404,8 +410,8 @@ impl Engine {
                 return Err("DMP short vertex DMA".into());
             }
             let mut at = 0;
-            for i in 0..count {
-                let slot = order >> (i * 4) & 15;
+            for i in 0..count as usize {
+                let slot = group.order >> (i * 4) & 15;
                 if slot >= 12 {
                     at = (at + 3) & !3;
                     at += (slot as usize - 11) * 4;
@@ -414,27 +420,24 @@ impl Engine {
                 if slot >= 8 {
                     return Err("DMP unsupported attribute format bank".into());
                 }
-                let format = self.reg(0x401) >> (slot * 4) & 15;
-                let components = (format >> 2) as usize + 1;
-                let kind = format & 3;
-                let width = if kind == 3 {
-                    4
-                } else if kind == 2 {
-                    2
-                } else {
-                    1
-                };
+                let format = state.vertex.formats[slot as usize];
+                let components = format.components as usize;
+                let width = format.bytes_per_component();
                 at = (at + width - 1) & !(width - 1);
                 let mut v = [0., 0., 0., 1.];
                 for component in v.iter_mut().take(components) {
                     let b = bytes
                         .get(at..at + width)
                         .ok_or("DMP vertex fetch exceeds stride")?;
-                    *component = match kind {
-                        0 => (b[0] as i8) as f32,
-                        1 => b[0] as f32,
-                        2 => i16::from_le_bytes(b.try_into().unwrap()) as f32,
-                        _ => f32::from_le_bytes(b.try_into().unwrap()),
+                    *component = match format.kind {
+                        draw_state::AttributeKind::Signed8 => (b[0] as i8) as f32,
+                        draw_state::AttributeKind::Unsigned8 => b[0] as f32,
+                        draw_state::AttributeKind::Signed16 => {
+                            i16::from_le_bytes(b.try_into().unwrap()) as f32
+                        }
+                        draw_state::AttributeKind::Float32 => {
+                            f32::from_le_bytes(b.try_into().unwrap())
+                        }
                     };
                     at += width;
                 }
@@ -443,29 +446,31 @@ impl Engine {
         }
         let mut inputs = [[0., 0., 0., 1.]; 16];
         for (i, v) in slots.iter().enumerate().take(8) {
-            inputs[(self.reg(0x48b) >> (i * 4) & 15) as usize] = *v;
+            inputs[state.vertex.input_map[i] as usize] = *v;
         }
         Ok(inputs)
     }
     fn vertex(
         &mut self,
         inputs: &[Vector; 16],
+        state: &DrawState,
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
         let vertex = shader::execute(self, inputs)?;
         self.vertices_executed += 1;
         self.last_output = Some(vertex);
-        let mode = self.reg(0x45e) >> 8 & 15;
+        let mode = state.raster.primitive_mode as u32;
         if mode == 8 {
-            return raster::point(self, &vertex, read, out);
+            return raster::point(state, &vertex, read, out);
         }
         self.vertices.push(vertex);
         let n = self.vertices.len();
         match mode {
             0 | 3 if n == 3 => {
                 raster::triangle(
-                    self,
+                    state,
+                    self.host_acceleration_enabled(),
                     [self.vertices[0], self.vertices[1], self.vertices[2]],
                     read,
                     out,
@@ -486,7 +491,7 @@ impl Engine {
                         self.vertices[n - 1],
                     ]
                 };
-                raster::triangle(self, t, read, out)?;
+                raster::triangle(state, self.host_acceleration_enabled(), t, read, out)?;
                 self.primitive_index += 1;
                 if n > 3 {
                     self.vertices.remove(0);
@@ -494,7 +499,8 @@ impl Engine {
             }
             2 if n >= 3 => {
                 raster::triangle(
-                    self,
+                    state,
+                    self.host_acceleration_enabled(),
                     [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]],
                     read,
                     out,
@@ -502,7 +508,7 @@ impl Engine {
                 self.vertices.remove(1);
             }
             4 | 5 if n == 2 => {
-                raster::line(self, [self.vertices[0], self.vertices[1]], read, out)?;
+                raster::line(state, [self.vertices[0], self.vertices[1]], read, out)?;
                 if mode == 4 {
                     self.vertices.clear();
                 } else {
