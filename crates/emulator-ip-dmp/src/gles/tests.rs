@@ -103,6 +103,50 @@ fn uploaded_mov_program_draws_triangle_with_exact_top_left_coverage() {
             .all(|p| *p == [0; 4] || *p == [255, 0, 0, 255])
     );
 }
+
+#[test]
+fn unused_nonfinite_uniform_words_survive_upload_checkpoint_and_draw() {
+    let mut words = setup();
+    pair(&mut words, 0x490, 0x80000006);
+    for value in [0x3f800000, 0x7fffffff, 0x7fffffff, 0x00001d00] {
+        pair(&mut words, 0x491, value);
+    }
+    for position in [
+        [-0.75, -0.75, 0., 1.],
+        [0.75, -0.75, 0., 1.],
+        [0., 0.75, 0., 1.],
+    ] {
+        upload(&mut words, 0x433, &packed(position), true);
+        upload(&mut words, 0x433, &packed([1., 0., 0., 1.]), true);
+    }
+
+    let mut engine = Engine::default();
+    let writes = engine
+        .execute(&words, &mut |a, n| {
+            assert_eq!(a, 0x10000);
+            Ok(vec![0; n])
+        })
+        .unwrap();
+    assert_eq!(
+        engine.uniforms[6],
+        [0x00001d00, 0x7fffffff, 0x7fffffff, 0x3f800000]
+    );
+    assert_eq!(
+        writes[0]
+            .1
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| **p == [255, 0, 0, 255])
+            .count(),
+        288
+    );
+
+    let checkpoint = serde_json::to_value(&engine).unwrap();
+    let restored: Engine = serde_json::from_value(checkpoint).unwrap();
+    assert_eq!(restored.uniforms[6], engine.uniforms[6]);
+}
+
 #[test]
 fn failed_list_rolls_back_program_registers_and_outputs() {
     let mut engine = Engine::default();

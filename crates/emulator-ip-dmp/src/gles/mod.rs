@@ -10,6 +10,7 @@ use shader::Vector;
 pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
+type Uniform = [u32; 4];
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Engine {
     #[serde(skip)]
@@ -22,7 +23,7 @@ pub struct Engine {
     regs: BTreeMap<u16, u32>,
     code: Vec<u32>,
     operands: Vec<u32>,
-    uniforms: Vec<Vector>,
+    uniforms: Vec<Uniform>,
     code_cursor: usize,
     operand_cursor: usize,
     uniform_cursor: u32,
@@ -46,7 +47,7 @@ impl Default for Engine {
             regs: BTreeMap::new(),
             code: vec![],
             operands: vec![],
-            uniforms: vec![[0.; 4]; 96],
+            uniforms: vec![[0; 4]; 96],
             code_cursor: 0,
             operand_cursor: 0,
             uniform_cursor: 0,
@@ -233,18 +234,15 @@ impl Engine {
                 let count = if self.uniform_cursor >> 31 != 0 { 4 } else { 3 };
                 if self.uniform_words.len() == count {
                     let slot = (self.uniform_cursor & 0x7fffffff) as usize;
-                    let v = if count == 3 {
-                        unpack(&self.uniform_words)
+                    let words = if count == 3 {
+                        unpack(&self.uniform_words).map(f32::to_bits)
                     } else {
-                        std::array::from_fn(|i| f32::from_bits(self.uniform_words[3 - i]))
+                        std::array::from_fn(|i| self.uniform_words[3 - i])
                     };
-                    if v.iter().any(|x| !x.is_finite()) {
-                        return Err("DMP nonfinite uniform upload is unsupported".into());
-                    }
                     *self
                         .uniforms
                         .get_mut(slot)
-                        .ok_or("DMP uniform upload outside bank")? = v;
+                        .ok_or("DMP uniform upload outside bank")? = words;
                     self.uniform_cursor += 1;
                     self.uniform_words.clear();
                 }
