@@ -1,45 +1,16 @@
 //! Host compute scan conversion. Integer edge equations match the CPU path;
 //! host handles and adapter selection never enter emulated checkpoints.
-use std::{
-    future::Future,
-    sync::{Arc, Mutex, OnceLock},
-    task::{Context, Poll, Wake},
-};
+use std::sync::{Mutex, OnceLock};
 use wgpu::util::DeviceExt;
-struct ThreadWake(std::thread::Thread);
-impl Wake for ThreadWake {
-    fn wake(self: Arc<Self>) {
-        self.0.unpark();
-    }
-}
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Arc::new(ThreadWake(std::thread::current())).into();
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(value) => return value,
-            Poll::Pending => std::thread::park(),
-        }
-    }
-}
 struct Gpu {
-    name: String,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
 }
 impl Gpu {
-    fn new() -> Option<Self> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let adapter =
-            block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).ok()?;
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
+    fn new(context: &crate::gpu::GpuContext) -> Option<Self> {
+        if context.adapter_device_type() == wgpu::DeviceType::Cpu {
             return None;
         }
-        let (device, queue) =
-            block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
+        let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DMP integer coverage"),
             source: wgpu::ShaderSource::Wgsl(include_str!("coverage.wgsl").into()),
@@ -52,36 +23,31 @@ impl Gpu {
             compilation_options: Default::default(),
             cache: None,
         });
-        Some(Self {
-            name: format!("{:?}: {}", info.backend, info.name),
-            device,
-            queue,
-            pipeline,
-        })
+        Some(Self { pipeline })
     }
-    fn coverage(&self, p: [i32; 16]) -> Result<Vec<u32>, String> {
+    fn coverage(&self, context: &crate::gpu::GpuContext, p: [i32; 16]) -> Result<Vec<u32>, String> {
+        let device = context.device();
+        let queue = context.queue();
         let count = (p[8] * p[9]) as usize;
         let data: Vec<_> = p.into_iter().flat_map(i32::to_le_bytes).collect();
-        let parameters = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: None,
-                contents: &data,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-        let output = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let parameters = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: &data,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let output = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: (count * 4) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        let download = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let download = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: (count * 4) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.pipeline.get_bind_group_layout(0),
             entries: &[
@@ -95,7 +61,7 @@ impl Gpu {
                 },
             ],
         });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&Default::default());
             pass.set_pipeline(&self.pipeline);
@@ -103,14 +69,14 @@ impl Gpu {
             pass.dispatch_workgroups((count as u32).div_ceil(64), 1, 1);
         }
         encoder.copy_buffer_to_buffer(&output, 0, &download, 0, (count * 4) as u64);
-        self.queue.submit([encoder.finish()]);
+        queue.submit([encoder.finish()]);
         let (sender, receiver) = std::sync::mpsc::channel();
         download
             .slice(..)
             .map_async(wgpu::MapMode::Read, move |result| {
                 let _ = sender.send(result);
             });
-        self.device
+        device
             .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|e| format!("DMP host GPU polling: {e}"))?;
         receiver
@@ -146,7 +112,12 @@ pub(super) fn coverage(
     if q.iter().flatten().any(|v| !(0..=16383).contains(v)) || x1 * 16 > 16383 || y1 * 16 > 16383 {
         return Ok(None);
     }
-    let Some(gpu) = GPU.get_or_init(|| Gpu::new().map(Mutex::new)) else {
+    let context = match crate::gpu::context() {
+        Ok(context) => context,
+        Err(error) if error.starts_with("DMP host GPU adapter:") => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let Some(gpu) = GPU.get_or_init(|| Gpu::new(context).map(Mutex::new)) else {
         return Ok(None);
     };
     let p = [
@@ -169,10 +140,13 @@ pub(super) fn coverage(
     ];
     gpu.lock()
         .map_err(|_| "DMP host GPU lock poisoned")?
-        .coverage(p)
+        .coverage(context, p)
         .map(Some)
 }
 
 pub(super) fn backend_name() -> Option<String> {
-    GPU.get()?.as_ref()?.lock().ok().map(|gpu| gpu.name.clone())
+    GPU.get()?.as_ref()?;
+    crate::gpu::context()
+        .ok()
+        .map(|context| context.adapter_name().to_owned())
 }

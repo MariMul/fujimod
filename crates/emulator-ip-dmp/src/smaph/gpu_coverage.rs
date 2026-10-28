@@ -4,54 +4,19 @@
 //! use host multisampling positions.
 
 use super::scanline;
-use std::{
-    future::Future,
-    sync::{Arc, OnceLock},
-    task::{Context, Poll, Wake},
-};
+use std::sync::OnceLock;
 use wgpu::util::DeviceExt;
 
 pub type Point = [f64; 2];
 
-struct ThreadWake(std::thread::Thread);
-
-impl Wake for ThreadWake {
-    fn wake(self: Arc<Self>) {
-        self.0.unpark();
-    }
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = Arc::new(ThreadWake(std::thread::current())).into();
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(value) => return value,
-            Poll::Pending => std::thread::park(),
-        }
-    }
-}
-
 struct Gpu {
     name: String,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
 }
 
 impl Gpu {
-    fn new() -> Result<Option<Self>, String> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let adapter =
-            match block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) {
-                Ok(adapter) => adapter,
-                Err(wgpu::RequestAdapterError::NotFound { .. }) => return Ok(None),
-                Err(error) => return Err(format!("SMAPH coverage adapter: {error}")),
-            };
-        let info = adapter.get_info();
-        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .map_err(|error| format!("SMAPH coverage device: {error}"))?;
+    fn new(context: &crate::gpu::GpuContext) -> Self {
+        let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SMAPH path coverage"),
             source: wgpu::ShaderSource::Wgsl(include_str!("gpu_coverage.wgsl").into()),
@@ -64,15 +29,19 @@ impl Gpu {
             compilation_options: Default::default(),
             cache: None,
         });
-        Ok(Some(Self {
-            name: format!("{:?}: {} ({:?})", info.backend, info.name, info.device_type),
-            device,
-            queue,
+        Self {
+            name: context.adapter_name().to_owned(),
             pipeline,
-        }))
+        }
     }
 
-    fn coverage_batch(&self, inputs: &[scanline::CoverageInput]) -> Result<Vec<Vec<u32>>, String> {
+    fn coverage_batch(
+        &self,
+        context: &crate::gpu::GpuContext,
+        inputs: &[scanline::CoverageInput],
+    ) -> Result<Vec<Vec<u32>>, String> {
+        let device = context.device();
+        let queue = context.queue();
         if inputs.is_empty() {
             return Ok(Vec::new());
         }
@@ -148,7 +117,7 @@ impl Gpu {
         let output_bytes = output_count
             .checked_mul(std::mem::size_of::<u32>())
             .ok_or("SMAPH coverage output buffer size overflow")?;
-        let limits = self.device.limits();
+        let limits = device.limits();
         if edge_bytes > limits.max_storage_buffer_binding_size as usize
             || job_bytes > limits.max_storage_buffer_binding_size as usize
             || output_bytes > limits.max_storage_buffer_binding_size as usize
@@ -167,33 +136,29 @@ impl Gpu {
             }
         }
         let job_bytes_data: Vec<u8> = jobs.into_iter().flat_map(u32::to_le_bytes).collect();
-        let jobs_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("SMAPH coverage jobs"),
-                contents: &job_bytes_data,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-        let edges_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("SMAPH coverage edges"),
-                contents: &edge_bytes_data,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
-        let output = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let jobs_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SMAPH coverage jobs"),
+            contents: &job_bytes_data,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let edges_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SMAPH coverage edges"),
+            contents: &edge_bytes_data,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let output = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SMAPH coverage output"),
             size: output_bytes as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        let download = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let download = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SMAPH coverage readback"),
             size: output_bytes as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("SMAPH coverage bindings"),
             layout: &self.pipeline.get_bind_group_layout(0),
             entries: &[
@@ -211,7 +176,7 @@ impl Gpu {
                 },
             ],
         });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&Default::default());
             pass.set_pipeline(&self.pipeline);
@@ -223,7 +188,7 @@ impl Gpu {
             );
         }
         encoder.copy_buffer_to_buffer(&output, 0, &download, 0, output_bytes as u64);
-        self.queue.submit([encoder.finish()]);
+        queue.submit([encoder.finish()]);
 
         let (sender, receiver) = std::sync::mpsc::channel();
         download
@@ -231,7 +196,7 @@ impl Gpu {
             .map_async(wgpu::MapMode::Read, move |result| {
                 let _ = sender.send(result);
             });
-        self.device
+        device
             .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|error| format!("SMAPH coverage GPU poll: {error}"))?;
         receiver
@@ -268,7 +233,12 @@ impl Gpu {
 static GPU: OnceLock<Result<Option<Gpu>, String>> = OnceLock::new();
 
 fn shared_gpu() -> Result<Option<&'static Gpu>, String> {
-    match GPU.get_or_init(Gpu::new) {
+    let context = match crate::gpu::context() {
+        Ok(context) => context,
+        Err(error) if error.starts_with("DMP host GPU adapter:") => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    match GPU.get_or_init(|| Ok(Some(Gpu::new(context)))) {
         Ok(Some(gpu)) => Ok(Some(gpu)),
         Ok(None) => Ok(None),
         Err(error) => Err(error.clone()),
@@ -314,9 +284,8 @@ pub(super) fn coverage_batch(inputs: &[scanline::CoverageInput]) -> Result<Vec<V
             .map(|input| Ok(vec![0; input.output_len()?]))
             .collect();
     }
-    shared_gpu()?
-        .ok_or_else(|| "SMAPH coverage has no wgpu adapter".to_owned())?
-        .coverage_batch(inputs)
+    let gpu = shared_gpu()?.ok_or_else(|| "SMAPH coverage has no wgpu adapter".to_owned())?;
+    gpu.coverage_batch(crate::gpu::context()?, inputs)
 }
 
 #[cfg(test)]

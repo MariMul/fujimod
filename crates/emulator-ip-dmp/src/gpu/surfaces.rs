@@ -9,7 +9,7 @@
 use std::{
     collections::HashMap,
     future::Future,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
     task::{Context, Poll, Wake},
 };
 
@@ -139,6 +139,7 @@ impl GpuSurface {
 pub struct GpuContext {
     gpu: Gpu,
     surfaces: Mutex<HashMap<SurfaceKey, Arc<GpuSurface>>>,
+    submission_lock: Mutex<()>,
 }
 
 impl GpuContext {
@@ -146,7 +147,15 @@ impl GpuContext {
         Ok(Self {
             gpu: Gpu::new()?,
             surfaces: Mutex::new(HashMap::new()),
+            submission_lock: Mutex::new(()),
         })
+    }
+
+    /// Serialize a multi-pass submission that updates resident targets.
+    pub fn acquire(&self) -> Result<MutexGuard<'_, ()>, String> {
+        self.submission_lock
+            .lock()
+            .map_err(|_| "DMP GPU submission lock poisoned".into())
     }
 
     /// Get or create a resident surface, synchronizing it when guest memory changed.
@@ -308,8 +317,16 @@ impl GpuContext {
         &self.gpu.queue
     }
 
+    pub fn submit(&self, command_buffer: wgpu::CommandBuffer) -> wgpu::SubmissionIndex {
+        self.gpu.queue.submit([command_buffer])
+    }
+
     pub fn adapter_name(&self) -> &str {
         &self.gpu.name
+    }
+
+    pub fn adapter_device_type(&self) -> wgpu::DeviceType {
+        self.gpu.device_type
     }
 
     pub fn accumulate_draw_mask(&self, key: SurfaceKey) -> Result<(), String> {
@@ -335,6 +352,7 @@ pub fn context() -> Result<&'static GpuContext, String> {
 
 struct Gpu {
     name: String,
+    device_type: wgpu::DeviceType,
     device: wgpu::Device,
     queue: wgpu::Queue,
     upload_pipeline: wgpu::ComputePipeline,
@@ -381,6 +399,7 @@ impl Gpu {
         let readback_pipeline = pipeline("DMP surface readback", "readback_morton");
         Ok(Self {
             name: format!("{:?}: {} ({:?})", info.backend, info.name, info.device_type),
+            device_type: info.device_type,
             device,
             queue,
             upload_pipeline,
@@ -867,7 +886,7 @@ mod tests {
         ];
         for (index, format) in formats.into_iter().enumerate() {
             let key = SurfaceKey {
-                guest_address: 0x10000 + index as u64 * 0x1000,
+                guest_address: 0x100000 + index as u64 * 0x1000,
                 format,
                 extent: EXTENT,
                 layout: SurfaceLayout::Morton8x8,
@@ -893,7 +912,7 @@ mod tests {
         };
         let format = SurfaceFormat::D24S8;
         let key = SurfaceKey {
-            guest_address: 0x24000,
+            guest_address: 0x124000,
             format,
             extent: EXTENT,
             layout: SurfaceLayout::Morton8x8,
@@ -942,7 +961,7 @@ mod tests {
             return;
         };
         let key = SurfaceKey {
-            guest_address: 0x28000,
+            guest_address: 0x128000,
             format: SurfaceFormat::Rgba8,
             extent: EXTENT,
             layout: SurfaceLayout::Morton8x8,
@@ -969,7 +988,7 @@ mod tests {
             height: 7,
         };
         let key = SurfaceKey {
-            guest_address: 0x2c000,
+            guest_address: 0x12c000,
             format: SurfaceFormat::Rgba8,
             extent,
             layout: SurfaceLayout::Linear,
@@ -981,5 +1000,96 @@ mod tests {
             .get_or_create_target(key, Some(&guest_bytes))
             .unwrap();
         assert_eq!(context.readback(key).unwrap().bytes, guest_bytes);
+    }
+
+    #[test]
+    fn submitted_gpu_work_updates_resident_bytes_and_write_ranges() {
+        let Some(context) = context_or_skip() else {
+            return;
+        };
+        let extent = SurfaceExtent {
+            width: 10,
+            height: 7,
+        };
+        let key = SurfaceKey {
+            guest_address: 0x130000,
+            format: SurfaceFormat::Rgba8,
+            extent,
+            layout: SurfaceLayout::Linear,
+        };
+        let surface = context
+            .get_or_create_target(
+                key,
+                Some(&vec![0; extent.width as usize * extent.height as usize * 4]),
+            )
+            .unwrap();
+        context.clear_write_masks(key).unwrap();
+        let shader = context
+            .device()
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("resident target write test"),
+                source: wgpu::ShaderSource::Wgsl(
+                    r#"
+                    @group(0) @binding(0) var surface: texture_storage_2d<r32uint, write>;
+                    @group(0) @binding(1) var<storage, read_write> masks: array<atomic<u32>>;
+                    @compute @workgroup_size(1)
+                    fn main() {
+                        textureStore(surface, vec2<i32>(3, 4), vec4<u32>(0x44332211u, 0u, 0u, 0u));
+                        atomicOr(&masks[43u], 5u);
+                    }
+                    "#
+                    .into(),
+                ),
+            });
+        let pipeline = context
+            .device()
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("resident target write test"),
+                layout: None,
+                module: &shader,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        let bindings = context
+            .device()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("resident target write test"),
+                layout: &pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(
+                            &surface.texture().create_view(&Default::default()),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: surface.write_mask_accumulator().as_entire_binding(),
+                    },
+                ],
+            });
+        let mut encoder = context.device().create_command_encoder(&Default::default());
+        {
+            let mut pass = encoder.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bindings, &[]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
+        context.submit(encoder.finish());
+
+        let readback = context.readback(key).unwrap();
+        let pixel_offset = (4 * extent.width as usize + 3) * 4;
+        assert_eq!(
+            &readback.bytes[pixel_offset..pixel_offset + 4],
+            &[0x11, 0x22, 0x33, 0x44]
+        );
+        assert_eq!(
+            readback.written_ranges,
+            vec![
+                (key.guest_address + pixel_offset as u64, 1),
+                (key.guest_address + pixel_offset as u64 + 2, 1)
+            ]
+        );
     }
 }

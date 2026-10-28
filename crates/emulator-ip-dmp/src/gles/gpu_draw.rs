@@ -74,6 +74,7 @@ pub(super) fn render(
     }
 
     let cache = context()?;
+    let _submission = cache.acquire()?;
     let mut surfaces = BTreeMap::<u64, SurfaceKey>::new();
     for (primitive, _) in &geometry {
         let state = &primitive.state;

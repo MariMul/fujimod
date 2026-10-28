@@ -8,11 +8,7 @@
 use super::Engine;
 #[cfg(test)]
 use super::raster;
-use std::{
-    future::Future,
-    sync::{Mutex, OnceLock},
-    task::{Context, Poll, Wake},
-};
+use std::sync::{Mutex, OnceLock};
 use wgpu::util::DeviceExt;
 
 const REGISTER_WORDS: usize = 0x500;
@@ -40,39 +36,13 @@ pub(super) struct FragmentCase<'a> {
     pub input: FragmentInput,
 }
 
-struct ThreadWake(std::thread::Thread);
-
-impl Wake for ThreadWake {
-    fn wake(self: std::sync::Arc<Self>) {
-        self.0.unpark();
-    }
-}
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let waker = std::sync::Arc::new(ThreadWake(std::thread::current())).into();
-    let mut context = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(future);
-    loop {
-        match future.as_mut().poll(&mut context) {
-            Poll::Ready(value) => return value,
-            Poll::Pending => std::thread::park(),
-        }
-    }
-}
-
 struct Gpu {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
 }
 
 impl Gpu {
-    fn new() -> Result<Self, String> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .map_err(|error| format!("DMP fragment adapter: {error}"))?;
-        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
-            .map_err(|error| format!("DMP fragment device: {error}"))?;
+    fn new(context: &crate::gpu::GpuContext) -> Result<Self, String> {
+        let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DMP fragment stage"),
             source: wgpu::ShaderSource::Wgsl(include_str!("gpu_fragment.wgsl").into()),
@@ -85,14 +55,17 @@ impl Gpu {
             compilation_options: Default::default(),
             cache: None,
         });
-        Ok(Self {
-            device,
-            queue,
-            pipeline,
-        })
+        Ok(Self { pipeline })
     }
 
-    fn dispatch(&self, cases: &[FragmentCase<'_>], memory: &[u8]) -> Result<Vec<u8>, String> {
+    fn dispatch(
+        &self,
+        context: &crate::gpu::GpuContext,
+        cases: &[FragmentCase<'_>],
+        memory: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        let device = context.device();
+        let queue = context.queue();
         if cases.is_empty() || memory.is_empty() || !memory.len().is_multiple_of(4) {
             return Err("DMP fragment input extent is invalid".into());
         }
@@ -100,7 +73,7 @@ impl Gpu {
             .len()
             .checked_mul(CASE_WORDS)
             .ok_or("DMP fragment parameter extent overflow")?;
-        let limits = self.device.limits();
+        let limits = device.limits();
         if parameter_words * 4 > limits.max_storage_buffer_binding_size as usize
             || memory.len() > limits.max_storage_buffer_binding_size as usize
             || memory.len() as u64 > limits.max_buffer_size
@@ -145,44 +118,38 @@ impl Gpu {
             ]);
         }
         let parameter_bytes = encode_words(&parameters);
-        let parameter_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP fragment parameters"),
-                contents: &parameter_bytes,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
+        let parameter_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DMP fragment parameters"),
+            contents: &parameter_bytes,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
         let memory_words: Vec<u32> = memory
             .chunks_exact(4)
             .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
             .collect();
-        let memory_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP fragment guest memory"),
-                contents: &encode_words(&memory_words),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            });
-        let status_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP fragment status"),
-                contents: &encode_words(&vec![0; cases.len()]),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            });
-        let download = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let memory_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DMP fragment guest memory"),
+            contents: &encode_words(&memory_words),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        });
+        let status_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("DMP fragment status"),
+            contents: &encode_words(&vec![0; cases.len()]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        });
+        let download = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("DMP fragment readback"),
             size: memory.len() as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let status_download = self.device.create_buffer(&wgpu::BufferDescriptor {
+        let status_download = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("DMP fragment status readback"),
             size: (cases.len() * 4) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("DMP fragment bindings"),
             layout: &self.pipeline.get_bind_group_layout(0),
             entries: &[
@@ -200,7 +167,7 @@ impl Gpu {
                 },
             ],
         });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let mut encoder = device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&Default::default());
             pass.set_pipeline(&self.pipeline);
@@ -215,14 +182,14 @@ impl Gpu {
             0,
             (cases.len() * 4) as u64,
         );
-        self.queue.submit([encoder.finish()]);
+        queue.submit([encoder.finish()]);
         let (sender, receiver) = std::sync::mpsc::channel();
         download
             .slice(..)
             .map_async(wgpu::MapMode::Read, move |result| {
                 let _ = sender.send(result);
             });
-        self.device
+        device
             .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|error| format!("DMP fragment GPU polling: {error}"))?;
         receiver
@@ -242,7 +209,7 @@ impl Gpu {
             .map_async(wgpu::MapMode::Read, move |result| {
                 let _ = sender.send(result);
             });
-        self.device
+        device
             .poll(wgpu::PollType::wait_indefinitely())
             .map_err(|error| format!("DMP fragment status polling: {error}"))?;
         receiver
@@ -296,12 +263,13 @@ static GPU: OnceLock<Result<Mutex<Gpu>, String>> = OnceLock::new();
 /// `memory` is indexed by the DMP's byte addresses, as it is by the CPU
 /// sampler and target reader. Returned bytes include any color/depth writes.
 pub(super) fn dispatch(cases: &[FragmentCase<'_>], memory: &[u8]) -> Result<Vec<u8>, String> {
-    let gpu = GPU.get_or_init(|| Gpu::new().map(Mutex::new));
+    let context = crate::gpu::context()?;
+    let gpu = GPU.get_or_init(|| Gpu::new(context).map(Mutex::new));
     match gpu {
         Ok(gpu) => gpu
             .lock()
             .map_err(|_| "DMP fragment GPU lock poisoned")?
-            .dispatch(cases, memory),
+            .dispatch(context, cases, memory),
         Err(error) => Err(error.clone()),
     }
 }
@@ -345,14 +313,18 @@ mod tests {
     }
 
     fn skip_without_adapter() -> bool {
-        match GPU.get_or_init(|| Gpu::new().map(Mutex::new)) {
-            Ok(_) => false,
-            Err(error) if error.starts_with("DMP fragment adapter:") => {
+        let context = match crate::gpu::context() {
+            Ok(context) => context,
+            Err(error) if error.starts_with("DMP host GPU adapter:") => {
                 eprintln!(
                     "skipping DMP fragment test because no host GPU adapter is available: {error}"
                 );
-                true
+                return true;
             }
+            Err(error) => panic!("DMP fragment GPU setup failed: {error}"),
+        };
+        match GPU.get_or_init(|| Gpu::new(context).map(Mutex::new)) {
+            Ok(_) => false,
             Err(error) => panic!("DMP fragment GPU setup failed: {error}"),
         }
     }
