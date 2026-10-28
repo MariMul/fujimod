@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { Show, createSignal, untrack } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
@@ -254,7 +255,10 @@ export function GettingStarted(props: {
           </div>
         </Item>
         <Item number={4} state={restarted() ? 'done' : 'todo'}>
-          <p class="gs-note">Remove the battery, reinsert it, switch on and reconnect.</p>
+          <p class="gs-note">
+            <BatteryCycleIcon />
+            Remove and reinsert the battery, then switch on and reconnect.
+          </p>
         </Item>
         <Item number={5} state="todo">
           <button

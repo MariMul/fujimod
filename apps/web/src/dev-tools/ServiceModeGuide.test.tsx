@@ -146,6 +146,10 @@ test('Disable debug mode persists debug access off for the camera firmware', asy
       flush();
       expect(p.host.textContent).toContain('Debug mode is off.');
     });
+    expect(p.host.querySelector('.dm-ok')?.textContent).toContain(
+      'Remove and reinsert the battery, then switch the camera on.',
+    );
+    expect(p.host.querySelector('.dm-ok .battery-cycle-icon')).not.toBeNull();
     expect(session.leaveDebugMode).toHaveBeenCalledWith(table, 'x70-110', 'a'.repeat(64));
   } finally {
     p.dispose();
@@ -166,6 +170,10 @@ test('the service guide connects without selecting firmware or writing anything'
     expect(p.host.querySelector('[data-part="shutter"] [data-action="full"].on')).not.toBeNull();
     expect(p.host.querySelector('[aria-label="USB connected"]')).not.toBeNull();
     expect(p.host.textContent).toContain('do not use the OFF switch');
+    expect(p.host.querySelector('.dm-entry li:first-child')?.textContent).toContain(
+      'Switch the camera OFF, then remove and reinsert the battery.',
+    );
+    expect(p.host.querySelector('.dm-entry .battery-cycle-icon')).not.toBeNull();
     expect(p.host.textContent).not.toMatch(/green|lamp|LED/);
     expect(p.host.querySelector('.dm input[type=checkbox]')).toBeNull();
     const connect = vi.spyOn(p.model, 'connectUsb');

@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import {
   Match,
   Show,
@@ -197,8 +198,9 @@ export function Workbench(props: {
           <div class="wb-service" role="alert">
             <strong>Service mode</strong>
             <span>
-              Switching the camera off in service mode restores factory settings. Remove the battery
-              to leave service mode.
+              Switching the camera off in service mode restores factory settings.{' '}
+              <BatteryCycleIcon />
+              Remove the battery to leave service mode.
             </span>
           </div>
         </Show>

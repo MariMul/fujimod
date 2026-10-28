@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { For, Match, Show, Switch, createEffect, createSignal } from 'solid-js';
 import { serviceModeControls, serviceModeEntry } from './service-mode-entry';
@@ -91,7 +92,12 @@ export function ServiceModeGuide(props: {
               Restart into service mode
             </h1>
             <ol class="dm-entry">
-              <li>{serviceModeEntry[0]}</li>
+              <li>
+                <span>
+                  <BatteryCycleIcon />
+                  {serviceModeEntry[0]}
+                </span>
+              </li>
               <li>
                 <PowerComboKeys controls={serviceModeControls} modes={['service']} />
               </li>
@@ -99,8 +105,10 @@ export function ServiceModeGuide(props: {
             </ol>
             <div class="dm-warning" role="note">
               <strong>In service mode, do not use the OFF switch.</strong>
-              Switching off in service mode restores factory settings. To restart, remove the
-              battery.
+              <span>
+                Switching off in service mode restores factory settings. <BatteryCycleIcon />
+                To restart, remove and reinsert the battery.
+              </span>
             </div>
             <div class="dm-actions">
               <button
