@@ -1,0 +1,552 @@
+use super::bus::{Bus, Mode};
+use super::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+use super::memory::BusMapping;
+use super::preservation::{
+    PreservationBusSource, PreservationFault, PreservationState, PreservationViolation,
+};
+use super::*;
+use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
+
+fn board(alias: bool) -> Board {
+    let mut mappings = vec![MemoryMap {
+        core: 0,
+        address: 0x10000,
+        physical: 0x10000,
+        size: 0x4000,
+        permissions: 7,
+    }];
+    if alias {
+        mappings.push(MemoryMap {
+            core: 0,
+            address: 0x20000,
+            physical: 0x10000,
+            size: 0x4000,
+            permissions: 3,
+        });
+    }
+    Graph {
+        processors: vec![Processor {
+            model: Model::CortexR5F,
+            registers: vec![(Register::Pc, 0x10000)],
+            released: true,
+            mprofile: None,
+            rprofile: Some(Default::default()),
+        }],
+        ram: vec![Ram {
+            base: 0x10000,
+            size: 0x4000,
+        }],
+        dma_mappings: vec![BusMapping::ram(0x10000, 0x4000)],
+        decoders: vec![],
+        mappings,
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    }
+    .build(
+        Options {
+            engine: Engine::Unicorn,
+            translation_cache_bytes: 1 << 20,
+        },
+        Bus::new(Mode::Strict),
+        None,
+    )
+    .unwrap()
+}
+
+fn permissioned_board() -> Board {
+    Graph {
+        processors: vec![Processor {
+            model: Model::CortexR5F,
+            registers: vec![(Register::Pc, 0x10000)],
+            released: true,
+            mprofile: None,
+            rprofile: Some(Default::default()),
+        }],
+        ram: vec![Ram {
+            base: 0x10000,
+            size: 0x4000,
+        }],
+        dma_mappings: vec![BusMapping::ram(0x10000, 0x4000)],
+        decoders: vec![],
+        mappings: vec![
+            MemoryMap {
+                core: 0,
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x1000,
+                permissions: 7,
+            },
+            MemoryMap {
+                core: 0,
+                address: 0x11000,
+                physical: 0x11000,
+                size: 0x1000,
+                permissions: 2,
+            },
+            MemoryMap {
+                core: 0,
+                address: 0x12000,
+                physical: 0x11000,
+                size: 0x1000,
+                permissions: 7,
+            },
+        ],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    }
+    .build(
+        Options {
+            engine: Engine::Unicorn,
+            translation_cache_bytes: 1 << 20,
+        },
+        Bus::new(Mode::Strict),
+        None,
+    )
+    .unwrap()
+}
+
+fn two_core_board() -> Board {
+    Graph {
+        processors: vec![
+            Processor {
+                model: Model::CortexR5F,
+                registers: vec![(Register::Pc, 0x10000)],
+                released: true,
+                mprofile: None,
+                rprofile: Some(Default::default()),
+            },
+            Processor {
+                model: Model::CortexR5F,
+                registers: vec![(Register::Pc, 0x10000)],
+                released: true,
+                mprofile: None,
+                rprofile: Some(Default::default()),
+            },
+        ],
+        ram: vec![Ram {
+            base: 0x10000,
+            size: 0x4000,
+        }],
+        dma_mappings: vec![BusMapping::ram(0x10000, 0x4000)],
+        decoders: vec![],
+        mappings: vec![
+            MemoryMap {
+                core: 0,
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x1000,
+                permissions: 7,
+            },
+            MemoryMap {
+                core: 1,
+                address: 0x10000,
+                physical: 0x11000,
+                size: 0x1000,
+                permissions: 7,
+            },
+        ],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    }
+    .build(
+        Options {
+            engine: Engine::Unicorn,
+            translation_cache_bytes: 1 << 20,
+        },
+        Bus::new(Mode::Strict),
+        None,
+    )
+    .unwrap()
+}
+
+fn code(board: &Board, words: &[u32]) {
+    board
+        .cpu(0)
+        .unwrap()
+        .write_memory(
+            0x10000,
+            &words
+                .iter()
+                .flat_map(|word| word.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+}
+
+fn data(board: &Board, address: u64, bytes: &[u8]) {
+    board.cpu(0).unwrap().write_memory(address, bytes).unwrap();
+}
+
+fn address(board: &Board, value: u32) {
+    board
+        .write_register(0, Register::Arm32(arm::Register::R(1)), u64::from(value))
+        .unwrap();
+}
+
+fn run(board: &mut Board, instructions: u64) {
+    board.run_for_instructions(instructions, 1).unwrap();
+}
+
+fn bytes(board: &Board, address: u64, count: usize) -> Vec<u8> {
+    let mut bytes = vec![0; count];
+    board.read_memory(0, address, &mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn identity_store_counts_without_a_violation() {
+    let mut board = board(false);
+    code(&board, &[0xe5910000, 0xe5810000, 0xeafffffe]);
+    data(&board, 0x10080, &[1, 2, 3, 4]);
+    address(&board, 0x10080);
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    run(&mut board, 3);
+    let state = preservation.state();
+    assert_eq!(state.ranges, vec![(0x10080, 0x10090)]);
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (1, 0)
+    );
+    assert_eq!((state.host_writes, state.model_bus_writes), (0, 0));
+    assert_eq!(state.violation, None);
+    assert_eq!(bytes(&board, 0x10080, 4), vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn transient_change_and_restore_reports_the_first_store() {
+    let mut board = board(false);
+    code(
+        &board,
+        &[
+            0xe3a00001,
+            0xe5810000,
+            0xe3a00000,
+            0xe5810000,
+            0xeafffffe,
+        ],
+    );
+    data(&board, 0x10080, &[0; 4]);
+    address(&board, 0x10080);
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    run(&mut board, 5);
+    assert_eq!(bytes(&board, 0x10080, 4), vec![0; 4]);
+    let state = preservation.state();
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (0, 2)
+    );
+    let PreservationViolation::CpuChange {
+        core,
+        pc,
+        address,
+        physical,
+        size,
+        before,
+        after,
+        ..
+    } = state.violation.unwrap()
+    else {
+        panic!("expected a changed CPU store");
+    };
+    assert_eq!((core, pc, address, physical), (0, 0x10004, 0x10080, 0x10080));
+    assert_eq!(size, 4);
+    assert_eq!(before.as_slice(), &[0u8, 0, 0, 0][..]);
+    assert_eq!(after.as_slice(), &[1u8, 0, 0, 0][..]);
+}
+
+#[test]
+fn partial_overlap_compares_only_the_protected_intersection() {
+    let mut unchanged = board(false);
+    code(
+        &unchanged,
+        &[0xe30c0cdd, 0xe34b0baa, 0xe5810000, 0xeafffffe],
+    );
+    data(&unchanged, 0x10080, &[0x11, 0x22, 0xaa, 0xbb]);
+    address(&unchanged, 0x10080);
+    let preservation = unchanged
+        .preservation_begin(vec![(0x10082, 0x10090)])
+        .unwrap();
+    run(&mut unchanged, 4);
+    assert_eq!(
+        bytes(&unchanged, 0x10080, 4),
+        vec![0xdd, 0xcc, 0xaa, 0xbb]
+    );
+    let state = preservation.state();
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (1, 0)
+    );
+    assert_eq!(state.violation, None);
+
+    let mut changed = board(false);
+    code(
+        &changed,
+        &[0xe30c0cdd, 0xe34b0bab, 0xe5810000, 0xeafffffe],
+    );
+    data(&changed, 0x10080, &[0x11, 0x22, 0xaa, 0xbb]);
+    address(&changed, 0x10080);
+    let preservation = changed
+        .preservation_begin(vec![(0x10082, 0x10090)])
+        .unwrap();
+    run(&mut changed, 4);
+    let state = preservation.state();
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (0, 1)
+    );
+    let PreservationViolation::CpuChange {
+        address,
+        physical,
+        size,
+        before,
+        after,
+        ..
+    } = state.violation.unwrap()
+    else {
+        panic!("expected a changed CPU store");
+    };
+    assert_eq!((address, physical, size), (0x10082, 0x10082, 2));
+    assert_eq!(before.as_slice(), &[0xaau8, 0xbb][..]);
+    assert_eq!(after.as_slice(), &[0xabu8, 0xbb][..]);
+}
+
+#[test]
+fn alias_view_store_is_observed_as_the_protected_physical_bytes() {
+    let mut board = board(true);
+    code(&board, &[0xe3a00001, 0xe5810000, 0xeafffffe]);
+    data(&board, 0x10080, &[0; 4]);
+    address(&board, 0x20080);
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    run(&mut board, 3);
+    let state = preservation.state();
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (0, 1)
+    );
+    let PreservationViolation::CpuChange {
+        address, physical, ..
+    } = state.violation.unwrap()
+    else {
+        panic!("expected a changed CPU store");
+    };
+    assert_eq!((address, physical), (0x20080, 0x10080));
+}
+
+#[test]
+fn host_and_model_bus_writes_are_unverifiable() {
+    let board = board(false);
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    board.write_physical(0x10080, &[9]).unwrap();
+    board.write_memory(0, 0x10084, &[8]).unwrap();
+    {
+        let state = board.state.borrow();
+        board
+            .physical_memory
+            .write_dma(&board.cpus, &state.exclusive, 0x10088, &[7])
+            .unwrap();
+    }
+    let state = preservation.state();
+    assert_eq!((state.host_writes, state.model_bus_writes), (2, 1));
+    let PreservationViolation::UnverifiableWrite {
+        source,
+        address,
+        physical,
+        size,
+    } = state.violation.unwrap()
+    else {
+        panic!("expected an unverifiable write");
+    };
+    assert_eq!(source, PreservationBusSource::HostWrite);
+    assert_eq!((address, physical, size), (0x10080, 0x10080, 1));
+}
+
+#[test]
+fn integrity_fault_dominates_an_earlier_cpu_change() {
+    let mut board = permissioned_board();
+    code(
+        &board,
+        &[
+            0xe3a00001,
+            0xe3021000,
+            0xe3401001,
+            0xe5810000,
+            0xe3011000,
+            0xe5810000,
+            0xeafffffe,
+        ],
+    );
+    data(&board, 0x12000, &[0; 4]);
+    let preservation = board
+        .preservation_begin(vec![(0x11000, 0x11020)])
+        .unwrap();
+    run(&mut board, 7);
+    let state = preservation.state();
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (0, 1)
+    );
+    assert_eq!(
+        state.violation,
+        Some(PreservationViolation::IntegrityFault {
+            reason: PreservationFault::UnreadablePreimage
+        })
+    );
+}
+
+#[test]
+fn dropping_preservation_removes_hooks_and_rearms() {
+    let mut board = board(false);
+    code(&board, &[0xe5910000, 0xe5810000, 0xeafffffe]);
+    data(&board, 0x10080, &[1, 2, 3, 4]);
+    address(&board, 0x10080);
+    {
+        let preservation = board
+            .preservation_begin(vec![(0x10080, 0x10090)])
+            .unwrap();
+        run(&mut board, 3);
+        assert_eq!(preservation.state().identity_cpu_writes, 1);
+    }
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    board
+        .write_register(0, Register::Pc, 0x10000)
+        .unwrap();
+    run(&mut board, 3);
+    let state = preservation.state();
+    assert_eq!(
+        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (1, 0)
+    );
+    assert_eq!(state.violation, None);
+    drop(preservation);
+    let mut preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    board.preservation_end(&mut preservation).unwrap();
+    drop(preservation);
+    assert!(
+        board
+            .preservation_begin(vec![(0x10080, 0x10090)])
+            .is_ok()
+    );
+}
+
+#[test]
+fn host_write_uses_the_target_core_mapping() {
+    let board = two_core_board();
+    let preservation = board
+        .preservation_begin(vec![(0x11000, 0x11020)])
+        .unwrap();
+    board.write_memory(0, 0x10080, &[1]).unwrap();
+    assert_eq!(preservation.state().host_writes, 0);
+    board.write_memory(1, 0x10080, &[2]).unwrap();
+    let state = preservation.state();
+    assert_eq!(state.host_writes, 1);
+    let PreservationViolation::UnverifiableWrite {
+        address, physical, ..
+    } = state.violation.unwrap()
+    else {
+        panic!("expected an unverifiable write");
+    };
+    assert_eq!((address, physical), (0x10080, 0x11000));
+}
+
+#[test]
+fn empty_host_writes_stay_clean() {
+    let board = board(false);
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    board.write_physical(0x10084, &[]).unwrap();
+    let _ = board.write_memory(0, 0x10084, &[]);
+    {
+        let state = board.state.borrow();
+        board
+            .physical_memory
+            .write_dma(&board.cpus, &state.exclusive, 0x10084, &[])
+            .unwrap();
+    }
+    let state = preservation.state();
+    assert_eq!((state.host_writes, state.model_bus_writes), (0, 0));
+    assert_eq!(state.violation, None);
+}
+
+#[test]
+fn failed_host_mapping_marks_an_integrity_fault() {
+    let board = board(false);
+    let preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    assert!(board.write_physical(0x20000, &[1]).is_err());
+    assert_eq!(
+        preservation.state().violation,
+        Some(PreservationViolation::IntegrityFault {
+            reason: PreservationFault::UnresolvedMapping
+        })
+    );
+}
+
+#[test]
+fn successful_end_disables_state_and_is_idempotent() {
+    let mut board = board(false);
+    code(&board, &[0xe5910000, 0xe5810000, 0xeafffffe]);
+    data(&board, 0x10080, &[1, 2, 3, 4]);
+    address(&board, 0x10080);
+    let mut preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090)])
+        .unwrap();
+    run(&mut board, 3);
+    assert_eq!(preservation.state().identity_cpu_writes, 1);
+    board.preservation_end(&mut preservation).unwrap();
+    board.preservation_end(&mut preservation).unwrap();
+    board
+        .write_register(0, Register::Pc, 0x10000)
+        .unwrap();
+    run(&mut board, 3);
+    assert_eq!(preservation.state(), PreservationState::disabled());
+}
+
+#[test]
+fn begin_refuses_unsupported_ranges_and_conflicting_observers() {
+    let board = board(false);
+    assert!(board.preservation_begin(vec![]).is_err());
+    assert!(
+        board
+            .preservation_begin(vec![(0x14000, 0x14010)])
+            .err()
+            .unwrap()
+            .contains("physical RAM backing")
+    );
+    let mut preservation = board
+        .preservation_begin(vec![(0x10080, 0x10090), (0x10090, 0x100a0)])
+        .unwrap();
+    assert!(
+        board
+            .memory_watch_begin(vec![(0x10080, 0x10090)], 8, board.mappings().to_vec())
+            .is_err()
+    );
+    assert!(
+        board
+            .preservation_begin(vec![(0x10080, 0x10090)])
+            .is_err()
+    );
+    board.preservation_end(&mut preservation).unwrap();
+    let mut watch = board
+        .memory_watch_begin(vec![(0x10080, 0x10090)], 8, board.mappings().to_vec())
+        .unwrap();
+    assert!(
+        board
+            .preservation_begin(vec![(0x10080, 0x10090)])
+            .is_err()
+    );
+    board.memory_watch_end(&mut watch).unwrap();
+}
