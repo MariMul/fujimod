@@ -33,6 +33,50 @@ fn upload(words: &mut Vec<u32>, index: u16, data: &[u32], increment: bool) {
         words.push(0xa5a5a5a5);
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn triangle_list(registers: &[(u16, u32)]) -> Vec<u32> {
+    let mut words = setup();
+    for &(register, value) in registers {
+        pair(&mut words, register, value);
+    }
+    for position in [
+        [-0.83, -0.71, -0.5, 1.],
+        [0.72, -0.65, -0.5, 1.],
+        [-0.13, 0.91, -0.5, 1.],
+    ] {
+        upload(&mut words, 0x433, &packed(position), true);
+        upload(&mut words, 0x433, &packed([0.75, 0.25, 0.5, 0.5]), true);
+    }
+    words
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn assert_host_gpu_matches_cpu(
+    words: &[u32],
+    read: impl Fn(u64, usize) -> Vec<u8>,
+) -> Option<Snapshots> {
+    let mut cpu = Engine::default();
+    cpu.set_host_acceleration(false);
+    let expected = cpu
+        .execute(words, &mut |address, length| Ok(read(address, length)))
+        .unwrap();
+    let actual = match Engine::default()
+        .execute_host_gpu(words, &mut |address, length| Ok(read(address, length)))
+    {
+        Ok(actual) => actual,
+        Err(error) if error.starts_with("DMP host GPU adapter:") => {
+            eprintln!(
+                "skipping DMP host render parity because no host GPU adapter is available: {error}"
+            );
+            return None;
+        }
+        Err(error) => panic!("DMP host render path failed: {error}"),
+    };
+    assert_eq!(actual, expected);
+    Some(actual)
+}
+
 fn setup() -> Vec<u32> {
     let mut words = Vec::new();
     for (r, v) in [
@@ -90,6 +134,10 @@ fn uploaded_mov_program_draws_triangle_with_exact_top_left_coverage() {
         upload(&mut words, 0x433, &packed(position), true);
         upload(&mut words, 0x433, &packed([1., 0., 0., 1.]), true);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
+        return;
+    }
     let writes = Engine::default()
         .execute(&words, &mut |a, n| {
             assert_eq!(a, 0x10000);
@@ -130,6 +178,11 @@ fn unused_nonfinite_uniform_words_survive_upload_checkpoint_and_draw() {
     ] {
         upload(&mut words, 0x433, &packed(position), true);
         upload(&mut words, 0x433, &packed([1., 0., 0., 1.]), true);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
+        return;
     }
 
     let mut engine = Engine::default();
@@ -193,6 +246,10 @@ fn host_gpu_and_cpu_produce_identical_pixels_and_preserve_constant_alpha() {
         upload(&mut words, 0x433, &packed(position), true);
         upload(&mut words, 0x433, &packed([1., 0.25, 0.5, 1.]), true);
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
+        return;
+    }
     let mut cpu = Engine {
         cpu_only: true,
         ..Default::default()
@@ -243,6 +300,158 @@ fn host_render_path_matches_cpu_snapshots_and_written_ranges() {
         Err(error) => panic!("DMP host render path failed: {error}"),
     };
     assert_eq!(actual, expected);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn host_render_path_matches_dmp_fragment_state_regressions() {
+    for format in [0, 1, 2, 3, 4, 5, 7, 8] {
+        let words = triangle_list(&[
+            (0x280, 1),
+            (0x282, 0x0008_0008),
+            (0x283, 0),
+            (0x284, 0),
+            (0x285, 0x40000),
+            (0x28e, format),
+            (0x2c0, 0x0003_0003),
+            (0x2c2, 0),
+            (0x2c8, 0x000f_000f),
+            (0x2ca, 0),
+        ]);
+        let initial_texture = if format == 8 { 0x80 } else { 0x5a };
+        let Some(actual) = assert_host_gpu_matches_cpu(&words, |address, length| {
+            if address == 0x40000 {
+                vec![initial_texture; length]
+            } else {
+                vec![0; length]
+            }
+        }) else {
+            return;
+        };
+        if format == 8 {
+            assert!(
+                actual[0]
+                    .1
+                    .as_chunks::<4>()
+                    .0
+                    .contains(&[0x80, 255, 255, 255])
+            );
+        }
+    }
+
+    let blend = (6 << 16) | (7 << 20) | (1 << 24);
+    let blend_words = triangle_list(&[(0x300, 0x100), (0x301, blend)]);
+    if assert_host_gpu_matches_cpu(&blend_words, |_, length| vec![0x60; length]).is_none() {
+        return;
+    }
+
+    let mask_words = triangle_list(&[(0x307, 1 << 8)]);
+    if assert_host_gpu_matches_cpu(&mask_words, |_, length| vec![0x60; length]).is_none() {
+        return;
+    }
+
+    let combiner_words = triangle_list(&[
+        (0x280, 1),
+        (0x282, 0x0008_0008),
+        (0x283, 0),
+        (0x284, 0),
+        (0x285, 0x40000),
+        (0x28e, 0),
+        (0x2c0, 0x0030_0030),
+        (0x2c2, 0x0001_0001),
+        (0x2c8, 0x000f_000f),
+        (0x2ca, 0),
+    ]);
+    if assert_host_gpu_matches_cpu(&combiner_words, |address, length| {
+        if address == 0x40000 {
+            vec![0x83; length]
+        } else {
+            vec![0; length]
+        }
+    })
+    .is_none()
+    {
+        return;
+    }
+
+    for (fog_control, table_words) in [(1, false), (5, true)] {
+        let mut registers = vec![
+            (0x2e0, fog_control),
+            (0x2e1, 0x0000_ff00),
+            (0x2e2, 1024),
+            (0x2e3, 0),
+        ];
+        if table_words {
+            registers.push((0x2e6, 0));
+        }
+        let mut fog_list = setup();
+        for &(register, value) in &registers {
+            pair(&mut fog_list, register, value);
+        }
+        if table_words {
+            for _ in 0..128 {
+                pair(&mut fog_list, 0x2e8, (1024 << 13) | 256);
+            }
+        }
+        for position in [
+            [-0.83, -0.71, -0.5, 1.],
+            [0.72, -0.65, -0.5, 1.],
+            [-0.13, 0.91, -0.5, 1.],
+        ] {
+            upload(&mut fog_list, 0x433, &packed(position), true);
+            upload(&mut fog_list, 0x433, &packed([0.75, 0.25, 0.5, 0.5]), true);
+        }
+        if assert_host_gpu_matches_cpu(&fog_list, |_, length| vec![0; length]).is_none() {
+            return;
+        }
+    }
+
+    let depth_stencil_words = triangle_list(&[
+        (0x316, 3),
+        (0x31c, 0x20000),
+        (
+            0x305,
+            1 | (1 << 4) | (0xff << 8) | (0x80 << 16) | (0xff << 24),
+        ),
+        (0x306, 2 << 8),
+        (0x307, 0x1f11),
+    ]);
+    if assert_host_gpu_matches_cpu(&depth_stencil_words, |_, length| vec![0; length]).is_none() {
+        return;
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn host_render_path_preserves_fragment_refusals() {
+    for format in [6, 9] {
+        let words = triangle_list(&[
+            (0x280, 1),
+            (0x282, 0x0008_0008),
+            (0x285, 0x40000),
+            (0x28e, format),
+        ]);
+        let error = Engine::default()
+            .execute_host_gpu(&words, &mut |_, length| Ok(vec![0; length]))
+            .unwrap_err();
+        assert!(error.contains(&format!("DMP unsupported sampler format {format}")));
+    }
+
+    let factor_words = triangle_list(&[(0x300, 0x100), (0x301, 15 << 16), (0x302, 3)]);
+    assert_eq!(
+        Engine::default()
+            .execute_host_gpu(&factor_words, &mut |_, length| Ok(vec![0; length]))
+            .unwrap_err(),
+        "DMP unsupported blend factor"
+    );
+
+    let logic_words = triangle_list(&[(0x300, 0), (0x302, 2)]);
+    assert_eq!(
+        Engine::default()
+            .execute_host_gpu(&logic_words, &mut |_, length| Ok(vec![0; length]))
+            .unwrap_err(),
+        "DMP unsupported logic operation"
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -321,6 +530,21 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
     upload(&mut last, 0x433, &packed(positions[2]), true);
     upload(&mut last, 0x433, &packed([1., 0., 0., 1.]), true);
     let expected = engine.execute(&last, &mut |_, n| Ok(vec![0; n])).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut gpu_restored = restored.clone();
+        let actual = match gpu_restored.execute_host_gpu(&last, &mut |_, n| Ok(vec![0; n])) {
+            Ok(actual) => actual,
+            Err(error) if error.starts_with("DMP host GPU adapter:") => {
+                eprintln!(
+                    "skipping checkpointed DMP render parity because no host GPU adapter is available: {error}"
+                );
+                return;
+            }
+            Err(error) => panic!("checkpointed DMP host render path failed: {error}"),
+        };
+        assert_eq!(actual, expected);
+    }
     assert_eq!(
         restored.execute(&last, &mut |_, n| Ok(vec![0; n])).unwrap(),
         expected
@@ -338,6 +562,10 @@ fn flat_shading_uses_the_provoking_vertex_color() {
     ] {
         upload(&mut words, 0x433, &packed(position), true);
         upload(&mut words, 0x433, &packed(color), true);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
+        return;
     }
     let writes = Engine::default()
         .execute(&words, &mut |_, n| Ok(vec![0; n]))
@@ -367,6 +595,10 @@ fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
             ] {
                 upload(&mut words, 0x433, &packed(position), true);
                 upload(&mut words, 0x433, &packed([0.; 4]), true);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
+                return;
             }
             let mut engine = Engine::default();
             engine.set_host_acceleration(acceleration);
