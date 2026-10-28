@@ -302,6 +302,26 @@
             ]
           }
         ],
+        "encoders": [
+          {
+            "name": "command_dial",
+            "options": {
+              "pins": [
+                {
+                  "port": 3,
+                  "pin": 8
+                },
+                {
+                  "port": 3,
+                  "pin": 9
+                }
+              ],
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          }
+        ],
         "card_contacts": {
           "detect": [
             12,
@@ -315,7 +335,9 @@
           ],
           "basis": "Declared catalog input."
         },
-        "limits": [],
+        "limits": [
+          "Command-dial phase pacing is a declared external input: 120000 virtual ticks per Gray-code edge; stock polling rate is unmeasured."
+        ],
         "dram_basis": "Declared catalog input.",
         "attachments": {
           "serial_part": [
@@ -893,6 +915,26 @@
             ]
           }
         ],
+        "encoders": [
+          {
+            "name": "command_dial",
+            "options": {
+              "pins": [
+                {
+                  "port": 3,
+                  "pin": 8
+                },
+                {
+                  "port": 3,
+                  "pin": 9
+                }
+              ],
+              "phase_ticks": 120000,
+              "rest_phase": 3
+            },
+            "counter": null
+          }
+        ],
         "card_contacts": {
           "detect": [
             12,
@@ -906,7 +948,9 @@
           ],
           "basis": "Declared catalog input."
         },
-        "limits": [],
+        "limits": [
+          "Command-dial phase pacing is a declared external input: 120000 virtual ticks per Gray-code edge; stock polling rate is unmeasured."
+        ],
         "dram_basis": "Declared catalog input.",
         "attachments": {
           "serial_part": [
