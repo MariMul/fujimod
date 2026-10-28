@@ -45,6 +45,8 @@ pub struct Definition {
     #[serde(default)]
     pub xpp_sub_cpu: Option<XppSubCpu>,
     #[serde(default)]
+    pub xpp_display_frames: Option<XppDisplayFrames>,
+    #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
     pub io_group_base: Option<u64>,
@@ -110,6 +112,14 @@ pub enum TimerLayout {
 pub struct XppSubCpu {
     pub port: u64,
     pub registers: Vec<(u8, u8)>,
+}
+
+/// X-Processor Pro display frame interrupts: one edge per line each period.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppDisplayFrames {
+    pub irqs: Vec<u32>,
+    pub period_ticks: u64,
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.

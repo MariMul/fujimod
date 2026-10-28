@@ -751,6 +751,12 @@ impl Devices {
         self.windows.push((base, base + REGISTERS, id));
         Ok(())
     }
+    /// X-Processor Pro display frame interrupts; the law has no register window.
+    pub fn xpp_display_frames(&mut self, irqs: Vec<u32>, period: u64) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::display::FrameClock::new(irqs, period)?;
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {
         self.windows
             .iter()

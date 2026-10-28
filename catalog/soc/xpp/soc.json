@@ -82,6 +82,20 @@
       "clock_id": null
     },
     {
+      "id": "dmp",
+      "base": 4294475776,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "display",
+      "base": 4294328320,
+      "size": 8192,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
       "id": "serial0",
       "base": 4294082560,
       "size": 256,
@@ -287,6 +301,41 @@
         "source_block_id": "decompressor",
         "output_id": "interrupt",
         "line": 129
+      },
+      {
+        "source_block_id": "dmp",
+        "output_id": "interrupt",
+        "line": 92
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event0",
+        "line": 112
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event1",
+        "line": 113
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event2",
+        "line": 114
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event0",
+        "line": 117
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event1",
+        "line": 118
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event2",
+        "line": 119
       }
     ],
     "companion": null,
@@ -420,11 +469,22 @@
             "base": 4294443008,
             "irq_route": 129,
             "basis": "Method-4 streaming decompressor with the XP4 register interface: the X-T20 2.11 section-6 loader resets it through +0 (0xc5d584), waits for +0 to read nonzero and for +0x24 to read 0x10001, and connects interrupt descriptor row 0x12 of 0xed4720 (interrupt 0x81) with handler 0xc5d348 (0xc5d440)."
+          },
+          "dmp": {
+            "base": 4294475776,
+            "size": 12288,
+            "irq_route": 92,
+            "basis": "DMP SMAPH vector-graphics renderer with the XP4 register interface. The X-T20 2.11 OpenVG/EGL driver (seg5 0xdda65c onward, kernel tasks smaphk/smaphp) programs command words at +0x1c, the copy unit at +0xc00-+0xc18 and command lists at +0x10d0/+0x10e0. Its interrupt 92 handler 0xdda2fc reads status +0x34, and waiter 0xdda3cc reports bits 31, 30 and 26."
+          },
+          "display_frames": {
+            "irq_routes": [112, 113, 114, 117, 118, 119],
+            "period_ticks": 800000,
+            "basis": "Frame interrupts of the display controller, as an interrupt law without its registers. Seg5 source table 0xed4720 rows 73-78 connect lines 112-114 and 117-119 (edge) to handlers that run the callbacks queued by 0xc9dc38 for output 0 or 1 and event 0-2 (0xc9d854, 0xc9d994); the handlers read no controller register. The X-T20 2.11 vglib thread clears bit 16 of 0xfff65000 or 0xfff5a000, queues such a callback and yields at priority 7 until it runs (0xcad290), which starves flashload before section 7 loads. The period is an assumed 60 Hz in 48 MHz timer ticks (the 10 ms system tick reloads 480000); the panel rate is not measured."
           }
         },
         "limits": [
           "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor; no display block is declared.",
+          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer is declared; no display output block is.",
           "No boot ROM, reset-release controller or external peripheral replies are assumed."
         ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."

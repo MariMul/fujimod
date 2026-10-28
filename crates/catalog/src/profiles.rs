@@ -1065,6 +1065,20 @@ pub struct Dma {
     pub timing: String,
 }
 
+/// Display frame interrupts declared as a law without controller registers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayFrames"))]
+pub struct DisplayFrames {
+    /// Declared basis.
+    pub basis: String,
+    /// Lines receiving one edge per frame.
+    pub irq_routes: Vec<u64>,
+    /// Frame period in guest ticks.
+    pub period_ticks: u64,
+}
+
 /// Declared dmp facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1413,6 +1427,9 @@ pub struct RegisterLayouts {
     /// Declared dma.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dma: Option<Dma>,
+    /// Declared display frame interrupts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_frames: Option<DisplayFrames>,
     /// Declared dmp.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dmp: Option<Dmp>,

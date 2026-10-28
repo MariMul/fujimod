@@ -10849,6 +10849,37 @@
       ],
       "type": "object"
     },
+    "HardwareDisplayFrames": {
+      "additionalProperties": false,
+      "description": "Display frame interrupts declared as a law without controller registers.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_routes": {
+          "description": "Lines receiving one edge per frame.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "period_ticks": {
+          "description": "Frame period in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "irq_routes",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
     "HardwareDisplayTiming": {
       "additionalProperties": false,
       "description": "Declared display timing facts.",
@@ -12395,6 +12426,17 @@
             }
           ],
           "description": "Declared decompressor."
+        },
+        "display_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared display frame interrupts."
         },
         "dma": {
           "anyOf": [

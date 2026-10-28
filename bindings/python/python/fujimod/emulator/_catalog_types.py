@@ -2286,6 +2286,12 @@ class HardwareDiscoveryWindow(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareDisplayFrames(TypedDict, total=False):
+    basis: Required[str]
+    irq_routes: Required[list[int]]
+    period_ticks: Required[int]
+
+
 class HardwareDisplayTiming(TypedDict, total=False):
     basis: Required[str]
     frame_period_ticks: Required[int]
@@ -2573,6 +2579,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     control_bus1: NotRequired[HardwareSecondaryBusRegistersAddress | None]
     control_requests: NotRequired[HardwareControlRequests | None]
     decompressor: NotRequired[HardwareDecompressor | None]
+    display_frames: NotRequired[HardwareDisplayFrames | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
     flash_controller: NotRequired[HardwareFlashController | None]

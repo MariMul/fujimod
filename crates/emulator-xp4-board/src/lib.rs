@@ -931,6 +931,7 @@ impl Session {
             xpp_storage,
             xpp_serial,
             xpp_sub_cpu,
+            xpp_display_frames,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -1061,6 +1062,11 @@ impl Session {
             }
             None => None,
         };
+        if let Some(frames) = xpp_display_frames {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_frames(frames.irqs, frames.period_ticks)?;
+        }
         for base in xpp_serial {
             let peer = match &sub_cpu {
                 Some((port, _)) if *port == base => sub_cpu.take().map(|(_, r)| r),
