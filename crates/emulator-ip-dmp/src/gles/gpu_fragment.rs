@@ -260,11 +260,18 @@ impl Gpu {
                 .iter()
                 .enumerate()
                 .find_map(|(index, bytes)| {
-                    let error = match u32::from_le_bytes(*bytes) {
+                    let status = u32::from_le_bytes(*bytes);
+                    let error = match status {
                         0 => return None,
                         1 => "DMP unsupported blend factor".to_string(),
                         2 => "DMP unsupported blend equation".to_string(),
                         3 => "DMP unsupported logic operation".to_string(),
+                        status if status & 0xffff_fff0 == 0x10000 => {
+                            return Some(format!(
+                                "DMP fragment {index}: DMP unsupported sampler format {}",
+                                status & 15
+                            ));
+                        }
                         status => format!("unsupported status {status}"),
                     };
                     Some(format!("DMP fragment {index}: {error}"))
@@ -335,6 +342,19 @@ mod tests {
 
     fn set(engine: &mut Engine, register: u16, value: u32) {
         engine.regs.insert(register, value);
+    }
+
+    fn skip_without_adapter() -> bool {
+        match GPU.get_or_init(|| Gpu::new().map(Mutex::new)) {
+            Ok(_) => false,
+            Err(error) if error.starts_with("DMP fragment adapter:") => {
+                eprintln!(
+                    "skipping DMP fragment test because no host GPU adapter is available: {error}"
+                );
+                true
+            }
+            Err(error) => panic!("DMP fragment GPU setup failed: {error}"),
+        }
     }
 
     fn random_combiner(rng: &mut Random, engine: &mut Engine, base: u16) {
@@ -492,6 +512,9 @@ mod tests {
 
     #[test]
     fn wgsl_fragment_matches_cpu_for_randomized_state_and_inputs() {
+        if skip_without_adapter() {
+            return;
+        }
         let mut rng = Random(0xa891_7c5d_93b1_42e7);
         let mut initial = vec![0u8; MEMORY_BASE + CASE_COUNT * REGION_SIZE];
         let mut engines = Vec::with_capacity(CASE_COUNT);
@@ -561,6 +584,9 @@ mod tests {
 
     #[test]
     fn wgsl_fragment_refuses_unsupported_blend_and_logic_operations() {
+        if skip_without_adapter() {
+            return;
+        }
         let mut rng = Random(0x3f21_1d74_912e_0ab5);
         let mut memory = vec![0u8; MEMORY_BASE + 2 * REGION_SIZE];
         let (mut factor_engine, input) = random_case(&mut rng, &mut memory, 0);
@@ -591,6 +617,26 @@ mod tests {
         assert!(matches!(
             dispatch(&logic_case, &memory),
             Err(error) if error == "DMP fragment 0: DMP unsupported logic operation"
+        ));
+    }
+
+    #[test]
+    fn wgsl_fragment_refuses_unsupported_texture_codes() {
+        if skip_without_adapter() {
+            return;
+        }
+        let mut rng = Random(0xe477_b2c1_6a03_95fd);
+        let mut memory = vec![0u8; MEMORY_BASE + REGION_SIZE];
+        let (mut engine, input) = random_case(&mut rng, &mut memory, 0);
+        set(&mut engine, 0x280, 1);
+        set(&mut engine, 0x28e, 6);
+        let case = [FragmentCase {
+            engine: &engine,
+            input,
+        }];
+        assert!(matches!(
+            dispatch(&case, &memory),
+            Err(error) if error == "DMP fragment 0: DMP unsupported sampler format 6"
         ));
     }
 }
