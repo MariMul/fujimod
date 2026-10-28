@@ -72,117 +72,124 @@ impl Gpu {
         }))
     }
 
-    fn coverage(
-        &self,
-        contours: &[Vec<Point>],
-        x0: usize,
-        x1: usize,
-        y0: usize,
-        y1: usize,
-        samples: u32,
-        stroke: Option<f64>,
-        nonzero: bool,
-    ) -> Result<Vec<u32>, String> {
-        let width = x1.saturating_sub(x0);
-        let height = y1.saturating_sub(y0);
-        let count = width
-            .checked_mul(height)
-            .ok_or("SMAPH coverage extent overflow")?;
-        if count == 0 || samples == 0 {
-            return Ok(vec![0; count]);
-        }
-        if !matches!(samples, 1 | 2 | 4) {
-            return Err("SMAPH coverage sample count must be 1, 2, or 4".into());
-        }
-        if x1 > 2048 || y1 > 2048 {
-            return Err("SMAPH coverage bounds exceed the DMP coordinate grid".into());
+    fn coverage_batch(&self, inputs: &[scanline::CoverageInput]) -> Result<Vec<Vec<u32>>, String> {
+        if inputs.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let x0: u32 = x0.try_into().map_err(|_| "SMAPH coverage x origin")?;
-        let y0: u32 = y0.try_into().map_err(|_| "SMAPH coverage y origin")?;
-        let width_u32: u32 = width.try_into().map_err(|_| "SMAPH coverage width")?;
-        let height_u32: u32 = height.try_into().map_err(|_| "SMAPH coverage height")?;
+        let mut jobs = Vec::<u32>::with_capacity(inputs.len() * 12);
         let mut edges = Vec::<[i32; 4]>::new();
-        if stroke.is_some() {
-            for points in contours {
-                for pair in points.windows(2) {
-                    edges.push([
-                        scanline::grid_coordinate(pair[0][0]),
-                        scanline::grid_coordinate(pair[0][1]),
-                        scanline::grid_coordinate(pair[1][0]),
-                        scanline::grid_coordinate(pair[1][1]),
-                    ]);
-                }
+        let mut output_lengths = Vec::with_capacity(inputs.len());
+        let mut output_count = 0usize;
+        let mut max_width = 0usize;
+        let mut max_height = 0usize;
+        for input in inputs {
+            let [x0, x1, y0, y1] = input.bounds;
+            if x0 > x1 || y0 > y1 || x1 > 2048 || y1 > 2048 {
+                return Err("SMAPH coverage batch has invalid bounds".into());
             }
-        } else {
-            for points in contours.iter().filter(|points| points.len() >= 3) {
-                for (a, b) in points
-                    .iter()
-                    .zip(points.iter().cycle().skip(1))
-                    .take(points.len())
-                {
-                    edges.push([
-                        scanline::grid_coordinate(a[0]),
-                        scanline::grid_coordinate(a[1]),
-                        scanline::grid_coordinate(b[0]),
-                        scanline::grid_coordinate(b[1]),
-                    ]);
-                }
+            if !matches!(input.samples, 0 | 1 | 2 | 4) {
+                return Err("SMAPH coverage sample count must be 1, 2, or 4".into());
             }
+            let width = x1 - x0;
+            let height = y1 - y0;
+            let output_len = input.output_len()?;
+            let edge_offset: u32 = edges
+                .len()
+                .try_into()
+                .map_err(|_| "SMAPH coverage edge offset")?;
+            let edge_count: u32 = input
+                .edges
+                .len()
+                .try_into()
+                .map_err(|_| "SMAPH coverage edge count")?;
+            let coverage_offset: u32 = output_count
+                .try_into()
+                .map_err(|_| "SMAPH coverage output offset")?;
+            let mut flags = u32::from(input.stroke_radius.is_some());
+            flags |= u32::from(input.nonzero) << 1;
+            jobs.extend([
+                x0 as u32,
+                y0 as u32,
+                width as u32,
+                height as u32,
+                input.samples,
+                edge_offset,
+                edge_count,
+                flags,
+                input.stroke_radius.unwrap_or(0) as u32,
+                coverage_offset,
+                0,
+                0,
+            ]);
+            edges.extend_from_slice(&input.edges);
+            output_count = output_count
+                .checked_add(output_len)
+                .ok_or("SMAPH coverage batch output overflow")?;
+            output_lengths.push(output_len);
+            max_width = max_width.max(width);
+            max_height = max_height.max(height);
         }
-        let radius = scanline::grid_coordinate(stroke.unwrap_or(0.0));
-        let edge_count: u32 = edges
+        if output_count == 0 {
+            return Ok(output_lengths.iter().map(|_| Vec::new()).collect());
+        }
+        if edges.is_empty() {
+            edges.push([0; 4]);
+        }
+
+        let edge_bytes = edges
             .len()
-            .try_into()
-            .map_err(|_| "SMAPH coverage edge count")?;
+            .checked_mul(16)
+            .ok_or("SMAPH coverage edge buffer size overflow")?;
+        let job_bytes = jobs
+            .len()
+            .checked_mul(4)
+            .ok_or("SMAPH coverage job buffer size overflow")?;
+        let output_bytes = output_count
+            .checked_mul(std::mem::size_of::<u32>())
+            .ok_or("SMAPH coverage output buffer size overflow")?;
+        let limits = self.device.limits();
+        if edge_bytes > limits.max_storage_buffer_binding_size as usize
+            || job_bytes > limits.max_storage_buffer_binding_size as usize
+            || output_bytes > limits.max_storage_buffer_binding_size as usize
+            || output_bytes as u64 > limits.max_buffer_size
+            || inputs.len() > limits.max_compute_workgroups_per_dimension as usize
+            || max_width.div_ceil(8) > limits.max_compute_workgroups_per_dimension as usize
+            || max_height.div_ceil(8) > limits.max_compute_workgroups_per_dimension as usize
+        {
+            return Err("SMAPH coverage batch exceeds host GPU limits".into());
+        }
 
-        let mut params = [0u32; 9];
-        params[0] = x0;
-        params[1] = y0;
-        params[2] = width_u32;
-        params[3] = height_u32;
-        params[4] = samples;
-        params[5] = edge_count;
-        params[6] = u32::from(stroke.is_some());
-        params[7] = u32::from(nonzero);
-        params[8] = radius as u32;
-
-        let mut edge_bytes = Vec::with_capacity(edges.len() * 16);
+        let mut edge_bytes_data = Vec::with_capacity(edge_bytes);
         for edge in &edges {
             for value in edge {
-                edge_bytes.extend_from_slice(&value.to_le_bytes());
+                edge_bytes_data.extend_from_slice(&value.to_le_bytes());
             }
         }
-        if edge_bytes.is_empty() {
-            edge_bytes.resize(16, 0);
-        }
-        let param_bytes: Vec<u8> = params.into_iter().flat_map(u32::to_le_bytes).collect();
-        let params_buffer = self
+        let job_bytes_data: Vec<u8> = jobs.into_iter().flat_map(u32::to_le_bytes).collect();
+        let jobs_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("SMAPH coverage parameters"),
-                contents: &param_bytes,
+                label: Some("SMAPH coverage jobs"),
+                contents: &job_bytes_data,
                 usage: wgpu::BufferUsages::STORAGE,
             });
         let edges_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("SMAPH coverage edges"),
-                contents: &edge_bytes,
+                contents: &edge_bytes_data,
                 usage: wgpu::BufferUsages::STORAGE,
             });
-        let byte_count = count
-            .checked_mul(std::mem::size_of::<u32>())
-            .ok_or("SMAPH coverage buffer size overflow")?;
         let output = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SMAPH coverage output"),
-            size: byte_count as u64,
+            size: output_bytes as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let download = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SMAPH coverage readback"),
-            size: byte_count as u64,
+            size: output_bytes as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -192,7 +199,7 @@ impl Gpu {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: params_buffer.as_entire_binding(),
+                    resource: jobs_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -209,9 +216,13 @@ impl Gpu {
             let mut pass = encoder.begin_compute_pass(&Default::default());
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bindings, &[]);
-            pass.dispatch_workgroups(width_u32.div_ceil(8), height_u32.div_ceil(8), 1);
+            pass.dispatch_workgroups(
+                max_width.div_ceil(8) as u32,
+                max_height.div_ceil(8) as u32,
+                inputs.len() as u32,
+            );
         }
-        encoder.copy_buffer_to_buffer(&output, 0, &download, 0, byte_count as u64);
+        encoder.copy_buffer_to_buffer(&output, 0, &download, 0, output_bytes as u64);
         self.queue.submit([encoder.finish()]);
 
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -231,7 +242,7 @@ impl Gpu {
             .slice(..)
             .get_mapped_range()
             .map_err(|error| format!("SMAPH coverage mapped range: {error}"))?;
-        let result = bytes
+        let values: Vec<u32> = bytes
             .as_chunks::<4>()
             .0
             .iter()
@@ -239,6 +250,17 @@ impl Gpu {
             .collect();
         drop(bytes);
         download.unmap();
+
+        let mut offset = 0usize;
+        let result = output_lengths
+            .into_iter()
+            .map(|length| {
+                let end = offset + length;
+                let values = values[offset..end].to_vec();
+                offset = end;
+                values
+            })
+            .collect();
         Ok(result)
     }
 }
@@ -269,9 +291,32 @@ pub fn coverage(
     stroke: Option<f64>,
     nonzero: bool,
 ) -> Result<Vec<u32>, String> {
+    let input = scanline::CoverageInput::new(contours, [x0, x1, y0, y1], samples, stroke, nonzero);
+    coverage_batch(std::slice::from_ref(&input))
+        .map(|mut outputs| outputs.pop().unwrap_or_default())
+}
+
+/// Rasterize every path in a stream with one dispatch and one edge buffer.
+pub(super) fn coverage_batch(inputs: &[scanline::CoverageInput]) -> Result<Vec<Vec<u32>>, String> {
+    if inputs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut no_gpu_work = true;
+    for input in inputs {
+        if input.samples != 0 && input.output_len()? != 0 {
+            no_gpu_work = false;
+            break;
+        }
+    }
+    if no_gpu_work {
+        return inputs
+            .iter()
+            .map(|input| Ok(vec![0; input.output_len()?]))
+            .collect();
+    }
     shared_gpu()?
         .ok_or_else(|| "SMAPH coverage has no wgpu adapter".to_owned())?
-        .coverage(contours, x0, x1, y0, y1, samples, stroke, nonzero)
+        .coverage_batch(inputs)
 }
 
 #[cfg(test)]

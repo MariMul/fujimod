@@ -1,4 +1,12 @@
-@group(0) @binding(0) var<storage, read> params: array<u32>;
+struct CoverageJob {
+    bounds: vec4<u32>,
+    parameters: vec4<u32>,
+    stroke_radius: i32,
+    coverage_offset: u32,
+    padding: vec2<u32>,
+}
+
+@group(0) @binding(0) var<storage, read> jobs: array<CoverageJob>;
 @group(0) @binding(1) var<storage, read> edges: array<vec4<i32>>;
 @group(0) @binding(2) var<storage, read_write> coverage: array<u32>;
 
@@ -67,17 +75,19 @@ fn stroke_covers(point: vec2<i32>, edge: vec4<i32>, radius: i32) -> bool {
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
-    if id.x >= params[2] || id.y >= params[3] {
+    let job = jobs[id.z];
+    if id.x >= job.bounds.z || id.y >= job.bounds.w {
         return;
     }
 
-    let x = params[0] + id.x;
-    let y = params[1] + id.y;
-    let samples = params[4];
-    let edge_count = params[5];
-    let stroke_enabled = params[6] != 0u;
-    let nonzero = params[7] != 0u;
-    let radius = bitcast<i32>(params[8]);
+    let x = job.bounds.x + id.x;
+    let y = job.bounds.y + id.y;
+    let samples = job.parameters.x;
+    let edge_offset = job.parameters.y;
+    let edge_count = job.parameters.z;
+    let stroke_enabled = (job.parameters.w & 1u) != 0u;
+    let nonzero = (job.parameters.w & 2u) != 0u;
+    let radius = job.stroke_radius;
     var pixel_coverage = 0u;
 
     for (var sy = 0u; sy < samples; sy += 1u) {
@@ -89,7 +99,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
             if stroke_enabled {
                 for (var edge_index = 0u; edge_index < edge_count; edge_index += 1u) {
-                    if stroke_covers(point, edges[edge_index], radius) {
+                    if stroke_covers(point, edges[edge_offset + edge_index], radius) {
                         covered = true;
                         break;
                     }
@@ -97,7 +107,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             } else {
                 var winding = 0i;
                 for (var edge_index = 0u; edge_index < edge_count; edge_index += 1u) {
-                    let edge = edges[edge_index];
+                    let edge = edges[edge_offset + edge_index];
                     let a = edge.xy;
                     let b = edge.zw;
                     let upward = b.y > a.y;
@@ -119,5 +129,5 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         }
     }
 
-    coverage[id.y * params[2] + id.x] = pixel_coverage;
+    coverage[job.coverage_offset + id.y * job.bounds.z + id.x] = pixel_coverage;
 }

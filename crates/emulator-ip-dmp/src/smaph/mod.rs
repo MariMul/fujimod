@@ -672,6 +672,22 @@ fn blend_pixel(source: [u8; 4], dest: &[u8], order: u32, coverage: f64, mode: u3
     }
 }
 
+struct PreparedPaint<'a> {
+    fill: &'a FillDraw,
+    address: u64,
+    width: u32,
+    height: u32,
+    coverage_index: usize,
+    clips: Vec<[u32; 4]>,
+    order: u32,
+    tiled: bool,
+    flip: bool,
+    blend: u32,
+    texture: Option<Texture>,
+    gradient: Option<Gradient>,
+    solid: [u8; 4],
+}
+
 fn rectangles(
     cx: &mut Cx<'_>,
     paths: &[PathDraw],
@@ -681,6 +697,8 @@ fn rectangles(
         return Err("DMP unmatched/bounded draw lists".into());
     }
     let mut output: BTreeMap<u64, (u32, u32, Vec<u8>)> = BTreeMap::new();
+    let mut coverage_inputs = Vec::with_capacity(paths.len());
+    let mut prepared = Vec::with_capacity(paths.len());
     for (p, f) in paths.iter().zip(fills) {
         if p.sequence != f.sequence {
             return Err("DMP path/fill sequence mismatch".into());
@@ -706,12 +724,12 @@ fn rectangles(
         }
         let image = get(r, 0x115)? & 0x1000000 != 0;
         let paint = get(r, 0x140)?;
-        let gradient = paint & 0x400 != 0;
+        let has_gradient = paint & 0x400 != 0;
         // Register writes update only the low selector lanes. A solid draw
         // can retain the upper210000 image pipeline bank from an earlier draw.
         if !matches!(paint & !0x403, 0x50000 | 0x210000)
             || paint & 3 != if image { 2 } else { 0 }
-            || (gradient && image)
+            || (has_gradient && image)
         {
             return Err(format!(
                 "DMP unsupported paint={:#x} image/scissor={:#x} flags={:#x}",
@@ -778,12 +796,12 @@ fn rectangles(
                 })
                 .collect()
         };
-        // The path matrix is applied unchanged in pixel units.
-        // Supersampling changes the raster bands/grid, not this transform.
+        // Path matrices use pixel units; supersampling changes only the
+        // coverage grid and raster band.
         for points in &mut contours {
-            for p in points {
-                let [x, y] = *p;
-                *p = [
+            for point in points {
+                let [x, y] = *point;
+                *point = [
                     matrix[0] * x + matrix[3] * y + matrix[6],
                     matrix[1] * x + matrix[4] * y + matrix[7],
                 ];
@@ -830,7 +848,13 @@ fn rectangles(
         }
         let address = get(r, 0x1a4)? as u64;
         if !output.contains_key(&address) {
-            if output.values().map(|(_, _, b)| b.len()).sum::<usize>() + count > MAX_BYTES {
+            if output
+                .values()
+                .map(|(_, _, bytes)| bytes.len())
+                .sum::<usize>()
+                + count
+                > MAX_BYTES
+            {
                 return Err("DMP aggregate output too large".into());
             }
             output.insert(address, (width, height, cx.ram_bytes(address, count)?));
@@ -840,61 +864,91 @@ fn rectangles(
         } else {
             None
         };
-        let gradient = if gradient {
+        let gradient = if has_gradient {
             Some(Gradient::new(&f.stream)?)
         } else {
             None
         };
-        let (ow, oh, bytes) = output.get_mut(&address).unwrap();
-        if (*ow, *oh) != (width, height) {
+        let solid = packed(get(r, 0x185)?.to_le_bytes(), r, &f.stream.gamma, order)?;
+        let coverage_index = coverage_inputs.len();
+        coverage_inputs.push(scanline::CoverageInput::new(
+            &contours,
+            [x0, x1, y0, y1],
+            samples,
+            stroke.then_some(radius),
+            get(r, 0xa5)? & 0x100 != 0,
+        ));
+        let (target_width, target_height, _) = output.get(&address).unwrap();
+        if (*target_width, *target_height) != (width, height) {
             return Err("DMP target resized within batch".into());
         }
-        let solid = packed(get(r, 0x185)?.to_le_bytes(), r, &f.stream.gamma, order)?;
+        prepared.push(PreparedPaint {
+            fill: f,
+            address,
+            width,
+            height,
+            coverage_index,
+            clips,
+            order,
+            tiled,
+            flip: flip == 1,
+            blend,
+            texture,
+            gradient,
+            solid,
+        });
+    }
+
+    for draw in prepared {
+        let input = &coverage_inputs[draw.coverage_index];
+        let coverage = scanline::coverage_image(input);
+        let [x0, x1, y0, y1] = input.bounds;
+        let bbox_width = x1.saturating_sub(x0);
+        let regs = &draw.fill.stream.regs;
+        let gamma = &draw.fill.stream.gamma;
+        let bytes = &mut output.get_mut(&draw.address).unwrap().2;
         for y in y0..y1 {
-            let coverage = scanline::coverage(
-                &contours,
-                x0,
-                x1,
-                y,
-                samples,
-                if stroke { Some(radius) } else { None },
-                get(r, 0xa5)? & 0x100 != 0,
-            );
             for x in x0..x1 {
-                if !clips.iter().any(|c| {
-                    x as u32 >= c[0] && (x as u32) < c[2] && y as u32 >= c[1] && (y as u32) < c[3]
+                if !draw.clips.iter().any(|clip| {
+                    x as u32 >= clip[0]
+                        && (x as u32) < clip[2]
+                        && y as u32 >= clip[1]
+                        && (y as u32) < clip[3]
                 }) {
                     continue;
                 }
-                let covered = coverage[x - x0];
+                let covered = coverage[(y - y0) * bbox_width + x - x0];
                 if covered == 0 {
                     continue;
                 }
-                let source = if let Some(t) = &texture {
-                    packed(t.sample(x, y)?, r, &f.stream.gamma, order)?
-                } else if let Some(g) = &gradient {
-                    packed(g.sample(x, y), r, &f.stream.gamma, order)?
+                let source = if let Some(texture) = &draw.texture {
+                    packed(texture.sample(x, y)?, regs, gamma, draw.order)?
+                } else if let Some(gradient) = &draw.gradient {
+                    packed(gradient.sample(x, y), regs, gamma, draw.order)?
                 } else {
-                    solid
+                    draw.solid
                 };
-                let row = if flip == 1 {
-                    height as usize - 1 - y
+                let row = if draw.flip {
+                    draw.height as usize - 1 - y
                 } else {
                     y
                 };
-                let i = pixel_index(x, row, width as usize, tiled) * 4;
+                let index = pixel_index(x, row, draw.width as usize, draw.tiled) * 4;
                 let pixel = blend_pixel(
                     source,
-                    &bytes[i..i + 4],
-                    order,
-                    covered as f64 / (samples * samples) as f64,
-                    blend,
+                    &bytes[index..index + 4],
+                    draw.order,
+                    covered as f64 / (input.samples * input.samples) as f64,
+                    draw.blend,
                 );
-                bytes[i..i + 4].copy_from_slice(&pixel);
+                bytes[index..index + 4].copy_from_slice(&pixel);
             }
         }
     }
-    Ok(output.into_iter().map(|(a, (_, _, b))| (a, b)).collect())
+    Ok(output
+        .into_iter()
+        .map(|(address, (_, _, bytes))| (address, bytes))
+        .collect())
 }
 
 #[cfg(test)]

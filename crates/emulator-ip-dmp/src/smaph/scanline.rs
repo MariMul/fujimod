@@ -2,8 +2,19 @@
 //! Fill crossings and stroke distances use integer arithmetic so CPU and GPU
 //! paths classify shared and collinear sample points identically.
 
-type Point = [f64; 2];
+pub(super) type Point = [f64; 2];
 type GridPoint = [i32; 2];
+pub(super) type Edge = [i32; 4];
+
+/// Quantized path edges and raster state shared by CPU and GPU coverage.
+#[derive(Clone, Debug)]
+pub(super) struct CoverageInput {
+    pub bounds: [usize; 4],
+    pub samples: u32,
+    pub edges: Vec<Edge>,
+    pub stroke_radius: Option<i32>,
+    pub nonzero: bool,
+}
 
 const GRID_SCALE: f64 = 8.0;
 const MAX_GRID_COORDINATE: i32 = 16_383;
@@ -22,6 +33,63 @@ pub(super) fn sample_grid(pixel: usize, index: u32, samples: u32) -> i64 {
     let numerator = (u64::from(index) * 2 + 1) * 4;
     let offset = (numerator + u64::from(samples) / 2) / u64::from(samples);
     pixel as i64 * 8 + offset as i64
+}
+
+impl CoverageInput {
+    pub(super) fn new(
+        contours: &[Vec<Point>],
+        bounds: [usize; 4],
+        samples: u32,
+        stroke: Option<f64>,
+        nonzero: bool,
+    ) -> Self {
+        let grid_contours: Vec<Vec<GridPoint>> = contours
+            .iter()
+            .map(|points| {
+                points
+                    .iter()
+                    .map(|point| [grid_coordinate(point[0]), grid_coordinate(point[1])])
+                    .collect()
+            })
+            .collect();
+        let mut edges = Vec::new();
+        if stroke.is_some() {
+            for points in &grid_contours {
+                edges.extend(
+                    points
+                        .windows(2)
+                        .map(|pair| [pair[0][0], pair[0][1], pair[1][0], pair[1][1]]),
+                );
+            }
+        } else {
+            for points in grid_contours.iter().filter(|points| points.len() >= 3) {
+                edges.extend((0..points.len()).map(|index| {
+                    let a = points[index];
+                    let b = points[(index + 1) % points.len()];
+                    [a[0], a[1], b[0], b[1]]
+                }));
+            }
+        }
+        let bounds = if bounds[0] >= bounds[1] || bounds[2] >= bounds[3] {
+            [0; 4]
+        } else {
+            bounds
+        };
+        Self {
+            bounds,
+            samples,
+            edges,
+            stroke_radius: stroke.map(grid_coordinate),
+            nonzero,
+        }
+    }
+
+    pub(super) fn output_len(&self) -> Result<usize, String> {
+        self.bounds[1]
+            .saturating_sub(self.bounds[0])
+            .checked_mul(self.bounds[3].saturating_sub(self.bounds[2]))
+            .ok_or_else(|| "SMAPH coverage extent overflow".into())
+    }
 }
 
 fn stroke_covers(point: [i64; 2], a: GridPoint, b: GridPoint, radius: i32) -> bool {
@@ -56,7 +124,7 @@ fn crossing_at_or_left(crossing: (i64, i64, i32), x: i64) -> bool {
     i128::from(crossing.0) <= i128::from(x) * i128::from(crossing.1)
 }
 
-pub fn coverage(
+pub(super) fn coverage(
     contours: &[Vec<Point>],
     x0: usize,
     x1: usize,
@@ -65,46 +133,53 @@ pub fn coverage(
     stroke: Option<f64>,
     nonzero: bool,
 ) -> Vec<u32> {
+    let input = CoverageInput::new(
+        contours,
+        [x0, x1, y, y.saturating_add(1)],
+        samples,
+        stroke,
+        nonzero,
+    );
+    coverage_row(&input, y)
+}
+
+pub(super) fn coverage_image(input: &CoverageInput) -> Vec<u32> {
+    let [_, _, y0, y1] = input.bounds;
+    let mut output = Vec::with_capacity(input.output_len().unwrap_or(0));
+    for y in y0..y1 {
+        output.extend(coverage_row(input, y));
+    }
+    output
+}
+
+pub(super) fn coverage_row(input: &CoverageInput, y: usize) -> Vec<u32> {
+    let [x0, x1, y0, y1] = input.bounds;
     let mut out = vec![0; x1.saturating_sub(x0)];
+    if y < y0 || y >= y1 {
+        return out;
+    }
+    let samples = input.samples;
     if samples == 0 {
         return out;
     }
 
-    let grid_contours: Vec<Vec<GridPoint>> = contours
-        .iter()
-        .map(|points| {
-            points
-                .iter()
-                .map(|point| [grid_coordinate(point[0]), grid_coordinate(point[1])])
-                .collect()
-        })
-        .collect();
-    let radius = grid_coordinate(stroke.unwrap_or(0.0));
-
-    if stroke.is_some() {
-        let edges: Vec<_> = grid_contours
-            .iter()
-            .flat_map(|points| points.windows(2))
-            .map(|pair| (pair[0], pair[1]))
-            .collect();
+    if let Some(radius) = input.stroke_radius {
         for sy in 0..samples {
             let py = sample_grid(y, sy, samples);
-            let row_edges: Vec<_> = edges
+            let row_edges: Vec<_> = input
+                .edges
                 .iter()
-                .copied()
-                .filter(|(a, b)| {
-                    py >= i64::from(a[1].min(b[1])) - i64::from(radius)
-                        && py <= i64::from(a[1].max(b[1])) + i64::from(radius)
+                .filter(|edge| {
+                    py >= i64::from(edge[1].min(edge[3])) - i64::from(radius)
+                        && py <= i64::from(edge[1].max(edge[3])) + i64::from(radius)
                 })
                 .collect();
             for (n, covered) in out.iter_mut().enumerate() {
                 for sx in 0..samples {
                     let point = [sample_grid(x0 + n, sx, samples), py];
-                    *covered += u32::from(
-                        row_edges
-                            .iter()
-                            .any(|(a, b)| stroke_covers(point, *a, *b, radius)),
-                    );
+                    *covered += u32::from(row_edges.iter().any(|edge| {
+                        stroke_covers(point, [edge[0], edge[1]], [edge[2], edge[3]], radius)
+                    }));
                 }
             }
         }
@@ -114,24 +189,20 @@ pub fn coverage(
     for sy in 0..samples {
         let py = sample_grid(y, sy, samples);
         let mut crossings = Vec::<(i64, i64, i32)>::new();
-        for points in grid_contours.iter().filter(|points| points.len() >= 3) {
-            for index in 0..points.len() {
-                let a = points[index];
-                let b = points[(index + 1) % points.len()];
-                let ay = i64::from(a[1]);
-                let by = i64::from(b[1]);
-                if (ay <= py && by > py) || (by <= py && ay > py) {
-                    let dx = i64::from(b[0]) - i64::from(a[0]);
-                    let dy = by - ay;
-                    let raw_numerator = i64::from(a[0]) * dy + (py - ay) * dx;
-                    let denominator = dy.abs();
-                    let numerator = if dy > 0 {
-                        raw_numerator
-                    } else {
-                        -raw_numerator
-                    };
-                    crossings.push((numerator, denominator, if dy > 0 { 1 } else { -1 }));
-                }
+        for edge in &input.edges {
+            let ay = i64::from(edge[1]);
+            let by = i64::from(edge[3]);
+            if (ay <= py && by > py) || (by <= py && ay > py) {
+                let dx = i64::from(edge[2]) - i64::from(edge[0]);
+                let dy = by - ay;
+                let raw_numerator = i64::from(edge[0]) * dy + (py - ay) * dx;
+                let denominator = dy.abs();
+                let numerator = if dy > 0 {
+                    raw_numerator
+                } else {
+                    -raw_numerator
+                };
+                crossings.push((numerator, denominator, if dy > 0 { 1 } else { -1 }));
             }
         }
         crossings.sort_unstable_by(|a, b| {
@@ -146,7 +217,7 @@ pub fn coverage(
                     winding -= crossings[edge].2;
                     edge += 1;
                 }
-                let inside = if nonzero {
+                let inside = if input.nonzero {
                     winding != 0
                 } else {
                     winding & 1 != 0
