@@ -477,6 +477,13 @@ class ConfigurationLocationVariant1(TypedDict, total=False):
     kind: Required[Literal["direct"]]
 
 
+class ConfigurationWindow(TypedDict, total=False):
+    basis: Required[str]
+    bytes: Required[int]
+    flash_offset: Required[int]
+    sha256: Required[str]
+
+
 type ConnectionKind = Literal[
     "control",
     "usb",
@@ -1892,7 +1899,8 @@ FirmwareSettings = TypedDict(
     "FirmwareSettings",
     {
         "$schema": Required["str"],
-        "bank": Required["SettingsBank"],
+        "bank": NotRequired["SettingsBank | None"],
+        "configuration": NotRequired["ConfigurationWindow | None"],
         "defaults": NotRequired["UpdateRange | None"],
         "fields": Required["list[SettingsField]"],
         "firmware_id": Required["str"],
@@ -3628,7 +3636,7 @@ class ProfileRecord(TypedDict, total=False):
     defaults: Required[UpdateRange]
     defaults_offset: Required[int]
     fields: Required[list[SettingsField]]
-    managed_index: Required[int]
+    managed_index: NotRequired[int | None]
     parity_offset: Required[int]
 
 
