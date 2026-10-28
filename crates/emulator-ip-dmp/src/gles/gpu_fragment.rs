@@ -5,7 +5,9 @@
 //! harness share the same packed inputs so the CPU implementation remains a
 //! byte-exact oracle while this is developed.
 
-use super::{Engine, raster};
+use super::Engine;
+#[cfg(test)]
+use super::raster;
 use std::{
     future::Future,
     sync::{Mutex, OnceLock},
@@ -21,7 +23,7 @@ const INPUT_WORDS: usize = 16;
 const CASE_WORDS: usize = INPUT_OFFSET + INPUT_WORDS;
 
 /// Values interpolated at one fragment by the primitive stage.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) struct FragmentInput {
     pub x: u32,
     pub y: u32,
@@ -441,7 +443,7 @@ mod tests {
         set(&mut engine, 0x300, color_blend << 8);
         set(&mut engine, 0x302, 3);
         set(&mut engine, 0x303, rng.next());
-        let blend_code = || rng.below(15);
+        let mut blend_code = || rng.below(15);
         let rgb_source = blend_code();
         let rgb_destination = blend_code();
         let alpha_source = blend_code();
@@ -540,8 +542,17 @@ mod tests {
                 .zip(&expected)
                 .position(|(actual, expected)| actual != expected)
                 .unwrap_or(actual.len().min(expected.len()));
+            let case_index = offset.saturating_sub(MEMORY_BASE) / REGION_SIZE;
+            let case = &cases[case_index];
+            let engine = case.engine;
             panic!(
-                "WGSL fragment differs from CPU at byte {offset:#x}: GPU {:?}, CPU {:?}",
+                "WGSL fragment differs from CPU at byte {offset:#x}, case {case_index}, input {:?}, registers 0x301={:#x} 0x302={:#x} 0x307={:#x} 0x317={:#x}: initial {:?}, GPU {:?}, CPU {:?}",
+                case.input,
+                engine.reg(0x301),
+                engine.reg(0x302),
+                engine.reg(0x307),
+                engine.reg(0x317),
+                initial.get(offset..offset.saturating_add(8)),
                 actual.get(offset..offset.saturating_add(8)),
                 expected.get(offset..offset.saturating_add(8)),
             );
@@ -554,6 +565,7 @@ mod tests {
         let mut memory = vec![0u8; MEMORY_BASE + 2 * REGION_SIZE];
         let (mut factor_engine, input) = random_case(&mut rng, &mut memory, 0);
         set(&mut factor_engine, 0x304, 0);
+        set(&mut factor_engine, 0x305, 0);
         set(&mut factor_engine, 0x307, 15 << 8);
         set(&mut factor_engine, 0x300, 0x100);
         set(&mut factor_engine, 0x301, 15 << 16);
@@ -561,13 +573,14 @@ mod tests {
             engine: &factor_engine,
             input,
         }];
-        assert_eq!(
-            dispatch(&factor_case, &memory).unwrap_err(),
-            "DMP fragment 0: DMP unsupported blend factor"
-        );
+        assert!(matches!(
+            dispatch(&factor_case, &memory),
+            Err(error) if error == "DMP fragment 0: DMP unsupported blend factor"
+        ));
 
         let (mut logic_engine, logic_input) = random_case(&mut rng, &mut memory, 1);
         set(&mut logic_engine, 0x304, 0);
+        set(&mut logic_engine, 0x305, 0);
         set(&mut logic_engine, 0x307, 15 << 8);
         set(&mut logic_engine, 0x300, 0);
         set(&mut logic_engine, 0x302, 2);
@@ -575,9 +588,9 @@ mod tests {
             engine: &logic_engine,
             input: logic_input,
         }];
-        assert_eq!(
-            dispatch(&logic_case, &memory).unwrap_err(),
-            "DMP fragment 0: DMP unsupported logic operation"
-        );
+        assert!(matches!(
+            dispatch(&logic_case, &memory),
+            Err(error) if error == "DMP fragment 0: DMP unsupported logic operation"
+        ));
     }
 }

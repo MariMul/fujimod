@@ -663,9 +663,9 @@ fn process_fragment(case_index: u32) {
             } else if equation == 2u {
                 color[channel] = b - a;
             } else if equation == 3u {
-                color[channel] = min(color[channel], destination[channel]);
+                color[channel] = min(color[channel], b);
             } else {
-                color[channel] = max(color[channel], destination[channel]);
+                color[channel] = max(color[channel], b);
             }
         }
     } else if reg(case_index, 0x302u) != 3u {
