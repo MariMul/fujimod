@@ -12,7 +12,7 @@ fn main() {
         std::process::exit(2);
     }
     match replay_captures(&PathBuf::from(directory)) {
-        Ok(count) => println!("replayed {count} DMP command lists through the CPU renderer"),
+        Ok(count) => println!("replayed {count} DMP command lists with host GPU parity"),
         Err(error) => {
             eprintln!("DMP capture replay failed: {error}");
             std::process::exit(1);

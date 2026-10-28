@@ -264,7 +264,7 @@ fn replay_record(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("restore DMP engine state from {}: {error}", path.display()))?;
     engine.set_host_acceleration(false);
     let mut read_index = 0;
-    let actual_snapshots = engine.execute(&record.words, &mut |address, length| {
+    let actual_snapshots = engine.execute_host_gpu(&record.words, &mut |address, length| {
         let Some((expected_address, bytes)) = record.reads.get(read_index) else {
         return Err(format!("{} replay requested an extra reader range", path.display()));
         };
