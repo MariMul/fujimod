@@ -7,9 +7,11 @@ use super::scanline;
 use std::sync::OnceLock;
 use wgpu::util::DeviceExt;
 
+#[cfg(test)]
 pub type Point = [f64; 2];
 
 struct Gpu {
+    #[cfg(test)]
     name: String,
     pipeline: wgpu::ComputePipeline,
 }
@@ -30,6 +32,7 @@ impl Gpu {
             cache: None,
         });
         Self {
+            #[cfg(test)]
             name: context.adapter_name().to_owned(),
             pipeline,
         }
@@ -251,6 +254,7 @@ fn shared_gpu() -> Result<Option<&'static Gpu>, String> {
 /// points; stroke edges follow the CPU implementation's open contour windows.
 /// Coordinates and stroke radius are rounded to eighth-pixel units, which
 /// includes the DMP's current 1x, 2x, and 4x sample modes.
+#[cfg(test)]
 pub fn coverage(
     contours: &[Vec<Point>],
     x0: usize,

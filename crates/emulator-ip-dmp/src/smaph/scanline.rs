@@ -124,6 +124,7 @@ fn crossing_at_or_left(crossing: (i64, i64, i32), x: i64) -> bool {
     i128::from(crossing.0) <= i128::from(x) * i128::from(crossing.1)
 }
 
+#[cfg(test)]
 pub(super) fn coverage(
     contours: &[Vec<Point>],
     x0: usize,

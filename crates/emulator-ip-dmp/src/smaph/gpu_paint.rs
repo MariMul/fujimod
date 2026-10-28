@@ -4,10 +4,12 @@
 //! samples paint, applies color state and blends against the destination.
 
 use super::{Bank, Gradient, Texture};
+use crate::gpu::GpuSurface;
 use std::sync::OnceLock;
 use wgpu::util::DeviceExt;
 
 struct Gpu {
+    #[cfg(test)]
     name: String,
     pipeline: wgpu::ComputePipeline,
 }
@@ -28,6 +30,7 @@ impl Gpu {
             cache: None,
         });
         Self {
+            #[cfg(test)]
             name: context.adapter_name().to_owned(),
             pipeline,
         }
@@ -52,9 +55,9 @@ impl Gpu {
         texture: Option<&Texture>,
         gradient: Option<&Gradient>,
         gradient_deltas: &[u32],
+        resident_surface: Option<&GpuSurface>,
     ) -> Result<Vec<u8>, String> {
         let device = context.device();
-        let queue = context.queue();
         let [x0, x1, y0, y1] = bounds;
         let [width, height] = target_extent;
         let bbox_width = x1.saturating_sub(x0);
@@ -86,6 +89,12 @@ impl Gpu {
             || scissors.len() > 16
             || !matches!(order, 1 | 0x101 | 0x01000001 | 0x01000101)
             || (texture.is_some() && gradient.is_some())
+            || resident_surface.is_some_and(|surface| {
+                let key = surface.key();
+                key.format != crate::gpu::SurfaceFormat::Rgba8
+                    || key.extent.width as usize != width
+                    || key.extent.height as usize != height
+            })
         {
             return Err("SMAPH paint inputs have invalid extents or state".into());
         }
@@ -127,13 +136,15 @@ impl Gpu {
         data.extend_from_slice(gradient_deltas);
 
         let target_offset = data.len();
-        data.extend(
-            target
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|bytes| u32::from_le_bytes(*bytes)),
-        );
+        if resident_surface.is_none() {
+            data.extend(
+                target
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|bytes| u32::from_le_bytes(*bytes)),
+            );
+        }
         let image_offset = data.len();
         if let Some(texture) = texture {
             for chunk in texture.bytes.chunks(4) {
@@ -235,6 +246,23 @@ impl Gpu {
             }
         }
 
+        let resident = resident_surface.is_some();
+        let bytes_per_row = if resident {
+            bbox_width
+                .checked_mul(4)
+                .and_then(|bytes| bytes.checked_add(255))
+                .map(|bytes| bytes & !255)
+                .ok_or("SMAPH paint row stride overflow")?
+        } else {
+            bbox_width
+                .checked_mul(4)
+                .ok_or("SMAPH paint row stride overflow")?
+        };
+        params[66] = u32::from(resident);
+        params[67] = (bytes_per_row / 4)
+            .try_into()
+            .map_err(|_| "SMAPH paint row stride exceeds u32")?;
+
         let param_bytes: Vec<u8> = params.into_iter().flat_map(u32::to_le_bytes).collect();
         let coverage_bytes: Vec<u8> = coverage
             .iter()
@@ -256,8 +284,8 @@ impl Gpu {
             contents: &data_bytes,
             usage: wgpu::BufferUsages::STORAGE,
         });
-        let byte_count = count
-            .checked_mul(4)
+        let byte_count = (bytes_per_row as usize)
+            .checked_mul(bbox_height)
             .ok_or("SMAPH paint output buffer size overflow")?;
         let output = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("SMAPH paint output"),
@@ -265,12 +293,31 @@ impl Gpu {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        let download = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("SMAPH paint readback"),
-            size: byte_count as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+        let dummy_target = resident_surface.is_none().then(|| {
+            device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("SMAPH paint unused target"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::R32Uint,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
         });
+        let target_view = resident_surface.map_or_else(
+            || {
+                dummy_target
+                    .as_ref()
+                    .unwrap()
+                    .create_view(&Default::default())
+            },
+            |surface| surface.texture().create_view(&Default::default()),
+        );
         let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("SMAPH paint bindings"),
             layout: &self.pipeline.get_bind_group_layout(0),
@@ -291,6 +338,10 @@ impl Gpu {
                     binding: 3,
                     resource: output.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&target_view),
+                },
             ],
         });
         let mut encoder = device.create_command_encoder(&Default::default());
@@ -300,8 +351,44 @@ impl Gpu {
             pass.set_bind_group(0, &bindings, &[]);
             pass.dispatch_workgroups((params[2]).div_ceil(8), (params[3]).div_ceil(8), 1);
         }
+        if let Some(surface) = resident_surface {
+            let destination_y = if flip { height - y1 } else { y0 };
+            encoder.copy_buffer_to_texture(
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &output,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(bytes_per_row as u32),
+                        rows_per_image: Some(bbox_height as u32),
+                    },
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: surface.texture(),
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: x0 as u32,
+                        y: destination_y as u32,
+                        z: 0,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: bbox_width as u32,
+                    height: bbox_height as u32,
+                    depth_or_array_layers: 1,
+                },
+            );
+            context.submit(encoder.finish());
+            return Ok(Vec::new());
+        }
+        let download = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("SMAPH paint readback"),
+            size: byte_count as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         encoder.copy_buffer_to_buffer(&output, 0, &download, 0, byte_count as u64);
-        queue.submit([encoder.finish()]);
+        context.submit(encoder.finish());
 
         let (sender, receiver) = std::sync::mpsc::channel();
         download
@@ -353,6 +440,7 @@ fn shared_gpu() -> Result<Option<&'static Gpu>, String> {
 /// `coverage` is row-major and uses the same sample count as the path
 /// coverage stage. Scissors use exclusive right and bottom coordinates.
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(super) fn paint(
     coverage: &[u32],
     bounds: [usize; 4],
@@ -390,7 +478,53 @@ pub(super) fn paint(
         texture,
         gradient,
         gradient_deltas,
+        None,
     )
+}
+
+/// Paint a bounding box directly into its shared resident target.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn paint_resident(
+    surface: &GpuSurface,
+    coverage: &[u32],
+    bounds: [usize; 4],
+    target_extent: [usize; 2],
+    target: &[u8],
+    samples: u32,
+    regs: &Bank,
+    gamma: &[u8],
+    order: u32,
+    tiled: bool,
+    flip: bool,
+    scissors: &[[u32; 4]],
+    solid: [u8; 4],
+    blend: u32,
+    texture: Option<&Texture>,
+    gradient: Option<&Gradient>,
+    gradient_deltas: &[u32],
+) -> Result<(), String> {
+    let gpu = shared_gpu()?.ok_or_else(|| "SMAPH paint has no wgpu adapter".to_owned())?;
+    gpu.paint(
+        crate::gpu::context()?,
+        coverage,
+        bounds,
+        target_extent,
+        target,
+        samples,
+        regs,
+        gamma,
+        order,
+        tiled,
+        flip,
+        scissors,
+        solid,
+        blend,
+        texture,
+        gradient,
+        gradient_deltas,
+        Some(surface),
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

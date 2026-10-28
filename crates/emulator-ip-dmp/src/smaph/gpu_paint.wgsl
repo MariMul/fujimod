@@ -2,6 +2,7 @@
 @group(0) @binding(1) var<storage, read> coverage: array<u32>;
 @group(0) @binding(2) var<storage, read> data: array<u32>;
 @group(0) @binding(3) var<storage, read_write> output: array<u32>;
+@group(0) @binding(4) var resident_target: texture_2d<u32>;
 
 fn image_byte(offset: u32) -> u32 {
     let word = data[params[19] + offset / 4u];
@@ -366,10 +367,16 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let x = params[0] + id.x;
     let y = params[1] + id.y;
-    let output_index = id.y * params[2] + id.x;
+    let output_row = select(id.y, params[3] - 1u - id.y, params[66] != 0u && params[10] != 0u);
+    let output_index = output_row * params[67] + id.x;
     let destination_y = select(y, params[5] - 1u - y, params[10] != 0u);
     let target_index = pixel_index(x, destination_y, params[4], params[9] != 0u);
-    let destination_word = data[params[18] + target_index];
+    var destination_word = 0u;
+    if params[66] != 0u {
+        destination_word = textureLoad(resident_target, vec2<i32>(i32(x), i32(destination_y)), 0).x;
+    } else {
+        destination_word = data[params[18] + target_index];
+    }
     var inside_scissor = params[11] == 0u;
     for (var index = 0u; index < params[11]; index += 1u) {
         let offset = params[12] + index * 4u;

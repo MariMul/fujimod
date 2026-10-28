@@ -678,6 +678,7 @@ struct PreparedPaint<'a> {
     width: u32,
     height: u32,
     coverage_index: usize,
+    samples: u32,
     clips: Vec<[u32; 4]>,
     order: u32,
     tiled: bool,
@@ -882,6 +883,7 @@ fn rectangles(
             width,
             height,
             coverage_index,
+            samples,
             clips,
             order,
             tiled,
@@ -893,9 +895,219 @@ fn rectangles(
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    let (gpu_requested, verify_gpu) = gpu_mode();
+    #[cfg(not(target_arch = "wasm32"))]
+    let gpu_enabled = if gpu_requested {
+        match crate::gpu::context() {
+            Ok(_) => true,
+            Err(error) if !verify_gpu && error.starts_with("DMP host GPU adapter:") => false,
+            Err(error) => return Err(error),
+        }
+    } else {
+        false
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    if gpu_enabled {
+        let gpu_context = crate::gpu::context()?;
+        let _gpu_guard = gpu_context.acquire()?;
+        let gpu_coverages = gpu_coverage::coverage_batch(&coverage_inputs)?;
+        if verify_gpu {
+            let cpu_coverages: Vec<_> = coverage_inputs
+                .iter()
+                .map(scanline::coverage_image)
+                .collect();
+            for (index, (cpu, gpu)) in cpu_coverages.iter().zip(&gpu_coverages).enumerate() {
+                if cpu != gpu {
+                    let offset = cpu
+                        .iter()
+                        .zip(gpu)
+                        .position(|(cpu, gpu)| cpu != gpu)
+                        .unwrap_or(0);
+                    return Err(format!(
+                        "SMAPH GPU coverage differs from CPU at draw {index}, sample {offset}"
+                    ));
+                }
+            }
+            paint_cpu_draws(&prepared, &coverage_inputs, &cpu_coverages, &mut output)?;
+        }
+
+        let mut surfaces: BTreeMap<u64, Arc<crate::gpu::GpuSurface>> = BTreeMap::new();
+        let mut write_flags: BTreeMap<u64, Vec<bool>> = BTreeMap::new();
+        for draw in &prepared {
+            if surfaces.contains_key(&draw.address) {
+                let key = surfaces.get(&draw.address).unwrap().key();
+                if key.extent.width != draw.width
+                    || key.extent.height != draw.height
+                    || key.layout
+                        != if draw.tiled {
+                            crate::gpu::SurfaceLayout::Morton8x8
+                        } else {
+                            crate::gpu::SurfaceLayout::Linear
+                        }
+                {
+                    return Err("DMP target layout changed within batch".into());
+                }
+                continue;
+            }
+            let layout = if draw.tiled {
+                crate::gpu::SurfaceLayout::Morton8x8
+            } else {
+                crate::gpu::SurfaceLayout::Linear
+            };
+            let key = crate::gpu::SurfaceKey {
+                guest_address: draw.address,
+                format: crate::gpu::SurfaceFormat::Rgba8,
+                extent: crate::gpu::SurfaceExtent {
+                    width: draw.width,
+                    height: draw.height,
+                },
+                layout,
+            };
+            let guest_bytes = &output.get(&draw.address).unwrap().2;
+            let surface = gpu_context.get_or_create_target(key, Some(guest_bytes))?;
+            gpu_context.clear_write_masks(key)?;
+            surfaces.insert(draw.address, surface);
+            write_flags.insert(
+                draw.address,
+                vec![false; draw.width as usize * draw.height as usize],
+            );
+        }
+
+        for draw in &prepared {
+            let input = &coverage_inputs[draw.coverage_index];
+            let coverage = &gpu_coverages[draw.coverage_index];
+            let [x0, x1, y0, y1] = input.bounds;
+            let bbox_width = x1.saturating_sub(x0);
+            let target = &output.get(&draw.address).unwrap().2;
+            gpu_paint::paint_resident(
+                surfaces.get(&draw.address).unwrap(),
+                coverage,
+                input.bounds,
+                [draw.width as usize, draw.height as usize],
+                target,
+                draw.samples,
+                &draw.fill.stream.regs,
+                &draw.fill.stream.gamma,
+                draw.order,
+                draw.tiled,
+                draw.flip,
+                &draw.clips,
+                draw.solid,
+                draw.blend,
+                draw.texture.as_ref(),
+                draw.gradient.as_ref(),
+                &draw.fill.stream.gradient_deltas,
+            )?;
+            let flags = write_flags.get_mut(&draw.address).unwrap();
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let covered = coverage[(y - y0) * bbox_width + x - x0] != 0;
+                    let in_scissor = draw.clips.iter().any(|clip| {
+                        x as u32 >= clip[0]
+                            && (x as u32) < clip[2]
+                            && y as u32 >= clip[1]
+                            && (y as u32) < clip[3]
+                    });
+                    if covered && in_scissor {
+                        let target_y = if draw.flip {
+                            draw.height as usize - 1 - y
+                        } else {
+                            y
+                        };
+                        flags[target_y * draw.width as usize + x] = true;
+                    }
+                }
+            }
+        }
+
+        let limits = gpu_context.device().limits();
+        let mask_batch_limit = (limits.max_storage_buffer_binding_size as usize / 12)
+            .min(limits.max_compute_workgroups_per_dimension as usize * 64)
+            .max(1);
+        for (address, flags) in &write_flags {
+            let surface = surfaces.get(address).unwrap();
+            let width = surface.key().extent.width as usize;
+            let writes: Vec<_> = flags
+                .iter()
+                .enumerate()
+                .filter(|(_, written)| **written)
+                .map(|(index, _)| crate::gpu::PixelWriteMask {
+                    x: (index % width) as u32,
+                    y: (index / width) as u32,
+                    byte_mask: 0xf,
+                })
+                .collect();
+            for batch in writes.chunks(mask_batch_limit) {
+                gpu_context.record_write_masks(surface.key(), batch)?;
+            }
+        }
+
+        let mut gpu_writes = Vec::new();
+        for (address, surface) in &surfaces {
+            let readback = gpu_context.readback(surface.key())?;
+            if verify_gpu {
+                let cpu_bytes = &output.get(address).unwrap().2;
+                if cpu_bytes != &readback.bytes {
+                    let offset = cpu_bytes
+                        .iter()
+                        .zip(&readback.bytes)
+                        .position(|(cpu, gpu)| cpu != gpu)
+                        .unwrap_or(cpu_bytes.len().min(readback.bytes.len()));
+                    return Err(format!(
+                        "SMAPH GPU paint differs from CPU at target {address:#x}, byte {offset}"
+                    ));
+                }
+            }
+            for (range_address, range_len) in readback.written_ranges {
+                let offset = usize::try_from(range_address - surface.key().guest_address)
+                    .map_err(|_| "SMAPH GPU readback range offset overflow")?;
+                let end = offset
+                    .checked_add(range_len)
+                    .filter(|end| *end <= readback.bytes.len())
+                    .ok_or("SMAPH GPU readback range exceeds target")?;
+                gpu_writes.push((range_address, readback.bytes[offset..end].to_vec()));
+            }
+        }
+        if verify_gpu {
+            return Ok(output
+                .into_iter()
+                .map(|(address, (_, _, bytes))| (address, bytes))
+                .collect());
+        }
+        return Ok(gpu_writes);
+    }
+
+    let coverages: Vec<_> = coverage_inputs
+        .iter()
+        .map(scanline::coverage_image)
+        .collect();
+    paint_cpu_draws(&prepared, &coverage_inputs, &coverages, &mut output)?;
+    Ok(output
+        .into_iter()
+        .map(|(address, (_, _, bytes))| (address, bytes))
+        .collect())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn gpu_mode() -> (bool, bool) {
+    let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
+    let verify = enabled("FUJIMOD_SMAPH_VERIFY_GPU");
+    (verify || !enabled("FUJIMOD_SMAPH_CPU"), verify)
+}
+
+fn paint_cpu_draws(
+    prepared: &[PreparedPaint<'_>],
+    coverage_inputs: &[scanline::CoverageInput],
+    coverages: &[Vec<u32>],
+    output: &mut BTreeMap<u64, (u32, u32, Vec<u8>)>,
+) -> Result<(), String> {
+    if prepared.len() != coverage_inputs.len() || prepared.len() != coverages.len() {
+        return Err("DMP paint coverage batch length mismatch".into());
+    }
     for draw in prepared {
         let input = &coverage_inputs[draw.coverage_index];
-        let coverage = scanline::coverage_image(input);
+        let coverage = &coverages[draw.coverage_index];
         let [x0, x1, y0, y1] = input.bounds;
         let bbox_width = x1.saturating_sub(x0);
         let regs = &draw.fill.stream.regs;
@@ -939,10 +1151,7 @@ fn rectangles(
             }
         }
     }
-    Ok(output
-        .into_iter()
-        .map(|(address, (_, _, bytes))| (address, bytes))
-        .collect())
+    Ok(())
 }
 
 #[cfg(test)]
