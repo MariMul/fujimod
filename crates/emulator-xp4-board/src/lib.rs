@@ -930,6 +930,7 @@ impl Session {
             storage_irq,
             xpp_storage,
             xpp_serial,
+            xpp_sub_cpu,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -1044,10 +1045,30 @@ impl Session {
             }
             None
         };
+        let mut sub_cpu = match xpp_sub_cpu {
+            Some(peer) => {
+                if !xpp_serial.contains(&peer.port) {
+                    return Err("X-Processor Pro sub-CPU needs a declared serial port".to_owned());
+                }
+                let mut registers = vec![0; fujimod_emulator_xpp::serial::PEER_REGISTERS];
+                for (register, value) in peer.registers {
+                    let slot = registers
+                        .get_mut(usize::from(register))
+                        .ok_or("X-Processor Pro sub-CPU register out of range")?;
+                    *slot = value;
+                }
+                Some((peer.port, registers))
+            }
+            None => None,
+        };
         for base in xpp_serial {
+            let peer = match &sub_cpu {
+                Some((port, _)) if *port == base => sub_cpu.take().map(|(_, r)| r),
+                _ => None,
+            };
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_serial(base)?;
+                .xpp_serial(base, peer)?;
         }
         if let Some((inputs, sample_ticks)) = adc {
             devices

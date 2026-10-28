@@ -138,6 +138,17 @@
             "null"
           ]
         },
+        "sub_cpu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSubCpu"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared register-file peer on a serial port."
+        },
         "temperature_input": {
           "anyOf": [
             {
@@ -2180,6 +2191,63 @@
         "clear_from_ticks",
         "mask",
         "set_through_ticks"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpu": {
+      "additionalProperties": false,
+      "description": "Declared register-file peer behind one serial port.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "description": "Registers that do not read zero after reset.",
+          "items": {
+            "$ref": "#/$defs/ResetSubCpuRegister"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "port",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpuRegister": {
+      "additionalProperties": false,
+      "description": "One register of a declared sub-CPU register file.",
+      "properties": {
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "register": {
+          "description": "Register number, bits 14..8 of a send word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Value after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "register",
+        "value"
       ],
       "type": "object"
     },

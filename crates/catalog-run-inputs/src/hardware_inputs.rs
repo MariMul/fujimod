@@ -938,6 +938,34 @@ pub struct TemperatureInput {
     pub millicelsius: u64,
 }
 
+/// One register of a declared sub-CPU register file.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuRegister"))]
+pub struct SubCpuRegister {
+    /// Declared name.
+    pub name: String,
+    /// Register number, bits 14..8 of a send word.
+    pub register: u64,
+    /// Value after reset.
+    pub value: u64,
+}
+
+/// Declared register-file peer behind one serial port.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpu"))]
+pub struct SubCpuInputs {
+    /// Declared basis.
+    pub basis: String,
+    /// Serial port base address.
+    pub port: u64,
+    /// Registers that do not read zero after reset.
+    pub registers: Vec<SubCpuRegister>,
+}
+
 /// Declared hardware reset facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -982,6 +1010,9 @@ pub struct HardwareReset {
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,
+    /// Declared register-file peer on a serial port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_cpu: Option<SubCpuInputs>,
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,

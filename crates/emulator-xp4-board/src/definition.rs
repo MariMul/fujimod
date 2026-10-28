@@ -43,6 +43,8 @@ pub struct Definition {
     #[serde(default)]
     pub xpp_serial: Vec<u64>,
     #[serde(default)]
+    pub xpp_sub_cpu: Option<XppSubCpu>,
+    #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
     pub io_group_base: Option<u64>,
@@ -99,6 +101,15 @@ pub enum TimerLayout {
     Xp4,
     /// Sixteen channels; select bits clear in the control word.
     Xpp,
+}
+
+/// Register-file peer on one X-Processor Pro serial port: (register, value)
+/// pairs after reset; unlisted registers read zero.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppSubCpu {
+    pub port: u64,
+    pub registers: Vec<(u8, u8)>,
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.
