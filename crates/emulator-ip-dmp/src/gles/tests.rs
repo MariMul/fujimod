@@ -1,4 +1,7 @@
 use super::*;
+const TEST_SHADER_PROGRAM: [u32; 3] = [0x4c000000, 0x4c201000, 0x88000000];
+const TEST_SHADER_DESCRIPTOR: u32 = 0x8d86c36f;
+
 fn pair(words: &mut Vec<u32>, index: u16, value: u32) {
     words.extend([value, 0xf0000 | index as u32]);
 }
@@ -58,15 +61,24 @@ fn setup() -> Vec<u32> {
     ] {
         pair(&mut words, r, v);
     }
-    upload(
-        &mut words,
-        0x49c,
-        &[0x4c000000, 0x4c201000, 0x88000000],
-        false,
-    );
-    upload(&mut words, 0x4a6, &[0x8d86c36f], false);
+    upload(&mut words, 0x49c, &TEST_SHADER_PROGRAM, false);
+    upload(&mut words, 0x4a6, &[TEST_SHADER_DESCRIPTOR], false);
     words
 }
+
+#[test]
+fn uploaded_mov_program_translates_to_wgsl_via_naga() {
+    let semantics = std::array::from_fn(|index| index as u32);
+    let wgsl = crate::pica::translate_vertex_to_wgsl(
+        &TEST_SHADER_PROGRAM,
+        &[TEST_SHADER_DESCRIPTOR],
+        0,
+        &semantics,
+    )
+    .unwrap();
+    assert!(wgsl.contains("@vertex"), "{wgsl}");
+}
+
 #[test]
 fn uploaded_mov_program_draws_triangle_with_exact_top_left_coverage() {
     let mut words = setup();
