@@ -75,6 +75,13 @@
       "clock_id": null
     },
     {
+      "id": "decompressor",
+      "base": 4294443008,
+      "size": 108,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
       "id": "serial0",
       "base": 4294082560,
       "size": 256,
@@ -275,6 +282,11 @@
         "source_block_id": "dma",
         "output_id": "event7",
         "line": 214
+      },
+      {
+        "source_block_id": "decompressor",
+        "output_id": "interrupt",
+        "line": 129
       }
     ],
     "companion": null,
@@ -403,11 +415,16 @@
               4294107136
             ],
             "basis": "Declared discovery input: a provisional status law without a peer. Sends complete at once and set done bit 2, writes to +0x2c clear status bits, bit 3 reads set and received words read zero. The attached peers are not identified."
+          },
+          "decompressor": {
+            "base": 4294443008,
+            "irq_route": 129,
+            "basis": "Method-4 streaming decompressor with the XP4 register interface: the X-T20 2.11 section-6 loader resets it through +0 (0xc5d584), waits for +0 to read nonzero and for +0x24 to read 0x10001, and connects interrupt descriptor row 0x12 of 0xed4720 (interrupt 0x81) with handler 0xc5d348 (0xc5d440)."
           }
         },
         "limits": [
           "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture and PL330 memory-to-memory programs only; no decompressor or display block is declared.",
+          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor; no display block is declared.",
           "No boot ROM, reset-release controller or external peripheral replies are assumed."
         ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."

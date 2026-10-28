@@ -1008,6 +1008,7 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
+        let has_xpp_storage = xpp_storage.is_some();
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
@@ -1178,7 +1179,10 @@ impl Session {
                 .io_groups(base);
         }
         if let Some((base, irq)) = decompressor {
-            if base != 0xfff79000 || !(32..512).contains(&irq) {
+            // The same engine sits at 0xfff79000 on XP4 and at 0xfff80000 on
+            // the X-Processor Pro, whose storage is the flash-controller map.
+            let expected = if has_xpp_storage { 0xfff80000 } else { 0xfff79000 };
+            if base != expected || !(32..512).contains(&irq) {
                 return Err("Invalid XP4 decompressor wiring".to_owned());
             }
             devices
