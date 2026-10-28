@@ -125,40 +125,48 @@ impl Engine {
     /// Transactional validation and rendering: a refused list changes neither
     /// register/program state nor memory. Outputs commit at the device deadline.
     pub fn execute(&mut self, words: &[u32], read: &mut Reader<'_>) -> Result<Snapshots, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(directory) = capture::capture_directory() {
+            return self.execute_captured(words, read, &directory);
+        }
+
         let mut next = self.clone();
         let mut output = raster::Targets::default();
-        #[cfg(not(target_arch = "wasm32"))]
-        let capture_directory = capture::capture_directory();
-        #[cfg(target_arch = "wasm32")]
-        let capture_directory = None::<std::path::PathBuf>;
-        #[cfg(not(target_arch = "wasm32"))]
-        let capture_state = capture_directory
-            .as_ref()
-            .map(|_| capture::serialize_engine(self))
-            .transpose()?;
-        let mut capture_reads = Vec::new();
-        let mut recording_reader = |address, length| {
-            let bytes = read(address, length)?;
-            if capture_directory.is_some() {
-                capture_reads.push((address, bytes.clone()));
-            }
-            Ok(bytes)
-        };
-        next.packets(words, &mut recording_reader, &mut output, 0)?;
-        drop(recording_reader);
+        next.packets(words, read, &mut output, 0)?;
         next.written_ranges = output.written_ranges();
         let snapshots = output.into_snapshots();
-        #[cfg(not(target_arch = "wasm32"))]
-        if let (Some(directory), Some(state)) = (capture_directory, capture_state) {
-            capture::write_capture(
-                &directory,
-                &state,
-                words,
-                &capture_reads,
-                &snapshots,
-                &next.written_ranges,
-            )?;
+        *self = next;
+        Ok(snapshots)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn execute_captured(
+        &mut self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+        directory: &std::path::Path,
+    ) -> Result<Snapshots, String> {
+        let capture_state = capture::serialize_engine(self)?;
+        let mut next = self.clone();
+        let mut output = raster::Targets::default();
+        let mut capture_reads = Vec::new();
+        {
+            let mut recording_reader = |address, length| {
+                let bytes = read(address, length)?;
+                capture_reads.push((address, bytes.clone()));
+                Ok(bytes)
+            };
+            next.packets(words, &mut recording_reader, &mut output, 0)?;
         }
+        next.written_ranges = output.written_ranges();
+        let snapshots = output.into_snapshots();
+        capture::write_capture(
+            directory,
+            &capture_state,
+            words,
+            &capture_reads,
+            &snapshots,
+            &next.written_ranges,
+        )?;
         *self = next;
         Ok(snapshots)
     }
