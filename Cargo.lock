@@ -2111,6 +2111,7 @@ dependencies = [
 name = "fujimod-emulator-ip-dmp"
 version = "0.1.0"
 dependencies = [
+ "ciborium",
  "fujimod-emulator-devices",
  "fujimod-workspace-hack",
  "libm",

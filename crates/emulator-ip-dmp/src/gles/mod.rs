@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
+mod capture;
+#[cfg(not(target_arch = "wasm32"))]
 mod gpu;
 mod raster;
 mod shader;
@@ -125,10 +127,40 @@ impl Engine {
     pub fn execute(&mut self, words: &[u32], read: &mut Reader<'_>) -> Result<Snapshots, String> {
         let mut next = self.clone();
         let mut output = raster::Targets::default();
-        next.packets(words, read, &mut output, 0)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let capture_directory = capture::capture_directory();
+        #[cfg(target_arch = "wasm32")]
+        let capture_directory = None::<std::path::PathBuf>;
+        #[cfg(not(target_arch = "wasm32"))]
+        let capture_state = capture_directory
+            .as_ref()
+            .map(|_| capture::serialize_engine(self))
+            .transpose()?;
+        let mut capture_reads = Vec::new();
+        let mut recording_reader = |address, length| {
+            let bytes = read(address, length)?;
+            if capture_directory.is_some() {
+                capture_reads.push((address, bytes.clone()));
+            }
+            Ok(bytes)
+        };
+        next.packets(words, &mut recording_reader, &mut output, 0)?;
+        drop(recording_reader);
         next.written_ranges = output.written_ranges();
+        let snapshots = output.into_snapshots();
+        #[cfg(not(target_arch = "wasm32"))]
+        if let (Some(directory), Some(state)) = (capture_directory, capture_state) {
+            capture::write_capture(
+                &directory,
+                &state,
+                words,
+                &capture_reads,
+                &snapshots,
+                &next.written_ranges,
+            )?;
+        }
         *self = next;
-        Ok(output.into_snapshots())
+        Ok(snapshots)
     }
     /// Byte ranges written by the most recent successful command list.
     /// Surface snapshots also contain pixels read for blending or tests;
@@ -474,6 +506,11 @@ impl Engine {
         }
         Ok(())
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn replay_captures(directory: &std::path::Path) -> Result<usize, String> {
+    capture::replay_directory(directory)
 }
 
 #[cfg(test)]

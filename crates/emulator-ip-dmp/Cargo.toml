@@ -21,4 +21,5 @@ fujimod-workspace-hack.workspace = true
 unsafe_op_in_unsafe_fn = "deny"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ciborium = { workspace = true }
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "vulkan", "dx12", "wgsl"] }
