@@ -266,3 +266,52 @@ fn flat_shading_uses_the_provoking_vertex_color() {
         288
     );
 }
+
+#[test]
+fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
+    for mask in [15, 1] {
+        for acceleration in [false, true] {
+            let mut words = setup();
+            pair(&mut words, 0x307, mask << 8);
+            for position in [
+                [-0.75, -0.75, 0., 1.],
+                [0.75, -0.75, 0., 1.],
+                [0., 0.75, 0., 1.],
+            ] {
+                upload(&mut words, 0x433, &packed(position), true);
+                upload(&mut words, 0x433, &packed([0.; 4]), true);
+            }
+            let mut engine = Engine::default();
+            engine.set_host_acceleration(acceleration);
+            let snapshots = engine.execute(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
+            assert_eq!(snapshots.len(), 1);
+            assert!(snapshots[0].1.iter().all(|&byte| byte == 0));
+            let ranges = engine.written_ranges();
+            assert_eq!(
+                ranges.iter().map(|(_, n)| n).sum::<usize>(),
+                288 * if mask == 15 { 4 } else { 1 }
+            );
+            // Another producer changes memory after submission and before the
+            // completion commits. Equal-valued GPU stores still take effect;
+            // untouched pixels and disabled channels retain the later write.
+            let mut memory = vec![0x5a; 32 * 32 * 4];
+            let mut written = vec![false; memory.len()];
+            for &(address, length) in ranges {
+                let offset = (address - 0x10000) as usize;
+                memory[offset..offset + length]
+                    .copy_from_slice(&snapshots[0].1[offset..offset + length]);
+                written[offset..offset + length].fill(true);
+                if mask == 1 {
+                    assert_eq!((length, offset % 4), (1, 3));
+                }
+            }
+            assert!(
+                memory
+                    .iter()
+                    .zip(&written)
+                    .all(|(&byte, &written)| byte == if written { 0 } else { 0x5a })
+            );
+            assert_eq!(&memory[memory.len() - 4..], &[0x5a; 4]);
+        }
+    }
+}

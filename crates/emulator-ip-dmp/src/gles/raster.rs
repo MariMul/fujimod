@@ -1,10 +1,11 @@
 //! Ordered single-sample rasterization over Morton color/depth surfaces.
-use super::{Engine, MAX_BYTES, Reader, Writes, float24, shader::Vector};
+use super::{Engine, MAX_BYTES, Reader, Snapshots, float24, shader::Vector};
 use std::collections::BTreeMap;
 #[derive(Default)]
 pub(super) struct Targets {
     buffers: BTreeMap<u64, Vec<u8>>,
     textures: BTreeMap<(u64, usize), Vec<u8>>,
+    written: BTreeMap<u64, Vec<bool>>,
 }
 impl Targets {
     fn buffer(
@@ -32,7 +33,32 @@ impl Targets {
         }
         Ok(bytes)
     }
-    pub fn into_writes(self) -> Writes {
+    fn mark_written(&mut self, address: u64, offset: usize, count: usize) {
+        let extent = self.buffers[&address].len();
+        self.written
+            .entry(address)
+            .or_insert_with(|| vec![false; extent])[offset..offset + count]
+            .fill(true);
+    }
+    pub fn written_ranges(&self) -> Vec<(u64, usize)> {
+        let mut ranges = Vec::new();
+        for (&address, flags) in &self.written {
+            let mut offset = 0;
+            while offset < flags.len() {
+                if !flags[offset] {
+                    offset += 1;
+                    continue;
+                }
+                let begin = offset;
+                while offset < flags.len() && flags[offset] {
+                    offset += 1;
+                }
+                ranges.push((address + begin as u64, offset - begin));
+            }
+        }
+        ranges
+    }
+    pub fn into_snapshots(self) -> Snapshots {
         self.buffers.into_iter().collect()
     }
 }
@@ -854,7 +880,11 @@ fn fragment_coverage(
             let mask = (st >> 8) as u8;
             bytes[i + 3] = old_stencil & !mask | stencil(op, old_stencil, reference) & mask;
         }
+        let stencil_written = st & 1 != 0 && bpp == 4 && (st >> 8) as u8 != 0;
         if !stencil_pass || !depth_pass {
+            if stencil_written {
+                out.mark_written(e.reg(0x31c) as u64, i + 3, 1);
+            }
             return Ok(());
         }
         if depth_control & 0x1001 == 0x1001 {
@@ -863,6 +893,12 @@ fn fragment_coverage(
             } else {
                 bytes[i..i + 3].copy_from_slice(&depth.to_le_bytes()[..3]);
             }
+        }
+        if stencil_written {
+            out.mark_written(e.reg(0x31c) as u64, i + 3, 1);
+        }
+        if depth_control & 0x1001 == 0x1001 {
+            out.mark_written(e.reg(0x31c) as u64, i, if bpp == 2 { 2 } else { 3 });
         }
     }
     if depth_control >> 8 & 15 == 0 {
@@ -939,6 +975,15 @@ fn fragment_coverage(
             .fold(0, |bits, c| bits | channel_masks[c]);
         let previous = u16::from_le_bytes(bytes[i..i + 2].try_into().unwrap());
         bytes[i..i + 2].copy_from_slice(&((previous & !bits) | (word & bits)).to_le_bytes());
+    }
+    if format == 0 {
+        for c in 0..4 {
+            if mask & (1 << c) != 0 {
+                out.mark_written(e.reg(0x31d) as u64, i + 3 - c, 1);
+            }
+        }
+    } else {
+        out.mark_written(e.reg(0x31d) as u64, i, bpp);
     }
     Ok(())
 }

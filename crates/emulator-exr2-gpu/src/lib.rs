@@ -686,6 +686,23 @@ impl CommandProcessor {
                 host.read(cpu, address, length as u64)
             })
             .map_err(Unsupported)?;
+        // Raster snapshots include untouched destination pixels. Commit only
+        // actual color/depth writes so concurrent accesses elsewhere survive.
+        let output: Vec<(u64, Vec<u8>)> = self
+            .gles
+            .written_ranges()
+            .iter()
+            .map(|&(address, length)| {
+                let (base, snapshot) = output
+                    .iter()
+                    .find(|(base, bytes)| {
+                        *base <= address && address + length as u64 <= *base + bytes.len() as u64
+                    })
+                    .ok_or_else(|| Unsupported("DMP write range outside target snapshot".into()))?;
+                let offset = (address - base) as usize;
+                Ok((address, snapshot[offset..offset + length].to_vec()))
+            })
+            .collect::<Result<_>>()?;
         let count = output.iter().map(|(_, b)| b.len() as u64).sum::<u64>();
         let job = self.new_job_with_receipts(receipts, || {
             vec![

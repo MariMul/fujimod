@@ -7,11 +7,13 @@ mod gpu;
 mod raster;
 mod shader;
 use shader::Vector;
-pub type Writes = Vec<(u64, Vec<u8>)>;
+pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Engine {
+    #[serde(skip)]
+    written_ranges: Vec<(u64, usize)>,
     vertices_executed: u64,
     primitive_index: u64,
     #[serde(skip)]
@@ -36,6 +38,7 @@ pub struct Engine {
 impl Default for Engine {
     fn default() -> Self {
         Self {
+            written_ranges: Vec::new(),
             vertices_executed: 0,
             primitive_index: 0,
             cpu_only: std::env::var_os("FUJIMOD_DMP_CPU").is_some(),
@@ -118,12 +121,19 @@ impl Engine {
     }
     /// Transactional validation and rendering: a refused list changes neither
     /// register/program state nor memory. Outputs commit at the device deadline.
-    pub fn execute(&mut self, words: &[u32], read: &mut Reader<'_>) -> Result<Writes, String> {
+    pub fn execute(&mut self, words: &[u32], read: &mut Reader<'_>) -> Result<Snapshots, String> {
         let mut next = self.clone();
         let mut output = raster::Targets::default();
         next.packets(words, read, &mut output, 0)?;
+        next.written_ranges = output.written_ranges();
         *self = next;
-        Ok(output.into_writes())
+        Ok(output.into_snapshots())
+    }
+    /// Byte ranges written by the most recent successful command list.
+    /// Surface snapshots also contain pixels read for blending or tests;
+    /// those bytes must not be committed by the device as DMA writes.
+    pub fn written_ranges(&self) -> &[(u64, usize)] {
+        &self.written_ranges
     }
     fn packets(
         &mut self,
