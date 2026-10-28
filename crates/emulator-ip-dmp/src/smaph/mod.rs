@@ -17,6 +17,8 @@ type Bank = BTreeMap<u16, u32>;
 mod geometry;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod gpu_coverage;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod gpu_paint;
 mod scanline;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
