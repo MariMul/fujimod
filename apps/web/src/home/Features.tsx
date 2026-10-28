@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
+import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
 import iconMetrics from '../ui/assets/feature-icon-metrics.generated.json';
@@ -292,7 +292,36 @@ export function FeatureCatalog() {
   const [position, setPosition] = createSignal({ left: 0, top: 0 });
   let timer: ReturnType<typeof setTimeout> | undefined;
   let card: HTMLDivElement | undefined;
+  let pinned = false;
   onCleanup(() => clearTimeout(timer));
+  const close = () => {
+    clearTimeout(timer);
+    pinned = false;
+    setTarget();
+  };
+  onSettled(() => {
+    const outside = (event: Event) => {
+      const anchor = target()?.anchor;
+      if (
+        anchor &&
+        event.target instanceof Node &&
+        !anchor.contains(event.target) &&
+        !card?.contains(event.target)
+      )
+        close();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  });
 
   const place = (anchor: HTMLElement) => {
     const r = anchor.getBoundingClientRect();
@@ -306,6 +335,7 @@ export function FeatureCatalog() {
     });
   };
   const show = (next: Target) => {
+    clearTimeout(timer);
     setTarget(next);
     place(next.anchor);
     requestAnimationFrame(() => place(next.anchor));
@@ -315,28 +345,67 @@ export function FeatureCatalog() {
     timer = setTimeout(action, ms);
   };
   /** A control or option with a hover card: after a short hover, on focus or on tap. */
-  const Ref = (props: { card: string; choice?: string; class?: string; children: JSX.Element }) => (
-    <span
-      class={props.class ? `${props.class} catalog-ref` : 'catalog-ref'}
-      tabindex="0"
-      onMouseEnter={(event) => {
-        const anchor = event.currentTarget;
-        later(() => show({ card: props.card, choice: props.choice, anchor }), 250);
-      }}
-      onMouseLeave={() => later(() => setTarget(), 150)}
-      onFocus={(event) =>
-        show({ card: props.card, choice: props.choice, anchor: event.currentTarget })
+  const Ref = (props: { card: string; choice?: string; class?: string; children: JSX.Element }) => {
+    let pointerPinned: boolean | undefined;
+    const activate = (anchor: HTMLElement, dismiss = pinned && target()?.anchor === anchor) => {
+      // Focus can open the card before the same tap delivers its click. Only
+      // an already pinned card should toggle closed on activation.
+      if (dismiss) close();
+      else {
+        pinned = true;
+        show({ card: props.card, choice: props.choice, anchor });
       }
-      onBlur={() => later(() => setTarget(), 150)}
-      onClick={(event) => {
-        const anchor = event.currentTarget;
-        if (target()?.anchor === anchor) setTarget();
-        else show({ card: props.card, choice: props.choice, anchor });
-      }}
-    >
-      {props.children}
-    </span>
-  );
+    };
+    return (
+      <span
+        class={props.class ? `${props.class} catalog-ref` : 'catalog-ref'}
+        role="button"
+        tabindex="0"
+        onPointerDown={(event) => {
+          // Safari can move focus to the tile during a tap. Keep the state
+          // from before that focus change so a second tap still dismisses.
+          pointerPinned = pinned && target()?.anchor === event.currentTarget;
+        }}
+        onPointerCancel={() => {
+          pointerPinned = undefined;
+        }}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'mouse' || pinned) return;
+          const anchor = event.currentTarget;
+          later(() => show({ card: props.card, choice: props.choice, anchor }), 250);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse' && !pinned) later(close, 150);
+        }}
+        onFocus={(event) => {
+          // Opening during pointer focus can cover the trigger before mouseup
+          // in Safari, retargeting the click. Let the completed tap open it.
+          if (pointerPinned !== undefined) return;
+          if (target()?.anchor !== event.currentTarget) pinned = false;
+          show({ card: props.card, choice: props.choice, anchor: event.currentTarget });
+        }}
+        onBlur={(event) => {
+          if (
+            !pinned &&
+            !(event.relatedTarget instanceof Node && card?.contains(event.relatedTarget))
+          )
+            later(close, 150);
+        }}
+        onClick={(event) => {
+          activate(event.currentTarget, pointerPinned);
+          pointerPinned = undefined;
+        }}
+        onKeyDown={(event) => {
+          if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) {
+            event.preventDefault();
+            activate(event.currentTarget);
+          }
+        }}
+      >
+        {props.children}
+      </span>
+    );
+  };
 
   /** An option chip; the X70's own options are dimmed. Options with a card description open it. */
   const Chip = (props: { choice: Choice; card: string | null }) => {
@@ -430,8 +499,12 @@ export function FeatureCatalog() {
         class={['catalog-card', { on: !!target() }]}
         role="tooltip"
         style={{ left: `${position().left}px`, top: `${position().top}px` }}
-        onMouseEnter={() => clearTimeout(timer)}
-        onMouseLeave={() => later(() => setTarget(), 150)}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') clearTimeout(timer);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse' && !pinned) later(close, 150);
+        }}
       >
         <Show when={target()}>{(current) => <CardBody target={current()} />}</Show>
       </div>
