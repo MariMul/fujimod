@@ -51,7 +51,9 @@ pub const CLEAR_PROFILE: &str = "stock-vg-clear-only";
 pub const UI_PROFILE: &str = "declared-vg-ui-primitives-unmeasured";
 const COMMAND: [u32; 6] = [0x10d4, 0x10dc, 0x10e4, 0x10ec, 0x20e0, 0x20e8];
 const COPY: [u32; 8] = [0xc00, 0xc04, 0xc08, 0xc0c, 0xc10, 0xc20, 0xc24, 0xc28];
-const TRIGGERS: [u32; 3] = [0x10d0, 0x10e0, 0x20f0];
+// Stock GL submits its shader/uniform command list through logical register 0x20f0.
+const GLES_SUBMIT: u32 = 0x20f0;
+const TRIGGERS: [u32; 3] = [0x10d0, 0x10e0, GLES_SUBMIT];
 pub type DmaOutput = Vec<(u64, Arc<Vec<u8>>)>;
 pub type RenderedBatch = (DmaOutput, u64);
 pub type Fields = Vec<(&'static str, Value)>;
@@ -420,7 +422,7 @@ impl CommandProcessor {
         if o == 0x34 || o == 0x105c {
             return fail("Graphics completion status is read-only");
         }
-        if o == 0x20f0 {
+        if o == GLES_SUBMIT {
             return self.start_gles(cpu, value, host, actions, record_receipts);
         }
         if TRIGGERS.contains(&o) {
@@ -565,7 +567,7 @@ impl CommandProcessor {
         record_receipts: bool,
     ) -> Result<()> {
         let o = offset(address, 4)?;
-        if o == 0x20f0 {
+        if o == GLES_SUBMIT {
             return self.start_gles(cpu, value, host, actions, record_receipts);
         }
         if TRIGGERS.contains(&o) {
@@ -717,7 +719,7 @@ impl CommandProcessor {
         self.busy = true;
         self.jobs_started += 1;
         self.clear_ack_offsets.clear();
-        self.store(0x20f0, trigger);
+        self.store(GLES_SUBMIT, trigger);
         self.schedule(
             Completion {
                 cpu,
