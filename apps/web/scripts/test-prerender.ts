@@ -254,7 +254,7 @@ try {
       assert.match(await note.innerText(), /without flashing your camera/);
       assert.equal(await note.locator('mark, em, strong, b, svg').count(), 0);
       assert.equal(await note.locator('a').count(), 1);
-      await note.getByRole('link', { name: 'Try FujiMod', exact: true }).click();
+      await note.getByRole('link', { name: 'Get started below', exact: true }).click();
       assert.equal(new URL(page.url()).hash, '#software');
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
