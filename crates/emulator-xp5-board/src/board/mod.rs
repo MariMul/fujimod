@@ -185,9 +185,27 @@ fn register_with_resources(
             )?;
         }
         "clock-gates" | "power-gates" => {
+            if window
+                .options
+                .keys()
+                .any(|key| window.kind != "clock-gates" || key != "configuration_word")
+            {
+                return Err("unknown gate option".into());
+            }
+            let configuration_word = window
+                .options
+                .get("configuration_word")
+                .map(|value| {
+                    value
+                        .as_integer()
+                        .and_then(|value| u32::try_from(value).ok())
+                        .ok_or("configuration_word must be an unsigned 32-bit integer")
+                })
+                .transpose()?;
             let gates =
                 gates::Gates::with_panel_clocks(window.kind == "power-gates", Some(clocks.clone()))
-                    .with_companion(companion);
+                    .with_companion(companion)
+                    .with_configuration_word(configuration_word);
             bus.register(window.base, window.size, Box::new(gates))?;
         }
         "timer-extended" => {
