@@ -103,6 +103,22 @@ fn record_write_masks(@builtin(global_invocation_id) invocation: vec3<u32>) {
     atomicOr(&write_masks.values[linear_offset], write.byte_mask);
 }
 
+@group(0) @binding(12) var draw_mask_in: texture_2d<u32>;
+@group(0) @binding(13) var<storage, read_write> draw_write_masks: PixelWriteMasks;
+
+@compute @workgroup_size(8, 8)
+fn accumulate_draw_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
+    let position = invocation.xy;
+    if (position.x >= params.storage_width || position.y >= params.storage_height) {
+        return;
+    }
+    let byte_mask = textureLoad(draw_mask_in, vec2<i32>(position), 0).x;
+    if (byte_mask != 0u) {
+        let linear_offset = position.y * params.width + position.x;
+        atomicOr(&draw_write_masks.values[linear_offset], byte_mask);
+    }
+}
+
 @group(0) @binding(7) var<storage, read_write> resolved_masks: PixelWriteMasks;
 @group(0) @binding(8) var resolved_mask_out: texture_storage_2d<r32uint, write>;
 

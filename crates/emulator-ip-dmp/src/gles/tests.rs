@@ -216,6 +216,37 @@ fn host_gpu_and_cpu_produce_identical_pixels_and_preserve_constant_alpha() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn host_render_path_matches_cpu_snapshots_and_written_ranges() {
+    let mut words = setup();
+    for position in [
+        [-0.83, -0.71, -0.5, 1.],
+        [0.72, -0.65, -0.5, 1.],
+        [-0.13, 0.91, -0.5, 1.],
+    ] {
+        upload(&mut words, 0x433, &packed(position), true);
+        upload(&mut words, 0x433, &packed([1., 0.25, 0.5, 1.]), true);
+    }
+    let mut cpu = Engine::default();
+    let expected = cpu
+        .execute(&words, &mut |_, length| Ok(vec![0; length]))
+        .unwrap();
+    let actual = match Engine::default()
+        .execute_host_gpu(&words, &mut |_, length| Ok(vec![0; length]))
+    {
+        Ok(actual) => actual,
+        Err(error) if error.starts_with("DMP host GPU adapter:") => {
+            eprintln!(
+                "skipping DMP host render test because no host GPU adapter is available: {error}"
+            );
+            return;
+        }
+        Err(error) => panic!("DMP host render path failed: {error}"),
+    };
+    assert_eq!(actual, expected);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn host_coverage_matches_integer_reference_at_shared_edges_and_subpixels() {
     for seed in 1..24i64 {
         let q = [

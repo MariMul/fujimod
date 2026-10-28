@@ -8,7 +8,11 @@ mod draw_state;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu;
 #[cfg(not(target_arch = "wasm32"))]
+mod gpu_draw;
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) mod gpu_fragment;
+#[cfg(not(target_arch = "wasm32"))]
+mod gpu_surfaces;
 mod raster;
 mod shader;
 use draw_state::DrawState;
@@ -25,6 +29,9 @@ pub struct Engine {
     primitive_index: u64,
     #[serde(skip)]
     cpu_only: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    #[serde(skip)]
+    gpu_primitives: Option<Vec<gpu_draw::Primitive>>,
     last_output: Option<[Vector; 16]>,
     regs: BTreeMap<u16, u32>,
     code: Vec<u32>,
@@ -49,6 +56,8 @@ impl Default for Engine {
             vertices_executed: 0,
             primitive_index: 0,
             cpu_only: std::env::var_os("FUJIMOD_DMP_CPU").is_some(),
+            #[cfg(not(target_arch = "wasm32"))]
+            gpu_primitives: None,
             last_output: None,
             regs: BTreeMap::new(),
             code: vec![],
@@ -141,6 +150,48 @@ impl Engine {
         let snapshots = output.into_snapshots();
         *self = next;
         Ok(snapshots)
+    }
+    /// Execute one list on the CPU reference path and the host render path.
+    /// The command list commits only when snapshots and write ranges agree.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn execute_host_gpu(
+        &mut self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+    ) -> Result<Snapshots, String> {
+        let mut next = self.clone();
+        next.cpu_only = true;
+        next.gpu_primitives = Some(Vec::new());
+        let mut cpu_output = raster::Targets::default();
+        let mut recorded_reads = Vec::new();
+        {
+            let mut recording_reader = |address, length| {
+                let bytes = read(address, length)?;
+                recorded_reads.push((address, bytes.clone()));
+                Ok(bytes)
+            };
+            next.packets(words, &mut recording_reader, &mut cpu_output, 0)?;
+        }
+        let cpu_written_ranges = cpu_output.written_ranges();
+        let cpu_snapshots = cpu_output.into_snapshots();
+        let primitives = next.gpu_primitives.take().unwrap_or_default();
+        let rendered = gpu_draw::render(&primitives, &recorded_reads, &cpu_snapshots, read)?;
+        if rendered.snapshots != cpu_snapshots {
+            return Err(gpu_draw::snapshot_mismatch(
+                &rendered.snapshots,
+                &cpu_snapshots,
+            ));
+        }
+        if rendered.written_ranges != cpu_written_ranges {
+            return Err(format!(
+                "DMP host GPU write ranges differ: GPU {:?}, CPU {:?}",
+                rendered.written_ranges, cpu_written_ranges
+            ));
+        }
+        next.gpu_primitives = None;
+        next.written_ranges = rendered.written_ranges;
+        *self = next;
+        Ok(rendered.snapshots)
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn execute_captured(
@@ -464,19 +515,25 @@ impl Engine {
         self.last_output = Some(vertex);
         let mode = state.raster.primitive_mode as u32;
         if mode == 8 {
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.gpu_primitives.is_some() {
+                return Err("DMP host GPU draw does not support points".into());
+            }
             return raster::point(state, &vertex, read, out);
         }
         self.vertices.push(vertex);
         let n = self.vertices.len();
         match mode {
             0 | 3 if n == 3 => {
+                let triangle = [self.vertices[0], self.vertices[1], self.vertices[2]];
                 raster::triangle(
                     state,
                     self.host_acceleration_enabled(),
-                    [self.vertices[0], self.vertices[1], self.vertices[2]],
+                    triangle,
                     read,
                     out,
                 )?;
+                self.record_gpu_triangle(state, triangle);
                 self.vertices.clear();
             }
             1 if n >= 3 => {
@@ -494,22 +551,29 @@ impl Engine {
                     ]
                 };
                 raster::triangle(state, self.host_acceleration_enabled(), t, read, out)?;
+                self.record_gpu_triangle(state, t);
                 self.primitive_index += 1;
                 if n > 3 {
                     self.vertices.remove(0);
                 }
             }
             2 if n >= 3 => {
+                let triangle = [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]];
                 raster::triangle(
                     state,
                     self.host_acceleration_enabled(),
-                    [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]],
+                    triangle,
                     read,
                     out,
                 )?;
+                self.record_gpu_triangle(state, triangle);
                 self.vertices.remove(1);
             }
             4 | 5 if n == 2 => {
+                #[cfg(not(target_arch = "wasm32"))]
+                if self.gpu_primitives.is_some() {
+                    return Err("DMP host GPU draw does not support lines".into());
+                }
                 raster::line(state, [self.vertices[0], self.vertices[1]], read, out)?;
                 if mode == 4 {
                     self.vertices.clear();
@@ -521,6 +585,16 @@ impl Engine {
             _ => return Err(format!("DMP unsupported primitive mode {mode}")),
         }
         Ok(())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_gpu_triangle(&mut self, state: &DrawState, vertices: [[Vector; 16]; 3]) {
+        if let Some(primitives) = &mut self.gpu_primitives {
+            primitives.push(gpu_draw::Primitive::new(
+                state.clone(),
+                vertices,
+                &self.regs,
+            ));
+        }
     }
 }
 

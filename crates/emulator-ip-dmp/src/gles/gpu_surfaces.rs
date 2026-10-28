@@ -246,6 +246,22 @@ impl SurfaceCache {
             .ok_or("DMP surface is not resident")?;
         self.gpu.readback(surface)
     }
+
+    pub(super) fn device(&self) -> &wgpu::Device {
+        &self.gpu.device
+    }
+
+    pub(super) fn queue(&self) -> &wgpu::Queue {
+        &self.gpu.queue
+    }
+
+    pub(super) fn accumulate_draw_mask(&self, key: SurfaceKey) -> Result<(), String> {
+        let surface = self
+            .surfaces
+            .get(&key)
+            .ok_or("DMP surface is not resident")?;
+        self.gpu.accumulate_draw_mask(surface)
+    }
 }
 
 struct Gpu {
@@ -254,6 +270,7 @@ struct Gpu {
     upload_pipeline: wgpu::ComputePipeline,
     clear_mask_pipeline: wgpu::ComputePipeline,
     record_mask_pipeline: wgpu::ComputePipeline,
+    accumulate_draw_mask_pipeline: wgpu::ComputePipeline,
     resolve_mask_pipeline: wgpu::ComputePipeline,
     readback_pipeline: wgpu::ComputePipeline,
 }
@@ -287,6 +304,8 @@ impl Gpu {
         let upload_pipeline = pipeline("DMP Morton upload", "upload_morton");
         let clear_mask_pipeline = pipeline("DMP write-mask clear", "clear_write_mask");
         let record_mask_pipeline = pipeline("DMP write-mask record", "record_write_masks");
+        let accumulate_draw_mask_pipeline =
+            pipeline("DMP rendered write-mask record", "accumulate_draw_mask");
         let resolve_mask_pipeline = pipeline("DMP write-mask resolve", "resolve_write_mask");
         let readback_pipeline = pipeline("DMP Morton readback", "readback_morton");
         Ok(Self {
@@ -295,6 +314,7 @@ impl Gpu {
             upload_pipeline,
             clear_mask_pipeline,
             record_mask_pipeline,
+            accumulate_draw_mask_pipeline,
             resolve_mask_pipeline,
             readback_pipeline,
         })
@@ -402,6 +422,40 @@ impl Gpu {
             &bindings,
             surface.key.extent,
             "DMP write-mask clear",
+        );
+        self.queue.submit([encoder.finish()]);
+        Ok(())
+    }
+
+    fn accumulate_draw_mask(&self, surface: &GpuSurface) -> Result<(), String> {
+        let params = self.params(surface, 0);
+        let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("DMP rendered write-mask bindings"),
+            layout: &self.accumulate_draw_mask_pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 12,
+                    resource: wgpu::BindingResource::TextureView(
+                        &surface.write_mask_texture.create_view(&Default::default()),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 13,
+                    resource: surface.write_mask_accumulator.as_entire_binding(),
+                },
+            ],
+        });
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        dispatch_2d(
+            &mut encoder,
+            &self.accumulate_draw_mask_pipeline,
+            &bindings,
+            surface.key.extent,
+            "DMP rendered write-mask accumulation",
         );
         self.queue.submit([encoder.finish()]);
         Ok(())
@@ -591,7 +645,11 @@ fn create_surface(key: SurfaceKey, pixel_count: usize, byte_len: usize, gpu: &Gp
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R32Uint,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         })
     };
@@ -710,9 +768,24 @@ mod tests {
         height: 8,
     };
 
+    fn surface_cache_or_skip() -> Option<SurfaceCache> {
+        match SurfaceCache::new() {
+            Ok(cache) => Some(cache),
+            Err(error) if error.starts_with("DMP host GPU adapter:") => {
+                eprintln!(
+                    "skipping DMP surface test because no host GPU adapter is available: {error}"
+                );
+                None
+            }
+            Err(error) => panic!("host GPU surface setup failed: {error}"),
+        }
+    }
+
     #[test]
     fn guest_upload_and_readback_are_exact_for_every_dmp_format() {
-        let mut cache = SurfaceCache::new().expect("host GPU adapter");
+        let Some(mut cache) = surface_cache_or_skip() else {
+            return;
+        };
         let formats = [
             SurfaceFormat::Rgba8,
             SurfaceFormat::Rgb565,
@@ -742,7 +815,9 @@ mod tests {
 
     #[test]
     fn write_mask_reports_exact_morton_guest_byte_ranges() {
-        let mut cache = SurfaceCache::new().expect("host GPU adapter");
+        let Some(mut cache) = surface_cache_or_skip() else {
+            return;
+        };
         let format = SurfaceFormat::D24S8;
         let key = SurfaceKey {
             guest_address: 0x24000,
