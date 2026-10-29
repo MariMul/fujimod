@@ -83,6 +83,16 @@ impl Host for PhysicalHost<'_> {
     fn raise_irq(&mut self, _cpu: usize, _line: u32) -> Result<(), String> {
         Err("Per-core interrupt input is not wired for ARMv7-A".into())
     }
+    // Applied once the MMU is off, as retained TLB entries keep the ROM
+    // page table in the old low window until then.
+    fn select_memory(&mut self, decoder: usize, choice: usize) -> Result<(), String> {
+        let state = unsafe { &mut *self.cluster.state.get() };
+        if (decoder, choice) != (0, 1) || state.low_alias.is_none() || state.remap_pending {
+            return Err("Unsupported ARMv7-A memory decoder selection".into());
+        }
+        state.remap_pending = true;
+        Ok(())
+    }
     fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
         let source = self.cluster.memory_pointer(address, out.len(), 1)?;
         unsafe {
@@ -725,6 +735,61 @@ impl Devices {
         self.windows.push((base, base + REGISTERS, id));
         Ok(())
     }
+    pub fn xpp_boot(
+        &mut self,
+        options: fujimod_emulator_xpp::boot::Options,
+        card_strap: bool,
+    ) -> Result<(), String> {
+        let bases: Vec<u64> = [
+            options.selector_base,
+            options.clock_base,
+            options.ddr_base,
+            options.remap_base,
+        ]
+        .into_iter()
+        .chain(options.bus_bases.iter().copied())
+        .chain(options.memory_port_bases.iter().copied())
+        .collect();
+        if bases.iter().any(|&base| {
+            self.windows
+                .iter()
+                .any(|&(lo, hi, _)| base < hi && lo < base + 0x1000)
+        }) {
+            return Err("Overlapping X-Processor Pro boot controller".into());
+        }
+        let model = fujimod_emulator_xpp::boot::BootController::new(
+            options,
+            vec![fujimod_emulator_devices::signals::Level::new(card_strap)],
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        for base in bases {
+            self.windows.push((base, base + 0x1000, id));
+        }
+        Ok(())
+    }
+    pub fn xpp_sd(
+        &mut self,
+        options: fujimod_emulator_xpp::sd::Options,
+        format: fujimod_emulator_storage::fat::Options,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<(), String> {
+        let base = options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + 0x1000)
+        {
+            return Err("Overlapping X-Processor Pro SD wrapper".into());
+        }
+        let card = fujimod_emulator_storage::fat::format(&format, files)?;
+        let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
+        let model = fujimod_emulator_xpp::sd::Controller::new(options, card, contacts, None)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {
         self.windows
             .iter()
@@ -865,6 +930,18 @@ impl Cluster {
         result
     }
     pub fn flush_dma(&self) -> Result<(), String> {
+        let state = unsafe { &mut *self.state.get() };
+        if state.remap_ready
+            && let Some(index) = state.low_alias.take()
+        {
+            let low = self.memory[index].data.len();
+            for cpu in &self.cpus {
+                cpu.unmap(0, low)?;
+                unsafe { cpu.map_backing(0, low, 7, std::ptr::NonNull::new(self.ram.as_ptr()).unwrap()) }?;
+            }
+            state.remap_pending = false;
+            state.remap_ready = false;
+        }
         if unsafe { (*self.state.get()).cache_dirty } {
             for cpu in &self.cpus {
                 cpu.invalidate_code(None)?;

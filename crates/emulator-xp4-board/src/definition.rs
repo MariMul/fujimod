@@ -89,6 +89,14 @@ pub struct Definition {
     pub usb: Option<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub usb_phy: Option<(u64, [u8; 32], u32)>,
+    #[serde(default)]
+    pub xpp_boot: Option<XppBoot>,
+    #[serde(default)]
+    pub xpp_sd: Option<XppSd>,
+    #[serde(default)]
+    pub dram_alias: Option<u64>,
+    #[serde(default)]
+    pub pmu_cycles_per_tick: Option<u64>,
 }
 
 /// Register layout of the interval timer at `timer_base`.
@@ -112,4 +120,23 @@ pub struct XppStorage {
     pub dma_irq_routes: Vec<u32>,
     pub dma_setup_ticks: u64,
     pub dma_bytes_per_tick: u64,
+}
+
+/// X-Processor Pro cold-reset controller and its boot-selection strap level.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBoot {
+    pub options: fujimod_emulator_xpp::boot::Options,
+    pub card_strap: bool,
+    /// Memory window shown at physical 0 until the guest selects the remap.
+    #[serde(default)]
+    pub low_alias: Option<u64>,
+}
+
+/// X-Processor Pro SD0 wrapper and the FAT geometry of its inserted card.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppSd {
+    pub options: fujimod_emulator_xpp::sd::Options,
+    pub format: fujimod_emulator_storage::fat::Options,
 }

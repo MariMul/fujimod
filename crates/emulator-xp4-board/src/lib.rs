@@ -79,6 +79,11 @@ struct RunState {
     pc_observers: Vec<BTreeSet<u64>>,
     devices: Option<devices::Devices>,
     cache_dirty: bool,
+    pmu: Vec<Option<fujimod_emulator::board::armv7a::Profile>>,
+    // Memory window shown at physical 0 until the guest selects the remap.
+    low_alias: Option<usize>,
+    remap_pending: bool,
+    remap_ready: bool,
     driver_guard: Option<driver_guard::Guard>,
 }
 
@@ -86,6 +91,7 @@ struct Cluster {
     // Destroy processors before their RAM backing and callback contexts.
     cpus: Vec<Box<dyn Cpu>>,
     ram: Backing,
+    dram_alias: Option<u64>,
     memory: Vec<memory::Window>,
     hooks: Vec<Box<Hook>>,
     labels: Vec<u32>,
@@ -444,6 +450,12 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         ));
     }
     c.due();
+    if unsafe { (*c.state.get()).remap_pending } && c.cp(core, 1, 0, 0, 0)? & 1 == 0 {
+        unsafe {
+            (*c.state.get()).remap_ready = true;
+            (*c.state.get()).cache_dirty = true;
+        }
+    }
     if unsafe { (*c.state.get()).cache_dirty } {
         return c.redirect(core, address as u32);
     }
@@ -565,6 +577,17 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         }
     }
     let state = unsafe { &mut *c.state.get() };
+    // PMCR, PMCNTENSET/CLR and PMCCNTR follow the shared ARMv7-A PMU profile.
+    if word & 0x0fef0f10 == 0x0e090f10
+        && matches!(word & 15, 12 | 13)
+        && let Some(pmu) = state.pmu.get_mut(core).and_then(Option::as_mut)
+    {
+        use fujimod_emulator::board::armv7a::Entry;
+        if !matches!(pmu.before(&*c.cpus[core], address, state.ticks)?, Entry::Execute) {
+            state.redirected = Some(address as u32 + 4);
+            return Ok(());
+        }
+    }
     let load_exclusive = word & 0x0f900fff == 0x01900f9f;
     let store_exclusive = word & 0x0f900ff0 == 0x01800f90;
     let cp_read = word & 0x0fff0fff;
@@ -910,7 +933,11 @@ impl Session {
     pub fn ram_bytes(&self) -> usize {
         self.inner.ram.len()
     }
-    pub fn new(definition: Definition, storage_image: Option<Vec<u8>>) -> Result<Self, String> {
+    pub fn new(
+        definition: Definition,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+    ) -> Result<Self, String> {
         let Definition {
             ram_size,
             cores,
@@ -946,6 +973,10 @@ impl Session {
             instructions_per_tick,
             usb,
             usb_phy,
+            xpp_boot,
+            xpp_sd,
+            dram_alias,
+            pmu_cycles_per_tick,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -955,6 +986,7 @@ impl Session {
             return Err("A7 needs at least one instruction per guest tick".to_owned());
         }
         if !(1..=4).contains(&cores)
+            || pmu_cycles_per_tick == Some(0)
             || ram_size < 0x10000
             || ram_size & 4095 != 0
             || ram_size > 0x80000000
@@ -993,6 +1025,27 @@ impl Session {
         }
         let ram = Backing::zeros(ram_size);
         let memory = memory::allocate(memory_regions, ram_size)?;
+        let low_alias = xpp_boot
+            .as_ref()
+            .and_then(|boot| boot.low_alias)
+            .map(|base| {
+                memory
+                    .iter()
+                    .position(|window| window.base == base && window.data.len() < ram_size)
+                    .ok_or_else(|| "Low-memory alias names no smaller memory window".to_owned())
+            })
+            .transpose()?;
+        if let Some(alias) = dram_alias
+            && (alias % 4096 != 0
+                || alias < ram_size as u64
+                || alias + ram_size as u64 > 1 << 32
+                || memory.iter().any(|window| {
+                    alias < window.base + window.data.len() as u64
+                        && window.base < alias + ram_size as u64
+                }))
+        {
+            return Err("Invalid or overlapping ARM32 DRAM alias".into());
+        }
         if !initial_registers.is_empty() && initial_registers.len() != cores {
             return Err("Initial ARM32 register sets must name every processor".into());
         }
@@ -1043,6 +1096,18 @@ impl Session {
             }
             None
         };
+        if let Some(boot) = xpp_boot {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_boot(boot.options, boot.card_strap)?;
+        }
+        if let Some(sd) = xpp_sd {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_sd(sd.options, sd.format, &card_files)?;
+        } else if !card_files.is_empty() {
+            return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
+        }
         for base in xpp_serial {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -1191,6 +1256,7 @@ impl Session {
         let mut inner = Box::new(Cluster {
             cpus,
             ram,
+            dram_alias,
             memory,
             hooks: Vec::new(),
             labels,
@@ -1228,18 +1294,56 @@ impl Session {
                 pc_observers: vec![BTreeSet::new(); cores],
                 devices,
                 cache_dirty: false,
+                pmu: (0..cores)
+                    .map(|core| {
+                        pmu_cycles_per_tick.map(|cycles_per_tick| {
+                            fujimod_emulator::board::armv7a::Profile::new(
+                                fujimod_emulator::board::armv7a::Config {
+                                    mpidr: 0x80000000 | core as u32,
+                                    configuration_base: cbar.unwrap_or(0),
+                                    cycles_per_tick,
+                                },
+                            )
+                        })
+                    })
+                    .collect(),
+                low_alias,
+                remap_pending: false,
+                remap_ready: false,
                 driver_guard: None,
             }),
         });
         for core in 0..cores {
+            let low = low_alias.map_or(0, |index| inner.memory[index].data.len());
             unsafe {
                 inner.cpus[core].map_backing(
-                    0,
-                    ram_size,
+                    low as u64,
+                    ram_size - low,
                     7,
-                    NonNull::new(inner.ram.as_ptr()).unwrap(),
+                    NonNull::new(inner.ram.as_ptr().add(low)).unwrap(),
                 )
             }?;
+            if let Some(index) = low_alias {
+                let window = &inner.memory[index];
+                unsafe {
+                    inner.cpus[core].map_backing(
+                        0,
+                        low,
+                        window.permissions,
+                        NonNull::new(window.data.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
+            if let Some(alias) = inner.dram_alias {
+                unsafe {
+                    inner.cpus[core].map_backing(
+                        alias,
+                        ram_size,
+                        7,
+                        NonNull::new(inner.ram.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
             for window in &inner.memory {
                 unsafe {
                     inner.cpus[core].map_backing(

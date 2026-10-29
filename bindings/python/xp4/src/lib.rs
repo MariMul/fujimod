@@ -4,10 +4,15 @@ mod session;
 use fujimod_python_base::xp4_backend::{Xp4Backend, set_xp4_factory};
 use pyo3::prelude::*;
 
-fn open(definition: &str, storage_image: Option<Vec<u8>>) -> PyResult<Box<dyn Xp4Backend>> {
+fn open(
+    definition: &str,
+    storage_image: Option<Vec<u8>>,
+    card_files: Vec<(String, Vec<u8>)>,
+) -> PyResult<Box<dyn Xp4Backend>> {
     Ok(Box::new(session::Xp4Session::from_definition(
         definition,
         storage_image,
+        card_files,
     )?))
 }
 
