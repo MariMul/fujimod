@@ -136,6 +136,77 @@ fn mmio_entries_and_tightened_deadlines_are_exact() {
         );
     }
 }
+struct HighAddressDevice {
+    reads: Vec<(u64, u32)>,
+}
+unsafe fn high_address_read(offset: u64, size: u32, data: *mut c_void) -> u64 {
+    let device = unsafe { &mut *data.cast::<HighAddressDevice>() };
+    device.reads.push((offset, size));
+    0x1234_5678
+}
+unsafe fn high_address_write(_: u64, _: u32, _: u64, _: *mut c_void) {}
+
+#[test]
+fn x100vi_el1_mmio_read_uses_scr_rw_and_reaches_callback() {
+    let raw = crate::test_support::library()
+        .open(Model::ArmV8A, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x68000000, 7).unwrap(); // X100VI DRAM extent.
+    let system = |encoding: u16, value: u64| {
+        cpu.write_register(
+            Register::Arm64System(arm::SystemRegister::from_encoding(encoding)),
+            &value.to_le_bytes(),
+        )
+        .unwrap();
+    };
+    system(0xf088, 0); // SCR_EL3 starts with RW clear.
+    system(0xe088, 0); // HCR_EL2 starts with RW clear.
+    cpu.write_register(Register::Pstate, &0x3c4u64.to_le_bytes())
+        .unwrap();
+    let system_value = |encoding| {
+        value(
+            &cpu,
+            Register::Arm64System(arm::SystemRegister::from_encoding(encoding)),
+        )
+    };
+    assert_eq!(system_value(0xf088) & 0x400, 0x400);
+    assert_eq!(system_value(0xe088) & 0x8000_0000, 0x8000_0000);
+    cpu.write_memory(0x108000, &0x609u64.to_le_bytes()).unwrap();
+    cpu.write_memory(0x108018, &0x109003u64.to_le_bytes())
+        .unwrap();
+    cpu.write_memory(
+        0x109000 + 0x1d0 * 8,
+        &0x0010_0000_fa00_0601u64.to_le_bytes(),
+    )
+    .unwrap();
+    system(0xc100, 0x108000); // TTBR0_EL1.
+    system(0xc102, 0x1a59c251c); // 36-bit VA, 4 KiB granule.
+    system(0xc510, 0xff4404); // MAIR_EL1.
+    system(0xc080, 0x30d00801); // SCTLR_EL1 at the observed failure.
+    // LDR W0, [X0] from the observed boot stop.
+    cpu.write_memory(0x9ed88, &0xb9400000u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(Register::X(0), &0xfa090400u64.to_le_bytes())
+        .unwrap();
+    let mut device = HighAddressDevice { reads: vec![] };
+    unsafe {
+        cpu.map_mmio(
+            0xfa000000,
+            0x100000,
+            Mmio {
+                read: high_address_read,
+                write: high_address_write,
+                data: (&mut device as *mut HighAddressDevice).cast(),
+            },
+        )
+        .unwrap()
+    }
+    assert_eq!(cpu.translate(0xfa090400, Access::Read).unwrap(), 0xfa090400);
+    run(&cpu, 0x9ed88, 1);
+    assert_eq!(device.reads, [(0x90400, 4)]);
+    assert_eq!(value(&cpu, Register::X(0)), 0x1234_5678);
+}
 unsafe fn intercept(_: u64, _: u32, data: *mut c_void) {
     unsafe { &*data.cast::<Core>() }
         .stop_before_instruction()

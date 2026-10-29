@@ -38,6 +38,7 @@ struct Execution {
     active: Cell<bool>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
+    startup_state_initialized: Cell<bool>,
     stopped: Cell<bool>,
     irq: Cell<bool>,
     fiq: Cell<bool>,
@@ -76,6 +77,7 @@ impl Core {
             active: Cell::new(false),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
+            startup_state_initialized: Cell::new(false),
             stopped: Cell::new(false),
             irq: Cell::new(false),
             fiq: Cell::new(false),
@@ -133,6 +135,22 @@ impl Execution {
         let mut v = [0; 8];
         self.cpu.read_register(r, &mut v)?;
         Ok(u64::from_le_bytes(v))
+    }
+    fn initialize_lower_el_state(&self, pstate: u64) -> Result<(), String> {
+        if self.startup_state_initialized.get() {
+            return Ok(());
+        }
+        if (pstate >> 2) & 3 == 3 {
+            return Ok(());
+        }
+        for (encoding, mask) in [(0xf088, 1 << 10), (0xe088, 1 << 31)] {
+            let register = Register::Arm64System(arm::SystemRegister::from_encoding(encoding));
+            let value = self.scalar(register)?;
+            self.cpu
+                .write_register(register, &(value | mask).to_le_bytes())?;
+        }
+        self.startup_state_initialized.set(true);
+        Ok(())
     }
     fn accounting(&self) -> Accounting {
         unsafe { Accounting::from_raw(self.record) }
