@@ -231,7 +231,7 @@ impl Core {
     }
     /// Only mapped MMIO data aborts are completed here. Unknown architectural
     /// traps return to the framework with the faulting PC unchanged.
-    fn mmio_trap(&self, trap: Trap) -> Result<bool, ExecutionError> {
+    fn mmio_trap(&self, trap: Trap, complete_after_pause: bool) -> Result<bool, ExecutionError> {
         if !matches!(trap.syndrome >> 26, 0x24 | 0x25) {
             return Ok(false);
         }
@@ -294,12 +294,15 @@ impl Core {
             ));
         }
         let mut updates = Vec::new();
+        // An async pause can arrive while a device callback is already in
+        // flight. Finish that guest access so the next run cannot repeat its
+        // side effect or lose a loaded value.
         for (t, pa, (base, w)) in transfers {
             let offset = w.offset + pa - base;
             if decoded.load {
                 let raw =
                     unsafe { (w.callbacks.read)(offset, u32::from(t.size), w.callbacks.data) };
-                if self.shared.stop.load(Ordering::Acquire) {
+                if !complete_after_pause && self.shared.stop.load(Ordering::Acquire) {
                     return Ok(true);
                 }
                 let mask = u64::MAX >> (64 - u32::from(t.size) * 8);
@@ -325,7 +328,7 @@ impl Core {
                 unsafe {
                     (w.callbacks.write)(offset, u32::from(t.size), value & mask, w.callbacks.data);
                 }
-                if self.shared.stop.load(Ordering::Acquire) {
+                if !complete_after_pause && self.shared.stop.load(Ordering::Acquire) {
                     return Ok(true);
                 }
             }
@@ -654,7 +657,7 @@ impl Cpu for Core {
                         .map_err(ExecutionError::Backend)?;
                 }
                 Event::Trap(trap) => {
-                    let handled = match self.mmio_trap(trap) {
+                    let handled = match self.mmio_trap(trap, false) {
                         Ok(handled) => handled,
                         Err(e) => {
                             error = Some(e);
@@ -803,7 +806,7 @@ impl Cpu for Core {
                 self.before(pc);
                 true
             }
-            Event::Trap(trap) => match self.mmio_trap(trap) {
+            Event::Trap(trap) => match self.mmio_trap(trap, true) {
                 Ok(handled) => handled,
                 Err(error) => {
                     self.validate_active_run(run)?
