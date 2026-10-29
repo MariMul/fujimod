@@ -2323,6 +2323,7 @@ name = "fujimod-emulator-xp4-display"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-display",
  "fujimod-emulator-graphics",
  "fujimod-emulator-imaging",
  "fujimod-workspace-hack",

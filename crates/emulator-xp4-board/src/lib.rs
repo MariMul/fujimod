@@ -980,6 +980,7 @@ impl Session {
             gpio_base,
             xpp_serial_replies,
             adc_base,
+            xpp_display_timing,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -1161,6 +1162,11 @@ impl Session {
                 layout.as_deref(),
                 video.as_deref(),
             )?;
+        }
+        if let Some((bases, irqs, frame_ticks, stop_ticks)) = xpp_display_timing {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_timing(bases, irqs, frame_ticks, stop_ticks)?;
         }
         if let Some(inputs) = gpio {
             devices

@@ -419,6 +419,25 @@ impl Devices {
         self.windows.push((base, base + 0x604, id));
         Ok(())
     }
+    pub fn xpp_display_timing(
+        &mut self,
+        bases: [u64; 2],
+        irqs: [[u8; 3]; 2],
+        frame_ticks: u64,
+        stop_ticks: u64,
+    ) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_display::timing::XppTiming::new(bases, irqs, frame_ticks, stop_ticks)?;
+        let windows = model.windows();
+        if windows.iter().any(|&(base, end)| {
+            self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end)
+        }) {
+            return Err("Duplicate X-Processor Pro display timing window".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.extend(windows.map(|(base, end)| (base, end, id)));
+        Ok(())
+    }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
         if words.iter().any(|&(address, _)| {
             self.windows

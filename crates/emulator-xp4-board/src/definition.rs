@@ -107,6 +107,10 @@ pub struct Definition {
     /// selects the X-Processor Pro law, where +8 is a power-down bit.
     #[serde(default)]
     pub adc_base: Option<u64>,
+    /// X-Processor Pro display timing: two bank bases, each bank's phase
+    /// 0/1/2 GIC lines, then frame and stop ticks.
+    #[serde(default)]
+    pub xpp_display_timing: Option<([u64; 2], [[u8; 3]; 2], u64, u64)>,
 }
 
 /// Register layout of the interval timer at `timer_base`.
