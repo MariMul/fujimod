@@ -663,32 +663,55 @@ impl PreservationContext {
             self.fault(PreservationFault::UnsupportedAccess);
             return;
         };
-        let physical = state
-            .decoders
-            .observed_physical(self.core.get() as usize, address, size.get())
-            .or_else(|| {
-                self.maps
-                    .iter()
-                    .find(|map| {
-                        map.address <= address
-                            && address.saturating_add(size.get()) <= map.address + map.size as u64
-                    })
-                    .map(|map| map.physical + address - map.address)
-            });
-        let Some(physical) = physical else {
+        let Some(end) = address
+            .checked_add(size.get())
+            .filter(|end| *end <= 1 << 32)
+        else {
             self.fault(PreservationFault::UnresolvedMapping);
             return;
         };
-        let Ok(physical) = PhysicalAddress::new(physical) else {
-            self.fault(PreservationFault::UnresolvedMapping);
-            return;
-        };
-        self.records.borrow_mut().bus_write(
-            PreservationBusSource::HostWrite,
-            physical,
-            cpu_address,
-            size,
-        );
+        let mut cursor = cpu_address.get();
+        let mut first = None;
+        // Validate the entire write, but record only its first protected chunk.
+        // A public write counts once even when it crosses several RAM windows.
+        while cursor < end {
+            let map = state
+                .decoders
+                .observed_mapping(self.core.get() as usize, cursor)
+                .or_else(|| {
+                    self.maps
+                        .iter()
+                        .find(|map| map.address <= cursor && cursor < map.address + map.size as u64)
+                });
+            let Some(map) = map else {
+                self.fault(PreservationFault::UnresolvedMapping);
+                return;
+            };
+            let chunk_end = end.min(map.address + map.size as u64);
+            let typed = (|| {
+                Ok::<_, String>((
+                    PhysicalAddress::new(map.physical + cursor - map.address)?,
+                    CpuAddress::new(cursor)?,
+                    WriteSize::new((chunk_end - cursor) as usize)?,
+                ))
+            })();
+            let Ok((physical, logical, chunk_size)) = typed else {
+                self.fault(PreservationFault::UnresolvedMapping);
+                return;
+            };
+            if first.is_none() && self.records.borrow().overlaps(physical, chunk_size) {
+                first = Some((physical, logical, chunk_size));
+            }
+            cursor = chunk_end;
+        }
+        if let Some((physical, logical, chunk_size)) = first {
+            self.records.borrow_mut().bus_write(
+                PreservationBusSource::HostWrite,
+                physical,
+                logical,
+                chunk_size,
+            );
+        }
     }
 }
 

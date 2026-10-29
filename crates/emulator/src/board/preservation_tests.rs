@@ -25,6 +25,10 @@ fn board(alias: bool) -> Board {
             permissions: 3,
         });
     }
+    mapped_board(mappings, vec![])
+}
+
+fn mapped_board(mappings: Vec<MemoryMap>, decoders: Vec<decoder::Decoder>) -> Board {
     Graph {
         processors: vec![Processor {
             model: Model::CortexR5F,
@@ -38,7 +42,7 @@ fn board(alias: bool) -> Board {
             size: 0x4000,
         }],
         dma_mappings: vec![BusMapping::ram(0x10000, 0x4000)],
-        decoders: vec![],
+        decoders,
         mappings,
         peripherals: vec![],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
@@ -623,4 +627,113 @@ fn begin_refuses_unsupported_ranges_and_conflicting_observers() {
             .is_err()
     );
     board.memory_watch_end(&mut watch).unwrap();
+}
+
+// Adjacent CPU windows need not have adjacent physical destinations.
+fn split_mapping_board(decoded: bool) -> Board {
+    let mappings = vec![
+        MemoryMap {
+            core: 0,
+            address: 0x10000,
+            physical: 0x10000,
+            size: 0x1000,
+            permissions: 7,
+        },
+        MemoryMap {
+            core: 0,
+            address: 0x11000,
+            physical: 0x12000,
+            size: 0x1000,
+            permissions: 7,
+        },
+    ];
+    let decoders = if decoded {
+        vec![decoder::Decoder {
+            initial: 1,
+            choices: vec![
+                decoder::Choice {
+                    processors: mappings
+                        .iter()
+                        .cloned()
+                        .map(|mut map| {
+                            map.physical = 0x13000;
+                            map
+                        })
+                        .collect(),
+                    dma: vec![],
+                },
+                decoder::Choice {
+                    processors: mappings.clone(),
+                    dma: vec![],
+                },
+            ],
+        }]
+    } else {
+        vec![]
+    };
+    mapped_board(mappings, decoders)
+}
+
+#[test]
+fn host_write_spanning_mappings_counts_once_at_the_protected_chunk() {
+    for decoded in [false, true] {
+        for (ranges, expected) in [
+            (vec![(0x10ffe, 0x11000)], Some((0x10ffe, 0x10ffe, 2))),
+            (vec![(0x12000, 0x12002)], Some((0x11000, 0x12000, 2))),
+            (
+                vec![(0x10ffe, 0x11000), (0x12000, 0x12002)],
+                Some((0x10ffe, 0x10ffe, 2)),
+            ),
+            (vec![(0x13000, 0x13002)], None),
+        ] {
+            let board = split_mapping_board(decoded);
+            let preservation = board.preservation_begin(protected(&ranges)).unwrap();
+            board
+                .cpu(0)
+                .unwrap()
+                .write_memory(0x10ffe, &[1, 2, 3, 4])
+                .unwrap();
+            assert_eq!(bytes(&board, 0x10ffe, 4), vec![1, 2, 3, 4]);
+            let state = preservation.state();
+            assert_eq!(state.host_writes().get(), u64::from(expected.is_some()));
+            if let Some(expected) = expected {
+                let Some(PreservationViolation::UnverifiableWrite {
+                    source,
+                    address,
+                    physical,
+                    size,
+                }) = state.violation()
+                else {
+                    panic!(
+                        "expected a resolved host write, got {:?}",
+                        state.violation()
+                    );
+                };
+                assert_eq!(*source, PreservationBusSource::HostWrite);
+                assert_eq!((address.get(), physical.get(), size.get()), expected);
+            } else {
+                assert_eq!(state.violation(), None);
+            }
+        }
+    }
+}
+
+#[test]
+fn host_write_spanning_mappings_preserves_an_earlier_violation() {
+    for decoded in [false, true] {
+        let mut board = split_mapping_board(decoded);
+        code(&board, &[0xe3a00001, 0xe5810000, 0xeafffffe]);
+        address(&board, 0x10080);
+        let preservation = board
+            .preservation_begin(protected(&[(0x10080, 0x10084), (0x12000, 0x12002)]))
+            .unwrap();
+        run(&mut board, 2);
+        let first = preservation.state().violation().cloned().unwrap();
+        assert!(matches!(first, PreservationViolation::CpuChange { .. }));
+        board.write_memory(0, 0x10ffe, &[1, 2, 3, 4]).unwrap();
+        let state = preservation.state();
+        assert_eq!(state.violation(), Some(&first));
+        assert_eq!(state.host_writes().get(), 1);
+        assert_eq!(state.changed_cpu_writes().get(), 1);
+    }
 }
