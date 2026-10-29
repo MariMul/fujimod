@@ -177,11 +177,15 @@ impl FlashController {
                 "Serial-flash chip select {chip_select} has no attached register device"
             ));
         }
-        let (transmit, receive) = match (self.registers[0x10 / 4], self.registers[0x20 / 4] & 0x7f)
-        {
+        // Bits 0-5, 14 and 24-31 are configuration the driver preserves across
+        // commands; they do not select command phases.
+        let (transmit, receive) = match (
+            self.registers[0x10 / 4] & !0xff00403f,
+            self.registers[0x20 / 4] & 0x7f,
+        ) {
             (0x18040 | 0x18080, 1) => (vec![], 0),
-            (0x38040 | 0x38080 | 0x39041 | 0x39081, 0x21) => (vec![], 1),
-            (0x19041 | 0x19081, 0x41) => {
+            (0x38040 | 0x38080 | 0x39040 | 0x39080, 0x21) => (vec![], 1),
+            (0x19040 | 0x19080, 0x41) => {
                 let value = u8::try_from(self.registers[0x14 / 4])
                     .map_err(|_| "Serial-flash transmit byte overflow")?;
                 (vec![value], 0)
