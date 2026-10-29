@@ -115,8 +115,13 @@ impl VectorGpu {
         ready.sort_unstable();
         for (_, token) in ready {
             let (_, outputs) = self.state.output(token).map_err(|e| e.0)?;
+            let ui_output = self.state.output_is_ui(token).map_err(|e| e.0)?;
             for (address, bytes) in &outputs {
-                cx.ram_write(*address, bytes)?;
+                if ui_output {
+                    cx.ram_write_coherent(*address, bytes)?;
+                } else {
+                    cx.ram_write(*address, bytes)?;
+                }
             }
             if let Some(recording) = &mut self.recording {
                 recording
@@ -184,6 +189,19 @@ impl Inputs for Connected<'_, '_> {
             });
         }
         result
+    }
+    fn page_versions(
+        &mut self,
+        _cpu: i64,
+        address: u64,
+        bytes: usize,
+    ) -> fujimod_emulator_devices::record::Result<Option<Vec<u64>>> {
+        if self.capture {
+            return Ok(None);
+        }
+        self.cx
+            .ram_page_versions(address, bytes)
+            .map_err(Unsupported)
     }
     fn targets(&mut self) -> fujimod_emulator_devices::record::Result<(usize, i64)> {
         let mut count = 0;

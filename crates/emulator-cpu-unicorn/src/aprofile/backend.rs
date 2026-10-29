@@ -45,6 +45,9 @@ impl Cpu for Core {
             ..Features::default()
         }
     }
+    fn precise_backing_write_observation(&self) -> bool {
+        self.execution.cpu.precise_backing_write_observation()
+    }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let e = &self.execution;
         e.memory.prepare_external_write()?;

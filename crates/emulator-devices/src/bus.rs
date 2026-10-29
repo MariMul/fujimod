@@ -140,6 +140,15 @@ pub trait Host {
     /// Guest RAM by physical address (DMA).
     fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String>;
     fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String>;
+    /// Stable identities and generations for backing pages intersecting a range.
+    /// Hosts without tracked RAM return `None` and devices take a full snapshot.
+    fn ram_page_versions(&mut self, _address: u64, _bytes: usize) -> Result<Option<Vec<u64>>, String> {
+        Ok(None)
+    }
+    /// Write bytes already reflected by a resident device surface.
+    fn ram_write_coherent(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        self.ram_write(address, bytes)
+    }
     /// Deliver captured pixels to host output transport. This cannot change
     /// guest time, device state or the model's image sequence.
     fn scanout(&mut self, _frame: crate::graphics::scanout::Frame) -> Result<(), String> {
@@ -233,6 +242,12 @@ impl<'a> Cx<'a> {
     }
     pub fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
         self.host.ram_write(address, bytes)
+    }
+    pub fn ram_page_versions(&mut self, address: u64, bytes: usize) -> Result<Option<Vec<u64>>, String> {
+        self.host.ram_page_versions(address, bytes)
+    }
+    pub fn ram_write_coherent(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        self.host.ram_write_coherent(address, bytes)
     }
     pub fn scanout(&mut self, frame: crate::graphics::scanout::Frame) -> Result<(), String> {
         self.host.scanout(frame)

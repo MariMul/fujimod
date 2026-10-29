@@ -88,6 +88,34 @@ impl Memory {
             .map(|chunk| chunk.map(|(physical, _, len)| (physical, physical + len as u64)))
             .collect()
     }
+    pub(super) fn page_versions(
+        &self,
+        address: u64,
+        bytes: usize,
+    ) -> Result<(Vec<u64>, bool), String> {
+        let mut versions = Vec::new();
+        let mut needs_rearm = false;
+        for chunk in self.chunks(address, bytes, Access::Host)? {
+            let (physical, _, len) = chunk?;
+            let Some((index, (base, _backing))) = self
+                .regions
+                .iter()
+                .enumerate()
+                .find(|(_, (base, backing))| *base <= physical && physical < *base + backing.len() as u64)
+            else {
+                return Err("page-version range has no physical backing".into());
+            };
+            let offset = (physical - *base) as usize;
+            let (page_versions, newly) = self.trackers[index].page_versions(offset, len)?;
+            needs_rearm |= newly;
+            for triple in page_versions.chunks_exact(3) {
+                if !versions.chunks_exact(3).any(|known| known == triple) {
+                    versions.extend_from_slice(triple);
+                }
+            }
+        }
+        Ok((versions, needs_rearm))
+    }
     fn observe_transfer(&self, source: &str, address: u64, bytes: usize) {
         if let Some(observer) = self
             .observation
@@ -131,6 +159,9 @@ impl Memory {
             unsafe {
                 cpu.observe_backings(&ranges)?;
             }
+        }
+        for tracker in &self.trackers {
+            tracker.clear_pending_rearm();
         }
         Ok(())
     }
@@ -192,12 +223,16 @@ impl Memory {
         self.mappings.borrow_mut().clone_from(&saved.mappings);
         Ok(())
     }
-    fn mark(&self, pointer: NonNull<u8>, bytes: usize) -> Result<(), String> {
+    fn mark(&self, pointer: NonNull<u8>, bytes: usize, coherent: bool) -> Result<(), String> {
         let start = pointer.as_ptr() as usize;
         for ((_, b), t) in self.regions.iter().zip(&self.trackers) {
             let base = b.as_ptr() as usize;
             if base <= start && start - base <= b.len() && bytes <= b.len() - (start - base) {
-                return t.mark(start - base, bytes);
+                return if coherent {
+                    t.mark_coherent(start - base, bytes)
+                } else {
+                    t.mark(start - base, bytes)
+                };
             }
         }
         Err("dirty write has no physical backing".into())
@@ -317,11 +352,12 @@ impl Memory {
         address: u64,
         bytes: &[u8],
         access: Access,
+        coherent: bool,
     ) -> Result<(), String> {
         let mut offset = 0;
         for chunk in self.chunks(address, bytes.len(), access)? {
             let (physical, pointer, len) = chunk?;
-            self.mark(pointer, len)?;
+            self.mark(pointer, len, coherent)?;
             unsafe {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr().add(offset), pointer.as_ptr(), len);
                 for cpu in cpus {
@@ -343,7 +379,7 @@ impl Memory {
         address: u64,
         bytes: &[u8],
     ) -> Result<(), String> {
-        self.write(cpus, domain, address, bytes, Access::Host)?;
+        self.write(cpus, domain, address, bytes, Access::Host, false)?;
         self.observe_transfer("host-write", address, bytes.len());
         Ok(())
     }
@@ -354,7 +390,32 @@ impl Memory {
         address: u64,
         bytes: &[u8],
     ) -> Result<(), String> {
-        self.write(cpus, domain, address, bytes, Access::Write)?;
+        self.write(cpus, domain, address, bytes, Access::Write, false)?;
+        self.observe_transfer("model-bus-write", address, bytes.len());
+        if let Some(stops) = self
+            .continuation
+            .borrow()
+            .as_ref()
+            .and_then(std::rc::Weak::upgrade)
+        {
+            let mut offset = 0;
+            for (physical, _, len) in self.chunks(address, bytes.len(), Access::Host)?.flatten() {
+                stops
+                    .borrow_mut()
+                    .store(physical, &bytes[offset..offset + len]);
+                offset += len;
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn write_dma_coherent(
+        &self,
+        cpus: &[Rc<dyn Cpu>],
+        domain: &exclusive::Shared,
+        address: u64,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        self.write(cpus, domain, address, bytes, Access::Write, true)?;
         self.observe_transfer("model-bus-write", address, bytes.len());
         if let Some(stops) = self
             .continuation

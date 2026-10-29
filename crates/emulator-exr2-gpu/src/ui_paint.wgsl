@@ -6,6 +6,7 @@ requires readonly_and_readwrite_storage_textures;
 @group(0) @binding(3) var resident_surface: texture_storage_2d<r32uint, read_write>;
 @group(0) @binding(4) var<storage, read> paint_data: array<u32>;
 @group(0) @binding(5) var<storage, read_write> touched_pixels: atomic<u32>;
+@group(0) @binding(6) var<storage, read_write> write_masks: array<atomic<u32>>;
 
 fn parameter_float(index: u32) -> f32 {
     return bitcast<f32>(params[index]);
@@ -208,4 +209,5 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
         packed_output = rgba.x << 24u | rgba.y << 16u | rgba.z << 8u | rgba.w;
     }
     textureStore(resident_surface, vec2<i32>(i32(x), i32(y)), vec4<u32>(packed_output, 0u, 0u, 0u));
+    atomicOr(&write_masks[y * params[4u] + x], 15u);
 }

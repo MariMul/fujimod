@@ -76,6 +76,20 @@ pub struct SurfaceReadback {
     pub written_ranges: Vec<(u64, usize)>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SurfaceRegion {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub struct SurfaceRegionReadback {
+    pub region: SurfaceRegion,
+    /// Eight bytes per pixel: packed pixel value followed by its byte mask.
+    pub records: Vec<u8>,
+}
+
 /// GPU surface readbacks encoded into a command buffer and mapped after it is
 /// submitted. Mapping a batch polls once for all of its surfaces.
 pub struct PendingSurfaceReadbacks {
@@ -84,6 +98,7 @@ pub struct PendingSurfaceReadbacks {
 
 struct PendingSurfaceReadback {
     surface: Arc<GpuSurface>,
+    region: SurfaceRegion,
     _result: wgpu::Buffer,
     download: wgpu::Buffer,
 }
@@ -93,9 +108,9 @@ pub struct GpuSurface {
     texture: wgpu::Texture,
     write_mask_texture: wgpu::Texture,
     write_mask_accumulator: wgpu::Buffer,
-    pixel_count: usize,
     byte_len: usize,
     guest_shadow: Mutex<Vec<u8>>,
+    guest_versions: Mutex<Option<Vec<u64>>>,
 }
 
 impl GpuSurface {
@@ -173,6 +188,10 @@ impl GpuContext {
             .map_err(|_| "host GPU surface cache lock poisoned")?;
         if let Some(surface) = surfaces.get(&key).cloned() {
             if let Some(bytes) = guest_bytes {
+                *surface
+                    .guest_versions
+                    .lock()
+                    .map_err(|_| "host GPU surface version lock poisoned")? = None;
                 let mut shadow = surface
                     .guest_shadow
                     .lock()
@@ -200,6 +219,32 @@ impl GpuContext {
         Ok(surface)
     }
 
+    pub fn target_is_current(&self, key: SurfaceKey, versions: &[u64]) -> Result<bool, String> {
+        let Some(surface) = self.get(key)? else {
+            return Ok(false);
+        };
+        Ok(surface
+            .guest_versions
+            .lock()
+            .map_err(|_| "host GPU surface version lock poisoned")?
+            .as_deref()
+            == Some(versions))
+    }
+
+    pub fn get_or_create_target_versioned(
+        &self,
+        key: SurfaceKey,
+        versions: Option<&[u64]>,
+        guest_bytes: Option<&[u8]>,
+    ) -> Result<Arc<GpuSurface>, String> {
+        let surface = self.get_or_create_target(key, guest_bytes)?;
+        *surface
+            .guest_versions
+            .lock()
+            .map_err(|_| "host GPU surface version lock poisoned")? = versions.map(<[u64]>::to_vec);
+        Ok(surface)
+    }
+
     /// Get or create a resident surface and record any guest upload into the
     /// caller's command encoder. Guest bytes are queued with `write_buffer`
     /// before the encoder is submitted.
@@ -222,6 +267,10 @@ impl GpuContext {
             .map_err(|_| "host GPU surface cache lock poisoned")?;
         if let Some(surface) = surfaces.get(&key).cloned() {
             if let Some(bytes) = guest_bytes {
+                *surface
+                    .guest_versions
+                    .lock()
+                    .map_err(|_| "host GPU surface version lock poisoned")? = None;
                 let shadow = surface
                     .guest_shadow
                     .lock()
@@ -382,7 +431,12 @@ impl GpuContext {
             .cloned()
             .ok_or("host GPU surface is not resident")?;
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        let pending = self.gpu.encode_readback(&mut encoder, surface)?;
+        let pending = self.gpu.encode_readback(
+            &mut encoder,
+            Arc::clone(&surface),
+            SurfaceRegion { x: 0, y: 0, width: key.extent.width, height: key.extent.height },
+            false,
+        )?;
         self.gpu.queue.submit([encoder.finish()]);
         let (surface, readback) = self
             .gpu
@@ -413,7 +467,37 @@ impl GpuContext {
                 .get(&key)
                 .cloned()
                 .ok_or("host GPU surface is not resident")?;
-            pending.push(self.gpu.encode_readback(encoder, surface)?);
+            pending.push(self.gpu.encode_readback(
+                encoder,
+                surface.clone(),
+                SurfaceRegion {
+                    x: 0,
+                    y: 0,
+                    width: surface.key.extent.width,
+                    height: surface.key.extent.height,
+                },
+                false,
+            )?);
+        }
+        Ok(PendingSurfaceReadbacks { surfaces: pending })
+    }
+
+    pub fn encode_region_readbacks(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        regions: &[(SurfaceKey, SurfaceRegion)],
+    ) -> Result<PendingSurfaceReadbacks, String> {
+        let surfaces = self
+            .surfaces
+            .lock()
+            .map_err(|_| "host GPU surface cache lock poisoned")?;
+        let mut pending = Vec::with_capacity(regions.len());
+        for (key, region) in regions {
+            let surface = surfaces
+                .get(key)
+                .cloned()
+                .ok_or("host GPU surface is not resident")?;
+            pending.push(self.gpu.encode_readback(encoder, surface, *region, true)?);
         }
         Ok(PendingSurfaceReadbacks { surfaces: pending })
     }
@@ -426,6 +510,67 @@ impl GpuContext {
     ) -> Result<Vec<(SurfaceKey, SurfaceReadback)>, String> {
         let readbacks = self.gpu.finish_readbacks(pending.surfaces)?;
         self.update_readback_shadows(readbacks)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn finish_region_readbacks(
+        &self,
+        pending: PendingSurfaceReadbacks,
+    ) -> Result<Vec<(SurfaceKey, SurfaceRegionReadback)>, String> {
+        let readbacks = self.gpu.finish_region_readbacks(pending.surfaces)?;
+        self.update_region_readback_shadows(readbacks)
+    }
+
+    /// Finish a submitted batch of region readbacks without blocking the browser.
+    pub async fn finish_region_readbacks_async(
+        &self,
+        pending: PendingSurfaceReadbacks,
+    ) -> Result<Vec<(SurfaceKey, SurfaceRegionReadback)>, String> {
+        let readbacks = self
+            .gpu
+            .finish_region_readbacks_async(pending.surfaces)
+            .await?;
+        self.update_region_readback_shadows(readbacks)
+    }
+
+    fn update_region_readback_shadows(
+        &self,
+        readbacks: Vec<(Arc<GpuSurface>, SurfaceRegionReadback)>,
+    ) -> Result<Vec<(SurfaceKey, SurfaceRegionReadback)>, String> {
+        let mut results = Vec::with_capacity(readbacks.len());
+        for (surface, readback) in readbacks {
+            let bpp = surface.key.format.bytes_per_pixel() as usize;
+            let width = surface.key.extent.width as usize;
+            let mut shadow = surface
+                .guest_shadow
+                .lock()
+                .map_err(|_| "host GPU surface shadow lock poisoned")?;
+            for (index, record) in readback.records.chunks_exact(8).enumerate() {
+                let x = readback.region.x as usize + index % readback.region.width as usize;
+                let y = readback.region.y as usize + index / readback.region.width as usize;
+                let pixel = match surface.key.layout {
+                    SurfaceLayout::Linear => y * width + x,
+                    SurfaceLayout::Morton8x8 => {
+                        let local = (x & 1)
+                            | ((y & 1) << 1)
+                            | ((x & 2) << 1)
+                            | ((y & 2) << 2)
+                            | ((x & 4) << 2)
+                            | ((y & 4) << 3);
+                        ((y >> 3) * (width >> 3) + (x >> 3)) * 64 + local
+                    }
+                };
+                let start = pixel * bpp;
+                shadow[start..start + bpp].copy_from_slice(&record[..bpp]);
+            }
+            results.push((surface.key, readback));
+        }
+        Ok(results)
+    }
+
+    /// Map a small host readback buffer asynchronously on WebGPU targets.
+    pub async fn map_read_buffer_async(&self, buffer: &wgpu::Buffer) -> Result<Vec<u8>, String> {
+        self.gpu.map_read_buffer_async(buffer).await
     }
 
     /// Finish a submitted batch without blocking the browser event loop.
@@ -805,9 +950,22 @@ impl Gpu {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         surface: Arc<GpuSurface>,
+        region: SurfaceRegion,
+        compact: bool,
     ) -> Result<PendingSurfaceReadback, String> {
-        let result_size = surface
-            .pixel_count
+        let end_x = region.x.checked_add(region.width).ok_or("host GPU readback region overflow")?;
+        let end_y = region.y.checked_add(region.height).ok_or("host GPU readback region overflow")?;
+        if region.width == 0
+            || region.height == 0
+            || end_x > surface.key.extent.width
+            || end_y > surface.key.extent.height
+        {
+            return Err("host GPU readback region is outside the surface".into());
+        }
+        let record_count = (region.width as usize)
+            .checked_mul(region.height as usize)
+            .ok_or("host GPU surface readback size overflow")?;
+        let result_size = record_count
             .checked_mul(8)
             .ok_or("host GPU surface readback size overflow")? as u64;
         let result = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -822,7 +980,7 @@ impl Gpu {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let params = self.params(&surface, 0);
+        let params = self.params_region(&surface, region, compact);
         let resolve_bindings = self.resolve_mask_bindings(&surface, &params);
         let readback_bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("host GPU surface readback bindings"),
@@ -854,19 +1012,20 @@ impl Gpu {
             encoder,
             &self.resolve_mask_pipeline,
             &resolve_bindings,
-            surface.key.extent,
+            SurfaceExtent { width: region.width, height: region.height },
             "host GPU write-mask resolve",
         );
         dispatch_2d(
             encoder,
             &self.readback_pipeline,
             &readback_bindings,
-            surface.key.extent,
+            SurfaceExtent { width: region.width, height: region.height },
             "host GPU surface readback",
         );
         encoder.copy_buffer_to_buffer(&result, 0, &download, 0, result_size);
         Ok(PendingSurfaceReadback {
             surface,
+            region,
             _result: result,
             download,
         })
@@ -903,6 +1062,100 @@ impl Gpu {
         }
 
         self.decode_readbacks(pending)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn finish_region_readbacks(
+        &self,
+        pending: Vec<PendingSurfaceReadback>,
+    ) -> Result<Vec<(Arc<GpuSurface>, SurfaceRegionReadback)>, String> {
+        let receivers = pending
+            .iter()
+            .map(|readback| {
+                let (sender, receiver) = std::sync::mpsc::channel();
+                readback.download.slice(..).map_async(wgpu::MapMode::Read, move |status| {
+                    let _ = sender.send(status);
+                });
+                receiver
+            })
+            .collect::<Vec<_>>();
+        if !pending.is_empty() {
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .map_err(|error| format!("host GPU polling: {error}"))?;
+        }
+        for receiver in receivers {
+            receiver
+                .recv()
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+        }
+        Self::decode_region_readbacks(pending)
+    }
+
+    async fn finish_region_readbacks_async(
+        &self,
+        pending: Vec<PendingSurfaceReadback>,
+    ) -> Result<Vec<(Arc<GpuSurface>, SurfaceRegionReadback)>, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.finish_region_readbacks(pending)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            for readback in &pending {
+                wait_for_mapping(&readback.download).await?;
+            }
+            Self::decode_region_readbacks(pending)
+        }
+    }
+
+    fn decode_region_readbacks(
+        pending: Vec<PendingSurfaceReadback>,
+    ) -> Result<Vec<(Arc<GpuSurface>, SurfaceRegionReadback)>, String> {
+        let mut readbacks = Vec::with_capacity(pending.len());
+        for pending in pending {
+            let mapped = pending
+                .download
+                .slice(..)
+                .get_mapped_range()
+                .map_err(|error| error.to_string())?;
+            let records = mapped.to_vec();
+            drop(mapped);
+            pending.download.unmap();
+            readbacks.push((
+                pending.surface,
+                SurfaceRegionReadback { region: pending.region, records },
+            ));
+        }
+        Ok(readbacks)
+    }
+
+    async fn map_read_buffer_async(&self, buffer: &wgpu::Buffer) -> Result<Vec<u8>, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            buffer.slice(..).map_async(wgpu::MapMode::Read, move |status| {
+                let _ = sender.send(status);
+            });
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .map_err(|error| format!("host GPU polling: {error}"))?;
+            receiver
+                .recv()
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+        }
+        #[cfg(target_arch = "wasm32")]
+        wait_for_mapping(buffer).await?;
+        let mapped = buffer
+            .slice(..)
+            .get_mapped_range()
+            .map_err(|error| error.to_string())?;
+        let bytes = mapped.to_vec();
+        drop(mapped);
+        buffer.unmap();
+        Ok(bytes)
     }
 
     async fn finish_readbacks_async(
@@ -961,7 +1214,12 @@ impl Gpu {
     #[cfg(not(target_arch = "wasm32"))]
     fn readback(&self, surface: Arc<GpuSurface>) -> Result<SurfaceReadback, String> {
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        let pending = self.encode_readback(&mut encoder, surface)?;
+        let pending = self.encode_readback(
+            &mut encoder,
+            Arc::clone(&surface),
+            SurfaceRegion { x: 0, y: 0, width: surface.key.extent.width, height: surface.key.extent.height },
+            false,
+        )?;
         self.queue.submit([encoder.finish()]);
         self.finish_readbacks(vec![pending])?
             .pop()
@@ -979,11 +1237,40 @@ impl Gpu {
             surface.key.format.bytes_per_pixel(),
             write_count,
             u32::from(surface.key.layout == SurfaceLayout::Morton8x8),
+            0,
+            0,
         ];
         let contents: Vec<u8> = words.into_iter().flat_map(u32::to_le_bytes).collect();
         self.device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("host GPU surface parameters"),
+                contents: &contents,
+                usage: wgpu::BufferUsages::UNIFORM,
+            })
+    }
+
+    fn params_region(
+        &self,
+        surface: &GpuSurface,
+        region: SurfaceRegion,
+        compact: bool,
+    ) -> wgpu::Buffer {
+        let words = [
+            surface.key.extent.width,
+            surface.key.extent.height,
+            region.width,
+            region.height,
+            surface.key.extent.width / TILE_SIDE,
+            surface.key.format.bytes_per_pixel(),
+            u32::from(compact),
+            u32::from(surface.key.layout == SurfaceLayout::Morton8x8),
+            region.x,
+            region.y,
+        ];
+        let contents: Vec<u8> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+        self.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("host GPU surface region parameters"),
                 contents: &contents,
                 usage: wgpu::BufferUsages::UNIFORM,
             })
@@ -1073,9 +1360,9 @@ fn create_surface(key: SurfaceKey, pixel_count: usize, byte_len: usize, gpu: &Gp
         texture: create_texture("host GPU resident packed pixels"),
         write_mask_texture: create_texture("host GPU resolved byte-write masks"),
         write_mask_accumulator: accumulator,
-        pixel_count,
         byte_len,
         guest_shadow: Mutex::new(Vec::new()),
+        guest_versions: Mutex::new(None),
     }
 }
 
@@ -1567,5 +1854,59 @@ mod tests {
                 (key.guest_address + pixel_offset as u64 + 2, 1)
             ]
         );
+    }
+
+    #[test]
+    fn region_readback_maps_only_the_requested_rectangle() {
+        let Some(context) = context_or_skip() else {
+            return;
+        };
+        let key = SurfaceKey {
+            guest_address: 0x140000,
+            format: SurfaceFormat::Rgba8,
+            extent: EXTENT,
+            layout: SurfaceLayout::Morton8x8,
+        };
+        let guest_bytes: Vec<u8> = (0..EXTENT.width as usize * EXTENT.height as usize * 4)
+            .map(|offset| (offset.wrapping_mul(17) + 3) as u8)
+            .collect();
+        context.get_or_create_target(key, Some(&guest_bytes)).unwrap();
+        context
+            .record_write_masks(
+                key,
+                &[PixelWriteMask {
+                    x: 9,
+                    y: 3,
+                    byte_mask: 0b1010,
+                }],
+            )
+            .unwrap();
+        let region = SurfaceRegion {
+            x: 8,
+            y: 0,
+            width: 8,
+            height: 8,
+        };
+        let mut encoder = context.device().create_command_encoder(&Default::default());
+        let pending = context
+            .encode_region_readbacks(&mut encoder, &[(key, region)])
+            .unwrap();
+        context.submit(encoder.finish());
+        let readbacks = context.finish_region_readbacks(pending).unwrap();
+        let readback = &readbacks[0].1;
+        assert_eq!(readback.region, region);
+        assert_eq!(readback.records.len(), 8 * 8 * 8);
+        let record = &readback.records[(3 * 8 + 1) * 8..(3 * 8 + 2) * 8];
+        let x = 9usize;
+        let y = 3usize;
+        let local = (x & 1)
+            | ((y & 1) << 1)
+            | ((x & 2) << 1)
+            | ((y & 2) << 2)
+            | ((x & 4) << 2)
+            | ((y & 4) << 3);
+        let guest_pixel = ((y >> 3) * (EXTENT.width as usize >> 3) + (x >> 3)) * 64 + local;
+        assert_eq!(&record[..4], &guest_bytes[guest_pixel * 4..guest_pixel * 4 + 4]);
+        assert_eq!(u32::from_le_bytes(record[4..8].try_into().unwrap()), 0b1010);
     }
 }

@@ -12,5 +12,6 @@ pub use coverage::{
 #[cfg(not(target_os = "emscripten"))]
 pub use surfaces::{
     GpuContext, GpuSurface, PendingSurfaceReadbacks, PixelWriteMask, SurfaceExtent, SurfaceFormat,
-    SurfaceKey, SurfaceLayout, SurfaceReadback, context, context_async,
+    SurfaceKey, SurfaceLayout, SurfaceReadback, SurfaceRegion, SurfaceRegionReadback, context,
+    context_async,
 };

@@ -12,6 +12,7 @@ use std::{
 
 pub const PAGE_BYTES: usize = 4096;
 type Page = [u8; PAGE_BYTES];
+static NEXT_TRACKER_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone)]
 pub struct Image {
     len: usize,
@@ -20,8 +21,12 @@ pub struct Image {
 /// Stable bitmap allocation retained until every observing processor is gone.
 /// Native processor threads and the owner may flag pages concurrently.
 pub struct Tracker {
+    id: u64,
     len: usize,
     dirty: Box<[AtomicU64]>,
+    versions: Box<[AtomicU64]>,
+    watched: Box<[AtomicU64]>,
+    pending_rearm: Box<[AtomicU64]>,
     base: RefCell<Option<Image>>,
 }
 fn zero() -> &'static Arc<Page> {
@@ -48,9 +53,18 @@ impl Image {
 }
 impl Tracker {
     pub fn new(len: usize) -> Self {
+        let page_count = len.div_ceil(PAGE_BYTES);
         Self {
+            id: NEXT_TRACKER_ID.fetch_add(1, Ordering::Relaxed),
             len,
             dirty: (0..len.div_ceil(PAGE_BYTES * 64))
+                .map(|_| AtomicU64::new(0))
+                .collect(),
+            versions: (0..page_count).map(|_| AtomicU64::new(0)).collect(),
+            watched: (0..len.div_ceil(PAGE_BYTES * 64))
+                .map(|_| AtomicU64::new(0))
+                .collect(),
+            pending_rearm: (0..len.div_ceil(PAGE_BYTES * 64))
                 .map(|_| AtomicU64::new(0))
                 .collect(),
             base: RefCell::new(None),
@@ -61,19 +75,67 @@ impl Tracker {
             backing,
             bytes: self.len,
             bitmap: NonNull::new(self.dirty.as_ptr() as *mut AtomicU64).unwrap(),
+            versions: NonNull::new(self.versions.as_ptr() as *mut AtomicU64).unwrap(),
+            watched: NonNull::new(self.watched.as_ptr() as *mut AtomicU64).unwrap(),
+            pending_rearm: NonNull::new(self.pending_rearm.as_ptr() as *mut AtomicU64).unwrap(),
             page_shift: 12,
         })
     }
     pub fn mark(&self, offset: usize, bytes: usize) -> Result<(), String> {
+        self.mark_inner(offset, bytes, true)
+    }
+    pub fn mark_coherent(&self, offset: usize, bytes: usize) -> Result<(), String> {
+        self.mark_inner(offset, bytes, false)
+    }
+    fn mark_inner(&self, offset: usize, bytes: usize, invalidate: bool) -> Result<(), String> {
         if offset.checked_add(bytes).is_none_or(|end| end > self.len) {
             return Err("dirty range escapes backing".into());
         }
         if bytes != 0 {
-            for page in offset / PAGE_BYTES..=(offset + bytes - 1) / PAGE_BYTES {
+            let first = offset / PAGE_BYTES;
+            let last = (offset + bytes - 1) / PAGE_BYTES;
+            for page in first..=last {
                 self.dirty[page / 64].fetch_or(1 << (page % 64), Ordering::Relaxed);
+                if invalidate {
+                    self.versions[page].fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
         Ok(())
+    }
+    pub fn page_versions(&self, offset: usize, bytes: usize) -> Result<(Vec<u64>, bool), String> {
+        if offset.checked_add(bytes).is_none_or(|end| end > self.len) {
+            return Err("page-version range escapes backing".into());
+        }
+        if bytes == 0 {
+            return Ok((Vec::new(), false));
+        }
+        let first = offset / PAGE_BYTES;
+        let last = (offset + bytes - 1) / PAGE_BYTES;
+        let mut versions = Vec::with_capacity((last - first + 1) * 3);
+        let mut needs_rearm = false;
+        for page in first..=last {
+            let bit = 1 << (page % 64);
+            let word = page / 64;
+            let previous = self.watched[word].fetch_or(bit, Ordering::Relaxed);
+            if previous & bit == 0 {
+                self.pending_rearm[word].fetch_or(bit, Ordering::Relaxed);
+                needs_rearm = true;
+            } else {
+                needs_rearm |= self.pending_rearm[word].load(Ordering::Relaxed) & bit != 0;
+            }
+            versions.extend([
+                self.id,
+                page as u64,
+                self.versions[page].load(Ordering::Relaxed),
+            ]);
+        }
+        Ok((versions, needs_rearm))
+    }
+    pub fn clear_pending_rearm(&self) {
+        for pending in &self.pending_rearm {
+            pending.store(0, Ordering::Relaxed);
+        }
     }
     fn dirty(&self, page: usize) -> bool {
         self.dirty[page / 64].load(Ordering::Relaxed) & (1 << (page % 64)) != 0
@@ -153,6 +215,11 @@ impl Tracker {
             } else {
                 changed.push((offset, size));
             }
+            let first = offset / PAGE_BYTES;
+            let last = (offset + size - 1) / PAGE_BYTES;
+            for page in first..=last {
+                self.versions[page].fetch_add(1, Ordering::Relaxed);
+            }
         }
         drop(previous);
         self.set_base(image);
@@ -213,5 +280,29 @@ mod tests {
         // backing: no candidate page requires a readable pointer in this case.
         let same = unsafe { tracker.capture(std::ptr::NonNull::<u8>::dangling().as_ptr()) };
         assert_eq!(first.shared_pages(&same), 2);
+    }
+
+    #[test]
+    fn watched_page_generations_ignore_coherent_writeback() {
+        let tracker = Tracker::new(PAGE_BYTES * 2);
+        let (first, newly_watched) = tracker.page_versions(PAGE_BYTES - 1, 2).unwrap();
+        assert!(newly_watched);
+        assert_eq!(first.len(), 6);
+        assert_eq!(tracker.pending_rearm[0].load(Ordering::Relaxed) & 0b11, 0b11);
+        tracker.clear_pending_rearm();
+        let (same, newly_watched) = tracker.page_versions(PAGE_BYTES - 1, 2).unwrap();
+        assert!(!newly_watched);
+        assert_eq!(same, first);
+
+        tracker.mark_coherent(PAGE_BYTES, 1).unwrap();
+        assert_eq!(tracker.page_versions(PAGE_BYTES - 1, 2).unwrap().0, first);
+        tracker.pending_rearm[0].fetch_or(1 << 1, Ordering::Relaxed);
+        assert!(tracker.page_versions(PAGE_BYTES - 1, 2).unwrap().1);
+        tracker.clear_pending_rearm();
+        assert!(!tracker.page_versions(PAGE_BYTES - 1, 2).unwrap().1);
+        tracker.mark(PAGE_BYTES, 1).unwrap();
+        let (changed, newly_watched) = tracker.page_versions(PAGE_BYTES - 1, 2).unwrap();
+        assert!(!newly_watched);
+        assert_eq!(changed[5], first[5] + 1);
     }
 }

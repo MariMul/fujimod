@@ -9,6 +9,11 @@ use fujimod_emulator_gpu::{
 use fujimod_emulator_graphics::render;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    future::Future,
+    task::{Context, Poll, Wake},
+};
 use wgpu::util::DeviceExt;
 
 struct PaintKernel {
@@ -179,12 +184,14 @@ fn paint_data(draw: &batch::Draw, image: Option<&[u8]>) -> Result<Vec<u32>> {
 }
 
 /// Paint a complete EXR2 vector batch, keeping coverage and pixels on the GPU.
-pub(super) fn render(
+pub(super) async fn render_async(
     draws: &[batch::Draw],
     cpu: i64,
     host: &mut dyn Inputs,
 ) -> Result<RenderedBatch> {
-    let mut target_bytes = Vec::<(SurfaceKey, Vec<u8>)>::new();
+    let context = fujimod_emulator_gpu::context()
+        .map_err(|error| Unsupported(format!("Graphics UI GPU paint {error}")))?;
+    let mut targets = Vec::<(SurfaceKey, Option<Vec<u8>>, Option<Vec<u64>>)>::new();
     let mut target_slots = HashMap::<u64, usize>::new();
     let mut texture_bytes = HashMap::<(u64, u32, u32), Vec<u8>>::new();
     for draw in draws {
@@ -194,18 +201,31 @@ pub(super) fn render(
                 .checked_mul(height as u64)
                 .and_then(|count| count.checked_mul(4))
                 .ok_or_else(|| Unsupported("Graphics UI target size overflow".into()))?;
-            let bytes = host.read(cpu, address, length).map_err(Unsupported)?;
-            if bytes.len() as u64 != length {
-                return fail("Graphics UI destination snapshot is incomplete");
-            }
             let key = SurfaceKey {
                 guest_address: address,
                 format: SurfaceFormat::Rgba8,
                 extent: SurfaceExtent { width, height },
                 layout: SurfaceLayout::Morton8x8,
             };
-            entry.insert(target_bytes.len());
-            target_bytes.push((key, bytes));
+            let versions = host
+                .page_versions(cpu, address, length as usize)?;
+            let current = versions
+                .as_deref()
+                .map(|versions| context.target_is_current(key, versions))
+                .transpose()
+                .map_err(|error| Unsupported(format!("Graphics UI GPU target versions {error}")))?
+                .unwrap_or(false);
+            let bytes = if current {
+                None
+            } else {
+                let bytes = host.read(cpu, address, length).map_err(Unsupported)?;
+                if bytes.len() as u64 != length {
+                    return fail("Graphics UI destination snapshot is incomplete");
+                }
+                Some(bytes)
+            };
+            entry.insert(targets.len());
+            targets.push((key, bytes, versions));
         }
         if let Some(texture) = &draw.texture {
             let key = image_key(texture);
@@ -225,18 +245,52 @@ pub(super) fn render(
         }
     }
 
-    let context = fujimod_emulator_gpu::context()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU paint {error}")))?;
     let _submission = context
         .acquire()
         .map_err(|error| Unsupported(format!("Graphics UI GPU paint {error}")))?;
-    for (key, bytes) in &target_bytes {
+    for (key, bytes, versions) in &targets {
         context
-            .get_or_create_target(*key, Some(bytes))
+            .get_or_create_target_versioned(*key, versions.as_deref(), bytes.as_deref())
             .map_err(|error| Unsupported(format!("Graphics UI GPU paint {error}")))?;
     }
 
     let plans = render::coverage_plans(draws)?;
+    let mut readback_regions = HashMap::new();
+    for (draw, plan) in draws.iter().zip(&plans) {
+        if plan.is_empty() {
+            continue;
+        }
+        let (left, top) = (plan.x0 as u32, plan.y0 as u32);
+        let (right, bottom) = (
+            (plan.x0 + plan.width as i64) as u32,
+            (plan.y0 + plan.height as i64) as u32,
+        );
+        readback_regions
+            .entry(draw.target.0)
+            .and_modify(|region: &mut fujimod_emulator_gpu::SurfaceRegion| {
+                let x1 = region.x + region.width;
+                let y1 = region.y + region.height;
+                let x0 = left.min(region.x);
+                let y0 = top.min(region.y);
+                *region = fujimod_emulator_gpu::SurfaceRegion {
+                    x: x0,
+                    y: y0,
+                    width: right.max(x1) - x0,
+                    height: bottom.max(y1) - y0,
+                };
+            })
+            .or_insert(fujimod_emulator_gpu::SurfaceRegion {
+                x: left,
+                y: top,
+                width: right - left,
+                height: bottom - top,
+            });
+    }
+    let target_snapshot_bytes = targets
+        .iter()
+        .filter_map(|(_, bytes, _)| bytes.as_ref())
+        .map(|bytes| bytes.len() as u64)
+        .sum::<u64>();
     let edge_sets: Vec<Vec<CoverageEdge>> = plans
         .iter()
         .map(|plan| {
@@ -284,12 +338,17 @@ pub(super) fn render(
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("EXR2 vector GPU coverage and paint"),
     });
+    for (key, _, _) in &targets {
+        context
+            .encode_clear_write_masks(&mut encoder, *key)
+            .map_err(|error| Unsupported(format!("Graphics UI GPU write masks {error}")))?;
+    }
     let coverage = super::coverage_kernel()?
         .encode_batch(context, &mut encoder, &requests)
         .map_err(|error| Unsupported(format!("Graphics UI GPU coverage {error}")))?;
-    let surfaces: Vec<_> = target_bytes
+    let surfaces: Vec<_> = targets
         .iter()
-        .map(|(key, _)| {
+        .map(|(key, _, _)| {
             context
                 .get(*key)
                 .map_err(|error| Unsupported(format!("Graphics UI GPU paint {error}")))?
@@ -380,6 +439,10 @@ pub(super) fn render(
                         binding: 5,
                         resource: touched.as_entire_binding(),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: surface.write_mask_accumulator().as_entire_binding(),
+                    },
                 ],
             });
             {
@@ -398,52 +461,174 @@ pub(super) fn render(
         }
     }
     encoder.copy_buffer_to_buffer(&touched, 0, &touched_readback, 0, 4);
+    let readback_requests: Vec<_> = targets
+        .iter()
+        .filter_map(|(key, _, _)| readback_regions.get(&key.guest_address).map(|region| (*key, *region)))
+        .collect();
     let pending = context
-        .encode_readbacks(
-            &mut encoder,
-            &target_bytes.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
-        )
+        .encode_region_readbacks(&mut encoder, &readback_requests)
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
     context.submit(encoder.finish());
 
-    let (sender, receiver) = std::sync::mpsc::channel();
-    touched_readback
-        .slice(..)
-        .map_async(wgpu::MapMode::Read, move |result| {
-            let _ = sender.send(result);
-        });
     let readbacks = context
-        .finish_readbacks(pending)
+        .finish_region_readbacks_async(pending)
+        .await
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel poll: {error}")))?;
-    receiver
-        .recv()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel readback: {error}")))?
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel map: {error}")))?;
-    let touched_bytes = touched_readback
-        .slice(..)
-        .get_mapped_range()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel range: {error}")))?;
-    let touched_pixels = u32::from_le_bytes(touched_bytes[..4].try_into().unwrap()) as u64;
-    drop(touched_bytes);
-    touched_readback.unmap();
-
-    let mut output_by_key = HashMap::new();
-    for (key, readback) in readbacks {
-        output_by_key.insert(key, Arc::new(readback.bytes));
-    }
-    let output = target_bytes
+    let region_readback_bytes = readbacks
         .iter()
-        .map(|(key, _)| {
-            output_by_key
-                .remove(key)
-                .map(|bytes| (key.guest_address, bytes))
-                .ok_or_else(|| Unsupported("Graphics UI GPU readback omitted a target".into()))
-        })
-        .collect::<Result<_>>()?;
-    Ok((output, touched_pixels * 4))
+        .map(|(_, readback)| readback.records.len() as u64)
+        .sum::<u64>();
+    let touched_bytes = context
+        .map_read_buffer_async(&touched_readback)
+        .await
+        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel readback: {error}")))?;
+    let touched_pixels = u32::from_le_bytes(touched_bytes[..4].try_into().unwrap()) as u64;
+
+    let mut output = Vec::new();
+    for (key, readback) in readbacks {
+        output.extend(
+            output_runs(key, &readback.records, readback.region)?
+                .into_iter()
+                .map(|(address, bytes)| (address, Arc::new(bytes))),
+        );
+    }
+    let output_bytes = output.iter().map(|(_, bytes)| bytes.len() as u64).sum();
+    debug_assert!(output_bytes <= touched_pixels * 4);
+    if std::env::var_os("FUJIMOD_VECTOR_GPU_STATS").is_some() {
+        eprintln!(
+            "vector_gpu_transfer target_snapshot_bytes={target_snapshot_bytes} region_readback_bytes={region_readback_bytes} guest_writeback_bytes={output_bytes}"
+        );
+    }
+    Ok((output, output_bytes))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn render(
+    draws: &[batch::Draw],
+    cpu: i64,
+    host: &mut dyn Inputs,
+) -> Result<RenderedBatch> {
+    block_on(render_async(draws, cpu, host))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct ThreadWake(std::thread::Thread);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Wake for ThreadWake {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn block_on<F: Future>(future: F) -> F::Output {
+    let waker = Arc::new(ThreadWake(std::thread::current())).into();
+    let mut context = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(value) => return value,
+            Poll::Pending => std::thread::park(),
+        }
+    }
+}
+
+fn output_runs(
+    key: SurfaceKey,
+    records: &[u8],
+    region: fujimod_emulator_gpu::SurfaceRegion,
+) -> Result<Vec<(u64, Vec<u8>)>> {
+    let bpp = key.format.bytes_per_pixel() as usize;
+    let expected = (region.width as usize)
+        .checked_mul(region.height as usize)
+        .and_then(|pixels| pixels.checked_mul(8))
+        .ok_or_else(|| Unsupported("Graphics UI GPU region size overflow".into()))?;
+    if records.len() != expected || bpp != 4 {
+        return fail("Graphics UI GPU readback region is incomplete");
+    }
+    let mut runs = Vec::<(u64, Vec<u8>)>::new();
+    if region.width == 0 || region.height == 0 {
+        return Ok(runs);
+    }
+    match key.layout {
+        SurfaceLayout::Linear => {
+            for y in region.y..region.y + region.height {
+                for x in region.x..region.x + region.width {
+                    append_pixel_write(&mut runs, key, records, region, x, y);
+                }
+            }
+        }
+        SurfaceLayout::Morton8x8 => {
+            let x_end = region.x + region.width;
+            let y_end = region.y + region.height;
+            for tile_y in region.y / 8..y_end.div_ceil(8) {
+                for tile_x in region.x / 8..x_end.div_ceil(8) {
+                    for local in 0..64 {
+                        let (local_x, local_y) = morton_coordinates(local);
+                        let x = tile_x * 8 + local_x;
+                        let y = tile_y * 8 + local_y;
+                        if x >= region.x && x < x_end && y >= region.y && y < y_end {
+                            append_pixel_write(&mut runs, key, records, region, x, y);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(runs)
+}
+
+fn append_pixel_write(
+    runs: &mut Vec<(u64, Vec<u8>)>,
+    key: SurfaceKey,
+    records: &[u8],
+    region: fujimod_emulator_gpu::SurfaceRegion,
+    x: u32,
+    y: u32,
+) {
+    let record_index = ((y - region.y) * region.width + (x - region.x)) as usize;
+    let record = &records[record_index * 8..record_index * 8 + 8];
+    let pixel = match key.layout {
+        SurfaceLayout::Linear => y as usize * key.extent.width as usize + x as usize,
+        SurfaceLayout::Morton8x8 => {
+            let local = (x & 1)
+                | ((y & 1) << 1)
+                | ((x & 2) << 1)
+                | ((y & 2) << 2)
+                | ((x & 4) << 2)
+                | ((y & 4) << 3);
+            ((y as usize >> 3) * (key.extent.width as usize >> 3) + (x as usize >> 3)) * 64
+                + local as usize
+        }
+    };
+    let address = key.guest_address + (pixel * key.format.bytes_per_pixel() as usize) as u64;
+    let value = u32::from_le_bytes(record[..4].try_into().unwrap());
+    let mask = u32::from_le_bytes(record[4..].try_into().unwrap());
+    for lane in 0..key.format.bytes_per_pixel() as usize {
+        if mask & (1 << lane) == 0 {
+            continue;
+        }
+        let write_address = address + lane as u64;
+        let byte = (value >> (lane * 8)) as u8;
+        if let Some((start, data)) = runs.last_mut()
+            && *start + data.len() as u64 == write_address
+        {
+            data.push(byte);
+        } else {
+            runs.push((write_address, vec![byte]));
+        }
+    }
+}
+
+fn morton_coordinates(index: u32) -> (u32, u32) {
+    let mut x = 0;
+    let mut y = 0;
+    for bit in 0..3 {
+        x |= ((index >> (2 * bit)) & 1) << bit;
+        y |= ((index >> (2 * bit + 1)) & 1) << bit;
+    }
+    (x, y)
 }
 
 fn words_as_bytes(words: &[u32]) -> Vec<u8> {
@@ -555,6 +740,7 @@ mod tests {
         let target: Vec<u8> = (0..8 * 8 * 4)
             .map(|index| (index * 37 + 11) as u8)
             .collect();
+        let initial_target = target.clone();
         let texture_bytes: Vec<u8> = (0..8 * 8 * 4).map(|index| (index * 19 + 7) as u8).collect();
         let mut draws = vec![
             draw(
@@ -631,14 +817,18 @@ mod tests {
         let targets = HashMap::from([(target_address, target)]);
         let textures = HashMap::from([((texture_address, 8, 8), texture_bytes)]);
         let mut coverage = cpu_coverage;
-        let (expected, expected_touched) =
+        let (expected, _) =
             super::render::render(&draws, &targets, &textures, &mut coverage)
                 .expect("CPU paint reference should render");
-        assert_eq!(actual.1, expected_touched);
-        assert_eq!(actual.0[0].0, expected[0].0);
-        if actual.0[0].1.as_slice() != expected[0].1.as_slice() {
-            let differences: Vec<_> = actual.0[0]
-                .1
+        let output_bytes: u64 = actual.0.iter().map(|(_, bytes)| bytes.len() as u64).sum();
+        assert_eq!(actual.1, output_bytes);
+        let mut actual_surface = initial_target;
+        for (address, bytes) in &actual.0 {
+            let start = (*address - target_address) as usize;
+            actual_surface[start..start + bytes.len()].copy_from_slice(bytes);
+        }
+        if actual_surface.as_slice() != expected[0].1.as_slice() {
+            let differences: Vec<_> = actual_surface
                 .chunks_exact(4)
                 .zip(expected[0].1.chunks_exact(4))
                 .enumerate()
