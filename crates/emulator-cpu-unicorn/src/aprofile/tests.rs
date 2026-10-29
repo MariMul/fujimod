@@ -151,8 +151,6 @@ fn x100vi_el1_mmio_read_uses_scr_rw_and_reaches_callback() {
     let raw = crate::test_support::library()
         .open(Model::ArmV8A, 1 << 20)
         .unwrap();
-    raw.write_register(Register::Pstate, &0x3c4u64.to_le_bytes())
-        .unwrap();
     let cpu = Core::new(raw, Memory::default()).unwrap();
     cpu.map_zeroed(0, 0x68000000, 7).unwrap(); // X100VI DRAM extent.
     let system_value = |encoding| {
@@ -163,6 +161,8 @@ fn x100vi_el1_mmio_read_uses_scr_rw_and_reaches_callback() {
     };
     assert_eq!(system_value(0xf088) & 0x400, 0x400);
     assert_eq!(system_value(0xe088) & 0x8000_0000, 0x8000_0000);
+    cpu.write_register(Register::Pstate, &0x3c4u64.to_le_bytes())
+        .unwrap();
     let system = |encoding: u16, value: u64| {
         cpu.write_register(
             Register::Arm64System(arm::SystemRegister::from_encoding(encoding)),
