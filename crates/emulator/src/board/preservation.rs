@@ -6,28 +6,215 @@ use super::{
     scalar,
 };
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register};
-use serde::Serialize;
+use serde::{Serialize, ser::SerializeSeq as _};
 use std::{
     cell::RefCell,
     ffi::c_void,
     rc::{Rc, Weak},
 };
 
-type Span = (u64, u64);
-
-const MAX_CPU_STORE: u64 = 8;
+const MAX_CPU_STORE: usize = 8;
 /// A wider store starting this far before a protected byte can still overlap.
 const HOOK_REACH: u64 = 64;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
+pub struct PhysicalAddress(u64);
+
+impl PhysicalAddress {
+    pub fn new(value: u64) -> Result<Self, String> {
+        if value > u32::MAX as u64 {
+            return Err("physical address exceeds 32 bits".into());
+        }
+        Ok(Self(value))
+    }
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
+pub struct CpuAddress(u64);
+
+impl CpuAddress {
+    pub fn new(value: u64) -> Result<Self, String> {
+        if value > u32::MAX as u64 {
+            return Err("CPU address exceeds 32 bits".into());
+        }
+        Ok(Self(value))
+    }
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PhysicalRange {
+    start: PhysicalAddress,
+    end: PhysicalAddress,
+}
+
+impl PhysicalRange {
+    pub fn new(start: u64, end: u64) -> Result<Self, String> {
+        let start = PhysicalAddress::new(start)?;
+        let end = PhysicalAddress::new(end)?;
+        if start >= end {
+            return Err("protected range must be nonempty".into());
+        }
+        Ok(Self { start, end })
+    }
+    pub fn start(self) -> u64 {
+        self.start.get()
+    }
+    pub fn end(self) -> u64 {
+        self.end.get()
+    }
+    fn overlaps(self, physical: PhysicalAddress, bytes: WriteSize) -> bool {
+        self.overlaps_bytes(physical, bytes.get())
+    }
+    fn overlaps_bytes(self, physical: PhysicalAddress, bytes: u64) -> bool {
+        physical.get() < self.end.get() && self.start.get() < physical.get().saturating_add(bytes)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProtectedRanges(Vec<PhysicalRange>);
+
+impl ProtectedRanges {
+    pub fn new(ranges: Vec<PhysicalRange>) -> Result<Self, String> {
+        if ranges.is_empty() || ranges.len() > 8 {
+            return Err("preservation requires 1..8 protected ranges".into());
+        }
+        Ok(Self(ranges))
+    }
+    pub fn ranges(&self) -> &[PhysicalRange] {
+        &self.0
+    }
+}
+
+impl Serialize for ProtectedRanges {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut sequence = serializer.serialize_seq(Some(self.0.len()))?;
+        for range in &self.0 {
+            sequence.serialize_element(&[range.start(), range.end()])?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct CpuRange {
+    start: CpuAddress,
+    end: CpuAddress,
+}
+
+impl CpuRange {
+    fn new(start: CpuAddress, end: CpuAddress) -> Result<Self, String> {
+        if start >= end {
+            return Err("CPU range must be nonempty".into());
+        }
+        Ok(Self { start, end })
+    }
+    fn start(self) -> u64 {
+        self.start.get()
+    }
+    fn end(self) -> u64 {
+        self.end.get()
+    }
+    fn overlaps(self, address: CpuAddress, width: u64) -> bool {
+        address.get() < self.end.get() && self.start.get() < address.get().saturating_add(width)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct WriteCount(u64);
+
+impl WriteCount {
+    pub fn get(self) -> u64 {
+        self.0
+    }
+    fn increment(&mut self) -> bool {
+        match self.0.checked_add(1) {
+            Some(next) => {
+                self.0 = next;
+                false
+            }
+            None => {
+                self.0 = u64::MAX;
+                true
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct InstructionCount(u64);
+
+impl InstructionCount {
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct CoreId(u32);
+
+impl CoreId {
+    pub fn new(core: usize) -> Result<Self, String> {
+        u32::try_from(core)
+            .map(Self)
+            .map_err(|_| "core exceeds 32 bits".into())
+    }
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct StoreSize(u8);
+
+impl StoreSize {
+    fn new(bytes: usize) -> Result<Self, String> {
+        if !(1..=MAX_CPU_STORE).contains(&bytes) {
+            return Err("store size exceeds the verified width".into());
+        }
+        Ok(Self(bytes as u8))
+    }
+    pub fn get(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct WriteSize(u64);
+
+impl WriteSize {
+    pub(super) fn new(bytes: usize) -> Result<Self, String> {
+        if bytes == 0 {
+            return Err("write size must be nonzero".into());
+        }
+        Ok(Self(bytes as u64))
+    }
+    pub fn get(self) -> u64 {
+        self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PreservationBytes {
-    bytes: [u8; MAX_CPU_STORE as usize],
+    bytes: [u8; MAX_CPU_STORE],
     len: u8,
 }
 
 impl PreservationBytes {
     fn new(bytes: &[u8]) -> Self {
-        let mut out = [0; MAX_CPU_STORE as usize];
+        let mut out = [0; MAX_CPU_STORE];
         out[..bytes.len()].copy_from_slice(bytes);
         Self {
             bytes: out,
@@ -42,7 +229,7 @@ impl PreservationBytes {
 impl Serialize for PreservationBytes {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         const HEX: &[u8; 16] = b"0123456789abcdef";
-        let mut text = [0u8; 16];
+        let mut text = [0u8; MAX_CPU_STORE * 2];
         for (index, &byte) in self.as_slice().iter().enumerate() {
             text[index * 2] = HEX[usize::from(byte >> 4)];
             text[index * 2 + 1] = HEX[usize::from(byte & 0x0f)];
@@ -74,20 +261,20 @@ pub enum PreservationFault {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum PreservationViolation {
     CpuChange {
-        core: usize,
-        pc: u64,
-        instructions: u64,
-        address: u64,
-        physical: u64,
-        size: u32,
+        core: CoreId,
+        pc: CpuAddress,
+        instructions: InstructionCount,
+        address: CpuAddress,
+        physical: PhysicalAddress,
+        size: StoreSize,
         before: PreservationBytes,
         after: PreservationBytes,
     },
     UnverifiableWrite {
         source: PreservationBusSource,
-        address: u64,
-        physical: u64,
-        size: u32,
+        address: CpuAddress,
+        physical: PhysicalAddress,
+        size: WriteSize,
     },
     IntegrityFault {
         reason: PreservationFault,
@@ -97,36 +284,68 @@ pub enum PreservationViolation {
 /// Integrity faults override earlier effects, mark counters incomplete and remain stable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PreservationState {
-    pub enabled: bool,
-    pub ranges: Vec<(u64, u64)>,
-    pub identity_cpu_writes: u64,
-    pub changed_cpu_writes: u64,
-    pub host_writes: u64,
-    pub model_bus_writes: u64,
-    pub violation: Option<PreservationViolation>,
+    enabled: bool,
+    #[serde(serialize_with = "serialize_state_ranges")]
+    ranges: Option<ProtectedRanges>,
+    identity_cpu_writes: WriteCount,
+    changed_cpu_writes: WriteCount,
+    host_writes: WriteCount,
+    model_bus_writes: WriteCount,
+    violation: Option<PreservationViolation>,
+}
+
+fn serialize_state_ranges<S: serde::Serializer>(
+    ranges: &Option<ProtectedRanges>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match ranges {
+        Some(ranges) => ranges.serialize(serializer),
+        None => serializer.serialize_seq(Some(0))?.end(),
+    }
 }
 
 impl PreservationState {
     pub fn disabled() -> Self {
         Self {
             enabled: false,
-            ranges: Vec::new(),
-            identity_cpu_writes: 0,
-            changed_cpu_writes: 0,
-            host_writes: 0,
-            model_bus_writes: 0,
+            ranges: None,
+            identity_cpu_writes: WriteCount::default(),
+            changed_cpu_writes: WriteCount::default(),
+            host_writes: WriteCount::default(),
+            model_bus_writes: WriteCount::default(),
             violation: None,
         }
+    }
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+    pub fn ranges(&self) -> Option<&ProtectedRanges> {
+        self.ranges.as_ref()
+    }
+    pub fn identity_cpu_writes(&self) -> WriteCount {
+        self.identity_cpu_writes
+    }
+    pub fn changed_cpu_writes(&self) -> WriteCount {
+        self.changed_cpu_writes
+    }
+    pub fn host_writes(&self) -> WriteCount {
+        self.host_writes
+    }
+    pub fn model_bus_writes(&self) -> WriteCount {
+        self.model_bus_writes
+    }
+    pub fn violation(&self) -> Option<&PreservationViolation> {
+        self.violation.as_ref()
     }
 }
 
 pub(super) struct PreservationRecords {
-    ranges: Vec<Span>,
-    merged: Vec<Span>,
-    identity_cpu_writes: u64,
-    changed_cpu_writes: u64,
-    host_writes: u64,
-    model_bus_writes: u64,
+    ranges: ProtectedRanges,
+    merged: Vec<PhysicalRange>,
+    identity_cpu_writes: WriteCount,
+    changed_cpu_writes: WriteCount,
+    host_writes: WriteCount,
+    model_bus_writes: WriteCount,
     violation: Option<PreservationViolation>,
 }
 
@@ -134,7 +353,7 @@ impl PreservationRecords {
     pub(super) fn state(&self) -> PreservationState {
         PreservationState {
             enabled: true,
-            ranges: self.ranges.clone(),
+            ranges: Some(self.ranges.clone()),
             identity_cpu_writes: self.identity_cpu_writes,
             changed_cpu_writes: self.changed_cpu_writes,
             host_writes: self.host_writes,
@@ -142,15 +361,12 @@ impl PreservationRecords {
             violation: self.violation.clone(),
         }
     }
-    pub(super) fn overlaps(&self, physical: u64, bytes: u64) -> bool {
-        if bytes == 0 {
-            return false;
-        }
+    pub(super) fn overlaps(&self, physical: PhysicalAddress, bytes: WriteSize) -> bool {
         self.merged
             .iter()
-            .any(|&(lo, hi)| physical < hi && lo < physical.saturating_add(bytes))
+            .any(|range| range.overlaps(physical, bytes))
     }
-    fn fault(&mut self, reason: PreservationFault) {
+    pub(super) fn fault(&mut self, reason: PreservationFault) {
         if matches!(
             self.violation,
             Some(PreservationViolation::IntegrityFault { .. })
@@ -161,68 +377,38 @@ impl PreservationRecords {
     }
     fn cpu_store(&mut self, changed: Option<PreservationViolation>) {
         if let Some(violation) = changed {
-            let overflow = match self.changed_cpu_writes.checked_add(1) {
-                Some(next) => {
-                    self.changed_cpu_writes = next;
-                    false
-                }
-                None => {
-                    self.changed_cpu_writes = u64::MAX;
-                    true
-                }
-            };
+            let overflow = self.changed_cpu_writes.increment();
             if self.violation.is_none() {
                 self.violation = Some(violation);
             }
             if overflow {
                 self.fault(PreservationFault::CounterOverflow);
             }
-        } else {
-            match self.identity_cpu_writes.checked_add(1) {
-                Some(next) => self.identity_cpu_writes = next,
-                None => {
-                    self.identity_cpu_writes = u64::MAX;
-                    self.fault(PreservationFault::CounterOverflow);
-                }
-            }
+        } else if self.identity_cpu_writes.increment() {
+            self.fault(PreservationFault::CounterOverflow);
         }
     }
     pub(super) fn bus_write(
         &mut self,
         source: PreservationBusSource,
-        physical: u64,
-        address: u64,
-        len: usize,
+        physical: PhysicalAddress,
+        address: CpuAddress,
+        len: WriteSize,
     ) {
-        if !self.overlaps(physical, len as u64) {
+        if !self.overlaps(physical, len) {
             return;
         }
-        let counter = match source {
-            PreservationBusSource::HostWrite => &mut self.host_writes,
-            PreservationBusSource::ModelBusWrite => &mut self.model_bus_writes,
+        let overflow = match source {
+            PreservationBusSource::HostWrite => self.host_writes.increment(),
+            PreservationBusSource::ModelBusWrite => self.model_bus_writes.increment(),
         };
-        let overflow = match counter.checked_add(1) {
-            Some(next) => {
-                *counter = next;
-                false
-            }
-            None => {
-                *counter = u64::MAX;
-                true
-            }
-        };
-        match u32::try_from(len) {
-            Ok(size) => {
-                if self.violation.is_none() {
-                    self.violation = Some(PreservationViolation::UnverifiableWrite {
-                        source,
-                        address,
-                        physical,
-                        size,
-                    });
-                }
-            }
-            Err(_) => self.fault(PreservationFault::UnsupportedAccess),
+        if self.violation.is_none() {
+            self.violation = Some(PreservationViolation::UnverifiableWrite {
+                source,
+                address,
+                physical,
+                size: len,
+            });
         }
         if overflow {
             self.fault(PreservationFault::CounterOverflow);
@@ -294,9 +480,9 @@ struct PreservationContext {
     cpu: Weak<dyn Cpu>,
     records: Rc<RefCell<PreservationRecords>>,
     maps: Vec<MemoryMap>,
-    spans: Vec<Span>,
-    merged: Vec<Span>,
-    core: usize,
+    spans: Vec<CpuRange>,
+    merged: Vec<PhysicalRange>,
+    core: CoreId,
 }
 
 impl PreservationContext {
@@ -310,54 +496,61 @@ impl PreservationContext {
         };
         let state = state.borrow();
         if size <= 0 {
-            if self.overlaps_spans(address, 1) {
+            self.fault(PreservationFault::UnsupportedAccess);
+            return;
+        }
+        let Ok(cpu_address) = CpuAddress::new(address) else {
+            self.fault(PreservationFault::UnsupportedAccess);
+            return;
+        };
+        let Ok(width) = StoreSize::new(size as usize) else {
+            if self.overlaps_spans(cpu_address, size as u64) {
                 self.fault(PreservationFault::UnsupportedAccess);
             }
             return;
-        }
-        let width = size as u64;
-        if width > MAX_CPU_STORE {
-            if self.overlaps_spans(address, width) {
-                self.fault(PreservationFault::UnsupportedAccess);
-            }
+        };
+        if !self.overlaps_spans(cpu_address, width.get() as u64) {
             return;
         }
-        if !self.overlaps_spans(address, width) {
-            return;
-        }
-        match tcm_overlap(&*cpu, address, width) {
+        match tcm_overlap(&*cpu, address, width.get() as u64) {
             Ok(false) => {}
-            Ok(true) => {
-                self.fault(PreservationFault::UnsupportedAccess);
-                return;
-            }
-            Err(_) => {
+            Ok(true) | Err(_) => {
                 self.fault(PreservationFault::UnsupportedAccess);
                 return;
             }
         }
         let physical = state
             .decoders
-            .observed_physical(self.core, address, width)
+            .observed_physical(self.core.get() as usize, address, width.get() as u64)
             .or_else(|| {
-                self.maps.iter().find(|map| {
-                    map.address <= address
-                        && address.saturating_add(width) <= map.address + map.size as u64
-                }).map(|map| map.physical + address - map.address)
+                self.maps
+                    .iter()
+                    .find(|map| {
+                        map.address <= address
+                            && address.saturating_add(width.get() as u64)
+                                <= map.address + map.size as u64
+                    })
+                    .map(|map| map.physical + address - map.address)
             });
-        let Some(physical) = physical else {
+        let Ok(physical) = physical
+            .ok_or_else(|| "unresolved".to_owned())
+            .and_then(PhysicalAddress::new)
+        else {
             self.fault(PreservationFault::UnresolvedMapping);
             return;
         };
         if !self
             .merged
             .iter()
-            .any(|&(lo, hi)| physical < hi && lo < physical + width)
+            .any(|range| range.overlaps_bytes(physical, width.get() as u64))
         {
             return;
         }
-        let mut before = [0; MAX_CPU_STORE as usize];
-        if cpu.read_memory(address, &mut before[..width as usize]).is_err() {
+        let mut before = [0; MAX_CPU_STORE];
+        if cpu
+            .read_memory(address, &mut before[..width.get()])
+            .is_err()
+        {
             self.fault(PreservationFault::UnreadablePreimage);
             return;
         }
@@ -368,37 +561,38 @@ impl PreservationContext {
                 return;
             }
         };
-        let mask = if width == 8 {
+        let mask = if width.get() == MAX_CPU_STORE {
             u64::MAX
         } else {
-            (1u64 << (width * 8)) - 1
+            (1u64 << (width.get() * 8)) - 1
         };
         let stored = value as u64 & mask;
-        let mut after = [0; MAX_CPU_STORE as usize];
-        for index in 0..width as usize {
+        let mut after = [0; MAX_CPU_STORE];
+        for index in 0..width.get() {
             let shift = if byte_order {
-                (width as usize - 1 - index) * 8
+                (width.get() - 1 - index) * 8
             } else {
                 index * 8
             };
             after[index] = (stored >> shift) as u8;
         }
         let mut changed = None;
-        for &(lo, hi) in &self.merged {
-            let start = lo.max(physical);
-            let end = hi.min(physical + width);
+        for range in &self.merged {
+            let start = range.start().max(physical.get());
+            let end = range.end().min(physical.get() + width.get() as u64);
             if start >= end {
                 continue;
             }
-            let offset = (start - physical) as usize;
+            let offset = (start - physical.get()) as usize;
             let len = (end - start) as usize;
             if before[offset..offset + len] == after[offset..offset + len] {
                 continue;
             }
             let progress = cpu
                 .instruction_progress()
-                .unwrap_or(state.accounted[self.core]);
-            let Some(extra) = progress.checked_sub(state.accounted[self.core]) else {
+                .unwrap_or(state.accounted[self.core.get() as usize]);
+            let Some(extra) = progress.checked_sub(state.accounted[self.core.get() as usize])
+            else {
                 self.fault(PreservationFault::CounterOverflow);
                 return;
             };
@@ -414,20 +608,32 @@ impl PreservationContext {
                 self.fault(PreservationFault::CounterOverflow);
                 return;
             };
-            let pc = match scalar(&*cpu, Register::Pc) {
-                Ok(pc) => pc,
-                Err(_) => {
-                    self.fault(PreservationFault::UnsupportedAccess);
-                    return;
-                }
+            let Ok(pc) = scalar(&*cpu, Register::Pc)
+                .map_err(|_| "pc".to_owned())
+                .and_then(CpuAddress::new)
+            else {
+                self.fault(PreservationFault::UnsupportedAccess);
+                return;
+            };
+            let Ok(store_size) = StoreSize::new(len) else {
+                self.fault(PreservationFault::UnsupportedAccess);
+                return;
+            };
+            let Ok(intersection) = CpuAddress::new(address + offset as u64) else {
+                self.fault(PreservationFault::UnsupportedAccess);
+                return;
+            };
+            let Ok(physical_start) = PhysicalAddress::new(start) else {
+                self.fault(PreservationFault::UnsupportedAccess);
+                return;
             };
             changed = Some(PreservationViolation::CpuChange {
                 core: self.core,
                 pc,
-                instructions,
-                address: address + offset as u64,
-                physical: start,
-                size: len as u32,
+                instructions: InstructionCount(instructions),
+                address: intersection,
+                physical: physical_start,
+                size: store_size,
                 before: PreservationBytes::new(&before[offset..offset + len]),
                 after: PreservationBytes::new(&after[offset..offset + len]),
             });
@@ -435,10 +641,8 @@ impl PreservationContext {
         }
         self.records.borrow_mut().cpu_store(changed);
     }
-    fn overlaps_spans(&self, address: u64, width: u64) -> bool {
-        self.spans
-            .iter()
-            .any(|&(lo, hi)| address < hi && lo < address.saturating_add(width))
+    fn overlaps_spans(&self, address: CpuAddress, width: u64) -> bool {
+        self.spans.iter().any(|span| span.overlaps(address, width))
     }
 }
 
@@ -484,25 +688,33 @@ impl Board {
                     })
                     .map(|map| map.physical + address - map.address)
             });
-        match physical {
-            Some(physical) => records
+        let Ok(size) = WriteSize::new(bytes) else {
+            records
                 .borrow_mut()
-                .bus_write(PreservationBusSource::HostWrite, physical, address, bytes),
-            None => records.borrow_mut().unresolved(),
+                .fault(PreservationFault::UnsupportedAccess);
+            return;
+        };
+        let Ok(address) = CpuAddress::new(address) else {
+            records
+                .borrow_mut()
+                .fault(PreservationFault::UnsupportedAccess);
+            return;
+        };
+        match physical.map(PhysicalAddress::new) {
+            Some(Ok(physical)) => {
+                records.borrow_mut().bus_write(
+                    PreservationBusSource::HostWrite,
+                    physical,
+                    address,
+                    size,
+                );
+            }
+            _ => records.borrow_mut().unresolved(),
         }
     }
-    pub fn preservation_begin(&self, ranges: Vec<Span>) -> Result<Box<Preservation>, String> {
-        if ranges.is_empty()
-            || ranges.len() > 8
-            || ranges
-                .iter()
-                .any(|&(lo, hi)| lo >= hi || hi > u32::MAX as u64)
-            || self.cpus.iter().any(|cpu| cpu.model() != Model::CortexR5F)
-        {
-            return Err(
-                "Preservation observation requires 1..8 bounded 32-bit ranges on R-profile processors"
-                    .into(),
-            );
+    pub fn preservation_begin(&self, ranges: ProtectedRanges) -> Result<Box<Preservation>, String> {
+        if self.cpus.iter().any(|cpu| cpu.model() != Model::CortexR5F) {
+            return Err("Preservation observation requires R-profile processors".into());
         }
         self.state
             .try_borrow_mut()
@@ -520,10 +732,9 @@ impl Board {
         {
             return Err("A memory watch conflicts with preservation observation".into());
         }
-        let merged = union(ranges.clone());
-        for &(lo, hi) in &merged {
-            let mut cursor = lo;
-            while cursor < hi {
+        for range in ranges.ranges() {
+            let mut cursor = range.start();
+            while cursor < range.end() {
                 let (base, backing) = self
                     .physical_memory
                     .regions()
@@ -532,9 +743,18 @@ impl Board {
                         *base <= cursor && cursor < *base + backing.len() as u64
                     })
                     .ok_or("Preservation range has no complete physical RAM backing")?;
-                cursor = hi.min(*base + backing.len() as u64);
+                cursor = range.end().min(*base + backing.len() as u64);
             }
         }
+        let merged = ranges
+            .ranges()
+            .iter()
+            .map(|range| (range.start(), range.end()))
+            .collect::<Vec<_>>();
+        let merged = union(merged)
+            .into_iter()
+            .map(|(start, end)| PhysicalRange::new(start, end))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut views = self.mappings.clone();
         {
             let state = self.state.borrow();
@@ -544,41 +764,47 @@ impl Board {
         }
         views.sort_by_key(|map| (map.core, map.address, map.physical, map.size));
         views.dedup();
-        let mut spans: Vec<Vec<Span>> = vec![Vec::new(); self.cpus.len()];
+        let mut spans: Vec<Vec<CpuRange>> = vec![Vec::new(); self.cpus.len()];
         for map in &views {
             if map.core >= self.cpus.len() {
                 continue;
             }
-            for &(lo, hi) in &merged {
-                let start = lo.max(map.physical);
-                let end = hi.min(map.physical + map.size as u64);
+            for range in &merged {
+                let start = range.start().max(map.physical);
+                let end = range.end().min(map.physical + map.size as u64);
                 if start < end {
-                    spans[map.core].push((
-                        map.address + start - map.physical,
-                        map.address + end - map.physical,
-                    ));
+                    spans[map.core].push(CpuRange::new(
+                        CpuAddress::new(map.address + start - map.physical)?,
+                        CpuAddress::new(map.address + end - map.physical)?,
+                    )?);
                 }
             }
         }
-        for (core, spans) in spans.iter_mut().enumerate() {
-            *spans = union(std::mem::take(spans));
-            for &(lo, hi) in spans.iter() {
-                if tcm_overlap(&*self.cpus[core], lo, hi - lo)
+        for (core, core_spans) in spans.iter_mut().enumerate() {
+            *core_spans = union(
+                core_spans
+                    .iter()
+                    .map(|span| (span.start(), span.end()))
+                    .collect(),
+            )
+            .into_iter()
+            .map(|(start, end)| CpuRange::new(CpuAddress::new(start)?, CpuAddress::new(end)?))
+            .collect::<Result<Vec<_>, String>>()?;
+            for span in core_spans.iter() {
+                if tcm_overlap(&*self.cpus[core], span.start(), span.end() - span.start())
                     .map_err(|error| format!("Preservation TCM inspection: {error}"))?
                 {
-                    return Err(
-                        "Preservation range intersects a CPU-private TCM overlay".into(),
-                    );
+                    return Err("Preservation range intersects a CPU-private TCM overlay".into());
                 }
             }
         }
         let records = Rc::new(RefCell::new(PreservationRecords {
             ranges,
             merged,
-            identity_cpu_writes: 0,
-            changed_cpu_writes: 0,
-            host_writes: 0,
-            model_bus_writes: 0,
+            identity_cpu_writes: WriteCount::default(),
+            changed_cpu_writes: WriteCount::default(),
+            host_writes: WriteCount::default(),
+            model_bus_writes: WriteCount::default(),
             violation: None,
         }));
         let mut preservation = Box::new(Preservation {
@@ -589,8 +815,8 @@ impl Board {
             broken: false,
             ended: false,
         });
-        for (core, spans) in spans.into_iter().enumerate() {
-            if spans.is_empty() {
+        for (core, core_spans) in spans.into_iter().enumerate() {
+            if core_spans.is_empty() {
                 continue;
             }
             let context_merged = records.borrow().merged.clone();
@@ -605,16 +831,20 @@ impl Board {
                     .cloned()
                     .collect(),
                 merged: context_merged,
-                spans,
-                core,
+                spans: core_spans,
+                core: CoreId::new(core)?,
             }));
             let data = (&**preservation.contexts.last().unwrap() as *const PreservationContext)
                 .cast_mut()
                 .cast();
             for (begin, end) in union(
-                preservation.contexts.last().unwrap().spans
+                preservation
+                    .contexts
+                    .last()
+                    .unwrap()
+                    .spans
                     .iter()
-                    .map(|&(lo, hi)| (lo.saturating_sub(HOOK_REACH), hi))
+                    .map(|span| (span.start().saturating_sub(HOOK_REACH), span.end()))
                     .collect(),
             ) {
                 match unsafe {

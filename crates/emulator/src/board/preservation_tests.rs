@@ -2,7 +2,8 @@ use super::bus::{Bus, Mode};
 use super::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
 use super::memory::BusMapping;
 use super::preservation::{
-    PreservationBusSource, PreservationFault, PreservationState, PreservationViolation,
+    PhysicalRange, PreservationBusSource, PreservationFault, PreservationState,
+    PreservationViolation, ProtectedRanges,
 };
 use super::*;
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
@@ -159,6 +160,29 @@ fn two_core_board() -> Board {
     .unwrap()
 }
 
+fn protected(ranges: &[(u64, u64)]) -> ProtectedRanges {
+    ProtectedRanges::new(
+        ranges
+            .iter()
+            .map(|&(lo, hi)| PhysicalRange::new(lo, hi).unwrap())
+            .collect(),
+    )
+    .unwrap()
+}
+
+fn observed_ranges(state: &PreservationState) -> Vec<(u64, u64)> {
+    state
+        .ranges()
+        .map(|ranges| {
+            ranges
+                .ranges()
+                .iter()
+                .map(|range| (range.start(), range.end()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn code(board: &Board, words: &[u32]) {
     board
         .cpu(0)
@@ -200,17 +224,23 @@ fn identity_store_counts_without_a_violation() {
     data(&board, 0x10080, &[1, 2, 3, 4]);
     address(&board, 0x10080);
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     run(&mut board, 3);
     let state = preservation.state();
-    assert_eq!(state.ranges, vec![(0x10080, 0x10090)]);
+    assert_eq!(observed_ranges(&state), vec![(0x10080, 0x10090)]);
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (1, 0)
     );
-    assert_eq!((state.host_writes, state.model_bus_writes), (0, 0));
-    assert_eq!(state.violation, None);
+    assert_eq!(
+        (state.host_writes().get(), state.model_bus_writes().get()),
+        (0, 0)
+    );
+    assert_eq!(state.violation(), None);
     assert_eq!(bytes(&board, 0x10080, 4), vec![1, 2, 3, 4]);
 }
 
@@ -219,24 +249,21 @@ fn transient_change_and_restore_reports_the_first_store() {
     let mut board = board(false);
     code(
         &board,
-        &[
-            0xe3a00001,
-            0xe5810000,
-            0xe3a00000,
-            0xe5810000,
-            0xeafffffe,
-        ],
+        &[0xe3a00001, 0xe5810000, 0xe3a00000, 0xe5810000, 0xeafffffe],
     );
     data(&board, 0x10080, &[0; 4]);
     address(&board, 0x10080);
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     run(&mut board, 5);
     assert_eq!(bytes(&board, 0x10080, 4), vec![0; 4]);
     let state = preservation.state();
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (0, 2)
     );
     let PreservationViolation::CpuChange {
@@ -248,14 +275,70 @@ fn transient_change_and_restore_reports_the_first_store() {
         before,
         after,
         ..
-    } = state.violation.unwrap()
+    } = state.violation().cloned().unwrap()
     else {
         panic!("expected a changed CPU store");
     };
-    assert_eq!((core, pc, address, physical), (0, 0x10004, 0x10080, 0x10080));
-    assert_eq!(size, 4);
+    assert_eq!(
+        (core.get(), pc.get(), address.get(), physical.get()),
+        (0, 0x10004, 0x10080, 0x10080)
+    );
+    assert_eq!(size.get(), 4);
     assert_eq!(before.as_slice(), &[0u8, 0, 0, 0][..]);
     assert_eq!(after.as_slice(), &[1u8, 0, 0, 0][..]);
+}
+
+#[test]
+fn setend_big_endian_word_store_uses_the_callback_value_order() {
+    for (initial, changed) in [
+        ([0x11u8, 0x22, 0x33, 0x44], false),
+        ([0x44u8, 0x33, 0x22, 0x11], true),
+    ] {
+        let mut board = board(false);
+        code(
+            &board,
+            &[
+                0xf1010200, // setend be
+                0xe3030344, // movw r0,#0x3344
+                0xe3410122, // movt r0,#0x1122
+                0xe5810000, // str r0,[r1]
+                0xeafffffe,
+            ],
+        );
+        data(&board, 0x10080, &initial);
+        address(&board, 0x10080);
+        let preservation = board
+            .preservation_begin(protected(&[(0x10080, 0x10090)]))
+            .unwrap();
+        run(&mut board, 5);
+        assert_eq!(bytes(&board, 0x10080, 4), vec![0x11, 0x22, 0x33, 0x44]);
+        let state = preservation.state();
+        if changed {
+            assert_eq!(
+                (
+                    state.identity_cpu_writes().get(),
+                    state.changed_cpu_writes().get()
+                ),
+                (0, 1)
+            );
+            let PreservationViolation::CpuChange { before, after, .. } =
+                state.violation().cloned().unwrap()
+            else {
+                panic!("expected a changed CPU store");
+            };
+            assert_eq!(before.as_slice(), &[0x44u8, 0x33, 0x22, 0x11][..]);
+            assert_eq!(after.as_slice(), &[0x11u8, 0x22, 0x33, 0x44][..]);
+        } else {
+            assert_eq!(
+                (
+                    state.identity_cpu_writes().get(),
+                    state.changed_cpu_writes().get()
+                ),
+                (1, 0)
+            );
+            assert_eq!(state.violation(), None);
+        }
+    }
 }
 
 #[test]
@@ -268,34 +351,34 @@ fn partial_overlap_compares_only_the_protected_intersection() {
     data(&unchanged, 0x10080, &[0x11, 0x22, 0xaa, 0xbb]);
     address(&unchanged, 0x10080);
     let preservation = unchanged
-        .preservation_begin(vec![(0x10082, 0x10090)])
+        .preservation_begin(protected(&[(0x10082, 0x10090)]))
         .unwrap();
     run(&mut unchanged, 4);
-    assert_eq!(
-        bytes(&unchanged, 0x10080, 4),
-        vec![0xdd, 0xcc, 0xaa, 0xbb]
-    );
+    assert_eq!(bytes(&unchanged, 0x10080, 4), vec![0xdd, 0xcc, 0xaa, 0xbb]);
     let state = preservation.state();
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (1, 0)
     );
-    assert_eq!(state.violation, None);
+    assert_eq!(state.violation(), None);
 
     let mut changed = board(false);
-    code(
-        &changed,
-        &[0xe30c0cdd, 0xe34b0bab, 0xe5810000, 0xeafffffe],
-    );
+    code(&changed, &[0xe30c0cdd, 0xe34b0bab, 0xe5810000, 0xeafffffe]);
     data(&changed, 0x10080, &[0x11, 0x22, 0xaa, 0xbb]);
     address(&changed, 0x10080);
     let preservation = changed
-        .preservation_begin(vec![(0x10082, 0x10090)])
+        .preservation_begin(protected(&[(0x10082, 0x10090)]))
         .unwrap();
     run(&mut changed, 4);
     let state = preservation.state();
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (0, 1)
     );
     let PreservationViolation::CpuChange {
@@ -305,11 +388,14 @@ fn partial_overlap_compares_only_the_protected_intersection() {
         before,
         after,
         ..
-    } = state.violation.unwrap()
+    } = state.violation().cloned().unwrap()
     else {
         panic!("expected a changed CPU store");
     };
-    assert_eq!((address, physical, size), (0x10082, 0x10082, 2));
+    assert_eq!(
+        (address.get(), physical.get(), size.get()),
+        (0x10082, 0x10082, 2)
+    );
     assert_eq!(before.as_slice(), &[0xaau8, 0xbb][..]);
     assert_eq!(after.as_slice(), &[0xabu8, 0xbb][..]);
 }
@@ -321,28 +407,31 @@ fn alias_view_store_is_observed_as_the_protected_physical_bytes() {
     data(&board, 0x10080, &[0; 4]);
     address(&board, 0x20080);
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     run(&mut board, 3);
     let state = preservation.state();
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (0, 1)
     );
     let PreservationViolation::CpuChange {
         address, physical, ..
-    } = state.violation.unwrap()
+    } = state.violation().cloned().unwrap()
     else {
         panic!("expected a changed CPU store");
     };
-    assert_eq!((address, physical), (0x20080, 0x10080));
+    assert_eq!((address.get(), physical.get()), (0x20080, 0x10080));
 }
 
 #[test]
 fn host_and_model_bus_writes_are_unverifiable() {
     let board = board(false);
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     board.write_physical(0x10080, &[9]).unwrap();
     board.write_memory(0, 0x10084, &[8]).unwrap();
@@ -354,18 +443,24 @@ fn host_and_model_bus_writes_are_unverifiable() {
             .unwrap();
     }
     let state = preservation.state();
-    assert_eq!((state.host_writes, state.model_bus_writes), (2, 1));
+    assert_eq!(
+        (state.host_writes().get(), state.model_bus_writes().get()),
+        (2, 1)
+    );
     let PreservationViolation::UnverifiableWrite {
         source,
         address,
         physical,
         size,
-    } = state.violation.unwrap()
+    } = state.violation().cloned().unwrap()
     else {
         panic!("expected an unverifiable write");
     };
     assert_eq!(source, PreservationBusSource::HostWrite);
-    assert_eq!((address, physical, size), (0x10080, 0x10080, 1));
+    assert_eq!(
+        (address.get(), physical.get(), size.get()),
+        (0x10080, 0x10080, 1)
+    );
 }
 
 #[test]
@@ -374,27 +469,24 @@ fn integrity_fault_dominates_an_earlier_cpu_change() {
     code(
         &board,
         &[
-            0xe3a00001,
-            0xe3021000,
-            0xe3401001,
-            0xe5810000,
-            0xe3011000,
-            0xe5810000,
-            0xeafffffe,
+            0xe3a00001, 0xe3021000, 0xe3401001, 0xe5810000, 0xe3011000, 0xe5810000, 0xeafffffe,
         ],
     );
     data(&board, 0x12000, &[0; 4]);
     let preservation = board
-        .preservation_begin(vec![(0x11000, 0x11020)])
+        .preservation_begin(protected(&[(0x11000, 0x11020)]))
         .unwrap();
     run(&mut board, 7);
     let state = preservation.state();
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (0, 1)
     );
     assert_eq!(
-        state.violation,
+        state.violation().cloned(),
         Some(PreservationViolation::IntegrityFault {
             reason: PreservationFault::UnreadablePreimage
         })
@@ -409,62 +501,64 @@ fn dropping_preservation_removes_hooks_and_rearms() {
     address(&board, 0x10080);
     {
         let preservation = board
-            .preservation_begin(vec![(0x10080, 0x10090)])
+            .preservation_begin(protected(&[(0x10080, 0x10090)]))
             .unwrap();
         run(&mut board, 3);
-        assert_eq!(preservation.state().identity_cpu_writes, 1);
+        assert_eq!(preservation.state().identity_cpu_writes().get(), 1);
     }
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
-    board
-        .write_register(0, Register::Pc, 0x10000)
-        .unwrap();
+    board.write_register(0, Register::Pc, 0x10000).unwrap();
     run(&mut board, 3);
     let state = preservation.state();
     assert_eq!(
-        (state.identity_cpu_writes, state.changed_cpu_writes),
+        (
+            state.identity_cpu_writes().get(),
+            state.changed_cpu_writes().get()
+        ),
         (1, 0)
     );
-    assert_eq!(state.violation, None);
+    assert_eq!(state.violation(), None);
     drop(preservation);
     let mut preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     board.preservation_end(&mut preservation).unwrap();
     drop(preservation);
-    assert!(
-        board
-            .preservation_begin(vec![(0x10080, 0x10090)])
-            .is_ok()
-    );
+    let preservation = board
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
+        .unwrap();
+    board.write_register(0, Register::Pc, 0x10000).unwrap();
+    run(&mut board, 3);
+    assert_eq!(preservation.state().identity_cpu_writes().get(), 1);
 }
 
 #[test]
 fn host_write_uses_the_target_core_mapping() {
     let board = two_core_board();
     let preservation = board
-        .preservation_begin(vec![(0x11000, 0x11020)])
+        .preservation_begin(protected(&[(0x11000, 0x11020)]))
         .unwrap();
     board.write_memory(0, 0x10080, &[1]).unwrap();
-    assert_eq!(preservation.state().host_writes, 0);
+    assert_eq!(preservation.state().host_writes().get(), 0);
     board.write_memory(1, 0x10080, &[2]).unwrap();
     let state = preservation.state();
-    assert_eq!(state.host_writes, 1);
+    assert_eq!(state.host_writes().get(), 1);
     let PreservationViolation::UnverifiableWrite {
         address, physical, ..
-    } = state.violation.unwrap()
+    } = state.violation().cloned().unwrap()
     else {
         panic!("expected an unverifiable write");
     };
-    assert_eq!((address, physical), (0x10080, 0x11000));
+    assert_eq!((address.get(), physical.get()), (0x10080, 0x11000));
 }
 
 #[test]
 fn empty_host_writes_stay_clean() {
     let board = board(false);
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     board.write_physical(0x10084, &[]).unwrap();
     let _ = board.write_memory(0, 0x10084, &[]);
@@ -476,19 +570,22 @@ fn empty_host_writes_stay_clean() {
             .unwrap();
     }
     let state = preservation.state();
-    assert_eq!((state.host_writes, state.model_bus_writes), (0, 0));
-    assert_eq!(state.violation, None);
+    assert_eq!(
+        (state.host_writes().get(), state.model_bus_writes().get()),
+        (0, 0)
+    );
+    assert_eq!(state.violation(), None);
 }
 
 #[test]
 fn failed_host_mapping_marks_an_integrity_fault() {
     let board = board(false);
     let preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     assert!(board.write_physical(0x20000, &[1]).is_err());
     assert_eq!(
-        preservation.state().violation,
+        preservation.state().violation().cloned(),
         Some(PreservationViolation::IntegrityFault {
             reason: PreservationFault::UnresolvedMapping
         })
@@ -502,32 +599,39 @@ fn successful_end_disables_state_and_is_idempotent() {
     data(&board, 0x10080, &[1, 2, 3, 4]);
     address(&board, 0x10080);
     let mut preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090)])
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
     run(&mut board, 3);
-    assert_eq!(preservation.state().identity_cpu_writes, 1);
+    assert_eq!(preservation.state().identity_cpu_writes().get(), 1);
     board.preservation_end(&mut preservation).unwrap();
     board.preservation_end(&mut preservation).unwrap();
-    board
-        .write_register(0, Register::Pc, 0x10000)
-        .unwrap();
+    board.write_register(0, Register::Pc, 0x10000).unwrap();
     run(&mut board, 3);
-    assert_eq!(preservation.state(), PreservationState::disabled());
+    assert_eq!(
+        serde_json::to_value(preservation.state()).unwrap(),
+        serde_json::json!({
+            "enabled": false,
+            "ranges": [],
+            "identity_cpu_writes": 0,
+            "changed_cpu_writes": 0,
+            "host_writes": 0,
+            "model_bus_writes": 0,
+            "violation": null,
+        })
+    );
 }
 
 #[test]
 fn begin_refuses_unsupported_ranges_and_conflicting_observers() {
     let board = board(false);
-    assert!(board.preservation_begin(vec![]).is_err());
+    assert!(ProtectedRanges::new(Vec::new()).is_err());
     assert!(
         board
-            .preservation_begin(vec![(0x14000, 0x14010)])
-            .err()
-            .unwrap()
-            .contains("physical RAM backing")
+            .preservation_begin(protected(&[(0x14000, 0x14010)]))
+            .is_err()
     );
     let mut preservation = board
-        .preservation_begin(vec![(0x10080, 0x10090), (0x10090, 0x100a0)])
+        .preservation_begin(protected(&[(0x10080, 0x10090), (0x10090, 0x100a0)]))
         .unwrap();
     assert!(
         board
@@ -536,7 +640,7 @@ fn begin_refuses_unsupported_ranges_and_conflicting_observers() {
     );
     assert!(
         board
-            .preservation_begin(vec![(0x10080, 0x10090)])
+            .preservation_begin(protected(&[(0x10080, 0x10090)]))
             .is_err()
     );
     board.preservation_end(&mut preservation).unwrap();
@@ -545,7 +649,7 @@ fn begin_refuses_unsupported_ranges_and_conflicting_observers() {
         .unwrap();
     assert!(
         board
-            .preservation_begin(vec![(0x10080, 0x10090)])
+            .preservation_begin(protected(&[(0x10080, 0x10090)]))
             .is_err()
     );
     board.memory_watch_end(&mut watch).unwrap();

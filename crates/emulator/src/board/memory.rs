@@ -140,10 +140,24 @@ impl Memory {
                 observer.borrow_mut().unresolved();
                 return;
             };
-            if observer.borrow().overlaps(physical, len as u64) {
+            let Ok(physical) = super::preservation::PhysicalAddress::new(physical) else {
+                observer.borrow_mut().unresolved();
+                return;
+            };
+            let Ok(logical) = super::preservation::CpuAddress::new(address + offset) else {
+                observer.borrow_mut().unresolved();
+                return;
+            };
+            let Ok(chunk_size) = super::preservation::WriteSize::new(len) else {
                 observer
                     .borrow_mut()
-                    .bus_write(source, physical, address + offset, len);
+                    .fault(super::preservation::PreservationFault::UnsupportedAccess);
+                return;
+            };
+            if observer.borrow().overlaps(physical, chunk_size) {
+                observer
+                    .borrow_mut()
+                    .bus_write(source, physical, logical, chunk_size);
                 return;
             }
             offset += len as u64;
@@ -236,12 +250,24 @@ impl Memory {
                     .map_err(|_| "exclusive monitors poisoned")?
                     .written(Some((physical, bytes)))?;
                 if let Some(observer) = &preservation {
-                    observer.borrow_mut().bus_write(
-                        super::preservation::PreservationBusSource::HostWrite,
-                        physical,
-                        physical,
-                        bytes,
-                    );
+                    let typed = (|| {
+                        Ok::<_, String>((
+                            super::preservation::PhysicalAddress::new(physical)?,
+                            super::preservation::CpuAddress::new(physical)?,
+                            super::preservation::WriteSize::new(bytes)?,
+                        ))
+                    })();
+                    match typed {
+                        Ok((physical, address, size)) => observer.borrow_mut().bus_write(
+                            super::preservation::PreservationBusSource::HostWrite,
+                            physical,
+                            address,
+                            size,
+                        ),
+                        Err(_) => observer
+                            .borrow_mut()
+                            .fault(super::preservation::PreservationFault::UnsupportedAccess),
+                    }
                 }
             }
         }
