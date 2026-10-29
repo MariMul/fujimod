@@ -2,11 +2,11 @@
 
 use super::{
     Reader, Snapshots,
-    draw_state::{DrawState, PrimitiveMode},
+    draw_state::{ColorTargetFormat, DepthTargetFormat, DrawState, PrimitiveMode},
     raster::{self, RasterVertex},
     shader::Vector,
 };
-use crate::gpu::{
+use fujimod_emulator_gpu::{
     GpuContext, GpuSurface, SurfaceExtent, SurfaceFormat, SurfaceKey, SurfaceLayout, context,
 };
 use std::{collections::BTreeMap, sync::OnceLock};
@@ -19,6 +19,29 @@ const INPUT_OFFSET: usize = FOG_OFFSET + FOG_WORDS;
 const CASE_WORDS: usize = INPUT_OFFSET + 16;
 
 static DRAW_PIPELINE: OnceLock<wgpu::RenderPipeline> = OnceLock::new();
+
+fn color_surface_format(format: ColorTargetFormat) -> Result<SurfaceFormat, String> {
+    match format {
+        ColorTargetFormat::Rgba8 => Ok(SurfaceFormat::Rgba8),
+        ColorTargetFormat::Rgb565 => Ok(SurfaceFormat::Rgb565),
+        ColorTargetFormat::Rgb5A1 => Ok(SurfaceFormat::Rgb5A1),
+        ColorTargetFormat::Rgba4 => Ok(SurfaceFormat::Rgba4),
+        ColorTargetFormat::Other(value) => {
+            Err(format!("DMP unsupported color surface format {value}"))
+        }
+    }
+}
+
+fn depth_surface_format(format: DepthTargetFormat) -> Result<SurfaceFormat, String> {
+    match format {
+        DepthTargetFormat::Depth16 => Ok(SurfaceFormat::D16),
+        DepthTargetFormat::Depth24 => Ok(SurfaceFormat::D24),
+        DepthTargetFormat::Depth24Stencil8 => Ok(SurfaceFormat::D24S8),
+        DepthTargetFormat::Other(value) => {
+            Err(format!("DMP unsupported depth surface format {value}"))
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(super) struct Primitive {
@@ -87,7 +110,7 @@ pub(super) fn render(
         };
         let color_key = SurfaceKey {
             guest_address: state.targets.color_address,
-            format: SurfaceFormat::from_color_code(state.targets.color_format.code())?,
+            format: color_surface_format(state.targets.color_format)?,
             extent,
             layout: SurfaceLayout::Morton8x8,
         };
@@ -225,7 +248,7 @@ fn depth_surface_key(state: &DrawState, extent: SurfaceExtent) -> Result<Surface
     };
     Ok(SurfaceKey {
         guest_address,
-        format: SurfaceFormat::from_depth_code(state.targets.depth_format.code())?,
+        format: depth_surface_format(state.targets.depth_format)?,
         extent,
         layout: SurfaceLayout::Morton8x8,
     })
@@ -258,7 +281,7 @@ fn render_triangle(
     };
     let color_key = SurfaceKey {
         guest_address: state.targets.color_address,
-        format: SurfaceFormat::from_color_code(state.targets.color_format.code())?,
+        format: color_surface_format(state.targets.color_format)?,
         extent,
         layout: SurfaceLayout::Morton8x8,
     };

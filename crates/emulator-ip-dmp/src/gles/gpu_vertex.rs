@@ -309,9 +309,9 @@ fn run_packed(
         return Ok(Vec::new());
     }
     let semantics = vertex_semantics(state);
-    let context = crate::gpu::context()?;
+    let context = fujimod_emulator_gpu::context()?;
     if context.adapter_device_type() == wgpu::DeviceType::Cpu {
-        return Err("DMP host GPU adapter: a hardware adapter is required".into());
+        return Err("host GPU adapter: a hardware adapter is required".into());
     }
     let _submission = context.acquire()?;
     let mut gpu = GPU
@@ -347,7 +347,7 @@ impl Gpu {
 
     fn execute(
         &mut self,
-        context: &crate::gpu::GpuContext,
+        context: &fujimod_emulator_gpu::GpuContext,
         engine: &Engine,
         state: &DrawState,
         semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
@@ -671,7 +671,7 @@ mod tests {
         };
         let actual = match run_draw(&engine, &state, 3, true, &mut read) {
             Ok(actual) => actual,
-            Err(error) if error.starts_with("DMP host GPU adapter:") => {
+            Err(error) if error.starts_with("host GPU adapter:") => {
                 eprintln!("skipping DMP vertex conformance without an adapter: {error}");
                 return;
             }

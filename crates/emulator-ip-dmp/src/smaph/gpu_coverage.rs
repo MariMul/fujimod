@@ -17,7 +17,7 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new(context: &crate::gpu::GpuContext) -> Self {
+    fn new(context: &fujimod_emulator_gpu::GpuContext) -> Self {
         let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SMAPH path coverage"),
@@ -40,7 +40,7 @@ impl Gpu {
 
     fn coverage_batch(
         &self,
-        context: &crate::gpu::GpuContext,
+        context: &fujimod_emulator_gpu::GpuContext,
         inputs: &[scanline::CoverageInput],
     ) -> Result<Vec<Vec<u32>>, String> {
         let device = context.device();
@@ -236,9 +236,9 @@ impl Gpu {
 static GPU: OnceLock<Result<Option<Gpu>, String>> = OnceLock::new();
 
 fn shared_gpu() -> Result<Option<&'static Gpu>, String> {
-    let context = match crate::gpu::context() {
+    let context = match fujimod_emulator_gpu::context() {
         Ok(context) => context,
-        Err(error) if error.starts_with("DMP host GPU adapter:") => return Ok(None),
+        Err(error) if error.starts_with("host GPU adapter:") => return Ok(None),
         Err(error) => return Err(error),
     };
     match GPU.get_or_init(|| Ok(Some(Gpu::new(context)))) {
@@ -289,7 +289,7 @@ pub(super) fn coverage_batch(inputs: &[scanline::CoverageInput]) -> Result<Vec<V
             .collect();
     }
     let gpu = shared_gpu()?.ok_or_else(|| "SMAPH coverage has no wgpu adapter".to_owned())?;
-    gpu.coverage_batch(crate::gpu::context()?, inputs)
+    gpu.coverage_batch(fujimod_emulator_gpu::context()?, inputs)
 }
 
 #[cfg(test)]

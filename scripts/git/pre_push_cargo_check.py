@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path, PurePosixPath
-import re
 import subprocess
 import sys
-from typing import Iterable
-
+from collections.abc import Iterable
+from pathlib import Path, PurePosixPath
 
 MAIN_REF = "refs/heads/main"
 WASM_TARGET = "wasm32-unknown-unknown"
+# The web app's production browser module is built by
+# bindings/javascript/scripts/build.ts.
+BROWSER_WASM_PACKAGE = "fujimod-javascript"
 RUST_INPUT_NAMES = {
-    "Cargo.lock", "Cargo.toml", "rust-toolchain", "rust-toolchain.toml",
+    "Cargo.lock",
+    "Cargo.toml",
+    "rust-toolchain",
+    "rust-toolchain.toml",
 }
-WASM_MARKER = re.compile(
-    r"wasm32|wasm-bindgen|web-sys|js-sys|target_family\s*=\s*['\"]wasm['\"]",
-    re.IGNORECASE,
-)
 
 
 def parse_updates(lines: Iterable[str]) -> list[tuple[str, str, str, str]]:
@@ -33,7 +33,10 @@ def parse_updates(lines: Iterable[str]) -> list[tuple[str, str, str, str]]:
 
 def _git_output(root: Path, *arguments: str) -> bytes:
     result = subprocess.run(
-        ["git", *arguments], cwd=root, capture_output=True, check=False,
+        ["git", *arguments],
+        cwd=root,
+        capture_output=True,
+        check=False,
     )
     if result.returncode:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
@@ -56,12 +59,21 @@ def pushed_paths(root: Path, updates: Iterable[tuple[str, str, str, str]]) -> se
         commits = _git_output(root, *revisions).decode("ascii").splitlines()
         for commit in commits:
             changed = _git_output(
-                root, "diff-tree", "--root", "--no-commit-id", "-m",
-                "--no-renames", "--name-only", "-r", "-z", commit,
+                root,
+                "diff-tree",
+                "--root",
+                "--no-commit-id",
+                "-m",
+                "--no-renames",
+                "--name-only",
+                "-r",
+                "-z",
+                commit,
             )
             paths.update(
                 part.decode("utf-8", errors="surrogateescape")
-                for part in changed.split(b"\0") if part
+                for part in changed.split(b"\0")
+                if part
             )
     return paths
 
@@ -76,7 +88,9 @@ def is_rust_input(path: str) -> bool:
 
 
 def select_touched_crates(
-    paths: Iterable[str], packages: Iterable[dict], workspace_root: Path,
+    paths: Iterable[str],
+    packages: Iterable[dict],
+    workspace_root: Path,
 ) -> list[dict]:
     root = workspace_root.resolve()
     package_roots = []
@@ -94,10 +108,12 @@ def select_touched_crates(
         if not is_rust_input(path):
             continue
         candidate = PurePosixPath(path)
-        if (candidate in {
-                PurePosixPath("Cargo.toml"), PurePosixPath("Cargo.lock"),
-                PurePosixPath("rust-toolchain"), PurePosixPath("rust-toolchain.toml"),
-        } or (candidate.parts and candidate.parts[0] == ".cargo")):
+        if candidate in {
+            PurePosixPath("Cargo.toml"),
+            PurePosixPath("Cargo.lock"),
+            PurePosixPath("rust-toolchain"),
+            PurePosixPath("rust-toolchain.toml"),
+        } or (candidate.parts and candidate.parts[0] == ".cargo"):
             selected.update(all_packages)
             continue
 
@@ -112,34 +128,91 @@ def select_touched_crates(
     return [selected[name] for name in sorted(selected)]
 
 
-def package_supports_wasm(package: dict) -> bool:
-    fujimod_metadata = (package.get("metadata") or {}).get("fujimod") or {}
-    if fujimod_metadata.get("skip-wasm32-unknown-unknown-check") is True:
-        return False
+def select_browser_wasm_packages(
+    metadata: dict,
+    touched_packages: Iterable[dict],
+    workspace_root: Path,
+) -> list[dict]:
+    """Select touched workspace crates built for the production browser module."""
+    workspace_members = set(metadata["workspace_members"])
+    packages = {
+        package["id"]: package
+        for package in metadata["packages"]
+        if package["id"] in workspace_members
+    }
+    browser_packages = [
+        package
+        for package in packages.values()
+        if package["name"] == BROWSER_WASM_PACKAGE
+        and Path(package["manifest_path"])
+        .parent.resolve()
+        .is_relative_to(workspace_root.resolve())
+    ]
+    if len(browser_packages) != 1:
+        raise ValueError(
+            f"expected one workspace package named {BROWSER_WASM_PACKAGE}, "
+            f"found {len(browser_packages)}"
+        )
 
-    package_root = Path(package["manifest_path"]).parent
-    candidates = [package_root / "Cargo.toml", package_root / "README.md"]
-    candidates.extend(package_root.rglob("*.rs"))
-    for path in candidates:
-        if any(part in {"target", ".git"} for part in path.parts):
+    nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
+    browser_id = browser_packages[0]["id"]
+    if browser_id not in nodes:
+        raise ValueError(
+            f"Cargo metadata has no dependency node for {BROWSER_WASM_PACKAGE}"
+        )
+
+    closure = set()
+    pending = [browser_id]
+    while pending:
+        package_id = pending.pop()
+        if package_id in closure:
             continue
-        try:
-            if WASM_MARKER.search(path.read_text(encoding="utf-8")):
-                return True
-        except (OSError, UnicodeDecodeError):
-            continue
-    return False
+        node = nodes.get(package_id)
+        if node is None:
+            raise ValueError(f"Cargo metadata has no dependency node for {package_id}")
+        closure.add(package_id)
+        for dependency in node.get("deps", []):
+            dependency_id = dependency["pkg"]
+            if dependency_id not in workspace_members:
+                continue
+            kinds = dependency.get("dep_kinds", [])
+            if kinds and not any(kind.get("kind") is None for kind in kinds):
+                continue
+            pending.append(dependency_id)
 
-
-def workspace_packages(root: Path) -> list[dict]:
-    result = subprocess.run(
-        ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
-        cwd=root, capture_output=True, text=True, check=True,
+    touched_ids = {package["id"] for package in touched_packages}
+    return sorted(
+        (
+            package
+            for package_id, package in packages.items()
+            if package_id in closure and package_id in touched_ids
+        ),
+        key=lambda package: package["name"],
     )
-    return json.loads(result.stdout)["packages"]
 
 
-def cargo_check_command(packages: Iterable[dict], target: str | None = None) -> list[str]:
+def workspace_metadata(root: Path) -> dict:
+    result = subprocess.run(
+        [
+            "cargo",
+            "metadata",
+            "--locked",
+            "--format-version",
+            "1",
+            "--filter-platform",
+            WASM_TARGET,
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def cargo_check_command(
+    packages: Iterable[dict], target: str | None = None
+) -> list[str]:
     command = ["cargo", "check", "--locked"]
     if target:
         command.extend(("--target", target))
@@ -158,9 +231,12 @@ def check_updates(root: Path, updates: Iterable[tuple[str, str, str, str]]) -> i
         print("No Rust inputs changed; skipping cargo check.", flush=True)
         return 0
 
-    packages = select_touched_crates(paths, workspace_packages(root), root)
+    metadata = workspace_metadata(root)
+    packages = select_touched_crates(paths, metadata["packages"], root)
     if not packages:
-        print("No workspace crates were affected by the pushed Rust inputs.", flush=True)
+        print(
+            "No workspace crates were affected by the pushed Rust inputs.", flush=True
+        )
         return 0
 
     names = ", ".join(package["name"] for package in packages)
@@ -169,12 +245,14 @@ def check_updates(root: Path, updates: Iterable[tuple[str, str, str, str]]) -> i
     if result.returncode:
         return result.returncode
 
-    wasm_packages = [package for package in packages if package_supports_wasm(package)]
+    wasm_packages = select_browser_wasm_packages(metadata, packages, root)
     if wasm_packages:
         names = ", ".join(package["name"] for package in wasm_packages)
         print(f"Checking {WASM_TARGET} for: {names}", flush=True)
         result = subprocess.run(
-            cargo_check_command(wasm_packages, WASM_TARGET), cwd=root, check=False,
+            cargo_check_command(wasm_packages, WASM_TARGET),
+            cwd=root,
+            check=False,
         )
         if result.returncode:
             return result.returncode
@@ -185,11 +263,19 @@ def main() -> int:
     try:
         root_result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         root = Path(root_result.stdout.strip())
         return check_updates(root, parse_updates(sys.stdin))
-    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+    except (
+        OSError,
+        RuntimeError,
+        ValueError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ) as error:
         print(f"Rust push check failed: {error}", file=sys.stderr, flush=True)
         return 1
 

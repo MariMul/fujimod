@@ -39,7 +39,7 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new(context: &crate::gpu::GpuContext) -> Result<Self, String> {
+    fn new(context: &fujimod_emulator_gpu::GpuContext) -> Result<Self, String> {
         let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DMP fragment stage"),
@@ -58,7 +58,7 @@ impl Gpu {
 
     fn dispatch(
         &self,
-        context: &crate::gpu::GpuContext,
+        context: &fujimod_emulator_gpu::GpuContext,
         cases: &[FragmentCase<'_>],
         memory: &[u8],
     ) -> Result<Vec<u8>, String> {
@@ -261,7 +261,7 @@ static GPU: OnceLock<Result<Mutex<Gpu>, String>> = OnceLock::new();
 /// `memory` is indexed by the DMP's byte addresses, as it is by the CPU
 /// sampler and target reader. Returned bytes include any color/depth writes.
 pub(super) fn dispatch(cases: &[FragmentCase<'_>], memory: &[u8]) -> Result<Vec<u8>, String> {
-    let context = crate::gpu::context()?;
+    let context = fujimod_emulator_gpu::context()?;
     let gpu = GPU.get_or_init(|| Gpu::new(context).map(Mutex::new));
     match gpu {
         Ok(gpu) => gpu
@@ -311,9 +311,9 @@ mod tests {
     }
 
     fn skip_without_adapter() -> bool {
-        let context = match crate::gpu::context() {
+        let context = match fujimod_emulator_gpu::context() {
             Ok(context) => context,
-            Err(error) if error.starts_with("DMP host GPU adapter:") => {
+            Err(error) if error.starts_with("host GPU adapter:") => {
                 eprintln!(
                     "skipping DMP fragment test because no host GPU adapter is available: {error}"
                 );

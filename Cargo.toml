@@ -65,6 +65,7 @@ members = [
   "crates/emulator-ip-dmp",
   "crates/emulator-ip-arm",
   "crates/emulator-graphics",
+  "crates/emulator-gpu",
   "crates/emulator-exr2-io",
   "crates/emulator-exr2-system",
   "crates/emulator-exr2-companion",
@@ -172,6 +173,7 @@ fujimod-emulator-ip = { path = "crates/emulator-ip", version = "0.1.0" }
 fujimod-emulator-ip-dmp = { path = "crates/emulator-ip-dmp", version = "0.1.0" }
 fujimod-emulator-ip-arm = { path = "crates/emulator-ip-arm", version = "0.1.0" }
 fujimod-emulator-graphics = { path = "crates/emulator-graphics", version = "0.1.0" }
+fujimod-emulator-gpu = { path = "crates/emulator-gpu", version = "0.1.0" }
 fujimod-emulator-exr2-io = { path = "crates/emulator-exr2-io", version = "0.1.0" }
 fujimod-emulator-exr2-system = { path = "crates/emulator-exr2-system", version = "0.1.0" }
 fujimod-emulator-exr2-companion = { path = "crates/emulator-exr2-companion", version = "0.1.0" }

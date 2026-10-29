@@ -1,7 +1,8 @@
-//! Shared host GPU device, queue, and resident surface API.
+//! Shared host GPU context, queue, resident surfaces, and guest-memory transfers.
 
+#[cfg(not(target_os = "emscripten"))]
 mod surfaces;
-
+#[cfg(not(target_os = "emscripten"))]
 pub use surfaces::{
     GpuContext, GpuSurface, PixelWriteMask, SurfaceExtent, SurfaceFormat, SurfaceKey,
     SurfaceLayout, SurfaceReadback, context, context_async,

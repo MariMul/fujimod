@@ -32,27 +32,6 @@ pub enum SurfaceFormat {
 }
 
 impl SurfaceFormat {
-    /// DMP color target register values: 0 RGBA8, 1 RGB565, 2 RGB5A1, 3 RGBA4.
-    pub fn from_color_code(code: u32) -> Result<Self, String> {
-        match code {
-            0 => Ok(Self::Rgba8),
-            1 => Ok(Self::Rgb565),
-            2 => Ok(Self::Rgb5A1),
-            3 => Ok(Self::Rgba4),
-            value => Err(format!("DMP unsupported color surface format {value}")),
-        }
-    }
-
-    /// DMP depth target register values: 0 D16, 2 D24, 3 D24S8.
-    pub fn from_depth_code(code: u32) -> Result<Self, String> {
-        match code {
-            0 => Ok(Self::D16),
-            2 => Ok(Self::D24),
-            3 => Ok(Self::D24S8),
-            value => Err(format!("DMP unsupported depth surface format {value}")),
-        }
-    }
-
     pub const fn bytes_per_pixel(self) -> u32 {
         match self {
             Self::Rgba8 | Self::D24S8 => 4,
@@ -158,7 +137,7 @@ impl GpuContext {
     pub fn acquire(&self) -> Result<MutexGuard<'_, ()>, String> {
         self.submission_lock
             .lock()
-            .map_err(|_| "DMP GPU submission lock poisoned".into())
+            .map_err(|_| "GPU submission lock poisoned".into())
     }
 
     /// Get or create a resident surface, synchronizing it when guest memory changed.
@@ -172,20 +151,20 @@ impl GpuContext {
         let (pixel_count, byte_len) = validate_key(key, &self.gpu)?;
         if guest_bytes.is_some_and(|bytes| bytes.len() != byte_len) {
             return Err(format!(
-                "DMP surface upload has {} bytes, expected {byte_len}",
+                "host GPU surface upload has {} bytes, expected {byte_len}",
                 guest_bytes.map_or(0, <[u8]>::len)
             ));
         }
         let mut surfaces = self
             .surfaces
             .lock()
-            .map_err(|_| "DMP surface cache lock poisoned")?;
+            .map_err(|_| "host GPU surface cache lock poisoned")?;
         if let Some(surface) = surfaces.get(&key).cloned() {
             if let Some(bytes) = guest_bytes {
                 let mut shadow = surface
                     .guest_shadow
                     .lock()
-                    .map_err(|_| "DMP surface shadow lock poisoned")?;
+                    .map_err(|_| "host GPU surface shadow lock poisoned")?;
                 if shadow.as_slice() != bytes {
                     self.gpu.upload(&surface, bytes)?;
                     shadow.clear();
@@ -204,7 +183,7 @@ impl GpuContext {
         *surface
             .guest_shadow
             .lock()
-            .map_err(|_| "DMP surface shadow lock poisoned")? = initial_bytes;
+            .map_err(|_| "host GPU surface shadow lock poisoned")? = initial_bytes;
         surfaces.insert(key, Arc::clone(&surface));
         Ok(surface)
     }
@@ -213,28 +192,28 @@ impl GpuContext {
         self.surfaces
             .lock()
             .map(|surfaces| surfaces.get(&key).cloned())
-            .map_err(|_| "DMP surface cache lock poisoned".into())
+            .map_err(|_| "host GPU surface cache lock poisoned".into())
     }
 
     pub fn len(&self) -> Result<usize, String> {
         self.surfaces
             .lock()
             .map(|surfaces| surfaces.len())
-            .map_err(|_| "DMP surface cache lock poisoned".into())
+            .map_err(|_| "host GPU surface cache lock poisoned".into())
     }
 
     pub fn is_empty(&self) -> Result<bool, String> {
         self.surfaces
             .lock()
             .map(|surfaces| surfaces.is_empty())
-            .map_err(|_| "DMP surface cache lock poisoned".into())
+            .map_err(|_| "host GPU surface cache lock poisoned".into())
     }
 
     pub fn evict(&self, key: SurfaceKey) -> Result<bool, String> {
         self.surfaces
             .lock()
             .map(|mut surfaces| surfaces.remove(&key).is_some())
-            .map_err(|_| "DMP surface cache lock poisoned".into())
+            .map_err(|_| "host GPU surface cache lock poisoned".into())
     }
 
     /// Atomically add byte writes for any pixels. Duplicate coordinates are
@@ -250,30 +229,30 @@ impl GpuContext {
         let surface = self
             .surfaces
             .lock()
-            .map_err(|_| "DMP surface cache lock poisoned")?
+            .map_err(|_| "host GPU surface cache lock poisoned")?
             .get(&key)
             .cloned()
-            .ok_or("DMP surface is not resident")?;
+            .ok_or("host GPU surface is not resident")?;
         let bytes_per_pixel = key.format.bytes_per_pixel();
         let valid_mask = (1 << bytes_per_pixel) - 1;
         let record_bytes = writes
             .len()
             .checked_mul(12)
-            .ok_or("DMP write-mask record size overflow")?;
+            .ok_or("host GPU write-mask record size overflow")?;
         let limits = self.gpu.device.limits();
         if writes.len() > u32::MAX as usize
             || record_bytes > limits.max_storage_buffer_binding_size as usize
             || (writes.len() as u32).div_ceil(64) > limits.max_compute_workgroups_per_dimension
         {
-            return Err("DMP write-mask batch exceeds host GPU limits".into());
+            return Err("host GPU write-mask batch exceeds host GPU limits".into());
         }
         let mut records = Vec::with_capacity(record_bytes);
         for write in writes {
             if write.x >= key.extent.width || write.y >= key.extent.height {
-                return Err("DMP write-mask coordinate is outside the surface".into());
+                return Err("host GPU write-mask coordinate is outside the surface".into());
             }
             if write.byte_mask & !valid_mask != 0 {
-                return Err("DMP write mask exceeds the surface pixel format".into());
+                return Err("host GPU write mask exceeds the surface pixel format".into());
             }
             records.extend_from_slice(&write.x.to_le_bytes());
             records.extend_from_slice(&write.y.to_le_bytes());
@@ -288,10 +267,10 @@ impl GpuContext {
         let surface = self
             .surfaces
             .lock()
-            .map_err(|_| "DMP surface cache lock poisoned")?
+            .map_err(|_| "host GPU surface cache lock poisoned")?
             .get(&key)
             .cloned()
-            .ok_or("DMP surface is not resident")?;
+            .ok_or("host GPU surface is not resident")?;
         self.gpu.clear_write_masks(&surface)
     }
 
@@ -300,15 +279,15 @@ impl GpuContext {
         let surface = self
             .surfaces
             .lock()
-            .map_err(|_| "DMP surface cache lock poisoned")?
+            .map_err(|_| "host GPU surface cache lock poisoned")?
             .get(&key)
             .cloned()
-            .ok_or("DMP surface is not resident")?;
+            .ok_or("host GPU surface is not resident")?;
         let readback = self.gpu.readback(&surface)?;
         *surface
             .guest_shadow
             .lock()
-            .map_err(|_| "DMP surface shadow lock poisoned")? = readback.bytes.clone();
+            .map_err(|_| "host GPU surface shadow lock poisoned")? = readback.bytes.clone();
         Ok(readback)
     }
 
@@ -336,10 +315,10 @@ impl GpuContext {
         let surface = self
             .surfaces
             .lock()
-            .map_err(|_| "DMP surface cache lock poisoned")?
+            .map_err(|_| "host GPU surface cache lock poisoned")?
             .get(&key)
             .cloned()
-            .ok_or("DMP surface is not resident")?;
+            .ok_or("host GPU surface is not resident")?;
         self.gpu.accumulate_draw_mask(&surface)
     }
 }
@@ -350,9 +329,9 @@ pub fn context() -> Result<&'static GpuContext, String> {
     #[cfg(not(target_arch = "wasm32"))]
     let context = GPU_CONTEXT.get_or_init(|| block_on(GpuContext::new()));
     #[cfg(target_arch = "wasm32")]
-    let context = GPU_CONTEXT.get().ok_or_else(|| {
-        "DMP GPU context is not initialized; await context_async first".to_owned()
-    })?;
+    let context = GPU_CONTEXT
+        .get()
+        .ok_or_else(|| "GPU context is not initialized; await context_async first".to_owned())?;
     match context {
         Ok(context) => Ok(context),
         Err(error) => Err(error.clone()),
@@ -397,14 +376,14 @@ impl Gpu {
                 ..Default::default()
             })
             .await
-            .map_err(|error| format!("DMP host GPU adapter: {error}"))?;
+            .map_err(|error| format!("host GPU adapter: {error}"))?;
         let info = adapter.get_info();
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
-            .map_err(|error| format!("DMP host GPU device: {error}"))?;
+            .map_err(|error| format!("host GPU device: {error}"))?;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("DMP resident surfaces"),
+            label: Some("host GPU resident surfaces"),
             source: wgpu::ShaderSource::Wgsl(include_str!("surfaces.wgsl").into()),
         });
         let pipeline = |label, entry_point| {
@@ -417,13 +396,15 @@ impl Gpu {
                 cache: None,
             })
         };
-        let upload_pipeline = pipeline("DMP surface upload", "upload_morton");
-        let clear_mask_pipeline = pipeline("DMP write-mask clear", "clear_write_mask");
-        let record_mask_pipeline = pipeline("DMP write-mask record", "record_write_masks");
-        let accumulate_draw_mask_pipeline =
-            pipeline("DMP rendered write-mask record", "accumulate_draw_mask");
-        let resolve_mask_pipeline = pipeline("DMP write-mask resolve", "resolve_write_mask");
-        let readback_pipeline = pipeline("DMP surface readback", "readback_morton");
+        let upload_pipeline = pipeline("host GPU surface upload", "upload_morton");
+        let clear_mask_pipeline = pipeline("host GPU write-mask clear", "clear_write_mask");
+        let record_mask_pipeline = pipeline("host GPU write-mask record", "record_write_masks");
+        let accumulate_draw_mask_pipeline = pipeline(
+            "host GPU rendered write-mask record",
+            "accumulate_draw_mask",
+        );
+        let resolve_mask_pipeline = pipeline("host GPU write-mask resolve", "resolve_write_mask");
+        let readback_pipeline = pipeline("host GPU surface readback", "readback_morton");
         Ok(Self {
             name: format!("{:?}: {} ({:?})", info.backend, info.name, info.device_type),
             device_type: info.device_type,
@@ -442,13 +423,13 @@ impl Gpu {
         let guest = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP surface guest bytes"),
+                label: Some("host GPU surface guest bytes"),
                 contents: guest_bytes,
                 usage: wgpu::BufferUsages::STORAGE,
             });
         let params = self.params(surface, 0);
         let upload_bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP surface upload bindings"),
+            label: Some("host GPU surface upload bindings"),
             layout: &self.upload_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -474,14 +455,14 @@ impl Gpu {
             &self.upload_pipeline,
             &upload_bindings,
             surface.key.extent,
-            "DMP surface upload",
+            "host GPU surface upload",
         );
         dispatch_2d(
             &mut encoder,
             &self.clear_mask_pipeline,
             &clear_bindings,
             surface.key.extent,
-            "DMP write-mask clear",
+            "host GPU write-mask clear",
         );
         self.queue.submit([encoder.finish()]);
         Ok(())
@@ -496,13 +477,13 @@ impl Gpu {
         let record_buffer = self
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP pixel byte-write masks"),
+                label: Some("host GPU pixel byte-write masks"),
                 contents: records,
                 usage: wgpu::BufferUsages::STORAGE,
             });
         let params = self.params(surface, count as u32);
         let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP write-mask record bindings"),
+            label: Some("host GPU write-mask record bindings"),
             layout: &self.record_mask_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -539,7 +520,7 @@ impl Gpu {
             &self.clear_mask_pipeline,
             &bindings,
             surface.key.extent,
-            "DMP write-mask clear",
+            "host GPU write-mask clear",
         );
         self.queue.submit([encoder.finish()]);
         Ok(())
@@ -548,7 +529,7 @@ impl Gpu {
     fn accumulate_draw_mask(&self, surface: &GpuSurface) -> Result<(), String> {
         let params = self.params(surface, 0);
         let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP rendered write-mask bindings"),
+            label: Some("host GPU rendered write-mask bindings"),
             layout: &self.accumulate_draw_mask_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -573,7 +554,7 @@ impl Gpu {
             &self.accumulate_draw_mask_pipeline,
             &bindings,
             surface.key.extent,
-            "DMP rendered write-mask accumulation",
+            "host GPU rendered write-mask accumulation",
         );
         self.queue.submit([encoder.finish()]);
         Ok(())
@@ -583,15 +564,15 @@ impl Gpu {
         let result_size = surface
             .pixel_count
             .checked_mul(8)
-            .ok_or("DMP surface readback size overflow")? as u64;
+            .ok_or("host GPU surface readback size overflow")? as u64;
         let result = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("DMP surface result"),
+            label: Some("host GPU surface result"),
             size: result_size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
         let download = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("DMP surface readback staging"),
+            label: Some("host GPU surface readback staging"),
             size: result_size,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -599,7 +580,7 @@ impl Gpu {
         let params = self.params(surface, 0);
         let resolve_bindings = self.resolve_mask_bindings(surface, &params);
         let readback_bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP surface readback bindings"),
+            label: Some("host GPU surface readback bindings"),
             layout: &self.readback_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -630,14 +611,14 @@ impl Gpu {
             &self.resolve_mask_pipeline,
             &resolve_bindings,
             surface.key.extent,
-            "DMP write-mask resolve",
+            "host GPU write-mask resolve",
         );
         dispatch_2d(
             &mut encoder,
             &self.readback_pipeline,
             &readback_bindings,
             surface.key.extent,
-            "DMP surface readback",
+            "host GPU surface readback",
         );
         encoder.copy_buffer_to_buffer(&result, 0, &download, 0, result_size);
         self.queue.submit([encoder.finish()]);
@@ -649,7 +630,7 @@ impl Gpu {
             });
         self.device
             .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|error| format!("DMP host GPU polling: {error}"))?;
+            .map_err(|error| format!("host GPU polling: {error}"))?;
         receiver
             .recv()
             .map_err(|error| error.to_string())?
@@ -692,7 +673,7 @@ impl Gpu {
         let contents: Vec<u8> = words.into_iter().flat_map(u32::to_le_bytes).collect();
         self.device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("DMP surface parameters"),
+                label: Some("host GPU surface parameters"),
                 contents: &contents,
                 usage: wgpu::BufferUsages::UNIFORM,
             })
@@ -700,7 +681,7 @@ impl Gpu {
 
     fn clear_mask_bindings(&self, surface: &GpuSurface, params: &wgpu::Buffer) -> wgpu::BindGroup {
         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP write-mask clear bindings"),
+            label: Some("host GPU write-mask clear bindings"),
             layout: &self.clear_mask_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -727,7 +708,7 @@ impl Gpu {
         params: &wgpu::Buffer,
     ) -> wgpu::BindGroup {
         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP write-mask resolve bindings"),
+            label: Some("host GPU write-mask resolve bindings"),
             layout: &self.resolve_mask_pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -772,15 +753,15 @@ fn create_surface(key: SurfaceKey, pixel_count: usize, byte_len: usize, gpu: &Gp
         })
     };
     let accumulator = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("DMP atomic byte-write masks"),
+        label: Some("host GPU atomic byte-write masks"),
         size: (pixel_count * 4) as u64,
         usage: wgpu::BufferUsages::STORAGE,
         mapped_at_creation: false,
     });
     GpuSurface {
         key,
-        texture: create_texture("DMP resident packed pixels"),
-        write_mask_texture: create_texture("DMP resolved byte-write masks"),
+        texture: create_texture("host GPU resident packed pixels"),
+        write_mask_texture: create_texture("host GPU resolved byte-write masks"),
         write_mask_accumulator: accumulator,
         pixel_count,
         byte_len,
@@ -791,33 +772,33 @@ fn create_surface(key: SurfaceKey, pixel_count: usize, byte_len: usize, gpu: &Gp
 fn validate_key(key: SurfaceKey, gpu: &Gpu) -> Result<(usize, usize), String> {
     let extent = key.extent;
     if extent.width == 0 || extent.height == 0 {
-        return Err("DMP surface extent must be nonzero".into());
+        return Err("host GPU surface extent must be nonzero".into());
     }
     if key.layout == SurfaceLayout::Morton8x8
         && (extent.width % TILE_SIDE != 0 || extent.height % TILE_SIDE != 0)
     {
-        return Err("DMP Morton surface extent must be a multiple of 8 pixels".into());
+        return Err("host GPU Morton surface extent must be a multiple of 8 pixels".into());
     }
     if extent.width > gpu.device.limits().max_texture_dimension_2d
         || extent.height > gpu.device.limits().max_texture_dimension_2d
     {
-        return Err("DMP surface exceeds the host GPU texture limit".into());
+        return Err("host GPU surface exceeds the host GPU texture limit".into());
     }
     let pixel_count = (extent.width as usize)
         .checked_mul(extent.height as usize)
-        .ok_or("DMP surface pixel count overflow")?;
+        .ok_or("host GPU surface pixel count overflow")?;
     let byte_len = pixel_count
         .checked_mul(key.format.bytes_per_pixel() as usize)
-        .ok_or("DMP surface byte count overflow")?;
+        .ok_or("host GPU surface byte count overflow")?;
     key.guest_address
         .checked_add(byte_len as u64)
-        .ok_or("DMP surface guest address overflow")?;
+        .ok_or("host GPU surface guest address overflow")?;
     let storage_limit = gpu.device.limits().max_storage_buffer_binding_size as u64;
     if byte_len as u64 > storage_limit
         || (pixel_count as u64) * 8 > storage_limit
         || (pixel_count as u64) * 4 > storage_limit
     {
-        return Err("DMP surface exceeds the host GPU storage-buffer limit".into());
+        return Err("host GPU surface exceeds the host GPU storage-buffer limit".into());
     }
     Ok((pixel_count, byte_len))
 }
@@ -890,9 +871,9 @@ mod tests {
     fn context_or_skip() -> Option<&'static GpuContext> {
         match context() {
             Ok(context) => Some(context),
-            Err(error) if error.starts_with("DMP host GPU adapter:") => {
+            Err(error) if error.starts_with("host GPU adapter:") => {
                 eprintln!(
-                    "skipping DMP surface test because no host GPU adapter is available: {error}"
+                    "skipping host GPU surface test because no host GPU adapter is available: {error}"
                 );
                 None
             }
@@ -901,7 +882,7 @@ mod tests {
     }
 
     #[test]
-    fn guest_upload_and_readback_are_exact_for_every_dmp_format() {
+    fn guest_upload_and_readback_are_exact_for_every_surface_format() {
         let Some(context) = context_or_skip() else {
             return;
         };

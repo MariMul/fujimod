@@ -2026,6 +2026,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-gpu"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "wgpu",
+]
+
+[[package]]
 name = "fujimod-emulator-graphics"
 version = "0.1.0"
 dependencies = [
@@ -2115,6 +2123,7 @@ version = "0.1.0"
 dependencies = [
  "ciborium",
  "fujimod-emulator-devices",
+ "fujimod-emulator-gpu",
  "fujimod-workspace-hack",
  "libm",
  "naga",

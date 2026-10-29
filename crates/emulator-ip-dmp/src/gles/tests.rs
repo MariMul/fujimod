@@ -64,7 +64,7 @@ fn assert_host_gpu_matches_cpu(
         .execute_host_gpu(words, &mut |address, length| Ok(read(address, length)))
     {
         Ok(actual) => actual,
-        Err(error) if error.starts_with("DMP host GPU adapter:") => {
+        Err(error) if error.starts_with("host GPU adapter:") => {
             eprintln!(
                 "skipping DMP host render parity because no host GPU adapter is available: {error}"
             );
@@ -291,7 +291,7 @@ fn host_render_path_matches_cpu_snapshots_and_written_ranges() {
         .execute_host_gpu(&words, &mut |_, length| Ok(vec![0; length]))
     {
         Ok(actual) => actual,
-        Err(error) if error.starts_with("DMP host GPU adapter:") => {
+        Err(error) if error.starts_with("host GPU adapter:") => {
             eprintln!(
                 "skipping DMP host render test because no host GPU adapter is available: {error}"
             );
@@ -568,7 +568,7 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
         let mut gpu_restored = restored.clone();
         let actual = match gpu_restored.execute_host_gpu(&last, &mut |_, n| Ok(vec![0; n])) {
             Ok(actual) => actual,
-            Err(error) if error.starts_with("DMP host GPU adapter:") => {
+            Err(error) if error.starts_with("host GPU adapter:") => {
                 eprintln!(
                     "skipping checkpointed DMP render parity because no host GPU adapter is available: {error}"
                 );

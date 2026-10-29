@@ -899,9 +899,9 @@ fn rectangles(
     let (gpu_requested, verify_gpu) = gpu_mode();
     #[cfg(not(target_arch = "wasm32"))]
     let gpu_enabled = if gpu_requested {
-        match crate::gpu::context() {
+        match fujimod_emulator_gpu::context() {
             Ok(_) => true,
-            Err(error) if !verify_gpu && error.starts_with("DMP host GPU adapter:") => false,
+            Err(error) if !verify_gpu && error.starts_with("host GPU adapter:") => false,
             Err(error) => return Err(error),
         }
     } else {
@@ -909,7 +909,7 @@ fn rectangles(
     };
     #[cfg(not(target_arch = "wasm32"))]
     if gpu_enabled {
-        let gpu_context = crate::gpu::context()?;
+        let gpu_context = fujimod_emulator_gpu::context()?;
         let _gpu_guard = gpu_context.acquire()?;
         let gpu_coverages = gpu_coverage::coverage_batch(&coverage_inputs)?;
         if verify_gpu {
@@ -932,7 +932,7 @@ fn rectangles(
             paint_cpu_draws(&prepared, &coverage_inputs, &cpu_coverages, &mut output)?;
         }
 
-        let mut surfaces: BTreeMap<u64, Arc<crate::gpu::GpuSurface>> = BTreeMap::new();
+        let mut surfaces: BTreeMap<u64, Arc<fujimod_emulator_gpu::GpuSurface>> = BTreeMap::new();
         let mut write_flags: BTreeMap<u64, Vec<bool>> = BTreeMap::new();
         for draw in &prepared {
             if surfaces.contains_key(&draw.address) {
@@ -941,9 +941,9 @@ fn rectangles(
                     || key.extent.height != draw.height
                     || key.layout
                         != if draw.tiled {
-                            crate::gpu::SurfaceLayout::Morton8x8
+                            fujimod_emulator_gpu::SurfaceLayout::Morton8x8
                         } else {
-                            crate::gpu::SurfaceLayout::Linear
+                            fujimod_emulator_gpu::SurfaceLayout::Linear
                         }
                 {
                     return Err("DMP target layout changed within batch".into());
@@ -951,14 +951,14 @@ fn rectangles(
                 continue;
             }
             let layout = if draw.tiled {
-                crate::gpu::SurfaceLayout::Morton8x8
+                fujimod_emulator_gpu::SurfaceLayout::Morton8x8
             } else {
-                crate::gpu::SurfaceLayout::Linear
+                fujimod_emulator_gpu::SurfaceLayout::Linear
             };
-            let key = crate::gpu::SurfaceKey {
+            let key = fujimod_emulator_gpu::SurfaceKey {
                 guest_address: draw.address,
-                format: crate::gpu::SurfaceFormat::Rgba8,
-                extent: crate::gpu::SurfaceExtent {
+                format: fujimod_emulator_gpu::SurfaceFormat::Rgba8,
+                extent: fujimod_emulator_gpu::SurfaceExtent {
                     width: draw.width,
                     height: draw.height,
                 },
@@ -1032,7 +1032,7 @@ fn rectangles(
                 .iter()
                 .enumerate()
                 .filter(|(_, written)| **written)
-                .map(|(index, _)| crate::gpu::PixelWriteMask {
+                .map(|(index, _)| fujimod_emulator_gpu::PixelWriteMask {
                     x: (index % width) as u32,
                     y: (index / width) as u32,
                     byte_mask: 0xf,

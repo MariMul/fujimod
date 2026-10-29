@@ -4,7 +4,7 @@
 //! samples paint, applies color state and blends against the destination.
 
 use super::{Bank, Gradient, Texture};
-use crate::gpu::GpuSurface;
+use fujimod_emulator_gpu::GpuSurface;
 use std::sync::OnceLock;
 use wgpu::util::DeviceExt;
 
@@ -15,7 +15,7 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new(context: &crate::gpu::GpuContext) -> Self {
+    fn new(context: &fujimod_emulator_gpu::GpuContext) -> Self {
         let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SMAPH path paint"),
@@ -38,7 +38,7 @@ impl Gpu {
 
     fn paint(
         &self,
-        context: &crate::gpu::GpuContext,
+        context: &fujimod_emulator_gpu::GpuContext,
         coverage: &[u32],
         bounds: [usize; 4],
         target_extent: [usize; 2],
@@ -91,7 +91,7 @@ impl Gpu {
             || (texture.is_some() && gradient.is_some())
             || resident_surface.is_some_and(|surface| {
                 let key = surface.key();
-                key.format != crate::gpu::SurfaceFormat::Rgba8
+                key.format != fujimod_emulator_gpu::SurfaceFormat::Rgba8
                     || key.extent.width as usize != width
                     || key.extent.height as usize != height
             })
@@ -423,9 +423,9 @@ fn reg(regs: &Bank, index: u16) -> Result<u32, String> {
 static GPU: OnceLock<Result<Option<Gpu>, String>> = OnceLock::new();
 
 fn shared_gpu() -> Result<Option<&'static Gpu>, String> {
-    let context = match crate::gpu::context() {
+    let context = match fujimod_emulator_gpu::context() {
         Ok(context) => context,
-        Err(error) if error.starts_with("DMP host GPU adapter:") => return Ok(None),
+        Err(error) if error.starts_with("host GPU adapter:") => return Ok(None),
         Err(error) => return Err(error),
     };
     match GPU.get_or_init(|| Ok(Some(Gpu::new(context)))) {
@@ -461,7 +461,7 @@ pub(super) fn paint(
 ) -> Result<Vec<u8>, String> {
     let gpu = shared_gpu()?.ok_or_else(|| "SMAPH paint has no wgpu adapter".to_owned())?;
     gpu.paint(
-        crate::gpu::context()?,
+        fujimod_emulator_gpu::context()?,
         coverage,
         bounds,
         target_extent,
@@ -505,7 +505,7 @@ pub(super) fn paint_resident(
 ) -> Result<(), String> {
     let gpu = shared_gpu()?.ok_or_else(|| "SMAPH paint has no wgpu adapter".to_owned())?;
     gpu.paint(
-        crate::gpu::context()?,
+        fujimod_emulator_gpu::context()?,
         coverage,
         bounds,
         target_extent,

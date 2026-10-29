@@ -5,11 +5,6 @@ edition = "2024"
 rust-version = "1.88"
 publish = false
 
-[package.metadata.fujimod]
-# This crate's browser build links the separately built Emscripten archive.
-# Its native Unicorn build cannot be checked for wasm32-unknown-unknown.
-skip-wasm32-unknown-unknown-check = true
-
 [lib]
 doctest = false
 
