@@ -76,6 +76,18 @@ pub struct SurfaceReadback {
     pub written_ranges: Vec<(u64, usize)>,
 }
 
+/// GPU surface readbacks encoded into a command buffer and mapped after it is
+/// submitted. Mapping a batch polls once for all of its surfaces.
+pub struct PendingSurfaceReadbacks {
+    surfaces: Vec<PendingSurfaceReadback>,
+}
+
+struct PendingSurfaceReadback {
+    surface: Arc<GpuSurface>,
+    _result: wgpu::Buffer,
+    download: wgpu::Buffer,
+}
+
 pub struct GpuSurface {
     key: SurfaceKey,
     texture: wgpu::Texture,
@@ -188,6 +200,57 @@ impl GpuContext {
         Ok(surface)
     }
 
+    /// Get or create a resident surface and record any guest upload into the
+    /// caller's command encoder. Guest bytes are queued with `write_buffer`
+    /// before the encoder is submitted.
+    pub fn get_or_create_target_encoded(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        key: SurfaceKey,
+        guest_bytes: Option<&[u8]>,
+    ) -> Result<Arc<GpuSurface>, String> {
+        let (pixel_count, byte_len) = validate_key(key, &self.gpu)?;
+        if guest_bytes.is_some_and(|bytes| bytes.len() != byte_len) {
+            return Err(format!(
+                "host GPU surface upload has {} bytes, expected {byte_len}",
+                guest_bytes.map_or(0, <[u8]>::len)
+            ));
+        }
+        let mut surfaces = self
+            .surfaces
+            .lock()
+            .map_err(|_| "host GPU surface cache lock poisoned")?;
+        if let Some(surface) = surfaces.get(&key).cloned() {
+            if let Some(bytes) = guest_bytes {
+                let shadow = surface
+                    .guest_shadow
+                    .lock()
+                    .map_err(|_| "host GPU surface shadow lock poisoned")?;
+                if shadow.as_slice() != bytes {
+                    self.gpu.encode_upload(encoder, &surface, bytes)?;
+                }
+            } else if surface
+                .guest_shadow
+                .lock()
+                .map_err(|_| "host GPU surface shadow lock poisoned")?
+                .is_empty()
+            {
+                self.gpu
+                    .encode_upload(encoder, &surface, &vec![0; byte_len])?;
+            }
+            return Ok(surface);
+        }
+
+        surfaces.retain(|existing, _| existing.guest_address != key.guest_address);
+        let surface = Arc::new(create_surface(key, pixel_count, byte_len, &self.gpu));
+        let initial_bytes = guest_bytes
+            .map(<[u8]>::to_vec)
+            .unwrap_or_else(|| vec![0; byte_len]);
+        self.gpu.encode_upload(encoder, &surface, &initial_bytes)?;
+        surfaces.insert(key, Arc::clone(&surface));
+        Ok(surface)
+    }
+
     pub fn get(&self, key: SurfaceKey) -> Result<Option<Arc<GpuSurface>>, String> {
         self.surfaces
             .lock()
@@ -274,6 +337,23 @@ impl GpuContext {
         self.gpu.clear_write_masks(&surface)
     }
 
+    /// Record a write-mask clear into a caller-owned command encoder.
+    pub fn encode_clear_write_masks(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        key: SurfaceKey,
+    ) -> Result<(), String> {
+        let surface = self
+            .surfaces
+            .lock()
+            .map_err(|_| "host GPU surface cache lock poisoned")?
+            .get(&key)
+            .cloned()
+            .ok_or("host GPU surface is not resident")?;
+        self.gpu.encode_clear_write_masks(encoder, &surface);
+        Ok(())
+    }
+
     /// Convert resident pixels back to the keyed guest layout and exact byte ranges.
     pub fn readback(&self, key: SurfaceKey) -> Result<SurfaceReadback, String> {
         let surface = self
@@ -283,12 +363,50 @@ impl GpuContext {
             .get(&key)
             .cloned()
             .ok_or("host GPU surface is not resident")?;
-        let readback = self.gpu.readback(&surface)?;
+        let readback = self.gpu.readback(Arc::clone(&surface))?;
         *surface
             .guest_shadow
             .lock()
             .map_err(|_| "host GPU surface shadow lock poisoned")? = readback.bytes.clone();
         Ok(readback)
+    }
+
+    /// Encode readbacks for several surfaces into the caller's command list.
+    pub fn encode_readbacks(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        keys: &[SurfaceKey],
+    ) -> Result<PendingSurfaceReadbacks, String> {
+        let surfaces = self
+            .surfaces
+            .lock()
+            .map_err(|_| "host GPU surface cache lock poisoned")?;
+        let mut pending = Vec::with_capacity(keys.len());
+        for &key in keys {
+            let surface = surfaces
+                .get(&key)
+                .cloned()
+                .ok_or("host GPU surface is not resident")?;
+            pending.push(self.gpu.encode_readback(encoder, surface)?);
+        }
+        Ok(PendingSurfaceReadbacks { surfaces: pending })
+    }
+
+    /// Map a submitted batch of surface readbacks with a single device poll.
+    pub fn finish_readbacks(
+        &self,
+        pending: PendingSurfaceReadbacks,
+    ) -> Result<Vec<(SurfaceKey, SurfaceReadback)>, String> {
+        let readbacks = self.gpu.finish_readbacks(pending.surfaces)?;
+        let mut results = Vec::with_capacity(readbacks.len());
+        for (surface, readback) in readbacks {
+            *surface
+                .guest_shadow
+                .lock()
+                .map_err(|_| "host GPU surface shadow lock poisoned")? = readback.bytes.clone();
+            results.push((surface.key, readback));
+        }
+        Ok(results)
     }
 
     pub fn device(&self) -> &wgpu::Device {
@@ -320,6 +438,23 @@ impl GpuContext {
             .cloned()
             .ok_or("host GPU surface is not resident")?;
         self.gpu.accumulate_draw_mask(&surface)
+    }
+
+    /// Record rendered byte-mask accumulation into a caller-owned encoder.
+    pub fn encode_accumulate_draw_mask(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        key: SurfaceKey,
+    ) -> Result<(), String> {
+        let surface = self
+            .surfaces
+            .lock()
+            .map_err(|_| "host GPU surface cache lock poisoned")?
+            .get(&key)
+            .cloned()
+            .ok_or("host GPU surface is not resident")?;
+        self.gpu.encode_accumulate_draw_mask(encoder, &surface);
+        Ok(())
     }
 }
 
@@ -420,13 +555,33 @@ impl Gpu {
     }
 
     fn upload(&self, surface: &GpuSurface, guest_bytes: &[u8]) -> Result<(), String> {
-        let guest = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("host GPU surface guest bytes"),
-                contents: guest_bytes,
-                usage: wgpu::BufferUsages::STORAGE,
-            });
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        self.encode_upload(&mut encoder, surface, guest_bytes)?;
+        self.queue.submit([encoder.finish()]);
+        Ok(())
+    }
+
+    fn encode_upload(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &GpuSurface,
+        guest_bytes: &[u8],
+    ) -> Result<(), String> {
+        let padded_len = guest_bytes
+            .len()
+            .max(4)
+            .checked_add(3)
+            .ok_or("host GPU surface upload size overflow")?
+            & !3;
+        let mut padded_bytes = guest_bytes.to_vec();
+        padded_bytes.resize(padded_len, 0);
+        let guest = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("host GPU surface guest bytes"),
+            size: padded_len as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue.write_buffer(&guest, 0, &padded_bytes);
         let params = self.params(surface, 0);
         let upload_bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("host GPU surface upload bindings"),
@@ -449,22 +604,20 @@ impl Gpu {
             ],
         });
         let clear_bindings = self.clear_mask_bindings(surface, &params);
-        let mut encoder = self.device.create_command_encoder(&Default::default());
         dispatch_2d(
-            &mut encoder,
+            encoder,
             &self.upload_pipeline,
             &upload_bindings,
             surface.key.extent,
             "host GPU surface upload",
         );
         dispatch_2d(
-            &mut encoder,
+            encoder,
             &self.clear_mask_pipeline,
             &clear_bindings,
             surface.key.extent,
             "host GPU write-mask clear",
         );
-        self.queue.submit([encoder.finish()]);
         Ok(())
     }
 
@@ -515,18 +668,44 @@ impl Gpu {
         let params = self.params(surface, 0);
         let bindings = self.clear_mask_bindings(surface, &params);
         let mut encoder = self.device.create_command_encoder(&Default::default());
-        dispatch_2d(
-            &mut encoder,
-            &self.clear_mask_pipeline,
-            &bindings,
-            surface.key.extent,
-            "host GPU write-mask clear",
-        );
+        self.encode_clear_write_masks_with_bindings(&mut encoder, surface.key.extent, &bindings);
         self.queue.submit([encoder.finish()]);
         Ok(())
     }
 
+    fn encode_clear_write_masks(&self, encoder: &mut wgpu::CommandEncoder, surface: &GpuSurface) {
+        let params = self.params(surface, 0);
+        let bindings = self.clear_mask_bindings(surface, &params);
+        self.encode_clear_write_masks_with_bindings(encoder, surface.key.extent, &bindings);
+    }
+
+    fn encode_clear_write_masks_with_bindings(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        extent: SurfaceExtent,
+        bindings: &wgpu::BindGroup,
+    ) {
+        dispatch_2d(
+            encoder,
+            &self.clear_mask_pipeline,
+            bindings,
+            extent,
+            "host GPU write-mask clear",
+        );
+    }
+
     fn accumulate_draw_mask(&self, surface: &GpuSurface) -> Result<(), String> {
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        self.encode_accumulate_draw_mask(&mut encoder, surface);
+        self.queue.submit([encoder.finish()]);
+        Ok(())
+    }
+
+    fn encode_accumulate_draw_mask(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &GpuSurface,
+    ) {
         let params = self.params(surface, 0);
         let bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("host GPU rendered write-mask bindings"),
@@ -548,19 +727,20 @@ impl Gpu {
                 },
             ],
         });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
         dispatch_2d(
-            &mut encoder,
+            encoder,
             &self.accumulate_draw_mask_pipeline,
             &bindings,
             surface.key.extent,
             "host GPU rendered write-mask accumulation",
         );
-        self.queue.submit([encoder.finish()]);
-        Ok(())
     }
 
-    fn readback(&self, surface: &GpuSurface) -> Result<SurfaceReadback, String> {
+    fn encode_readback(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: Arc<GpuSurface>,
+    ) -> Result<PendingSurfaceReadback, String> {
         let result_size = surface
             .pixel_count
             .checked_mul(8)
@@ -577,8 +757,8 @@ impl Gpu {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let params = self.params(surface, 0);
-        let resolve_bindings = self.resolve_mask_bindings(surface, &params);
+        let params = self.params(&surface, 0);
+        let resolve_bindings = self.resolve_mask_bindings(&surface, &params);
         let readback_bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("host GPU surface readback bindings"),
             layout: &self.readback_pipeline.get_bind_group_layout(0),
@@ -605,58 +785,97 @@ impl Gpu {
                 },
             ],
         });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
         dispatch_2d(
-            &mut encoder,
+            encoder,
             &self.resolve_mask_pipeline,
             &resolve_bindings,
             surface.key.extent,
             "host GPU write-mask resolve",
         );
         dispatch_2d(
-            &mut encoder,
+            encoder,
             &self.readback_pipeline,
             &readback_bindings,
             surface.key.extent,
             "host GPU surface readback",
         );
         encoder.copy_buffer_to_buffer(&result, 0, &download, 0, result_size);
-        self.queue.submit([encoder.finish()]);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        download
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |status| {
-                let _ = sender.send(status);
-            });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|error| format!("host GPU polling: {error}"))?;
-        receiver
-            .recv()
-            .map_err(|error| error.to_string())?
-            .map_err(|error| error.to_string())?;
-        let mapped = download
-            .slice(..)
-            .get_mapped_range()
-            .map_err(|error| error.to_string())?;
-        let mut bytes = Vec::with_capacity(surface.byte_len);
-        let mut byte_flags = Vec::with_capacity(surface.byte_len);
-        let bytes_per_pixel = surface.key.format.bytes_per_pixel() as usize;
-        for record in mapped.chunks_exact(8) {
-            let pixel = u32::from_le_bytes(record[..4].try_into().unwrap());
-            let mask = u32::from_le_bytes(record[4..].try_into().unwrap());
-            for lane in 0..bytes_per_pixel {
-                bytes.push((pixel >> (lane * 8)) as u8);
-                byte_flags.push(mask & (1 << lane) != 0);
-            }
-        }
-        drop(mapped);
-        download.unmap();
-        let written_ranges = byte_ranges(surface.key.guest_address, &byte_flags);
-        Ok(SurfaceReadback {
-            bytes,
-            written_ranges,
+        Ok(PendingSurfaceReadback {
+            surface,
+            _result: result,
+            download,
         })
+    }
+
+    fn finish_readbacks(
+        &self,
+        pending: Vec<PendingSurfaceReadback>,
+    ) -> Result<Vec<(Arc<GpuSurface>, SurfaceReadback)>, String> {
+        let receivers = pending
+            .iter()
+            .map(|readback| {
+                let (sender, receiver) = std::sync::mpsc::channel();
+                readback
+                    .download
+                    .slice(..)
+                    .map_async(wgpu::MapMode::Read, move |status| {
+                        let _ = sender.send(status);
+                    });
+                receiver
+            })
+            .collect::<Vec<_>>();
+        if !pending.is_empty() {
+            self.device
+                .poll(wgpu::PollType::wait_indefinitely())
+                .map_err(|error| format!("host GPU polling: {error}"))?;
+        }
+        for receiver in receivers {
+            receiver
+                .recv()
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+        }
+
+        let mut readbacks = Vec::with_capacity(pending.len());
+        for pending in pending {
+            let mapped = pending
+                .download
+                .slice(..)
+                .get_mapped_range()
+                .map_err(|error| error.to_string())?;
+            let mut bytes = Vec::with_capacity(pending.surface.byte_len);
+            let mut byte_flags = Vec::with_capacity(pending.surface.byte_len);
+            let bytes_per_pixel = pending.surface.key.format.bytes_per_pixel() as usize;
+            for record in mapped.chunks_exact(8) {
+                let pixel = u32::from_le_bytes(record[..4].try_into().unwrap());
+                let mask = u32::from_le_bytes(record[4..].try_into().unwrap());
+                for lane in 0..bytes_per_pixel {
+                    bytes.push((pixel >> (lane * 8)) as u8);
+                    byte_flags.push(mask & (1 << lane) != 0);
+                }
+            }
+            drop(mapped);
+            pending.download.unmap();
+            let written_ranges = byte_ranges(pending.surface.key.guest_address, &byte_flags);
+            readbacks.push((
+                pending.surface,
+                SurfaceReadback {
+                    bytes,
+                    written_ranges,
+                },
+            ));
+        }
+        Ok(readbacks)
+    }
+
+    fn readback(&self, surface: Arc<GpuSurface>) -> Result<SurfaceReadback, String> {
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let pending = self.encode_readback(&mut encoder, surface)?;
+        self.queue.submit([encoder.finish()]);
+        self.finish_readbacks(vec![pending])?
+            .pop()
+            .map(|(_, readback)| readback)
+            .ok_or_else(|| "host GPU readback returned no result".into())
     }
 
     fn params(&self, surface: &GpuSurface, write_count: u32) -> wgpu::Buffer {
@@ -964,6 +1183,102 @@ mod tests {
                 (key.guest_address + 8, 4)
             ]
         );
+    }
+
+    #[test]
+    fn encoded_surface_upload_and_batched_readback_preserve_write_masks() {
+        let Some(context) = context_or_skip() else {
+            return;
+        };
+        let keys = [0x134000, 0x135000].map(|guest_address| SurfaceKey {
+            guest_address,
+            format: SurfaceFormat::Rgba8,
+            extent: EXTENT,
+            layout: SurfaceLayout::Morton8x8,
+        });
+        let guest_bytes = keys.map(|key| {
+            (0..key.extent.width as usize * key.extent.height as usize * 4)
+                .map(|offset| (offset.wrapping_mul(17) + key.guest_address as usize) as u8)
+                .collect::<Vec<_>>()
+        });
+
+        let mut encoder = context
+            .device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        for (key, bytes) in keys.iter().copied().zip(&guest_bytes) {
+            context
+                .get_or_create_target_encoded(&mut encoder, key, Some(bytes))
+                .unwrap();
+            context.encode_clear_write_masks(&mut encoder, key).unwrap();
+        }
+        let pending = context.encode_readbacks(&mut encoder, &keys).unwrap();
+        context.submit(encoder.finish());
+        let initial = context.finish_readbacks(pending).unwrap();
+        for ((key, bytes), (actual_key, readback)) in keys.iter().zip(&guest_bytes).zip(initial) {
+            assert_eq!(actual_key, *key);
+            assert_eq!(readback.bytes, *bytes);
+            assert!(readback.written_ranges.is_empty());
+        }
+
+        let abandoned_key = SurfaceKey {
+            guest_address: 0x136000,
+            ..keys[0]
+        };
+        let mut abandoned = context
+            .device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        context
+            .get_or_create_target_encoded(&mut abandoned, abandoned_key, Some(&guest_bytes[0]))
+            .unwrap();
+        drop(abandoned);
+        let mut encoder = context
+            .device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        context
+            .get_or_create_target_encoded(&mut encoder, abandoned_key, Some(&guest_bytes[0]))
+            .unwrap();
+        let pending = context
+            .encode_readbacks(&mut encoder, &[abandoned_key])
+            .unwrap();
+        context.submit(encoder.finish());
+        let retried = context.finish_readbacks(pending).unwrap();
+        assert_eq!(retried[0].1.bytes, guest_bytes[0]);
+
+        context
+            .record_write_masks(
+                keys[0],
+                &[
+                    PixelWriteMask {
+                        x: 0,
+                        y: 0,
+                        byte_mask: 0b0101,
+                    },
+                    PixelWriteMask {
+                        x: 1,
+                        y: 0,
+                        byte_mask: 0b1010,
+                    },
+                ],
+            )
+            .unwrap();
+        let mut encoder = context
+            .device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let pending = context.encode_readbacks(&mut encoder, &keys).unwrap();
+        context.submit(encoder.finish());
+        let updated = context.finish_readbacks(pending).unwrap();
+        assert_eq!(updated[0].1.bytes, guest_bytes[0]);
+        assert_eq!(
+            updated[0].1.written_ranges,
+            vec![
+                (keys[0].guest_address, 1),
+                (keys[0].guest_address + 2, 1),
+                (keys[0].guest_address + 5, 1),
+                (keys[0].guest_address + 7, 1),
+            ]
+        );
+        assert_eq!(updated[1].1.bytes, guest_bytes[1]);
+        assert!(updated[1].1.written_ranges.is_empty());
     }
 
     #[test]

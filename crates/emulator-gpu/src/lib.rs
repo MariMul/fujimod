@@ -4,6 +4,6 @@
 mod surfaces;
 #[cfg(not(target_os = "emscripten"))]
 pub use surfaces::{
-    GpuContext, GpuSurface, PixelWriteMask, SurfaceExtent, SurfaceFormat, SurfaceKey,
-    SurfaceLayout, SurfaceReadback, context, context_async,
+    GpuContext, GpuSurface, PendingSurfaceReadbacks, PixelWriteMask, SurfaceExtent, SurfaceFormat,
+    SurfaceKey, SurfaceLayout, SurfaceReadback, context, context_async,
 };
