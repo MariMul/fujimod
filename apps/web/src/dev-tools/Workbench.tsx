@@ -22,7 +22,7 @@ import { ToolDeck, type SavedCamera } from './ToolDeck';
 import { CameraStore } from '../cameras/store';
 import { GuideConnection, ServiceModeGuide } from './ServiceModeGuide';
 import { GettingStarted, type PathResults } from './GettingStarted';
-import { bulkSelection, bulkSupportError } from './captures/capture';
+import { executionSelection, bulkSupportError } from './captures/capture';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
@@ -141,7 +141,7 @@ export function Workbench(props: {
     operations() && {
       leave(progress: (line: string) => void) {
         const debug = operations();
-        const firmwareId = bulkSelection(camera()?.identity)?.firmware.id;
+        const firmwareId = executionSelection(camera()?.identity)?.firmware.id;
         if (!debug || !firmwareId) throw Error(bulkSupportError(camera()?.identity));
         return debug.leave(firmwareId, progress);
       },

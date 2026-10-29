@@ -1,8 +1,7 @@
 import { Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import type { ResolvedSelection } from 'fujimod';
 import type { Camera } from '../camera-model';
-import { bulkSupportError, type CaptureSet } from './capture';
+import { bulkSupportError, type BulkSelection, type CaptureSet } from './capture';
 import { BulkSupportError } from '../BulkSupportError';
 
 export const emptySet = (firmwareId: string): CaptureSet => ({
@@ -15,7 +14,7 @@ export const emptySet = (firmwareId: string): CaptureSet => ({
 export function CapturePanel(props: {
   title: string;
   camera?: Camera;
-  selection?: ResolvedSelection;
+  selection?: BulkSelection;
   onConnect: () => void;
   onClose: () => void;
   children: JSX.Element;

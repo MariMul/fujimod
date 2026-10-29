@@ -11,12 +11,14 @@ import type {
   StateRegion,
   ToolSession,
 } from './camera-model';
-import { bulkSelection, bulkSupportError } from './captures/capture';
+import { executionSelection, bulkSupportError } from './captures/capture';
 import { slug, type AddFile } from '../files/shelf';
 import { backupChoice, rememberBackup } from './backup-unlock';
 import type { DebugModeOperations } from './debug-mode/operations';
 import { Wizard } from './routes';
 import { BulkSupportError } from './BulkSupportError';
+import { catalog } from 'fujimod';
+import { generationFailure } from './generation';
 import './getting-started.css';
 
 /** What the path produced on one camera during this page's life. */
@@ -50,10 +52,21 @@ export function GettingStarted(props: {
   const [running, setRunning] = createSignal<'backup' | 'state' | 'debug'>();
   const [progress, setProgress] = createSignal('');
   const [failure, setFailure] = createSignal('');
-  const selection = () => bulkSelection(props.camera.identity);
+  const selection = () => executionSelection(props.camera.identity);
   const firmwareId = () => selection()?.firmware.id;
-  const bulkError = () =>
-    props.camera.present && !firmwareId() ? bulkSupportError(props.camera.identity) : undefined;
+  const bulkError = () => {
+    if (!props.camera.present || firmwareId()) return undefined;
+    const report = catalog
+      .generationResults()
+      .find(
+        (item) =>
+          item.product === props.camera.identity?.product?.trim() &&
+          item.internal_version === props.camera.identity?.internalVersion?.trim(),
+      );
+    return report?.tables.bulk?.status === 'available'
+      ? generationFailure(report.firmware_id, 'service')
+      : bulkSupportError(props.camera.identity);
+  };
   const available = () =>
     props.camera.present &&
     !props.camera.uncertain &&
