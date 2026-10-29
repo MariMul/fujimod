@@ -472,18 +472,25 @@
       "id": "recipes",
       "group": "recipes",
       "icon": "recipes",
-      "title": "Unlimited Recipes",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
-      "summary": "Store custom settings as named files on the memory card and load them into C1–C7.",
+      "title": "Recipes",
+      "path": ["SHOOTING MENU", "RECIPES"],
+      "summary": "Load named shooting recipes from one list and pin favorites to C1–C7.",
       "card": null,
-      "media_cards": ["edit_save_custom_setting"],
+      "media_cards": ["recipes"],
       "controls": [
         {
-          "title": "RECIPE",
+          "title": "RECIPES",
           "primary": true,
+          "card": "recipes",
+          "choices": [],
+          "actions": ["NEW RECIPE"]
+        },
+        {
+          "title": "RECIPE",
+          "primary": false,
           "card": null,
           "choices": [],
-          "actions": ["SAVE CURRENT SETTINGS", "SAVE AS NEW RECIPE", "CHOOSE FROM SD CARD"]
+          "actions": ["UPDATE", "REVERT", "PIN TO", "UNPIN", "RENAME", "DELETE"]
         }
       ],
       "credits": {
@@ -1335,7 +1342,7 @@
       "summary": null,
       "choices": {},
       "related": [],
-      "changes": "Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+      "changes": "Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -1402,13 +1409,13 @@
       },
       "choice_credits": {}
     },
-    "edit_save_custom_setting": {
-      "title": "EDIT/SAVE CUSTOM SETTING",
+    "recipes": {
+      "title": "RECIPES",
       "path": ["SHOOTING MENU"],
-      "summary": null,
+      "summary": "RECIPES replaces SELECT CUSTOM SETTING and lists the recipes on the card. MENU/OK loads a recipe; RIGHT opens its actions and saved values. NEW RECIPE captures current settings. An asterisk marks edits to the loaded recipe. Loading a different recipe with edits opens Save Changes To <name>?: Save updates it before loading and Discard loads without saving. Save is initially selected; LEFT/RIGHT selects, OK confirms, UP/DOWN scrolls, and hardware BACK cancels. Dial previews never prompt. Pin favorites to C1–C7 for Q and Fn. Pins and pinned updates also refresh stock camera storage; C1–C7 load that copy with another card or no card.",
       "choices": {},
       "related": [],
-      "changes": "Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.",
+      "changes": null,
       "credits": {
         "premiere": false,
         "inspired": [],
