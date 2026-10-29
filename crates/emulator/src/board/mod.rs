@@ -110,6 +110,7 @@ struct State {
 struct Binding {
     state: Rc<RefCell<State>>,
     cpus: Weak<Vec<Rc<dyn Cpu>>>,
+    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     core: usize,
     base: u64,
 }
@@ -122,6 +123,9 @@ pub struct Board {
     bindings: Vec<Box<Binding>>,
     hooks: Vec<(usize, HookId)>,
     mmio: Vec<(usize, u64, usize)>,
+    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
+    interactive_windows: Cell<u64>,
+    interactive_host_duration_ns: Cell<u128>,
     next_core: Cell<usize>,
     slice_left: Cell<usize>,
     quantum: Cell<Option<usize>>,
@@ -310,6 +314,7 @@ impl Board {
         }
         let count = bus.len();
         let memory = Rc::new(memory);
+        let mmio_callback_counts = Rc::new(RefCell::new(vec![0; n]));
         let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
         let host_pause = Rc::new(Cell::new(false));
         let state = Rc::new(RefCell::new(State {
@@ -374,6 +379,9 @@ impl Board {
             bindings: vec![],
             hooks: vec![],
             mmio: vec![],
+            mmio_callback_counts,
+            interactive_windows: Cell::new(0),
+            interactive_host_duration_ns: Cell::new(0),
             next_core: Cell::new(0),
             slice_left: Cell::new(0),
             quantum: Cell::new(None),
@@ -387,6 +395,7 @@ impl Board {
             let binding = Box::new(Binding {
                 state: board.state.clone(),
                 cpus: Rc::downgrade(&board.cpus),
+                mmio_callback_counts: board.mmio_callback_counts.clone(),
                 core,
                 base: 0,
             });
@@ -445,6 +454,22 @@ impl Board {
     }
     pub fn instruction_counts(&self) -> Vec<u64> {
         self.state.borrow().instructions.clone()
+    }
+    /// Serviced board MMIO callbacks, indexed by processor.
+    pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
+        self.mmio_callback_counts.borrow().clone()
+    }
+    /// Interactive run windows completed by the board scheduler.
+    pub fn interactive_window_count(&self) -> u64 {
+        self.interactive_windows.get()
+    }
+    /// Mean host duration of completed interactive windows, in nanoseconds.
+    pub fn mean_interactive_window_host_duration_ns(&self) -> Option<u64> {
+        let count = self.interactive_windows.get();
+        (count != 0).then(|| {
+            u64::try_from(self.interactive_host_duration_ns.get() / u128::from(count))
+                .unwrap_or(u64::MAX)
+        })
     }
     /// Processor address views of RAM, as continuation watches take them.
     pub fn mappings(&self) -> &[factory::MemoryMap] {
@@ -663,6 +688,7 @@ impl Board {
         let binding = Box::new(Binding {
             state: self.state.clone(),
             cpus: Rc::downgrade(&self.cpus),
+            mmio_callback_counts: self.mmio_callback_counts.clone(),
             core,
             base: physical,
         });
@@ -1940,6 +1966,9 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
     let result = (|| {
         let address = b.base.checked_add(offset).ok_or("MMIO address overflow")?;
         let size = u8::try_from(size).map_err(|_| "MMIO width overflow")?;
+        if let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core) {
+            *count = count.saturating_add(1);
+        }
         b.state
             .borrow_mut()
             .access(&cpus, b.core, address, size, value)
@@ -1964,32 +1993,3 @@ unsafe fn write(offset: u64, size: u32, value: u64, data: *mut c_void) {
         access(data, offset, size, Some(value));
     }
 }
-    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
-    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
-    interactive_windows: Cell<u64>,
-    interactive_host_duration_ns: Cell<u128>,
-        let mmio_callback_counts = Rc::new(RefCell::new(vec![0; n]));
-            mmio_callback_counts,
-            interactive_windows: Cell::new(0),
-            interactive_host_duration_ns: Cell::new(0),
-                mmio_callback_counts: board.mmio_callback_counts.clone(),
-    /// Serviced board MMIO callbacks, indexed by processor.
-    pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
-        self.mmio_callback_counts.borrow().clone()
-    }
-    /// Interactive run windows completed by the board scheduler.
-    pub fn interactive_window_count(&self) -> u64 {
-        self.interactive_windows.get()
-    }
-    /// Mean host duration of completed interactive windows, in nanoseconds.
-    pub fn mean_interactive_window_host_duration_ns(&self) -> Option<u64> {
-        let count = self.interactive_windows.get();
-        (count != 0).then(|| {
-            u64::try_from(self.interactive_host_duration_ns.get() / u128::from(count))
-                .unwrap_or(u64::MAX)
-        })
-    }
-            mmio_callback_counts: self.mmio_callback_counts.clone(),
-        if let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core) {
-            *count = count.saturating_add(1);
-        }
