@@ -61,6 +61,7 @@ export class RemoteEngine implements Engine {
   private progress?: LoadingProgress;
   private unavailable?: Error;
   private disposed = false;
+  private disposePromise?: Promise<void>;
   private frameSequence = 0;
   private latestFrame?: ArrayBuffer;
   private processingFrames = false;
@@ -333,12 +334,29 @@ export class RemoteEngine implements Engine {
   powerChanges(listener: (on: boolean) => void) {
     return this.powerListeners.add(listener);
   }
-  dispose() {
-    if (this.disposed) return;
+  dispose(): Promise<void> {
+    if (this.disposePromise) return this.disposePromise;
+    if (this.disposed) return Promise.resolve();
     this.disposed = true;
-    this.socket?.close(1000, 'Preview closed');
+    const socket = this.socket;
+    if (socket?.readyState !== WebSocket.OPEN) {
+      socket?.close(1000, 'Preview closed');
+      return Promise.resolve();
+    }
+    const serial = ++this.serial;
+    this.disposePromise = new Promise<void>((resolve) => {
+      const timeout = window.setTimeout(() => socket.close(1000, 'Preview closed'), 3000);
+      const finish = () => {
+        window.clearTimeout(timeout);
+        resolve();
+      };
+      socket.addEventListener('close', finish, { once: true });
+      socket.addEventListener('error', finish, { once: true });
+      socket.send(JSON.stringify({ type: 'rpc', serial, action: 'close', args: {} }));
+    });
     const error = Error('Emulator closed.');
     for (const request of this.pending.values()) request.reject(error);
     this.pending.clear();
+    return this.disposePromise;
   }
 }

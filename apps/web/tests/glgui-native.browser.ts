@@ -51,12 +51,17 @@ try {
   await page.evaluate(async () => {
     const engine = (
       window as Window & {
-        nativeEngine?: { press(id: string): Promise<void>; release(id: string): Promise<void> };
+        nativeEngine?: {
+          press(id: string): Promise<void>;
+          release(id: string): Promise<void>;
+          dispose(): Promise<void>;
+        };
       }
     ).nativeEngine;
     if (!engine) throw Error('Native engine was not installed on the review page.');
     await engine.press('down');
     await engine.release('down');
+    await engine.dispose();
   });
   assert.deepEqual(errors, []);
   await context.close();
