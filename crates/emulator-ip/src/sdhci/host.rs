@@ -1012,7 +1012,9 @@ impl SdHost {
         if self.request.is_some() {
             return Err("SD configuration changed during command".into());
         }
-        if offset == 0x28 && !rom && value & !0xfff != 0
+        // Power-control bits 12-15 select SDHCI 4 VDD2, used only by UHS-II
+        // cards; GFX 50R 0xcac8e4 sets them. They are stored with no effect.
+        if offset == 0x28 && !rom && value & !0xffff != 0
             || offset == 4 && value & 0x8000 != 0
             || offset == 0x3e && value != 0
             || offset == 0x100 && value & !7 != 0
