@@ -1016,7 +1016,9 @@ impl SdHost {
         // cards; GFX 50R 0xcac8e4 sets them. They are stored with no effect.
         if offset == 0x28 && !rom && value & !0xffff != 0
             || offset == 4 && value & 0x8000 != 0
-            || offset == 0x3e && value != 0
+            // Host-control-2 bit 8 is SDHCI 4 UHS-II interface enable; a
+            // default-speed card has no UHS-II lanes, so it selects nothing.
+            || offset == 0x3e && value & !0x100 != 0
             || offset == 0x100 && value & !7 != 0
             || offset == 0x104 && value != 0
         {

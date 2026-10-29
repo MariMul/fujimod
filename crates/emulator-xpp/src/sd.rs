@@ -20,6 +20,9 @@ pub struct Controller {
     options: Options,
     host: SdHost,
     reset_due: Option<u64>,
+    // Wrapper words below the SDHCI bank; GFX 50R 0xcb0354 programs +0x20/+0x24
+    // timing fields and never polls them.
+    words: std::collections::BTreeMap<u64, u32>,
 }
 impl Controller {
     pub fn new(
@@ -56,6 +59,7 @@ impl Controller {
             options,
             host,
             reset_due: None,
+            words: Default::default(),
         })
     }
     fn transfer(
@@ -86,7 +90,14 @@ impl Controller {
         }
         let Some(offset) = address.checked_sub(self.options.base + self.options.register_offset)
         else {
-            return Err("SD access outside register bank".into());
+            if size != 4 || address & 3 != 0 {
+                return Err("SD access outside register bank".into());
+            }
+            let word = self.words.entry(address - self.options.base).or_default();
+            if let Some(v) = value {
+                *word = v as u32;
+            }
+            return Ok((*word).into());
         };
         if offset + u64::from(size) > 0x108 || address & u64::from(size - 1) != 0 {
             return Err("SD register alignment/extent".into());
@@ -157,7 +168,7 @@ impl Device for Controller {
             .min()
     }
     fn save(&self) -> Value {
-        json!({"reset_due":self.reset_due,"host":self.host.save()})
+        json!({"reset_due":self.reset_due,"words":self.words,"host":self.host.save()})
     }
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
         self.host.card_slot()
@@ -171,7 +182,7 @@ impl Device for Controller {
         // The SD host owns the exact card, FIFO, pending command and clocks.
         Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
-            &(&self.options, self.reset_due),
+            &(&self.options, self.reset_due, &self.words),
         )?
         .with_children(vec![self.host.checkpoint()?]))
     }
@@ -179,7 +190,8 @@ impl Device for Controller {
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let (options, _): (Options, Option<u64>) = saved.decode(self.name())?;
+        let (options, _, _): (Options, Option<u64>, std::collections::BTreeMap<u64, u32>) =
+            saved.decode(self.name())?;
         if options != self.options {
             return Err("SD wrapper checkpoint wiring differs".into());
         }
@@ -194,8 +206,10 @@ impl Device for Controller {
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.host.restore_checkpoint(&saved.children()[0])?;
-        let (_, due): (Options, Option<u64>) = saved.decode(self.name())?;
+        let (_, due, words): (Options, Option<u64>, std::collections::BTreeMap<u64, u32>) =
+            saved.decode(self.name())?;
         self.reset_due = due;
+        self.words = words;
         Ok(())
     }
     fn restore(&mut self, _: &Value) -> Result<(), String> {
