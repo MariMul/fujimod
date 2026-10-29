@@ -1413,6 +1413,16 @@ impl Board {
         serde_json::to_string(&self.board()?.observation().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    fn inspection_observation(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            return py
+                .import("json")?
+                .call_method1("dumps", (session.state(py, false)?,))?
+                .extract();
+        }
+        serde_json::to_string(&self.board()?.inspection_observation().map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
     fn failure(&self, py: Python<'_>) -> PyResult<String> {
         if let Some(Backend::Xp4(session)) = &self.backend {
             let state = session.state(py, false)?;

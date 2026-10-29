@@ -33,10 +33,14 @@ impl Board {
         state.bus.device_buffer(kind, name)
     }
 
-    /// CPU/IRQ/scheduler observation without serializing device DMA payloads.
-    pub fn observation(&self) -> Result<serde_json::Value, String> {
+    fn execution_observation(
+        &self,
+        track_interrupt_controllers: bool,
+    ) -> Result<serde_json::Value, String> {
         let s = self.state.try_borrow().map_err(|_| "board is executing")?;
-        self.track_device_kind("exr2-interrupt-controller", &s.bus);
+        if track_interrupt_controllers {
+            self.track_device_kind("exr2-interrupt-controller", &s.bus);
+        }
         Ok(serde_json::json!({
             "execution_mode":s.bus.mode().name(), "execution_policy":s.execution_policy.name(),
             "counts_as_boot":s.bus.mode()==super::bus::Mode::Strict,
@@ -46,6 +50,16 @@ impl Board {
             "quantum":self.quantum.get(), "failure":s.error,
             "interrupt_controllers":s.bus.device_states("exr2-interrupt-controller")
         }))
+    }
+
+    /// CPU/IRQ/scheduler observation without serializing device DMA payloads.
+    pub fn observation(&self) -> Result<serde_json::Value, String> {
+        self.execution_observation(true)
+    }
+
+    /// Inspect the same paused execution state without adding device dependencies.
+    pub fn inspection_observation(&self) -> Result<serde_json::Value, String> {
+        self.execution_observation(false)
     }
 
     pub fn inspect_device<T: Device, R>(

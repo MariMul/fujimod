@@ -96,6 +96,27 @@ def test_native_failure_read_does_not_watch_devices_or_memory():
         assert failure == json.loads(machine.native.observation())["failure"]
 
 
+def test_inspection_observation_matches_tracked_without_watching_devices():
+    with board(7, interrupt_controller=True) as machine:
+        machine.run(23)
+
+        machine.native.read_set_begin()
+        tracked = json.loads(machine.native.observation())
+        assert json.loads(machine.native.read_set_end()) == dict(
+            stores=[], devices=["irq0"]
+        )
+
+        machine.native.read_set_begin()
+        inspected = json.loads(machine.native.inspection_observation())
+        assert json.loads(machine.native.read_set_end()) == dict(stores=[], devices=[])
+
+        assert inspected == tracked
+        assert inspected["interrupt_controllers"]
+        assert inspected["instructions"] == tracked["instructions"]
+        assert inspected["next_core"] == tracked["next_core"]
+        assert inspected["slice_left"] == tracked["slice_left"]
+
+
 @pytest.mark.parametrize('quantum',[1,7,64])
 def test_native_watches_preserve_counts_ticks_and_complete_fingerprint(quantum):
     with board(quantum) as machine:
