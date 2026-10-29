@@ -1,15 +1,23 @@
-/** RAM captures through a firmware's catalog bulk path, and their tar archive. */
-import { catalog, type CaptureScope, type ResolvedSelection } from 'fujimod';
-import type { Camera, CameraIdentity, ToolSession } from '../camera-model';
+/** RAM captures through a firmware's catalog bulk path. */
+import {
+  catalog,
+  type CaptureScope,
+  type FirmwareBulk,
+  type FirmwareVersion,
+  type ResolvedSelection,
+} from 'fujimod';
+import type { CameraIdentity, ToolSession } from '../camera-model';
 import type { ControlDiff } from './mapping';
-import { TarArchive } from './tar';
+import { generationFailure } from '../generation';
 
 /** Bytes requested per qualified bulk read. */
 export const PIECE_BYTES = 16 << 20;
 export const MIB = 1 << 20;
 
-/** The catalog firmware whose located bulk path matches the camera's reported identity. */
-export function bulkSelection(identity: CameraIdentity | undefined): ResolvedSelection | undefined {
+/** The execution profile whose bulk path matches the camera's reported identity. */
+export function executionSelection(
+  identity: CameraIdentity | undefined,
+): ResolvedSelection | undefined {
   const product = identity?.product?.trim();
   const version = identity?.internalVersion?.trim();
   if (!product || !version) return undefined;
@@ -19,6 +27,56 @@ export function bulkSelection(identity: CameraIdentity | undefined): ResolvedSel
       (selection) =>
         selection.bulk?.product === product && selection.bulk.internal_version === version,
     );
+}
+
+/** Bulk facts and release identity, with physical controls when an execution profile has them. */
+export interface BulkSelection {
+  bulk: FirmwareBulk;
+  firmware: FirmwareVersion;
+  physical_controls: ResolvedSelection['physical_controls'];
+}
+
+export function bulkSelection(identity: CameraIdentity | undefined): BulkSelection | undefined {
+  const product = identity?.product?.trim();
+  const version = identity?.internalVersion?.trim();
+  if (!product || !version) return undefined;
+  const bulk = catalog
+    .bulkProfiles()
+    .find((item) => item.product === product && item.internal_version === version);
+  if (!bulk) return undefined;
+  const firmware = catalog.firmwareVersions().find((item) => item.firmware_id === bulk.firmware_id);
+  if (!firmware) return undefined;
+  const physical_controls = catalog
+    .selections()
+    .find((item) => item.firmware.id === bulk.firmware_id)?.physical_controls;
+  return { bulk, firmware, physical_controls };
+}
+
+/** Preserve the published generation failure for a camera without bulk support. */
+export function bulkSupportError(identity: CameraIdentity | undefined): string {
+  const product = identity?.product?.trim();
+  const version = identity?.internalVersion?.trim();
+  const reports = catalog.generationResults();
+  const report = reports.find(
+    (entry) => entry.product === product && entry.internal_version === version,
+  );
+  if (report) return generationFailure(report.firmware_id, 'bulk');
+  const identityErrors = reports
+    .filter((entry) => entry.product === product && !entry.internal_version)
+    .flatMap((entry) => {
+      const errors =
+        entry.tables.versions?.errors ??
+        entry.tables.facts?.errors.filter(
+          (error) => error.locator === 'internal_version' || error.locator === 'inputs',
+        ) ??
+        [];
+      return errors.map(
+        (error) => `${entry.product} ${entry.version}: ${error.locator}: ${error.reason}`,
+      );
+    });
+  return identityErrors.length
+    ? `Firmware identity generation failed. ${identityErrors.join('; ')}`
+    : 'No bulk generation result was published for this camera and firmware.';
 }
 
 export function scopeBytes(scope: CaptureScope) {
@@ -68,43 +126,50 @@ async function sha256(data: Uint8Array<ArrayBuffer>) {
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-/** Read every range in pieces, reporting bytes done of the total. */
+/** Read every range in pieces, reporting bytes done of the total. Aborting stops between pieces. */
 export async function captureRanges(
   session: ToolSession,
   firmwareId: string,
   scope: CaptureScope,
   progress: (done: number, total: number) => void,
+  signal?: AbortSignal,
   pieceBytes = PIECE_BYTES,
 ): Promise<Pick<StateCapture, 'ranges' | 'overwritten'>> {
   const total = scopeBytes(scope);
   let done = 0;
-  const overwritten = new Map<string, { address: number; size: number }>();
   const ranges: RangeCapture[] = [];
   progress(0, total);
-  for (const range of scope.ranges) {
-    const capture: RangeCapture = {
-      name: range.name,
-      address: range.address,
-      size: range.size,
-      parts: [],
-      pieces: [],
-    };
-    ranges.push(capture);
-    for (let offset = 0; offset < range.size; offset += pieceBytes) {
-      const size = Math.min(pieceBytes, range.size - offset);
-      const read = await session.readBulk(firmwareId, range.address + offset, size);
-      if (read.data.length !== size) throw Error('Bulk read returned a partial piece');
-      const data = new Uint8Array(read.data);
-      capture.parts.push(data);
-      capture.pieces.push({ offset, size, sha256: await sha256(data) });
-      if (read.overwritten)
-        overwritten.set(`${read.overwritten.address}:${read.overwritten.size}`, read.overwritten);
-      done += size;
-      progress(done, total);
+  const memory = await session.memory(firmwareId);
+  try {
+    for (const range of scope.ranges) {
+      const capture: RangeCapture = {
+        name: range.name,
+        address: range.address,
+        size: range.size,
+        parts: [],
+        pieces: [],
+      };
+      ranges.push(capture);
+      for (let offset = 0; offset < range.size; offset += pieceBytes) {
+        signal?.throwIfAborted();
+        const size = Math.min(pieceBytes, range.size - offset);
+        const data = new Uint8Array(await memory.read(range.address + offset, size));
+        signal?.throwIfAborted();
+        if (data.length !== size) throw Error('Bulk read returned a partial piece');
+        capture.parts.push(data);
+        capture.pieces.push({ offset, size, sha256: await sha256(data) });
+        done += size;
+        progress(done, total);
+      }
     }
+    const overwritten = memory.overwritten;
+    return { ranges, overwritten: overwritten ? [overwritten] : [] };
+  } finally {
+    await memory.close();
   }
-  return { ranges, overwritten: [...overwritten.values()] };
 }
+
+export const canceled = (error: unknown) => error instanceof Error && error.name === 'AbortError';
 
 /** One contiguous copy of a single-range capture, for comparisons. */
 export function contiguous(capture: Pick<StateCapture, 'ranges'>): Uint8Array<ArrayBuffer> {
@@ -119,82 +184,10 @@ export function contiguous(capture: Pick<StateCapture, 'ranges'>): Uint8Array<Ar
   return bytes;
 }
 
-function slug(text: string) {
-  return (
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'capture'
+/** The scope a state capture reads: everything the catalog locates. */
+export function stateScope(scopes: readonly CaptureScope[]): CaptureScope | undefined {
+  return scopes.reduce<CaptureScope | undefined>(
+    (largest, scope) => (!largest || scopeBytes(scope) > scopeBytes(largest) ? scope : largest),
+    undefined,
   );
-}
-const hex = (value: number) => `0x${value.toString(16)}`;
-
-/** Store-only tar: manifest.json, each range's bytes and photos, mapping words as binary. */
-export function captureArchive(camera: Camera, set: CaptureSet, createdAt = new Date()): Blob {
-  const files: [string, Blob | readonly Uint8Array<ArrayBuffer>[]][] = [];
-  const states = set.states.map((capture, index) => {
-    const directory = `states/${String(index + 1).padStart(3, '0')}-${slug(capture.label)}`;
-    const ranges = capture.ranges.map((range) => {
-      const file = `${directory}/${range.name}-${hex(range.address)}.bin`;
-      files.push([file, range.parts]);
-      return {
-        name: range.name,
-        address: range.address,
-        size: range.size,
-        file,
-        pieces: range.pieces,
-      };
-    });
-    let photo;
-    if (capture.photo) {
-      const extension = capture.photo.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-      photo = `${directory}/photo.${extension}`;
-      files.push([photo, capture.photo]);
-    }
-    return {
-      state: capture.state,
-      label: capture.label,
-      scope: capture.scope,
-      time: capture.time,
-      ranges,
-      overwritten: capture.overwritten,
-      photo,
-    };
-  });
-  const mappings = set.mappings.map((mapping, index) => {
-    const base = `mappings/${String(index + 1).padStart(3, '0')}-${slug(mapping.name)}`;
-    const candidates = `${base}-candidates.u32le`;
-    const changed = `${base}-changed.u32le`;
-    files.push([candidates, [new Uint8Array(mapping.diff.candidates.buffer as ArrayBuffer)]]);
-    files.push([changed, [new Uint8Array(mapping.diff.changed.buffer as ArrayBuffer)]]);
-    return {
-      control: mapping.control ?? null,
-      name: mapping.name,
-      note: mapping.note,
-      time: mapping.time,
-      scope: mapping.scope,
-      address: mapping.address,
-      size: mapping.size,
-      candidates: { file: candidates, count: mapping.diff.candidates.length },
-      changed: {
-        file: changed,
-        format: 'address, released, held, released, held',
-        count: mapping.diff.changed.length / 5,
-        omitted: mapping.diff.omitted,
-      },
-    };
-  });
-  const manifest = {
-    schema: 'fujimod-state-captures-1',
-    createdAt: createdAt.toISOString(),
-    camera: { name: camera.name, transport: camera.transport, identity: camera.identity ?? {} },
-    firmware_id: set.firmwareId,
-    states,
-    mappings,
-  };
-  const tar = new TarArchive(createdAt.getTime());
-  tar.add('manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2)));
-  for (const [name, data] of files) tar.add(name, data);
-  return tar.blob();
 }

@@ -74,13 +74,14 @@ export function testCameraModule(shared = false) {
     free() {}
     [Symbol.dispose]() {}
     close() {}
-    runUntil(until: bigint) {
+    runUntil(until: bigint, progress?: (ticks: number) => void) {
       if (failed) {
         const error = Error('unmapped guest load');
         error.name = 'GuestExecutionError';
         throw error;
       }
       ticks = until;
+      progress?.(Number(ticks));
     }
     input(key: string, pressed: boolean, at: bigint) {
       calls.push({ action: 'input', options: { key, pressed, at }, bytes: [] });
@@ -151,6 +152,10 @@ export function testCameraModule(shared = false) {
       record('press', { id, stage });
       return state;
     }
+    releaseBootInputs(inputs: BootInput[]) {
+      record('release_boot_inputs', { inputs });
+      return state;
+    }
     release(id: string) {
       record('release', { id });
       return state;
@@ -205,7 +210,8 @@ export function testCameraModule(shared = false) {
       record('card_format');
       return state;
     }
-    bootToRec(limit: bigint) {
+    bootToRec(limit: bigint, progress?: (ticks: number) => void) {
+      progress?.(Number(ticks));
       record('boot_to_rec', { limit });
       return {
         status: 'rec',
@@ -218,6 +224,7 @@ export function testCameraModule(shared = false) {
         pending_mode: 0,
         pending: false,
         setup_presses: 0,
+        translation_cache_size_bytes: 0,
         scanout_instance: null,
         failure: null,
       };
@@ -265,6 +272,10 @@ export function testCameraModule(shared = false) {
     profile(limit?: number | null) {
       record('profile', { limit });
       return { ticks: Number(ticks), instructions: [Number(ticks * 2n)], pcEntries: [], failed };
+    }
+    deviceStates(kind: string) {
+      record('device_states', { kind });
+      return { states: [] };
     }
     memoryRead(address: bigint, size: number) {
       record('memory_read', { address, size });

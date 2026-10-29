@@ -1,5 +1,6 @@
 use fujimod_emulator_devices::{Cx, test_host::ram::Ram};
 use fujimod_emulator_exr2_plan::*;
+use fujimod_emulator_exr2_resources::*;
 use serde_json::{Value, json};
 
 fn node(name: &str, base: u64, size: u64, model: Value) -> Value {
@@ -372,7 +373,7 @@ fn both_sd_hosts_own_their_clock_words_and_reject_a_competing_owner() {
         "card",
         0xfff50000,
         0x1000,
-        json!({"kind":"sd-host","options":{"protocol":"application","transfer_ticks":2,"clock_ticks":3,"rca":1,"ram_bytes":0x100000},
+        json!({"kind":"sd-host","options":{"base":0xfff50000u32,"protocol":"application","transfer_ticks":2,"clock_ticks":3,"rca":1,"ram_bytes":0x100000},
         "card":{"kind":"blank","options":{"sectors":0x400000,"max_dirty_sectors":64}},"present":true,"protected":false,"irq":{"Core":{"core":0,"line":80}}}),
     );
     let sdio = node(
@@ -541,7 +542,7 @@ fn readback_and_jpeg_peers_share_real_constructor_handles() {
     ]);
     doc["wires"] = json!({"parameters":"parameters","readback":"memory-outputs","edges":"phase-edges","outputs":"output-channels","routes":"irq-routes","jpeg":"stream"});
     let mut resources = Resources::default();
-    resources.inputs.images.insert(
+    fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().images.insert(
         "image".into(),
         ImageFrames::new(ImageLayout {
             width: 2,
@@ -611,7 +612,7 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
     })]);
     let mut resources = Resources::default();
     for name in ["image", "unconnected"] {
-        resources.inputs.images.insert(
+        fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().images.insert(
             name.into(),
             ImageFrames::new(ImageLayout {
                 width: 2,
@@ -621,7 +622,7 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
             .unwrap(),
         );
     }
-    resources.inputs.statistics.insert(
+    fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().statistics.insert(
         "statistics".into(),
         StatisticsFrames::new(vec![StatisticsSpan {
             destination: 2,
@@ -718,7 +719,8 @@ fn serial_register_access_wakes_the_coordinator_after_dma_consolidation() {
 
 #[test]
 fn board_registers_spi_selector_and_one_dma_controller_as_independent_nodes() {
-    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters, Resources};
+    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters};
+    use fujimod_emulator_exr2_resources::Resources;
     let plan = Plan::parse(
         &serde_json::json!({
             "schema": 1,

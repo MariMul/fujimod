@@ -5,7 +5,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { zipFiles } from '@fujimod/emulator-ui/archive';
+import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { localReports, simulatorReports } from '../scripts/local-reports.ts';
 
 test('local report writes metadata first and streams ZIP to its own directory', async () => {
@@ -32,9 +32,11 @@ test('local report writes metadata first and streams ZIP to its own directory', 
       json = () => readFile(join(path, 'metadata.json'), 'utf8').then(JSON.parse);
     assert.equal((await json()).archive.status, 'pending');
     const bytes = new Uint8Array(
-      await zipFiles([
-        ['report.json', new TextEncoder().encode(JSON.stringify({ description: 'Guest fault' }))],
-      ]).arrayBuffer(),
+      await (
+        await zipBlob([
+          { path: 'report.json', data: new Blob([JSON.stringify({ description: 'Guest fault' })]) },
+        ])
+      ).arrayBuffer(),
     );
     assert.equal(
       (await fetch(`${endpoint}/${id}/report.zip`, { method: 'PUT', body: bytes })).status,

@@ -1,10 +1,7 @@
 //! EXR II board constructors for this crate's models.
 use crate::companion;
-use fujimod_emulator_exr2_plan::{
-    Model,
-    construction::{Builder, Built, Constructors, decode},
-    wire,
-};
+use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, decode}};
+use fujimod_emulator_exr2_resources::wire;
 
 /// Add this crate's EXR II constructors.
 pub fn register(constructors: &mut Constructors) {
@@ -40,9 +37,7 @@ fn fe80_processing(builder: Builder<'_>, model: Model) -> Result<Built, String> 
             transport,
             options,
             crate::companion_processing::Wiring {
-                frames: resources
-                    .inputs
-                    .images
+                frames: fujimod_emulator_exr2_images::images(resources)?.images
                     .get(&frames)
                     .cloned()
                     .ok_or_else(|| format!("missing FE80 frame clock {frames}"))?,

@@ -119,6 +119,7 @@
               "type": "string"
             },
             "erased_tail": {
+              "default": null,
               "format": "uint8",
               "maximum": 255,
               "minimum": 0,
@@ -195,6 +196,7 @@
       "description": "A periodic external frame source for one or more declared blocks.",
       "properties": {
         "active_ticks": {
+          "default": null,
           "description": "Active duration within the frame period, when supplied.",
           "format": "uint64",
           "minimum": 0,
@@ -211,6 +213,7 @@
           "type": "array"
         },
         "luma": {
+          "default": null,
           "description": "Uniform source luma sample, when supplied.",
           "format": "uint16",
           "maximum": 65535,
@@ -254,6 +257,7 @@
               "type": "array"
             },
             "rtc_ticks_per_second": {
+              "default": null,
               "format": "uint64",
               "minimum": 0,
               "type": [
@@ -2389,6 +2393,7 @@
                   "type": "null"
                 }
               ],
+              "default": null,
               "description": "Policy for accepting a firmware first-start prompt, when needed."
             },
             "gpio": {
@@ -4670,6 +4675,7 @@
     "RunWifiSdioProfile": {
       "description": "Closed selection for wifi sdio profile.",
       "enum": [
+        "mt5931-no-peers",
         "declared-wifi-sdio-one-function-enumeration-unmeasured"
       ],
       "type": "string"
@@ -4757,6 +4763,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Execution policy for this run."
     },
     "firmware_id": {
@@ -4776,6 +4783,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Declared model-specific reset inputs, addressed by catalog identity."
     },
     "overlays": {
@@ -4809,6 +4817,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "External scene inputs generated for this run."
     },
     "schema": {

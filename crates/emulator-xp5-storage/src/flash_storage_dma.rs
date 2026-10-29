@@ -75,7 +75,7 @@ impl Dma {
                 self.flash_storage
                     .lock()
                     .unwrap()
-                    .read(a - flash_storage::BASE, sr)?
+                    .read_device(a - flash_storage::BASE, sr)?
             } else {
                 cx.ram_bytes(a, sr)?
             };
@@ -282,7 +282,7 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(storage)))
+        bus.register(0xff939000, 0x1000, Box::new(Dma::new(storage.clone())))
             .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],
@@ -322,6 +322,11 @@ mod tests {
         bus.event(&mut Cx::new(&mut h, 0, 0, 0), d, t).unwrap();
         assert_eq!(&h.ram[16..22], &[0, 1, 2, 3, 8, 9]);
         assert_eq!(&h.ram[26..32], &[10, 11, 16, 17, 18, 19]);
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 12);
+        assert_eq!(
+            storage.lock().unwrap().session.reads.ranges,
+            [(0, 4), (8, 12), (16, 20)]
+        );
         assert_eq!(rd(&mut bus, &mut h, 8), 0);
         assert_eq!(rd(&mut bus, &mut h, 0x18), 1);
         assert!(h.irq);

@@ -50,20 +50,18 @@ impl Drop for Lease {
     }
 }
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
-struct PythonBoard(Py<fujimod_python_emulator::board::Board>);
+struct PythonBoard(Py<PyAny>);
 #[cfg(all(feature = "emulator", not(target_os = "emscripten")))]
 impl remote::board::SessionOwner for PythonBoard {
     fn with_session<T>(
         &mut self,
-        call: impl FnOnce(&mut fujimod_emulator::session::Session) -> Result<T>,
+        call: impl FnOnce(&mut fujimod_emulator_session::Session) -> Result<T>,
     ) -> Result<T> {
         Python::attach(|py| {
-            let mut board = self
-                .0
-                .bind(py)
-                .try_borrow_mut()
-                .map_err(|e| e.to_string())?;
-            call(board.session_mut().map_err(|e| e.to_string())?)
+            fujimod_python_base::board_session::with_session(self.0.bind(py), |session| {
+                Ok(call(session))
+            })
+            .map_err(|e| e.to_string())?
         })
     }
 }
@@ -71,7 +69,7 @@ impl remote::board::SessionOwner for PythonBoard {
 impl Camera {
     #[staticmethod]
     fn from_ff80(
-        session: &fujimod_python_usb::asynchronous::AsyncSession,
+        session: &Bound<'_, PyAny>,
         facts: &str,
         read_bytes: u32,
         write_bytes: u32,
@@ -99,8 +97,12 @@ impl Camera {
             poll_interval: Duration::from_secs_f64(poll_seconds),
             output,
         };
-        let remote = remote::Ff80Remote::new(session.remote_lease()?, facts.clone(), options)
-            .map_err(error)?;
+        let remote = remote::Ff80Remote::new(
+            fujimod_python_usb_base::lease(session)?,
+            facts.clone(),
+            options,
+        )
+        .map_err(error)?;
         Ok(Self {
             slot: Rc::new(RefCell::new(Some(Box::new(remote)))),
             facts: Rc::new(facts),
@@ -337,9 +339,14 @@ impl Camera {
                     remote::operations::screenshot(r, deadline).await?,
                 )),
                 "frame" => Ok(Output::Capture(r.frame().await?)),
-                "readiness" => Ok(Output::Readiness(r.readiness().await?)),
+                "readiness" => Ok(Output::Readiness(r.readiness(None).await?)),
                 "wait_ready" => {
-                    remote::operations::wait_ready(r, deadline).await?;
+                    let control = match reference.as_ref() {
+                        Some(Reference::Control(control)) => Some(control),
+                        None => None,
+                        _ => return Err("wait_ready requires a control reference".into()),
+                    };
+                    remote::operations::wait_ready(r, control, deadline).await?;
                     Ok(Output::Unit)
                 }
                 "wait" => {
@@ -385,9 +392,28 @@ fn read_set(json: &str, device_ids: &BTreeMap<String, usize>) -> Result<ReadSet>
 }
 #[pyfunction]
 fn facts_from_selection(selection: &str, manifest: &str) -> PyResult<String> {
-    let selection = decode(selection)?;
+    let selection: fujimod_catalog::ResolvedSelection = decode(selection)?;
     let manifest = decode(manifest)?;
-    let facts = Facts::from_selection(&selection, manifest).map_err(error)?;
+    let generated = selection.firmware.generated_facts.as_ref();
+    let input = fujimod_catalog_remote::Selection {
+        firmware_id: &selection.firmware.id,
+        body_id: &selection.body.id,
+        firmware_sha256: selection
+            .firmware
+            .update
+            .as_ref()
+            .map(|content| content.sha256.as_str()),
+        remote_facts: generated.and_then(|facts| facts.remote.as_ref()),
+        physical_controls: selection.physical_controls.as_ref(),
+        control_ids: selection.control_ids.as_ref(),
+        connections: selection
+            .body
+            .connections
+            .iter()
+            .map(|connection| connection.id.as_str())
+            .collect(),
+    };
+    let facts = fujimod_catalog_remote::Facts::from_selection(&input, manifest).map_err(error)?;
     serde_json::to_string(&facts).map_err(|e| error(e.to_string()))
 }
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -406,20 +432,20 @@ impl Camera {
     #[staticmethod]
     #[pyo3(signature = (board, facts, options, observer=None))]
     fn from_board(
-        board: Py<fujimod_python_emulator::board::Board>,
+        board: Py<PyAny>,
         facts: &str,
         options: &str,
         observer: Option<Py<PyAny>>,
     ) -> PyResult<Self> {
         let facts: Facts = decode(facts)?;
-        let device_ids = Python::attach(|py| -> PyResult<BTreeMap<String, usize>> {
-            let mut owner = board.bind(py).try_borrow_mut()?;
-            Ok(owner
-                .session_mut()?
-                .nodes
-                .iter()
-                .map(|(name, id)| (name.clone(), *id))
-                .collect())
+        let device_ids = Python::attach(|py| {
+            fujimod_python_base::board_session::with_session(board.bind(py), |session| {
+                Ok(session
+                    .nodes
+                    .iter()
+                    .map(|(name, id)| (name.clone(), *id))
+                    .collect::<BTreeMap<String, usize>>())
+            })
         })?;
         let mut remote =
             remote::BoardRemote::new(PythonBoard(board), facts.clone(), decode(options)?)
@@ -442,15 +468,11 @@ impl Camera {
     }
 }
 
-#[cfg(feature = "testing")]
 #[pymethods]
 impl Camera {
     #[staticmethod]
     #[pyo3(signature = (session, poll_seconds=0.001))]
-    fn synthetic_ff80(
-        session: &fujimod_python_usb::asynchronous::AsyncSession,
-        poll_seconds: f64,
-    ) -> PyResult<Self> {
+    fn synthetic_ff80(session: &Bound<'_, PyAny>, poll_seconds: f64) -> PyResult<Self> {
         let facts =
             serde_json::to_string(&remote::testing::facts()).map_err(|e| error(e.to_string()))?;
         Self::from_ff80(session, &facts, 4, 4, 64, poll_seconds, "lcd".into())

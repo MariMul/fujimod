@@ -1,14 +1,11 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { Icon } from '@fujimod/emulator-ui/ui/icons';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Camera, CameraModel } from '../camera-model';
-import {
-  bulkSelection,
-  captureArchive,
-  captureRanges,
-  contiguous,
-  type CaptureSet,
-} from './capture';
+import { bulkSelection, canceled, captureRanges, contiguous, type CaptureSet } from './capture';
 import { controlDiff, type ControlDiff } from './mapping';
-import { CapturePanel, download, emptySet, message } from './CapturePanel';
+import { CapturePanel, emptySet } from './CapturePanel';
+import { slug, type AddFile } from '../../files/shelf';
 import './captures.css';
 
 const STEPS = ['released', 'held', 'released', 'held'] as const;
@@ -20,6 +17,7 @@ export function MapControls(props: {
   model: CameraModel;
   set?: CaptureSet;
   onSet: (set: CaptureSet) => void;
+  onFile: AddFile;
   onConnect: () => void;
   onClose: () => void;
 }) {
@@ -38,8 +36,9 @@ export function MapControls(props: {
   const [running, setRunning] = createSignal(false);
   const [progress, setProgress] = createSignal({ done: 0, total: 1 });
   const [failure, setFailure] = createSignal('');
+  let abort: AbortController | undefined;
   const [result, setResult] = createSignal<{ name: string; base: number; diff: ControlDiff }>();
-  const set = () => props.set ?? emptySet(selection()!.firmware.id);
+  const set = () => props.set ?? emptySet(selection()!.firmware.firmware_id);
   const name = () => {
     const id = control();
     const chosen = controls().find(([key]) => key === id)?.[1].name;
@@ -55,13 +54,21 @@ export function MapControls(props: {
   async function capture() {
     const camera = props.camera;
     const current = scope();
-    const firmwareId = selection()?.firmware.id;
+    const firmwareId = selection()?.firmware.firmware_id;
     if (!camera || !current || !firmwareId || !name() || !available()) return;
     setRunning(true);
     setFailure('');
+    abort = new AbortController();
+    const signal = abort.signal;
     try {
       const read = await props.model.withSession(camera.id, 'Map controls', (session) =>
-        captureRanges(session, firmwareId, current, (done, total) => setProgress({ done, total })),
+        captureRanges(
+          session,
+          firmwareId,
+          current,
+          (done, total) => setProgress({ done, total }),
+          signal,
+        ),
       );
       const taken = [...captures(), contiguous(read)];
       if (taken.length < STEPS.length) {
@@ -70,30 +77,55 @@ export function MapControls(props: {
       }
       const [range] = current.ranges;
       const diff = controlDiff(range.address, [taken[0], taken[1], taken[2], taken[3]]);
+      const mapping = {
+        control: control(),
+        name: name(),
+        note: note().trim(),
+        time: new Date().toISOString(),
+        scope: current.name,
+        address: range.address,
+        size: range.size,
+        diff,
+      };
+      const facts = {
+        firmware: firmwareId,
+        control: mapping.control ?? null,
+        name: mapping.name,
+        note: mapping.note,
+        time: mapping.time,
+        scope: mapping.scope,
+        address: mapping.address,
+        size: mapping.size,
+      };
+      const base = `mapping-${slug(mapping.name)}`;
+      props.onFile(
+        `${base}-candidates.bin`,
+        new Blob([new Uint8Array(diff.candidates.buffer as ArrayBuffer)]),
+        {
+          ...facts,
+          format: 'u32le address',
+          count: diff.candidates.length,
+        },
+      );
+      props.onFile(
+        `${base}-changed.bin`,
+        new Blob([new Uint8Array(diff.changed.buffer as ArrayBuffer)]),
+        {
+          ...facts,
+          format: 'u32le address, released, held, released, held',
+          count: diff.changed.length / 5,
+          omitted: diff.omitted,
+        },
+      );
       const previous = set();
-      props.onSet({
-        ...previous,
-        mappings: [
-          ...previous.mappings,
-          {
-            control: control(),
-            name: name(),
-            note: note().trim(),
-            time: new Date().toISOString(),
-            scope: current.name,
-            address: range.address,
-            size: range.size,
-            diff,
-          },
-        ],
-      });
+      props.onSet({ ...previous, mappings: [...previous.mappings, mapping] });
       setResult({ name: name(), base: range.address, diff });
       setCaptures([]);
       setControl(undefined);
       setCustom('');
       setNote('');
     } catch (error) {
-      setFailure(message(error));
+      if (!canceled(error)) setFailure(shownError(error));
     } finally {
       setRunning(false);
     }
@@ -160,7 +192,9 @@ export function MapControls(props: {
                 onClick={() => setControl(control() === id ? undefined : id)}
               >
                 <span>{entry.name}</span>
-                <span class="cap-dim">{mapped(id) ? '✓' : entry.location}</span>
+                <span class="cap-dim">
+                  {mapped(id) ? <Icon name="check" size={13} /> : entry.location}
+                </span>
               </button>
             </li>
           )}
@@ -203,6 +237,9 @@ export function MapControls(props: {
           <Show when={step() === 'held'}>
             <span class="cap-dim">Keep holding</span>
           </Show>
+          <button class="wb-btn" onClick={() => abort?.abort()}>
+            Cancel
+          </button>
         </div>
       </Show>
       <div class="wb-pair">
@@ -221,15 +258,6 @@ export function MapControls(props: {
         <p class="wb-status" role="alert">
           {failure()}
         </p>
-      </Show>
-      <Show when={props.set && (props.set.states.length || props.set.mappings.length)}>
-        <button
-          class="wb-btn"
-          disabled={running()}
-          onClick={() => download(captureArchive(props.camera!, props.set!))}
-        >
-          Download captures
-        </button>
       </Show>
     </CapturePanel>
   );

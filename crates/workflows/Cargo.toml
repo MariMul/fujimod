@@ -11,14 +11,20 @@ description = "Camera workflows composed from fujimod-usb operations: service mo
 doctest = false
 
 [features]
-service-capture = ["dep:serde", "dep:serde_json"]
+service-capture = []
+artifact-build = ["dep:fujimod-firmware", "dep:fujimod-corpus"]
 
 [dependencies]
+fujimod-firmware = { workspace = true, optional = true }
+fujimod-corpus = { path = "../corpus", optional = true }
 fujimod-catalog.workspace = true
+sha2.workspace = true
+fujimod-catalog-workflows.workspace = true
+fujimod-catalog-bulk.workspace = true
 fujimod-usb.workspace = true
 thiserror.workspace = true
-serde = { workspace = true, features = ["derive"], optional = true }
-serde_json = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 fujimod-workspace-hack.workspace = true
 
 [[example]]
@@ -26,5 +32,10 @@ name = "service_capture_plan"
 required-features = ["service-capture"]
 
 [dev-dependencies]
-fujimod-usb = { workspace = true, features = ["testing"] }
+nusb.workspace = true
+fujimod-catalog-firmware-identity.workspace = true
 futures-lite.workspace = true
+
+[[example]]
+name = "flash_reader_build"
+required-features = ["artifact-build"]

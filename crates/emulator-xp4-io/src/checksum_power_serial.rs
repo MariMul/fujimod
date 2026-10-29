@@ -1,6 +1,10 @@
 //! Four-byte power-peer frames: seven-bit register, write flag, data and checksum.
 //! Fixed inputs, inert disables, stored registers and an RTC law are declared.
-use crate::{gpio::SharedPins, rtc::{StagedClock, StagedConfig}, spi::Input};
+use crate::{
+    rtc::{StagedClock, StagedConfig},
+    spi::Input,
+};
+use fujimod_emulator_ip::socionext::gpio::SharedPins;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -232,7 +236,8 @@ impl Input for ChecksumPowerSerial {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpio::{BASE, Gpio, Pins};
+    use fujimod_emulator_ip::socionext::gpio::{Gpio, Pins};
+    const BASE: u64 = 0x10000;
     use fujimod_emulator_devices::{Cx, Device, Host, Record};
 
     struct Clock;
@@ -271,7 +276,7 @@ mod tests {
             vec![],
         )
         .unwrap();
-        let mut gpio = Gpio::new(pins);
+        let mut gpio = Gpio::new(BASE, pins).unwrap();
         select(&mut gpio, true);
         (peer, gpio)
     }
@@ -358,7 +363,7 @@ mod tests {
             [header, high, low, !(header + high + low) & 255]
         }
         let pins = Pins::new([0; 16]);
-        let mut gpio = Gpio::new(pins.clone());
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
         let mut peer = ChecksumPowerSerial::new(
             pins,
             12,
@@ -485,7 +490,7 @@ mod tests {
     #[test]
     fn declared_disable_acknowledges_only_zero_without_admitting_readback_or_enable() {
         let pins = Pins::new([0; 16]);
-        let mut gpio = Gpio::new(pins.clone());
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
         let mut peer = ChecksumPowerSerial::new(
             pins,
             12,

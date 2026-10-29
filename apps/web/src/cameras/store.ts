@@ -5,6 +5,14 @@ import {
   type DurableReference,
 } from '../storage/durable';
 import type { DevicePanel } from '@fujimod/emulator-ui/ui/layout';
+/** One official firmware update in the browser, shared by every camera made from it. */
+export interface LibraryFirmware {
+  sha256: string;
+  firmwareId: string;
+  name: string;
+  fileName: string;
+  addedAt: number;
+}
 /** Owned cameras are independent of the disposable firmware boot cache. */
 export interface CameraRecord {
   id: string;
@@ -31,17 +39,71 @@ interface StoredSave extends Omit<CameraSave, 'durable'> {
   durable: DurableReference;
 }
 const DB = 'fujimod-cameras';
+/** Version 1 kept a firmware copy per camera; version 2 keeps one per SHA-256. */
+function upgrade(request: IDBOpenDBRequest, oldVersion: number) {
+  const db = request.result,
+    tx = request.transaction!;
+  if (oldVersion < 1) {
+    db.createObjectStore('cameras', { keyPath: 'id' });
+    db.createObjectStore('saves');
+  }
+  db.createObjectStore('library', { keyPath: 'sha256' });
+  db.createObjectStore('library-bytes');
+  if (oldVersion < 1) return;
+  const library = tx.objectStore('library'),
+    bytes = tx.objectStore('library-bytes'),
+    copies = tx.objectStore('firmware');
+  const cursor = tx.objectStore('cameras').openCursor();
+  cursor.onsuccess = () => {
+    const position = cursor.result;
+    if (!position) {
+      db.deleteObjectStore('firmware');
+      return;
+    }
+    const camera = position.value as CameraRecord;
+    const copy = copies.get(camera.id);
+    copy.onsuccess = () => {
+      if (copy.result !== undefined) {
+        const firmware: LibraryFirmware = {
+          sha256: camera.firmwareHash,
+          firmwareId: camera.firmwareId,
+          name: camera.name,
+          fileName: camera.fileName,
+          addedAt: camera.createdAt,
+        };
+        library.put(firmware);
+        bytes.put(copy.result, camera.firmwareHash);
+      }
+      position.continue();
+    };
+  };
+}
 async function database() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DB, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore('cameras', { keyPath: 'id' });
-      request.result.createObjectStore('firmware');
-      request.result.createObjectStore('saves');
-    };
+    const request = indexedDB.open(DB, 2);
+    request.onupgradeneeded = (event) => upgrade(request, event.oldVersion);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+/** Add `firmware` to the library in `tx` unless it is already there. */
+function addToLibrary(
+  tx: IDBTransaction,
+  firmware: LibraryFirmware,
+  bytes: ArrayBuffer,
+  fail: (error: unknown) => void,
+) {
+  const library = tx.objectStore('library');
+  const existing = library.getKey(firmware.sha256);
+  existing.onsuccess = () => {
+    if (existing.result !== undefined) return;
+    try {
+      library.add(firmware);
+      tx.objectStore('library-bytes').put(bytes, firmware.sha256);
+    } catch (error) {
+      fail(error);
+    }
+  };
 }
 async function transaction<T>(
   stores: string[],
@@ -104,6 +166,22 @@ async function transactionAttempt<T>(
     db.close();
   }
 }
+/** A firmware update identified against the catalog. */
+export interface IdentifiedFirmware {
+  id: string;
+  model: string;
+  version: string;
+  sha256: string;
+}
+function libraryEntry(file: File, firmware: IdentifiedFirmware): LibraryFirmware {
+  return {
+    sha256: firmware.sha256,
+    firmwareId: firmware.id,
+    name: `${firmware.model} · ${firmware.version}`,
+    fileName: file.name,
+    addedAt: Date.now(),
+  };
+}
 export class CameraStore {
   list(): Promise<CameraRecord[]> {
     return transaction(['cameras'], 'readonly', (tx, result) => {
@@ -112,9 +190,43 @@ export class CameraStore {
         result((request.result as CameraRecord[]).sort((a, b) => b.createdAt - a.createdAt));
     });
   }
+  /** Stored firmware, most recently added first. */
+  library(): Promise<LibraryFirmware[]> {
+    return transaction(['library'], 'readonly', (tx, result) => {
+      const request = tx.objectStore('library').getAll();
+      request.onsuccess = () =>
+        result((request.result as LibraryFirmware[]).sort((a, b) => b.addedAt - a.addedAt));
+    });
+  }
+  /** Store an identified firmware update once; a repeat returns the stored entry. */
+  async addFirmware(file: File, firmware: IdentifiedFirmware): Promise<LibraryFirmware> {
+    // Store bytes rather than File/Blob handles: WebKit can fail their IndexedDB clone.
+    const bytes = await file.arrayBuffer();
+    const entry = libraryEntry(file, firmware);
+    return transaction(['library', 'library-bytes'], 'readwrite', (tx, result, fail) => {
+      const existing = tx.objectStore('library').get(entry.sha256);
+      existing.onsuccess = () => {
+        const stored = existing.result as LibraryFirmware | undefined;
+        result(stored ?? entry);
+      };
+      addToLibrary(tx, entry, bytes, fail);
+    });
+  }
+  /** Remove the library row; owned cameras keep access to their firmware bytes. */
+  removeFirmware(sha256: string): Promise<void> {
+    return transaction(['library', 'library-bytes', 'cameras'], 'readwrite', (tx, result) => {
+      tx.objectStore('library').delete(sha256);
+      const request = tx.objectStore('cameras').getAll();
+      request.onsuccess = () => {
+        if (!(request.result as CameraRecord[]).some((camera) => camera.firmwareHash === sha256))
+          tx.objectStore('library-bytes').delete(sha256);
+        result(undefined);
+      };
+    });
+  }
   async create(
     file: File,
-    firmware: { id: string; model: string; version: string; sha256: string },
+    firmware: IdentifiedFirmware,
     modEnabled: boolean,
   ): Promise<CameraRecord> {
     // Store bytes rather than File/Blob handles: WebKit can fail their IndexedDB clone.
@@ -129,23 +241,31 @@ export class CameraStore {
       revision: 0,
       modEnabled,
     };
-    await transaction(['cameras', 'firmware'], 'readwrite', (tx, result) => {
+    await transaction(['cameras', 'library', 'library-bytes'], 'readwrite', (tx, result, fail) => {
       tx.objectStore('cameras').add(record);
-      // A copy per camera keeps ownership/deletion independent, even for the same DAT.
-      tx.objectStore('firmware').add(bytes, record.id);
+      addToLibrary(tx, libraryEntry(file, firmware), bytes, fail);
       result(undefined);
     });
     return record;
   }
-  firmware(id: string): Promise<Blob> {
-    return transaction(['firmware'], 'readonly', (tx, result) => {
-      const request = tx.objectStore('firmware').get(id);
+  private firmwareValue(sha256: string): Promise<ArrayBuffer | Blob> {
+    return transaction<unknown>(['library-bytes'], 'readonly', (tx, result) => {
+      const request = tx.objectStore('library-bytes').get(sha256);
       request.onsuccess = () => result(request.result);
     }).then((value) => {
       if (!(value instanceof ArrayBuffer) && !(value instanceof Blob))
-        throw Error('This camera’s firmware is missing from browser storage.');
-      return new Blob([value]);
+        throw Error('This firmware is missing from browser storage.');
+      return value;
     });
+  }
+  /** The firmware update with this SHA-256. */
+  async firmware(sha256: string): Promise<Blob> {
+    return new Blob([await this.firmwareValue(sha256)]);
+  }
+  /** Read stored bytes directly, avoiding a large temporary Blob in WebKit. */
+  async firmwareBytes(sha256: string): Promise<ArrayBuffer> {
+    const value = await this.firmwareValue(sha256);
+    return value instanceof ArrayBuffer ? value : value.arrayBuffer();
   }
   async saved(id: string): Promise<CameraSave | undefined> {
     for (let attempt = 0; ; attempt++) {
@@ -209,7 +329,7 @@ export class CameraStore {
       throw error;
     }
     if (published.previous?.schema === 1)
-      await removeDurable(published.previous.durable).catch(() => {});
+      await removeDurable(published.previous.durable).catch((error) => console.error(error));
     return published.record;
   }
   saveLayout(id: string, layout: DevicePanel): Promise<CameraRecord> {

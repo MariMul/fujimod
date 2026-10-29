@@ -1,96 +1,42 @@
 import { Show, createSignal } from 'solid-js';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Camera, CameraModel, ToolSession } from './camera-model';
-import { memoryRange } from './inspection';
-import { zipFiles } from '@fujimod/emulator-ui/archive';
-
-/** Readings collected on one camera, for the diagnostic bundle. */
-export interface Readings {
-  configuration?: { capacity: number; pageBytes: number; data: Uint8Array; complete: boolean };
-  memory: { address: number; length: number; data: Uint8Array }[];
-  errors: { tool: string; time: string; message: string }[];
-}
-export const emptyReadings = (): Readings => ({ memory: [], errors: [] });
-
+import type { AddFile } from '../files/shelf';
 import { Wizard } from './routes';
 
-function message(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** Store-only ZIP: manifest.json plus the camera's bytes as binary files. */
-export function diagnosticBundle(camera: Camera, readings: Readings): Blob {
-  const files: [string, Uint8Array<ArrayBuffer>][] = [];
-  const memory = readings.memory.map((read, index) => {
-    const file = `memory-${index + 1}-0x${read.address.toString(16).padStart(8, '0')}.bin`;
-    files.push([file, new Uint8Array(read.data)]);
-    return { file, address: read.address, length: read.length };
-  });
-  let configuration;
-  if (readings.configuration) {
-    const { capacity, pageBytes, data, complete } = readings.configuration;
-    files.push(['configuration.bin', new Uint8Array(data)]);
-    configuration = {
-      file: 'configuration.bin',
-      capacity,
-      pageBytes,
-      bytes: data.length,
-      complete,
-    };
-  }
-  const manifest = {
-    schema: 'fujimod-diagnostics-2',
-    createdAt: new Date().toISOString(),
-    camera: { name: camera.name, transport: camera.transport, identity: camera.identity ?? {} },
-    configuration,
-    memory,
-    errors: readings.errors,
-  };
-  files.unshift(['manifest.json', new TextEncoder().encode(JSON.stringify(manifest, null, 2))]);
-  return zipFiles(files);
-}
-
-/** The tools for the selected camera: Read, Console, Write and Export. */
+/** The tools for the selected camera: Read, Console and Write. */
 export function CameraTools(props: {
   camera: Camera;
   model: CameraModel;
-  readings: Readings;
-  onReadings: (update: (readings: Readings) => Readings) => void;
+  onFile: AddFile;
   onWizard: (wizard: Wizard) => void;
 }) {
-  const [address, setAddress] = createSignal('0x00000000');
-  const [length, setLength] = createSignal('256');
   const [command, setCommand] = createSignal('');
   const [running, setRunning] = createSignal('');
   const [status, setStatus] = createSignal('');
   const available = () =>
     props.camera.present && !props.camera.uncertain && !props.camera.session && !running();
-  type Record = (update: (readings: Readings) => Readings) => void;
   /** Runs `operation` in a session held by `tool`. Reads the camera once, when the action starts. */
   async function run(
     tool: string,
-    operation: (session: ToolSession, record: Record) => Promise<void>,
+    operation: (session: ToolSession, file: AddFile) => Promise<void>,
   ) {
     if (!available()) return;
     const id = props.camera.id;
     const model = props.model;
-    const record: Record = props.onReadings;
+    const file = props.onFile;
     setRunning(tool);
     setStatus('');
     try {
-      await model.withSession(id, tool, (session) => operation(session, record));
+      await model.withSession(id, tool, (session) => operation(session, file));
     } catch (error) {
-      const text = message(error);
-      setStatus(text);
-      record((readings) => ({
-        ...readings,
-        errors: [...readings.errors, { tool, time: new Date().toISOString(), message: text }],
-      }));
+      setStatus(shownError(error));
     } finally {
       setRunning('');
     }
   }
   function dumpConfiguration() {
-    void run('Dump configuration', async (session, record) => {
+    void run('Dump configuration', async (session, file) => {
       const { capacity, pageBytes } = await session.configurationGeometry();
       // Host allocation budget, independent of camera identity. Never infer geometry.
       if (
@@ -113,33 +59,13 @@ export function CameraTools(props: {
         }
       } finally {
         const complete = offset >= capacity;
-        record((readings) => ({
-          ...readings,
-          configuration: {
+        if (offset > 0)
+          file('configuration.bin', new Blob([data.slice(0, Math.min(offset, capacity))]), {
             capacity,
             pageBytes,
-            data: complete ? data : data.slice(0, offset),
             complete,
-          },
-        }));
+          });
       }
-    });
-  }
-  function readMemory(event: SubmitEvent) {
-    event.preventDefault();
-    let range: { address: number; length: number };
-    try {
-      range = memoryRange(address(), length());
-    } catch (error) {
-      setStatus(message(error));
-      return;
-    }
-    void run('Read memory', async (session, record) => {
-      const data = await session.readMemory(range.address, range.length);
-      record((readings) => ({
-        ...readings,
-        memory: [...readings.memory, { ...range, data }],
-      }));
     });
   }
   function sendCommand(event: SubmitEvent) {
@@ -153,18 +79,6 @@ export function CameraTools(props: {
       throw Error('The command is still running; its output continues in the log.');
     });
   }
-  function download() {
-    const url = URL.createObjectURL(diagnosticBundle(props.camera, props.readings));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `fujimod-diagnostics-${new Date().toISOString().replaceAll(':', '-')}.zip`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-  const hasReadings = () =>
-    Boolean(
-      props.readings.configuration || props.readings.memory.length || props.readings.errors.length,
-    );
   return (
     <div class="wb-tools-body">
       <section class="wb-section" aria-labelledby="wb-read">
@@ -174,67 +88,27 @@ export function CameraTools(props: {
         <button class="wb-btn" disabled={!available()} onClick={dumpConfiguration}>
           {running() === 'Dump configuration' ? 'Dumping configuration…' : 'Dump configuration'}
         </button>
-        <div class="wb-pair wb-flush">
-          <button class="wb-btn" onClick={() => props.onWizard(Wizard.StateCaptures)}>
-            State captures
-          </button>
-          <button class="wb-btn" onClick={() => props.onWizard(Wizard.MapControls)}>
-            Map controls
-          </button>
-        </div>
-        <form class="wb-tool" onSubmit={readMemory} aria-labelledby="wb-memory">
-          <div id="wb-memory" class="wb-tool-head">
-            Read memory
-          </div>
-          <div class="wb-tool-body wb-memory">
-            <label class="wb-in">
-              Address
-              <input
-                value={address()}
-                onInput={(event) => setAddress(event.currentTarget.value)}
-                spellcheck={false}
-                autocomplete="off"
-              />
-            </label>
-            <label class="wb-in">
-              Bytes
-              <input
-                value={length()}
-                onInput={(event) => setLength(event.currentTarget.value)}
-                inputmode="numeric"
-              />
-            </label>
-            <button class="wb-btn wb-primary" type="submit" disabled={!available()}>
-              Read
-            </button>
-          </div>
-        </form>
+        <button class="wb-btn" onClick={() => props.onWizard(Wizard.MapControls)}>
+          Capture buttons
+        </button>
       </section>
 
-      <section class="wb-section" aria-labelledby="wb-console">
-        <h3 id="wb-console" class="wb-label">
-          Console
-        </h3>
-        <form class="wb-tool" onSubmit={sendCommand}>
-          <div class="wb-tool-head">Console command</div>
-          <div class="wb-tool-body wb-command">
-            <label class="wb-in">
-              Command
-              <input
-                value={command()}
-                onInput={(event) => setCommand(event.currentTarget.value)}
-                spellcheck={false}
-                autocomplete="off"
-                autocapitalize="off"
-                enterkeyhint="send"
-              />
-            </label>
-            <button class="wb-btn" type="submit" disabled={!available() || !command().trim()}>
-              Send
-            </button>
-          </div>
-        </form>
-      </section>
+      <form class="wb-command" onSubmit={sendCommand}>
+        <input
+          class="wb-command-input"
+          aria-label="Console command"
+          placeholder="Console command"
+          value={command()}
+          onInput={(event) => setCommand(event.currentTarget.value)}
+          spellcheck={false}
+          autocomplete="off"
+          autocapitalize="off"
+          enterkeyhint="send"
+        />
+        <button class="wb-btn" type="submit" disabled={!available() || !command().trim()}>
+          Send
+        </button>
+      </form>
 
       <section class="wb-section" aria-labelledby="wb-write">
         <h3 id="wb-write" class="wb-label wb-write">
@@ -261,38 +135,18 @@ export function CameraTools(props: {
                     : 'Reading…'}
             </strong>
           </div>
-          <div class={{ 'wb-pair': true, 'wb-single': props.camera.debugMode !== 'unknown' }}>
-            <Show when={props.camera.debugMode === 'off' || props.camera.debugMode === 'unknown'}>
-              <button
-                class="wb-btn"
-                disabled={!available() || props.camera.transport !== 'usb'}
-                aria-label="Enable debug mode"
-                onClick={() => props.onWizard(Wizard.Enable)}
-              >
-                Enable
-              </button>
-            </Show>
-            <Show when={props.camera.debugMode === 'on' || props.camera.debugMode === 'unknown'}>
-              <button
-                class="wb-btn"
-                disabled={!available() || props.camera.transport !== 'usb'}
-                aria-label="Disable debug mode"
-                onClick={() => props.onWizard(Wizard.Disable)}
-              >
-                Disable
-              </button>
-            </Show>
+          <div class="wb-pair wb-single">
+            <button
+              class="wb-btn"
+              disabled={
+                !available() || props.camera.transport !== 'usb' || props.camera.debugMode === 'off'
+              }
+              onClick={() => props.onWizard(Wizard.Disable)}
+            >
+              Disable debug mode
+            </button>
           </div>
         </div>
-      </section>
-
-      <section class="wb-section" aria-labelledby="wb-export">
-        <h3 id="wb-export" class="wb-label">
-          Export
-        </h3>
-        <button class="wb-btn" disabled={!hasReadings()} onClick={download}>
-          Download diagnostic bundle
-        </button>
       </section>
 
       <Show when={status()}>

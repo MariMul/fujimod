@@ -5,7 +5,8 @@
 //! board thread and services guest callbacks there through synchronous RPC.
 #![cfg(not(target_os = "emscripten"))]
 
-use super::{core, memory::SharedMemory};
+use super::core;
+use crate::memory::SharedMemory;
 use crate::Library;
 use fujimod_emulator_cpu::*;
 use std::any::Any;
@@ -23,7 +24,7 @@ mod durable;
 /// Inputs needed to construct one native R-profile processor on its owner
 /// thread.
 pub struct Config {
-    pub translation_cache_bytes: u32,
+    pub translation_cache_size_bytes: u32,
     pub options: core::Options,
     pub memory: SharedMemory,
 }
@@ -842,7 +843,7 @@ fn serve(
             return;
         }
     };
-    let engine = match library.open(Model::CortexR5F, config.translation_cache_bytes) {
+    let engine = match library.open(Model::CortexR5F, config.translation_cache_size_bytes) {
         Ok(engine) => engine,
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -2012,7 +2013,7 @@ mod tests {
 
     fn worker(memory: SharedMemory) -> CpuWorker {
         spawn(Config {
-            translation_cache_bytes: 1024 * 1024,
+            translation_cache_size_bytes: 1024 * 1024,
             options: core::Options::default(),
             memory,
         })
@@ -2859,6 +2860,85 @@ mod tests {
         .unwrap();
         assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x1111);
         assert_eq!(count.0.get(), 1);
+    }
+
+    #[test]
+    fn consuming_mmio_preserves_read_observers_and_reserves_the_owner_boundary() {
+        unsafe fn read(_: u64, _: u32, data: *mut std::ffi::c_void) -> u64 {
+            let calls = unsafe { &*data.cast::<Cell<u32>>() };
+            calls.set(calls.get() + 1);
+            0x44
+        }
+        unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
+        unsafe fn observe(
+            access: Access,
+            address: u64,
+            size: i32,
+            _: i64,
+            data: *mut std::ffi::c_void,
+        ) {
+            assert_eq!((access, address, size), (Access::Read, 0x8000, 4));
+            let calls = unsafe { &*data.cast::<Cell<u32>>() };
+            calls.set(calls.get() + 1);
+        }
+        let cpu = worker(SharedMemory::default());
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        write_words(&cpu, 0x1000, &[0xe5910000, 0xe5912000, 0xe320f003]);
+        cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        let consumed = Arc::new(AtomicU32::new(0));
+        let cursor = consumed.clone();
+        let fast = FastMmioRead::consuming_u32(
+            0,
+            Arc::new(move || {
+                cursor
+                    .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+                    .ok()
+                    .map(|_| 0x33)
+            }),
+        );
+        let mut owner_calls = Cell::new(0u32);
+        let mut observer_calls = Cell::new(0u32);
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8000,
+                4096,
+                Mmio {
+                    read,
+                    write,
+                    data: (&mut owner_calls as *mut Cell<u32>).cast(),
+                },
+                vec![fast],
+            )
+            .unwrap();
+            cpu.install_hook(Hook::Memory {
+                callback: observe,
+                data: (&mut observer_calls as *mut Cell<u32>).cast(),
+                read: true,
+                write: false,
+                range: HookRange::Inclusive {
+                    begin: 0x8000,
+                    end: 0x8003,
+                },
+            })
+            .unwrap();
+        }
+        assert!(cpu.read_memory(0x8000, &mut [0; 4]).is_err());
+        assert_eq!(consumed.load(Ordering::Acquire), 0);
+        cpu.run(Run {
+            begin: 0x1000,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(24),
+        })
+        .unwrap();
+        assert_eq!(read_u32(&cpu, arm::CORE[0]), 0x33);
+        assert_eq!(read_u32(&cpu, arm::CORE[2]), 0x44);
+        assert_eq!(owner_calls.get(), 1);
+        assert_eq!(observer_calls.get(), 2);
+        assert_eq!(consumed.load(Ordering::Acquire), 1);
     }
 
     #[test]

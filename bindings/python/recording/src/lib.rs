@@ -48,6 +48,9 @@ impl Frame {
     fn png<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(py, self.inner.png().map_err(error)?))
     }
+    fn pixels<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, self.inner.pixels())
+    }
     fn save(&self, path: PathBuf) -> PyResult<String> {
         self.inner.save(&path).map_err(error)
     }
@@ -129,7 +132,7 @@ struct Recorder {
 #[pymethods]
 impl Recorder {
     #[new]
-    #[pyo3(signature=(output,*,fps=15,video=false))]
+    #[pyo3(signature=(output,*,fps=30,video=false))]
     fn new(output: PathBuf, fps: u32, video: bool) -> PyResult<Self> {
         Ok(Self {
             inner: NativeRecorder::new(output, fps, video).map_err(error)?,
@@ -139,6 +142,26 @@ impl Recorder {
         self.inner
             .frame(frame.inner.clone(), seconds)
             .map_err(error)
+    }
+    #[pyo3(signature=(snapshot=None))]
+    fn card_panel(&mut self, snapshot: Option<&str>) -> PyResult<()> {
+        let panel = snapshot
+            .map(fujimod_recording::CardPanel::parse)
+            .transpose()
+            .map_err(error)?;
+        self.inner.card_panel(panel).map_err(error)
+    }
+    fn card_formatting(&mut self) -> PyResult<()> {
+        self.inner.card_formatting().map_err(error)
+    }
+    #[pyo3(signature=(frame=None,*,label="",width=0.6))]
+    fn display_panel(&mut self, frame: Option<&Frame>, label: &str, width: f32) -> PyResult<()> {
+        self.inner
+            .display_panel(frame.map(|frame| frame.inner.clone()), label.into(), width)
+            .map_err(error)
+    }
+    fn animate(&mut self, seconds: f64) -> PyResult<()> {
+        self.inner.animate(seconds).map_err(error)
     }
     fn input(&mut self, name: &str, pressed: bool, seconds: f64) -> PyResult<()> {
         self.inner.input(name, pressed, seconds).map_err(error)
@@ -184,6 +207,12 @@ impl Recorder {
     fn fps(&self) -> u32 {
         self.inner.fps
     }
+    /// How often LCD frames are sampled: at most 15 a second, whatever the
+    /// video frame rate.
+    #[getter]
+    fn sample_fps(&self) -> u32 {
+        self.inner.sample_fps()
+    }
     #[getter]
     fn video(&self) -> bool {
         self.inner.video
@@ -195,6 +224,11 @@ impl Recorder {
     #[getter]
     fn idle_limit(&self) -> f64 {
         self.inner.idle_limit
+    }
+    #[setter]
+    fn set_idle_limit(&mut self, value: f64) -> PyResult<()> {
+        self.inner.idle_limit = fujimod_recording::seconds(value).map_err(error)?;
+        Ok(())
     }
     #[getter]
     fn skipped_seconds(&self) -> f64 {

@@ -4,6 +4,7 @@
 //! DMA endpoints consume opaque bytes only when explicitly connected; this
 //! model does not create samples, transfer deadlines, or completion IRQs.
 pub mod construct;
+pub mod duplex;
 pub mod receive;
 pub mod transmit;
 use fujimod_emulator_parts_io::audio_sink::AudioSink;

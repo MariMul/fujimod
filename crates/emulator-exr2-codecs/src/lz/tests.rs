@@ -207,6 +207,26 @@ fn configure(d: &mut Decompressor, h: &mut Ram, stage: [u32; 6], kind: u8) {
     }
     put(d, h, 0x8c, 1).unwrap();
 }
+fn configure_soft_focus_first_crop(d: &mut Decompressor, h: &mut Ram) {
+    let values = [
+        0x1100, 0x10000, 0x5a0, 0x01e002d0, 0x100000, 0x5a0, 0x00f00170, 0x4c, 0x00191a1a,
+        0x24242526, 0x00400080, 0,
+    ];
+    for (offset, value) in ORDER.into_iter().zip(values) {
+        put(d, h, offset, value).unwrap();
+    }
+    put(d, h, 0x8c, 1).unwrap();
+}
+fn configure_soft_focus_weighted_crop(d: &mut Decompressor, h: &mut Ram) {
+    let values = [
+        0x1000, 0x10000, 0x5a0, 0x00f00170, 0x102e0, 0x5a0, 0x007800c0, 0x40, 0x00191a1a,
+        0x24242526, 0x00400080, 0,
+    ];
+    for (offset, value) in ORDER.into_iter().zip(values) {
+        put(d, h, offset, value).unwrap();
+    }
+    put(d, h, 0x8c, 1).unwrap();
+}
 #[test]
 fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_completes_before_irq() {
     for (stage, kind) in PYRAMID
@@ -279,6 +299,77 @@ fn every_declared_resize_descriptor_latches_pixels_preserves_padding_and_complet
 }
 
 #[test]
+fn released_resize_can_disable_irq_before_reset_and_lz_start() {
+    let (mut d, mut h, mut c) = setup();
+    reset(&mut d, &mut h);
+    enabled(&mut c, &mut h, 1, true);
+    let source = 0x10000usize;
+    let stage = PYRAMID[0];
+    let source_len = stage[0] as usize * (stage[1] >> 16) as usize;
+    h.bytes[source..source + source_len].fill(0x5a);
+    configure(&mut d, &mut h, stage, 0);
+    put(&mut d, &mut h, 4, 1).unwrap();
+    let due = d.next_deadline(h.now).unwrap();
+    tick(&mut d, &mut h, due).unwrap();
+    put(&mut d, &mut h, 0x88, 1).unwrap();
+    put(&mut d, &mut h, 0x8c, u32::MAX).unwrap();
+
+    put(&mut d, &mut h, 0x8c, 0).unwrap();
+    assert_eq!(d.r(0x8c), 0);
+    let checkpoint = d.checkpoint().unwrap();
+    d.validate_checkpoint(&checkpoint).unwrap();
+
+    reset(&mut d, &mut h);
+    h.bytes[0x4000..0x4002].copy_from_slice(&[1, 42]);
+    lz(&mut d, &mut h, 0x4000, 0x8000, 2);
+    let due = d.next_deadline(h.now).unwrap();
+    tick(&mut d, &mut h, due).unwrap();
+    assert_eq!(h.bytes[0x8000], 42);
+}
+
+#[test]
+fn idle_configured_resize_accepts_a_new_ordered_configuration_without_completing_work() {
+    let (mut d, mut h, mut c) = setup();
+    reset(&mut d, &mut h);
+    enabled(&mut c, &mut h, 0, true);
+    configure(&mut d, &mut h, PYRAMID[0], 0);
+
+    let configured = d.save();
+    assert!(put(&mut d, &mut h, ORDER[0], u32::MAX).is_err());
+    assert_eq!(d.save(), configured);
+
+    configure(&mut d, &mut h, PYRAMID[1], 0);
+    let stage = PYRAMID[1];
+    assert_eq!(
+        ORDER.map(|offset| d.r(offset)),
+        [
+            0, 0x10000, stage[0], stage[1], 0x100000, stage[2], stage[3], 0x40, 0x2040, 0x4080,
+            stage[4], stage[5],
+        ]
+    );
+    let resize = d.state.resize.as_ref().unwrap();
+    assert_eq!(resize.owner, 0);
+    assert_eq!(resize.step, ORDER.len());
+    assert!(resize.phase == Phase::Configured);
+    assert!(resize.enabled);
+
+    d.options.resize = ResizeMode::AwaitResult;
+    put(&mut d, &mut h, 4, 1).unwrap();
+    assert!(d.state.resize.as_ref().unwrap().phase == Phase::Awaiting);
+    assert_eq!(d.next_deadline(h.now), None);
+    let awaiting_registers = d.state.regs.clone();
+    assert!(put(&mut d, &mut h, ORDER[0], 0).is_err());
+    assert_eq!(d.state.regs, awaiting_registers);
+    assert!(d.state.resize.as_ref().unwrap().phase == Phase::Awaiting);
+    assert_eq!(d.next_deadline(h.now), None);
+    tick(&mut d, &mut h, 1_000_000).unwrap();
+    assert!(d.state.resize.as_ref().unwrap().phase == Phase::Awaiting);
+    assert_eq!(d.r(0x88), 0);
+    assert!(h.irqs.is_empty());
+    assert_eq!(h.writes, 0);
+}
+
+#[test]
 fn scalar_half_fir_samples_pixels_and_replicated_edges_without_writing_pitch_padding() {
     // A declared numerical FIR law with explicitly bounded precision.
     let (mut d, mut h, mut c) = setup();
@@ -329,6 +420,107 @@ fn scalar_half_fir_samples_pixels_and_replicated_edges_without_writing_pitch_pad
     }
     assert_eq!(h.irqs, [(0, IRQ)]);
     assert_eq!(h.irq_writes, 240);
+}
+
+#[test]
+fn soft_focus_first_crop_uses_bounded_descriptor_and_empirical_luma_curve() {
+    // Physical Soft Focus samples 16→19, 21→24 and 240→255. The exact
+    // threshold operation is unknown; this explicit approximation matches
+    // those sample points after the declared FIR.
+    for (input, expected) in [(16u16, 19u16), (21, 24), (240, 255)] {
+        let (mut d, mut h, mut c) = setup();
+        reset(&mut d, &mut h);
+        enabled(&mut c, &mut h, 0, true);
+        for sample in h.bytes[0x10000..0x10000 + 1440 * 480].chunks_exact_mut(2) {
+            sample.copy_from_slice(&input.to_le_bytes());
+        }
+        configure_soft_focus_first_crop(&mut d, &mut h);
+        assert!(matches!(
+            d.raster_kind(),
+            Ok(RasterKind::ScalarThresholdedHalf)
+        ));
+        put(&mut d, &mut h, 4, 1).unwrap();
+        let due = d.next_deadline(h.now).unwrap();
+        assert_eq!(h.writes, 0);
+        tick(&mut d, &mut h, due).unwrap();
+        let pixel = |x: usize, y: usize| {
+            u16::from_le_bytes(
+                h.bytes[0x100000 + y * 1440 + x * 2..0x100000 + y * 1440 + x * 2 + 2]
+                    .try_into()
+                    .unwrap(),
+            )
+        };
+        assert_eq!(pixel(0, 0), expected);
+        assert_eq!(pixel(183, 120), expected);
+        assert_eq!(pixel(367, 239), expected);
+        for row in 0..240 {
+            assert!(
+                h.bytes[0x100000 + row * 1440 + 736..0x100000 + (row + 1) * 1440]
+                    .iter()
+                    .all(|byte| *byte == 0xcc)
+            );
+        }
+        assert_eq!(h.irqs, [(0, IRQ)]);
+    }
+}
+
+#[test]
+fn soft_focus_first_crop_refuses_unmeasured_descriptor_variants() {
+    let values = [
+        0x1100, 0x10000, 0x5a0, 0x01e002d0, 0x100000, 0x5a0, 0x00f00170, 0x4c, 0x00191a1a,
+        0x24242526, 0x00400080, 0,
+    ];
+    for (offset, value) in [
+        (8, 0x1000),
+        (0x30, 0x4d),
+        (0x34, 0x00191a1b),
+        (0x38, 0x24242527),
+        (0x3c, 0x00400088),
+        (0x18, 0x01e002d8),
+    ] {
+        let mut regs = vec![0; 36];
+        for (register, word) in ORDER.into_iter().zip(values) {
+            regs[register / 4] = word;
+        }
+        regs[offset / 4] = value;
+        assert!(
+            Decompressor::raster_kind_for(&regs).is_err(),
+            "{offset:#x}={value:#x}"
+        );
+    }
+}
+
+#[test]
+fn weighted_scalar_half_resizes_with_exact_kernel_inside_source_row_padding() {
+    let (mut d, mut h, mut c) = setup();
+    reset(&mut d, &mut h);
+    enabled(&mut c, &mut h, 0, true);
+    for row in 0..240 {
+        for sample in h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736].chunks_exact_mut(2)
+        {
+            sample.copy_from_slice(&100u16.to_le_bytes());
+        }
+    }
+    let before = h.bytes[0x10000..0x10000 + 1440 * 240].to_vec();
+    configure_soft_focus_weighted_crop(&mut d, &mut h);
+    assert!(matches!(
+        d.raster_kind(),
+        Ok(RasterKind::ScalarWeightedHalf)
+    ));
+    put(&mut d, &mut h, 4, 1).unwrap();
+    let due = d.next_deadline(h.now).unwrap();
+    tick(&mut d, &mut h, due).unwrap();
+    for row in 0..120 {
+        let destination = 0x102e0 + row * 1440;
+        assert!(
+            h.bytes[destination..destination + 384]
+                .chunks_exact(2)
+                .all(|sample| sample == 100u16.to_le_bytes())
+        );
+        let source = &h.bytes[0x10000 + row * 1440..0x10000 + row * 1440 + 736];
+        assert_eq!(source, &before[row * 1440..row * 1440 + 736]);
+    }
+    assert_eq!(h.irqs, [(0, IRQ)]);
 }
 
 #[test]

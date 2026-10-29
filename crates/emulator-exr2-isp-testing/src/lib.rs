@@ -1,6 +1,6 @@
 //! Test support for the EXR II ISP live-view models: a recording memory host and an
 //! allocation counter. Test-only: it installs a counting global allocator.
-use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_devices::{Cx, Device, Host, Record};
 
 // Measure successful device calls on this test thread; allocations made by

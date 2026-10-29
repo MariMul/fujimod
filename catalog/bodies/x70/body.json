@@ -118,7 +118,7 @@
         }
       ],
       "travel_limits": [
-        6,
+        0,
         78
       ]
     },
@@ -766,8 +766,8 @@
               "refs": {}
             },
             {
-              "name": "rawconversion",
-              "kind": "RawConversionRegisters",
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
               "boot_entries": [
                 "loader"
               ],
@@ -978,8 +978,16 @@
               "refs": {}
             },
             {
-              "name": "movieencoder",
-              "kind": "MovieEncoderControl",
+              "name": "imagetransfer",
+              "kind": "ImageTransferControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1023,7 +1031,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -1054,7 +1062,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1065,7 +1074,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -1096,7 +1105,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1284,6 +1294,11 @@
               ]
             },
             "basis": "Declared catalog input."
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
           }
         },
         "pin_interrupts": [
@@ -1678,8 +1693,8 @@
               "refs": {}
             },
             {
-              "name": "rawconversion",
-              "kind": "RawConversionRegisters",
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1890,8 +1905,16 @@
               "refs": {}
             },
             {
-              "name": "movieencoder",
-              "kind": "MovieEncoderControl",
+              "name": "imagetransfer",
+              "kind": "ImageTransferControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
               "boot_entries": [
                 "loader"
               ],
@@ -1935,7 +1958,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -1966,7 +1989,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -1977,7 +2001,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -2008,7 +2032,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -2321,12 +2346,13 @@
                 ]
               },
               "shutter_output": 0,
+              "mode_change_frames": 2,
               "rolling_references": [
                 {
                   "mode": 236,
                   "horizontal": 706,
                   "vertical": 9348,
-                  "lines": 856
+                  "lines": 857
                 },
                 {
                   "mode": 236,
@@ -2352,7 +2378,12 @@
                 "focal_length_mm": 18.5,
                 "subject_distance_mm": 2000.0,
                 "sensor_width_mm": 23.6,
-                "relative_illumination": "cosine-fourth"
+                "relative_illumination": {
+                  "radial-polynomial": {
+                    "r2": 0.651,
+                    "r4": 0.492
+                  }
+                }
               },
               "ticks_per_second": 12000000
             },
@@ -2551,7 +2582,14 @@
           "sensor",
           "secondary-register-endpoint",
           "control-bus-device-9"
-        ]
+        ],
+        "controllers": {
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
+          }
+        }
       },
       "x70-runtime": {
         "dram_basis": "Declared runtime memory map.",
@@ -4484,8 +4522,8 @@
               "refs": {}
             },
             {
-              "name": "rawconversion",
-              "kind": "RawConversionRegisters",
+              "name": "windowanalysis",
+              "kind": "WindowAnalysisControl",
               "boot_entries": [
                 "loader"
               ],
@@ -4696,8 +4734,16 @@
               "refs": {}
             },
             {
-              "name": "movieencoder",
-              "kind": "MovieEncoderControl",
+              "name": "imagetransfer",
+              "kind": "ImageTransferControl",
+              "boot_entries": [
+                "loader"
+              ],
+              "refs": {}
+            },
+            {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
               "boot_entries": [
                 "loader"
               ],
@@ -4741,7 +4787,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "powerdevices",
             "usbcontrol",
@@ -4772,7 +4818,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -4783,7 +4830,7 @@
             "nandcontroller",
             "fujidecompressor",
             "imagescaler",
-            "rawconversion",
+            "windowanalysis",
             "loadermemorydma",
             "usbcontrol",
             "powerdevices",
@@ -4814,7 +4861,8 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
-            "movieencoder",
+            "imagetransfer",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "imagecombination"
@@ -5127,12 +5175,13 @@
                 ]
               },
               "shutter_output": 0,
+              "mode_change_frames": 2,
               "rolling_references": [
                 {
                   "mode": 236,
                   "horizontal": 706,
                   "vertical": 9348,
-                  "lines": 856
+                  "lines": 857
                 },
                 {
                   "mode": 236,
@@ -5158,7 +5207,12 @@
                 "focal_length_mm": 18.5,
                 "subject_distance_mm": 2000.0,
                 "sensor_width_mm": 23.6,
-                "relative_illumination": "cosine-fourth"
+                "relative_illumination": {
+                  "radial-polynomial": {
+                    "r2": 0.651,
+                    "r4": 0.492
+                  }
+                }
               },
               "ticks_per_second": 12000000
             },
@@ -5522,6 +5576,11 @@
               "usb_connected": null
             },
             "basis": "Declared catalog input."
+          },
+          "window_analysis": {
+            "profile": "declared-y16-window-gradients-and-local-tracking-unmeasured",
+            "ticks_per_window": 1000,
+            "basis": "Declared window-analysis numerical law and clock."
           }
         },
         "control_bus_order": [

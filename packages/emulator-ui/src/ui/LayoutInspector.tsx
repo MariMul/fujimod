@@ -4,6 +4,7 @@ import type { ControlSession } from './controls';
 import { compatibleVariants } from './default-layout';
 import { downloadBlob } from './download';
 import { Icon } from './icons';
+import { shownError } from './shown-error';
 import type { ControlNode, NodePath } from './layout';
 import type { LayoutEditor } from './layout-editor';
 
@@ -128,7 +129,7 @@ function ControlSheet(props: { session: ControlSession; editor: LayoutEditor }) 
           <div class="sheet-title">Inputs</div>
           <div class="sheet-group">
             <Show
-              when={node().kind === 'dpad' || node().kind === 'command'}
+              when={node().kind === 'dpad' || node().kind === 'command' || node().kind === 'rocker'}
               fallback={
                 <InputPicker
                   label="Input"
@@ -217,7 +218,7 @@ export function LayoutInspector(props: { session?: ControlSession; editor: Layou
                   setUnknown(props.editor.importJson(await file.text()));
                   setError('');
                 } catch (failure) {
-                  setError(failure instanceof Error ? failure.message : String(failure));
+                  setError(shownError(failure));
                 }
               }}
             />

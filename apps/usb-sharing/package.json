@@ -4,15 +4,17 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node ../../scripts/cloudflare/wrangler.ts deploy",
     "check": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json && wrangler deploy --dry-run --outdir build/worker",
-    "test": "node --test *.test.ts"
+    "test": "node --test *.test.ts",
+    "test:media:browser": "node shared-files.browser.ts",
+    "generate": "node scripts/generate-camera-labels.ts"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261018.1",
+    "@cloudflare/workers-types": "^5.20261022.1",
     "@types/node": "^26.6.5",
     "miniflare": "5.20261012.1-beta",
     "typescript": "^7.0.2",
-    "wrangler": "4.151.1"
+    "wrangler": "4.152.0"
   }
 }

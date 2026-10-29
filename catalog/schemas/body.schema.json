@@ -21,6 +21,19 @@
       ],
       "type": "object"
     },
+    "AvcCodecOptions": {
+      "additionalProperties": false,
+      "description": "Compression backend selection; register and DMA behavior is shared.",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/VideoEncoderBackend"
+        }
+      },
+      "required": [
+        "backend"
+      ],
+      "type": "object"
+    },
     "BlockSignal": {
       "description": "Named control signals carried by SoC blocks.",
       "oneOf": [
@@ -531,6 +544,7 @@
               "type": "string"
             },
             "threshold": {
+              "default": null,
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
@@ -1704,24 +1718,43 @@
         },
         {
           "additionalProperties": false,
-          "description": "H.264 image compression and addressed bitstream DMA.",
+          "description": "H.264 compression, decoding and addressed DMA.",
           "properties": {
             "irq": {
               "$ref": "#/$defs/ConstructionCore",
               "description": "Bitstream completion interrupt."
             },
             "kind": {
-              "const": "video-encoder",
+              "const": "avc-codec",
               "type": "string"
             },
             "options": {
-              "$ref": "#/$defs/VideoEncoderOptions",
+              "$ref": "#/$defs/AvcCodecOptions",
               "description": "Compression implementation selected by the run configuration."
             }
           },
           "required": [
             "kind",
             "options",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Addressed image transfer registers.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "image-transfer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
             "irq"
           ],
           "type": "object"
@@ -3056,8 +3089,13 @@
           "type": "string"
         },
         {
-          "const": "MovieEncoderControl",
-          "description": "H.264 initialization and sequence-start controller.",
+          "const": "AvcCodecControl",
+          "description": "H.264 compression, decoding and addressed DMA controller.",
+          "type": "string"
+        },
+        {
+          "const": "ImageTransferControl",
+          "description": "Addressed image transfer controller.",
           "type": "string"
         },
         {
@@ -3391,6 +3429,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Body-specific serial wiring for this panel."
         }
       },
@@ -4736,8 +4775,8 @@
           "type": "string"
         },
         "relative_illumination": {
-          "description": "Declared relative illumination.",
-          "type": "string"
+          "$ref": "#/$defs/SensorIllumination",
+          "description": "Declared relative illumination."
         },
         "sensor_width_mm": {
           "description": "Declared sensor width mm.",
@@ -4763,6 +4802,13 @@
       "additionalProperties": false,
       "description": "Declared radiometry facts.",
       "properties": {
+        "mode_change_frames": {
+          "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "pixel_clock_hz": {
           "description": "Declared pixel clock hz.",
           "format": "uint64",
@@ -4811,6 +4857,7 @@
         "pixel_clock_hz",
         "projection",
         "rolling_references",
+        "mode_change_frames",
         "saturation_lux_seconds",
         "shutter",
         "shutter_output",
@@ -5399,6 +5446,7 @@
           "type": "string"
         },
         "encoder_connection_id": {
+          "default": null,
           "description": "Body connection wired to the optional rotary encoder.",
           "type": [
             "string",
@@ -5414,6 +5462,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Documented focus-axis response."
         },
         "home_connections": {
@@ -5432,6 +5481,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Documented aperture positions and their optical output."
         },
         "part_id": {
@@ -5732,6 +5782,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "description": "Body-specific serial control-bus endpoint, when documented."
         },
         "part_id": {
@@ -5744,6 +5795,50 @@
         "connection_id"
       ],
       "type": "object"
+    },
+    "SensorIllumination": {
+      "description": "Image-circle illumination model of a sensor projection.",
+      "oneOf": [
+        {
+          "const": "uniform",
+          "description": "No falloff across the image.",
+          "type": "string"
+        },
+        {
+          "const": "cosine-fourth",
+          "description": "Cosine-fourth falloff across the image.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Measured radial falloff, 1 / (1 + r2 rho^2 + r4 rho^4), with rho the\nimage-plane radius over the sensor half-diagonal.",
+          "properties": {
+            "radial-polynomial": {
+              "properties": {
+                "r2": {
+                  "description": "Coefficient of rho^2.",
+                  "format": "double",
+                  "type": "number"
+                },
+                "r4": {
+                  "description": "Coefficient of rho^4.",
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "r2",
+                "r4"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "radial-polynomial"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "SerialAttachment": {
       "additionalProperties": false,
@@ -5762,6 +5857,7 @@
           "type": "string"
         },
         "select_connection_id": {
+          "default": null,
           "description": "Connection selecting the endpoint, when declared.",
           "type": [
             "string",
@@ -5788,6 +5884,7 @@
           "type": "integer"
         },
         "clock_hz": {
+          "default": null,
           "description": "Serial clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
@@ -5832,19 +5929,6 @@
         "software"
       ],
       "type": "string"
-    },
-    "VideoEncoderOptions": {
-      "additionalProperties": false,
-      "description": "Compression backend selection; register and DMA behavior is shared.",
-      "properties": {
-        "backend": {
-          "$ref": "#/$defs/VideoEncoderBackend"
-        }
-      },
-      "required": [
-        "backend"
-      ],
-      "type": "object"
     },
     "WireSignal": {
       "description": "Named physical wire types.",
@@ -5921,6 +6005,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional removable-card slot and its body-specific contacts."
     },
     "connections": {
@@ -5946,6 +6031,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional display assembly and its physical characteristics."
     },
     "dram_bytes": {
@@ -5978,6 +6064,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional lens assembly and its physical characteristics."
     },
     "microcontroller": {
@@ -5989,6 +6076,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional MCU endpoint and its body-specific serial wiring."
     },
     "nand": {
@@ -6000,6 +6088,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional installed NAND geometry."
     },
     "parts": {
@@ -6018,6 +6107,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional power-controller endpoint and its body-specific wiring."
     },
     "ram_regions": {
@@ -6042,6 +6132,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Optional sensor assembly and its physical characteristics."
     },
     "soc_id": {

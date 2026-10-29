@@ -54,7 +54,6 @@ class CameraDevice implements ModelDevice {
   closed = vi.fn();
   freed = vi.fn();
   releases = vi.fn();
-  failRead = false;
   failClose = false;
   debugByte = 1;
   failDebugRead = false;
@@ -158,13 +157,19 @@ class CameraDevice implements ModelDevice {
       abandon: () => this.update({ fenced: true }),
       deviceInfo: async () => ({ text: 'Identity', raw: new Uint8Array(), free() {} }),
       configurationGeometry: async () => ({ capacity: 16, pageBytes: 4, free() {} }),
-      readMemory: async () => {
-        if (this.failRead) throw Error('read failed');
-        this.emit();
-        this.emit(0xd1);
-        return Uint8Array.of(1, 2, 3, 4);
-      },
-      readBulk: async () => ({ data: Uint8Array.of(1, 2, 3, 4), overwritten: null }),
+      backupFlash: async () => ({
+        device: { kind: 'serial-nand', part: 'Fixture' },
+        size: 4,
+        sha256: 'a'.repeat(64),
+      }),
+      dumpState: async () => {},
+      memory: async () => ({
+        read: async () => Uint8Array.of(1, 2, 3, 4),
+        write: async () => {},
+        overwritten: null,
+        close: async () => {},
+        free() {},
+      }),
       readConfiguration: async (...args) => {
         this.configurationReads(...args);
         if (this.failDebugRead) throw Error('configuration read failed');
@@ -182,6 +187,7 @@ class CameraDevice implements ModelDevice {
         output: new Uint8Array(),
         free() {},
       }),
+      prepareServiceSession: async () => ({ guardBefore: 0, debugBefore: 0, progress: [] }),
       armResetGuard: async () => {
         throw Error('unused');
       },
@@ -254,7 +260,7 @@ async function idle(model: ReturnType<typeof createUsbCameraModel>, count = 1) {
   });
 }
 
-test('multiple devices: start share → local read → stop share → local read', async () => {
+test('multiple devices: start share → local session → stop share → local session', async () => {
   const f = fixture();
   try {
     await idle(f.model);
@@ -265,15 +271,13 @@ test('multiple devices: start share → local read → stop share → local read
     await f.model.connectUsb();
     await idle(f.model, 2);
     await f.model.setSharing(d.id, true);
-    await f.model.withSession(d.id, 'memory', (s) => s.readMemory(0, 4));
+    await f.model.withSession(d.id, 'local operation', async () => {});
     await f.model.setSharing(d.id, false);
-    await f.model.withSession(d.id, 'memory', (s) => s.readMemory(0, 4));
+    await f.model.withSession(d.id, 'local operation', async () => {});
     expect(f.model.cameras()[0]).toMatchObject({ present: true, uncertain: false });
     expect(f.model.cameras()[0].sharing).toBeUndefined();
     expect(d.closed).not.toHaveBeenCalled();
-    await vi.waitFor(() =>
-      expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(2),
-    );
+    expect(f.model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(0);
   } finally {
     f.model.dispose();
   }
@@ -291,10 +295,10 @@ test('held and uncertain devices refuse before acquire; other cameras remain usa
       d.update(patch);
       await Promise.resolve();
       const calls = d.acquire.mock.calls.length;
-      await expect(f.model.withSession(d.id, 'read', (s) => s.readMemory(0, 1))).rejects.toThrow();
+      await expect(f.model.withSession(d.id, 'read', async () => {})).rejects.toThrow();
       expect(d.acquire).toHaveBeenCalledTimes(calls);
     }
-    await f.model.withSession('two', 'read', (s) => s.readMemory(0, 1));
+    await f.model.withSession('two', 'read', async () => {});
     let release!: () => void;
     const run = f.model.withSession(
       'two',
@@ -337,11 +341,12 @@ test('always closes and preserves primary operation failure', async () => {
   try {
     await idle(f.model);
     const d = f.devices[0];
-    d.failRead = true;
     d.failClose = true;
-    await expect(f.model.withSession(d.id, 'read', (s) => s.readMemory(0, 1))).rejects.toThrow(
-      'read failed',
-    );
+    await expect(
+      f.model.withSession(d.id, 'operation', async () => {
+        throw Error('operation failed');
+      }),
+    ).rejects.toThrow('operation failed');
     expect(d.releases).toHaveBeenCalledTimes(2);
   } finally {
     f.model.dispose();
@@ -435,7 +440,7 @@ test('remote model uses binding events and never calls USB-only sharing on remov
     await idle(f.model);
     expect(f.model.cameras()[0].transport).toBe('remote');
     await expect(f.model.setSharing(remote.id, true)).rejects.toThrow(/remote/);
-    await f.model.withSession(remote.id, 'read', (s) => s.readMemory(0, 1));
+    await f.model.withSession(remote.id, 'read', async () => {});
     await f.model.remove(remote.id);
     expect(f.model.cameras()).toHaveLength(0);
     expect(remote.closed).toHaveBeenCalledOnce();
@@ -444,7 +449,7 @@ test('remote model uses binding events and never calls USB-only sharing on remov
     f.model.dispose();
   }
 });
-test('production WebUSB owner keeps one open/claim through sharing and reads', async () => {
+test('production WebUSB owner keeps one open/claim through sharing and sessions', async () => {
   const wire = installWebUsb();
   wire.state.interfaceDelay = 20;
   wire.iface.alternates[0].endpoints = [
@@ -491,11 +496,11 @@ test('production WebUSB owner keeps one open/claim through sharing and reads', a
     const id = model.cameras()[0].id;
     model.clearLog();
     await model.setSharing(id, true);
-    await model.withSession(id, 'memory', (s) => s.readMemory(0x1000, 4));
+    await model.withSession(id, 'memory', async () => {});
     await model.setSharing(id, false);
-    await model.withSession(id, 'memory', (s) => s.readMemory(0x1000, 4));
+    await model.withSession(id, 'memory', async () => {});
     await vi.waitFor(() =>
-      expect(model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(6),
+      expect(model.log().filter((row) => row.layer === Layer.Ff80)).toHaveLength(4),
     );
     expect(wire.log.filter(([kind]) => kind === 'open')).toHaveLength(1);
     expect(wire.log.filter(([kind]) => kind === 'claim')).toHaveLength(1);
@@ -778,7 +783,7 @@ test('debug changes refresh only after close and latch service mode for the curr
     expect(device.configurationReads.mock.invocationCallOrder[2]).toBeGreaterThan(
       device.releases.mock.invocationCallOrder[3],
     );
-    await f.model.withSession(device.id, 'Read memory', (session) => session.readMemory(0, 1));
+    await f.model.withSession(device.id, 'operation', async () => {});
     expect(device.configurationReads).toHaveBeenCalledTimes(3);
     device.update({ present: false });
     await vi.waitFor(() => expect(f.model.cameras()[0].present).toBe(false));
@@ -1043,17 +1048,11 @@ test('saved simulations use the same session, log, sharing and removal paths wit
       present: true,
       identity: { product: 'Identity' },
     });
-    await f.model.withSession(device.id, 'Read simulated memory', (session) =>
-      session.readMemory(0x100, 1),
-    );
+    await f.model.withSession(device.id, 'Read simulated memory', async () => {});
     await f.model.setSharing(device.id, true);
-    await f.model.withSession(device.id, 'Read while sharing', (session) =>
-      session.readMemory(0x100, 1),
-    );
+    await f.model.withSession(device.id, 'Read while sharing', async () => {});
     await f.model.setSharing(device.id, false);
-    await f.model.withSession(device.id, 'Read after sharing', (session) =>
-      session.readMemory(0x100, 1),
-    );
+    await f.model.withSession(device.id, 'Read after sharing', async () => {});
     await f.model.remove(device.id);
     expect(device.closed).toHaveBeenCalledOnce();
     expect(dispose).toHaveBeenCalledOnce();
@@ -1069,5 +1068,100 @@ test('builds without a simulation service omit connectSimulated', () => {
     expect(typeof f.model.connectSimulated).toBe('undefined');
   } finally {
     f.model.dispose();
+  }
+});
+
+test('service preparation, flash chunks and state regions use the owned workflow methods', async () => {
+  vi.stubGlobal('document', { baseURI: 'https://example.com/' });
+  const device = new CameraDevice('workflows');
+  const acquire = device.acquireSession.bind(device);
+  const prepare = vi.fn<ModelSession['prepareServiceSession']>(async () => ({
+    guardBefore: 0,
+    debugBefore: 1,
+    progress: ['prepared'],
+  }));
+  const backup = vi.fn<ModelSession['backupFlash']>(
+    async (_id, _metadata, _image, sink, progress) => {
+      sink({ offset: 4, data: Uint8Array.of(5, 6) });
+      progress?.(2, 2);
+      return { device: { kind: 'serial-nand', part: 'Fixture' }, size: 2, sha256: 'b'.repeat(64) };
+    },
+  );
+  const dump = vi.fn<ModelSession['dumpState']>(async (_id, sink, progress) => {
+    sink({
+      name: 'dram',
+      address: 4096,
+      size: 2,
+      constant: false,
+      sha256: 'c'.repeat(64),
+      data: Uint8Array.of(7, 8),
+    });
+    progress?.(2, 2);
+  });
+  vi.spyOn(device, 'acquireSession').mockImplementation(async (...args) => ({
+    ...(await acquire(...args)),
+    prepareServiceSession: prepare,
+    backupFlash: backup,
+    dumpState: dump,
+  }));
+  const firmware = {
+    id: 'sample-1',
+    body: 'sample',
+    model: 'Sample',
+    version: '1',
+    sha256: 'a'.repeat(64),
+    bytes: 4,
+    download_url: 'https://example.com/update.dat',
+    release_date: '',
+    service_workflow: 'runtime/sample-1/service-workflow.generated.json',
+    flash_reader: 'runtime/sample-1/flash-reader.json',
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: URL | string) => {
+      const path = String(input);
+      if (path.endsWith('service-workflow.generated.json')) return new Response('{"setup":{}}');
+      if (path.endsWith('flash-reader.json'))
+        return Response.json({ payload: { schema: 1 }, image: 'flash-reader.bin' });
+      if (path.endsWith('flash-reader.bin')) return new Response(Uint8Array.of(1, 2, 3));
+      return Response.json({ schema: 1, firmwares: [firmware] });
+    }),
+  );
+  const f = fixture([device]);
+  try {
+    await idle(f.model);
+    const chunk = vi.fn(),
+      region = vi.fn(),
+      byteProgress = vi.fn();
+    await f.model.withSession(device.id, 'workflows', async (session) => {
+      expect(await session.prepareServiceSession('sample-1')).toEqual({
+        guardBefore: 0,
+        debugBefore: 1,
+        progress: ['prepared'],
+      });
+      expect((await session.backupFlash('sample-1', chunk, byteProgress)).sha256).toBe(
+        'b'.repeat(64),
+      );
+      await session.dumpState('sample-1', region, byteProgress);
+    });
+    expect(f.model.cameras()[0]).toMatchObject({ serviceMode: true, debugMode: 'on' });
+    expect(prepare).toHaveBeenCalledExactlyOnceWith('{"setup":{}}', 'sample-1', 'a'.repeat(64));
+    expect(backup).toHaveBeenCalledWith(
+      'sample-1',
+      '{"schema":1}',
+      Uint8Array.of(1, 2, 3),
+      chunk,
+      byteProgress,
+    );
+    expect(dump).toHaveBeenCalledExactlyOnceWith('sample-1', region, byteProgress);
+    expect(byteProgress).toHaveBeenCalledTimes(2);
+    expect(byteProgress).toHaveBeenCalledWith(2, 2);
+    expect(chunk).toHaveBeenCalledExactlyOnceWith({ offset: 4, data: Uint8Array.of(5, 6) });
+    expect(region).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'dram', data: Uint8Array.of(7, 8) }),
+    );
+  } finally {
+    f.model.dispose();
+    vi.unstubAllGlobals();
   }
 });

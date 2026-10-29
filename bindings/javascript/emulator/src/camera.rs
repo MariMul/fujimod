@@ -5,7 +5,7 @@ use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };
-use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters, Resources};
+use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
@@ -54,12 +54,11 @@ struct Graph {
     execution: factory::Graph,
     devices: Plan,
     #[serde(default)]
-    scene: fujimod_emulator::session::preparation::Spec,
+    scene: fujimod_emulator_preparation::Spec,
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
     firmware: Firmware,
     quantum: usize,
-    translation_cache_bytes: u32,
     #[serde(default)]
     coprocessors: Vec<Coprocessor>,
     #[serde(default)]
@@ -69,7 +68,7 @@ struct Graph {
     card: Option<Card>,
     scene_input: Option<Scene>,
     controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
-    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    contact_driver: Option<fujimod_emulator_session::contact_driver::Spec>,
     preview: Option<Preview>,
 }
 #[derive(Deserialize)]
@@ -151,11 +150,11 @@ pub(super) struct Preview {
     pub node: String,
     pub tick_hz: u64,
     pub period_ticks: u64,
-    pub cadence: fujimod_emulator_imaging::scene::StatisticsCadence,
+    pub cadence: fujimod_emulator_devices::capability::StatisticsCadence,
 }
 pub(super) struct Metadata {
     pub card: Option<Card>,
-    pub storage: fujimod_emulator::session::durable::Spec,
+    pub storage: fujimod_emulator_session::durable::Spec,
     pub identity: [u8; 32],
     pub scene: Option<Scene>,
     pub scanout: Option<String>,
@@ -175,12 +174,12 @@ struct BrowserFields {
     card: Option<Card>,
     scene_input: Option<Scene>,
     controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
-    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
+    contact_driver: Option<fujimod_emulator_session::contact_driver::Spec>,
     preview: Option<Preview>,
 }
 
 /// A prepared run and its browser fields, `{schema, prepared, browser}`.
-/// `prepared` is `fujimod_emulator::boot::Prepared::to_json` output.
+/// `prepared` is `fujimod_emulator_boot::Prepared::to_json` output.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PreparedConfig {
@@ -234,8 +233,8 @@ struct Attachments {
     scene: Option<Scene>,
     preview: Option<Preview>,
     controls: Option<fujimod_emulator_devices::parts::switch_panel::Spec>,
-    contact_driver: Option<fujimod_emulator::session::contact_driver::Spec>,
-    storage: fujimod_emulator::session::durable::Spec,
+    contact_driver: Option<fujimod_emulator_session::contact_driver::Spec>,
+    storage: fujimod_emulator_session::durable::Spec,
     identity: [u8; 32],
     scanout: Option<String>,
     initial_positions: BTreeMap<String, String>,
@@ -274,7 +273,7 @@ fn device_roles(plan: &Plan) -> Result<(Option<String>, Vec<String>), String> {
 fn camera_identity(
     firmware_id: &str,
     firmware_sha256: &str,
-    storage: &fujimod_emulator::session::durable::Spec,
+    storage: &fujimod_emulator_session::durable::Spec,
 ) -> Result<[u8; 32], String> {
     Ok(Sha256::digest(
         serde_json::to_vec(&serde_json::json!({
@@ -333,10 +332,12 @@ impl Session {
             &serde_json::to_vec(&config.prepared["devices"]).map_err(|e| e.to_string())?,
         )?;
         let (scanout, nands) = device_roles(&plan)?;
-        let prepared = fujimod_emulator::boot::Prepared::from_json(&config.prepared)?;
-        let mut core = fujimod_emulator::boot::open_prepared(
+        fujimod_emulator_exr2_board::register_board_builder();
+        fujimod_emulator_models::register();
+        let prepared = fujimod_emulator_boot::Prepared::from_json(&config.prepared)?;
+        let mut core = fujimod_emulator_boot::open_prepared(
             prepared,
-            fujimod_emulator::boot::InputBytes {
+            fujimod_emulator_boot::InputBytes {
                 update,
                 boot_rom,
                 nand,
@@ -348,7 +349,7 @@ impl Session {
         )?;
         core.board.set_execution_policy(policy)?;
         let browser = config.browser;
-        let storage = fujimod_emulator::session::durable::Spec {
+        let storage = fujimod_emulator_session::durable::Spec {
             cards: browser
                 .card
                 .as_ref()
@@ -400,7 +401,7 @@ impl Session {
         }
         if let Some(clock) = c.clock_seconds2000 {
             let mut devices = definition["devices"].clone();
-            fujimod_emulator::boot::apply_clock(&mut devices, clock)?;
+            fujimod_emulator_boot::apply_clock(&mut devices, clock)?;
             g.devices = Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?;
             definition["devices"] = devices;
         }
@@ -430,14 +431,15 @@ impl Session {
                 .collect::<Vec<_>>(),
         )?;
         let (scanout, nands) = device_roles(&g.devices)?;
-        let mut resources = Resources::default();
         let assets = g
             .assets
             .into_iter()
             .map(|(name, a)| Ok((name, a.build(dat)?)))
             .collect::<Result<_, String>>()?;
-        resources.inputs = g.scene.build(&assets)?;
-        let storage = fujimod_emulator::session::durable::Spec {
+        fujimod_emulator_exr2_board::register_board_builder();
+        fujimod_emulator_models::register();
+        let resources = g.scene.build(&assets)?;
+        let storage = fujimod_emulator_session::durable::Spec {
             cards: g
                 .card
                 .as_ref()
@@ -446,15 +448,10 @@ impl Session {
             nands,
         };
         let identity = camera_identity(&g.firmware_id, &g.firmware.sha256, &storage)?;
-        fujimod_emulator_exr2_board::register_board_builder();
-        fujimod_emulator_models::register();
         let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, built.graph)?;
         let mut board = g.execution.build(
-            factory::Options {
-                engine: factory::Engine::Unicorn,
-                translation_cache_bytes: g.translation_cache_bytes,
-            },
+            factory::Options::new(factory::Engine::Unicorn),
             bus,
             None,
         )?;
@@ -473,7 +470,7 @@ impl Session {
             };
             cpu.coprocessor(c.register, Some(value | c.set_bits))?;
         }
-        let core = fujimod_emulator::session::Session {
+        let core = fujimod_emulator_session::Session {
             definition,
             controls: None,
             contact_driver: None,
@@ -507,7 +504,7 @@ impl Session {
 
     /// Apply the browser attachments to a booted core and start its checkpoint.
     fn start_camera(
-        mut core: fujimod_emulator::session::Session,
+        mut core: fujimod_emulator_session::Session,
         a: Attachments,
     ) -> Result<Self, String> {
         core.board.watch_pcs(&a.watch_pcs)?;
@@ -538,11 +535,12 @@ impl Session {
                         .into(),
                 );
             }
-            if !core.resources.inputs.images.contains_key(&scene.images)
+            let images = core.resources.images()?;
+            if !images.has_image(&scene.images)
                 || scene
                     .sensor
                     .as_ref()
-                    .is_some_and(|s| !core.resources.inputs.sensors.contains_key(s))
+                    .is_some_and(|s| !images.has_sensor(s))
             {
                 return Err("session scene input is not in the declared graph".into());
             }

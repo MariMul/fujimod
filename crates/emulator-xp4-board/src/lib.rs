@@ -1,6 +1,7 @@
 //! ARM application-profile cluster alongside the shared R-profile runtime.
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
+pub mod memory;
 mod client;
 mod definition;
 pub use definition::Definition;
@@ -26,7 +27,6 @@ use std::{
 };
 
 const FPEXC: Register = Register::Arm32(arm::Register::Fpexc);
-const TRANSLATION_CACHE_BYTES: u32 = 32 * 1024 * 1024;
 
 enum ExceptionEntry {
     Undefined,
@@ -86,6 +86,7 @@ struct Cluster {
     // Destroy processors before their RAM backing and callback contexts.
     cpus: Vec<Box<dyn Cpu>>,
     ram: Backing,
+    memory: Vec<memory::Window>,
     hooks: Vec<Box<Hook>>,
     labels: Vec<u32>,
     cbar: Option<u32>,
@@ -914,6 +915,8 @@ impl Session {
             ram_size,
             cores,
             discovery,
+            memory_regions,
+            initial_registers,
             labels,
             cbar,
             timer_base,
@@ -925,8 +928,29 @@ impl Session {
             control_requests,
             storage_geometry,
             storage_irq,
-            xppro_storage,
-            xppro_serial,
+            xpp_storage,
+            xpp_serial,
+            xpp_sub_cpu,
+            xpp_battery_gauge,
+            xpp_lens,
+            xpp_shutter,
+            xpp_display_frames,
+            xpp_adc,
+            xpp_display_outputs,
+            xpp_imaging_control,
+            xpp_reset_gates,
+            xpp_sd,
+            xpp_i2c,
+            xpp_dram,
+            dram_alias,
+            xpp_power,
+            xpp_usb,
+            xpp_frame_sync,
+            xpp_hdmi,
+            xpp_statistics,
+            xpp_face,
+            xpp_register_blocks,
+            xpp_clocks,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -934,6 +958,7 @@ impl Session {
             dmp,
             adc,
             gpio,
+            gpio_base,
             temperature,
             power_spi,
             checksum_power_spi,
@@ -988,17 +1013,48 @@ impl Session {
         {
             return Err("Invalid ARMv7-A peripheral reset inputs".to_owned());
         }
+        let ram = Backing::zeros(ram_size);
+        let memory = memory::allocate(memory_regions, ram_size)?;
+        if let Some(base) = dram_alias {
+            let end = base.checked_add(ram_size as u64);
+            if base % 4096 != 0
+                || base < ram_size as u64
+                || !end.is_some_and(|end| end <= 1 << 32)
+                || memory.iter().any(|window| {
+                    base < window.base + window.data.len() as u64 && window.base < end.unwrap()
+                })
+            {
+                return Err("Invalid or overlapping ARM32 DRAM alias".into());
+            }
+        }
+        if !initial_registers.is_empty() && initial_registers.len() != cores {
+            return Err("Initial ARM32 register sets must name every processor".into());
+        }
+        let translation_cache_size_bytes =
+            fujimod_emulator::board::factory::translation_cache_size_bytes(cores)?;
         let library = Library::linked()?;
         let cpus = (0..cores)
             .map(|_| {
                 library
-                    .open(cpu::Model::CortexA7, TRANSLATION_CACHE_BYTES)
+                    .open(cpu::Model::CortexA7, translation_cache_size_bytes)
                     .map(|cpu| Box::new(cpu) as Box<dyn Cpu>)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
-        if storage_jedec.is_some() && xppro_storage.is_some() {
+        let has_xpp_storage = xpp_storage.is_some();
+        let lens_link = match &xpp_lens {
+            Some(lens) if xpp_storage.is_some() && xpp_reset_gates.is_some() => {
+                Some(fujimod_emulator_xpp::lens::LensLink::new(lens.port)?)
+            }
+            Some(_) => {
+                return Err(
+                    "The X-Processor Pro lens needs its storage PL330 and reset gates".into(),
+                );
+            }
+            None => None,
+        };
+        if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
         let mut devices = if let Some(jedec) = storage_jedec {
@@ -1011,7 +1067,7 @@ impl Session {
                 storage_irq
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
             )?)
-        } else if let Some(storage) = xppro_storage {
+        } else if let Some(storage) = xpp_storage {
             if !storage_dma_routes.is_empty() || storage_geometry.is_some() || storage_irq.is_some()
             {
                 return Err("XP4 storage routes require the XP4 controller".to_owned());
@@ -1019,7 +1075,14 @@ impl Session {
             let image = storage_image
                 .ok_or_else(|| "X-Processor Pro flash requires explicit contents".to_owned())?;
             let mut devices = devices::Devices::empty();
-            devices.xppro_storage(storage, image)?;
+            let windows = lens_link
+                .iter()
+                .map(|link| {
+                    std::sync::Arc::new(link.clone())
+                        as std::sync::Arc<dyn fujimod_emulator_ip_arm::pl330::Source>
+                })
+                .collect();
+            devices.xpp_storage(storage, image, windows)?;
             Some(devices)
         } else {
             if !storage_dma_routes.is_empty()
@@ -1033,10 +1096,164 @@ impl Session {
             }
             None
         };
-        for base in xppro_serial {
+        let mut sub_cpu_clock = None;
+        let mut sub_cpu = match xpp_sub_cpu {
+            Some(peer) => {
+                if !xpp_serial.contains(&peer.port) {
+                    return Err("X-Processor Pro sub-CPU needs a declared serial port".to_owned());
+                }
+                let mut registers = vec![0; fujimod_emulator_xpp::serial::PEER_REGISTERS];
+                for (register, value) in peer.registers {
+                    let slot = registers
+                        .get_mut(usize::from(register))
+                        .ok_or("X-Processor Pro sub-CPU register out of range")?;
+                    *slot = value;
+                }
+                sub_cpu_clock = peer.clock;
+                Some((peer.port, registers))
+            }
+            None => None,
+        };
+        let mut battery_gauge = match xpp_battery_gauge {
+            Some(peer) if xpp_serial.contains(&peer.port) => {
+                Some((peer.port, peer.registers.into_iter().collect()))
+            }
+            Some(_) => {
+                return Err("X-Processor Pro battery gauge needs a declared serial port".to_owned());
+            }
+            None => None,
+        };
+        if let Some(adc) = xpp_adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xppro_serial(base)?;
+                .xpp_adc(adc.base, &adc.samples, adc.conversion_ticks)?;
+        }
+        if let Some((base, lock_ticks, running)) = xpp_clocks {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_clocks(base, lock_ticks, running)?;
+        }
+        if let Some(base) = xpp_imaging_control {
+            let hole = xpp_frame_sync.as_ref().map(|sync| sync.interrupts);
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_imaging_control(base, hole)?;
+        }
+        if let Some(sync) = xpp_frame_sync {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_frame_sync(sync)?;
+        }
+        let mut external_lines = None;
+        let reset_gates = match xpp_reset_gates {
+            Some(base) => Some(
+                devices
+                    .get_or_insert_with(devices::Devices::empty)
+                    .xpp_reset_gates(base)
+                    .map(|(resets, lines)| {
+                        external_lines = Some(lines);
+                        resets
+                    })?,
+            ),
+            None => None,
+        };
+        if let Some(sd) = xpp_sd {
+            let reset = match (sd.reset_channel, &reset_gates) {
+                (Some(channel), Some(lines)) => Some(
+                    lines
+                        .get(channel)
+                        .cloned()
+                        .ok_or("Invalid X-Processor Pro SD reset channel")?,
+                ),
+                (Some(_), None) => {
+                    return Err("X-Processor Pro SD reset line without reset gates".into());
+                }
+                (None, _) => None,
+            };
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_sd(sd, reset)?;
+        }
+        for block in xpp_register_blocks {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_register_block(block)?;
+        }
+        if let Some((base, irq, period)) = xpp_statistics {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_statistics(base, irq, period)?;
+        }
+        if let Some((base, irq, run_ticks)) = xpp_face {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_face(base, irq, run_ticks)?;
+        }
+        if let Some(base) = xpp_hdmi {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_hdmi(base)?;
+        }
+        if let Some((base, irq, command_ticks, transaction_ticks, speed)) = xpp_usb {
+            devices.get_or_insert_with(devices::Devices::empty).usb(
+                fujimod_emulator_ip::usb::dwc3::Config {
+                    base,
+                    irq,
+                    command_ticks,
+                    transaction_ticks,
+                    speed,
+                },
+            )?;
+        }
+        if let Some(base) = xpp_power {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_power(base)?;
+        }
+        if let Some((base, level)) = xpp_dram {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_dram(base, level)?;
+        }
+        for bus in xpp_i2c {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_i2c(bus)?;
+        }
+        for output in &xpp_display_outputs {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_output(output)?;
+        }
+        if let Some(frames) = xpp_display_frames {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_frames(frames.irqs, frames.period_ticks)?;
+        }
+        for base in xpp_serial {
+            if xpp_lens.as_ref().is_some_and(|lens| lens.port == base) {
+                continue;
+            }
+            use fujimod_emulator_xpp::serial::Peer;
+            let peer = match (&sub_cpu, &battery_gauge) {
+                (Some((port, _)), _) if *port == base => {
+                    Peer::Registers(sub_cpu.take().map(|(_, r)| r).unwrap_or_default())
+                }
+                (_, Some((port, _))) if *port == base => {
+                    Peer::Frames(battery_gauge.take().map(|(_, r)| r).unwrap_or_default())
+                }
+                _ => Peer::None,
+            };
+            let clock = match peer {
+                Peer::Registers(_) => sub_cpu_clock.take(),
+                _ => None,
+            };
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_serial(base, peer, clock)?;
+        }
+        if battery_gauge.is_some() {
+            return Err("X-Processor Pro battery gauge shares its serial port".to_owned());
         }
         if let Some((inputs, sample_ticks)) = adc {
             devices
@@ -1070,7 +1287,17 @@ impl Session {
         if let Some(inputs) = gpio {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .gpio(inputs)?;
+                .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
+        }
+        if let (Some(lens), Some(link), Some(lines)) = (xpp_lens, &lens_link, external_lines) {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_lens(lens, link, lines)?;
+        }
+        if let Some(shutter) = xpp_shutter {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_shutter(shutter)?;
         }
         if let Some((value, ticks)) = temperature {
             devices
@@ -1168,7 +1395,10 @@ impl Session {
                 .io_groups(base);
         }
         if let Some((base, irq)) = decompressor {
-            if base != 0xfff79000 || !(32..512).contains(&irq) {
+            // The same engine sits at 0xfff79000 on XP4 and at 0xfff80000 on
+            // the X-Processor Pro, whose storage is the flash-controller map.
+            let expected = if has_xpp_storage { 0xfff80000 } else { 0xfff79000 };
+            if base != expected || !(32..512).contains(&irq) {
                 return Err("Invalid XP4 decompressor wiring".to_owned());
             }
             devices
@@ -1180,7 +1410,8 @@ impl Session {
             .transpose()?;
         let mut inner = Box::new(Cluster {
             cpus,
-            ram: Backing::zeros(ram_size),
+            ram,
+            memory,
             hooks: Vec::new(),
             labels,
             cbar,
@@ -1229,6 +1460,27 @@ impl Session {
                     NonNull::new(inner.ram.as_ptr()).unwrap(),
                 )
             }?;
+            if let Some(base) = dram_alias {
+                unsafe {
+                    inner.cpus[core].map_physical(
+                        base,
+                        0,
+                        ram_size,
+                        1,
+                        NonNull::new(inner.ram.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
+            for window in &inner.memory {
+                unsafe {
+                    inner.cpus[core].map_backing(
+                        window.base,
+                        window.data.len(),
+                        window.permissions,
+                        NonNull::new(window.data.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
             inner.hooks.push(Box::new(Hook {
                 cluster: &*inner,
                 core,
@@ -1262,6 +1514,13 @@ impl Session {
                 unsafe { inner.cpus[core].install_hook(hook) }?;
             }
             inner.write_reg(core, arm::CPSR, 0xd3)?;
+            if let Some(registers) = initial_registers.get(core) {
+                for &(register, value) in registers {
+                    let value =
+                        u32::try_from(value).map_err(|_| "ARM32 reset register overflows")?;
+                    inner.cpus[core].write_register(register, &value.to_le_bytes())?;
+                }
+            }
         }
         if let Some(base) = cbar {
             inner.map_page(u64::from(base) + 0x1000)?;
@@ -1483,19 +1742,14 @@ impl Session {
         self.inner.cp(core, crn, crm, opc1, opc2)
     }
     pub fn validate_read(&self, address: usize, size: usize) -> Result<(), String> {
-        if address
-            .checked_add(size)
-            .is_none_or(|end| end > self.inner.ram.len())
-        {
-            return Err("Host read outside physical RAM".into());
-        }
+        self.inner.memory_pointer(address as u64, size, 1)?;
         Ok(())
     }
     pub fn read(&self, address: usize, out: &mut [u8]) -> Result<(), String> {
         self.validate_read(address, out.len())?;
         unsafe {
             std::ptr::copy_nonoverlapping(
-                self.inner.ram.as_ptr().add(address),
+                self.inner.memory_pointer(address as u64, out.len(), 1)?,
                 out.as_mut_ptr(),
                 out.len(),
             );
@@ -1503,16 +1757,11 @@ impl Session {
         Ok(())
     }
     pub fn write(&self, address: usize, data: &[u8]) -> Result<(), String> {
-        if address
-            .checked_add(data.len())
-            .is_none_or(|end| end > self.inner.ram.len())
-        {
-            return Err("Host write outside physical RAM".to_owned());
-        }
+        let target = self.inner.memory_pointer(address as u64, data.len(), 0)?;
         unsafe {
             std::ptr::copy_nonoverlapping(
                 data.as_ptr(),
-                self.inner.ram.as_ptr().add(address),
+                target,
                 data.len(),
             );
         }
@@ -1530,11 +1779,8 @@ impl Session {
             let va = address + bytes.len() as u32;
             let chunk = (size - bytes.len()).min(4096 - (va as usize & 4095));
             let pa = self.inner.cpus[core].translate(u64::from(va), Access::Read)?;
-            if pa + chunk as u64 > self.inner.ram.len() as u64 {
-                return Err("Passive virtual read outside RAM".to_owned());
-            }
             bytes.extend_from_slice(unsafe {
-                std::slice::from_raw_parts(self.inner.ram.as_ptr().add(pa as usize), chunk)
+                std::slice::from_raw_parts(self.inner.memory_pointer(pa, chunk, 1)?, chunk)
             });
         }
         Ok(bytes)

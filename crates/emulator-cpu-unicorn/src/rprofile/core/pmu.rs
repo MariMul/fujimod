@@ -33,7 +33,7 @@ impl Counter {
             Err("unmodeled R-profile PMU selector".into())
         }
     }
-    fn count(self, now: u64) -> u64 {
+    pub(super) fn count(self, now: u64) -> u64 {
         if self.control & 1 != 0 && self.enabled & 0x80000000 != 0 {
             now.wrapping_sub(self.start)
         } else {
@@ -50,7 +50,13 @@ impl Counter {
         }
         self.observed = count;
     }
-    fn access(&mut self, crm: u32, opc2: u32, value: Option<u32>, now: u64) -> Result<u32, String> {
+    pub(super) fn access(
+        &mut self,
+        crm: u32,
+        opc2: u32,
+        value: Option<u32>,
+        now: u64,
+    ) -> Result<u32, String> {
         Self::check(crm, opc2)?;
         self.observe(now);
         let count = self.count(now);

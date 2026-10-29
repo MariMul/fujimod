@@ -96,6 +96,14 @@
               255
             ],
             "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 488,
+            "bytes": [
+              1,
+              33
+            ],
+            "basis": "Stock profile_prepare_storage stamps the update version into main +0x1e8/+0x1e9."
           }
         ]
       },
@@ -114,14 +122,967 @@
           {
             "offset": 2,
             "bytes": [
-              255,
-              255
+              0,
+              0
             ],
-            "basis": "Custom record marker after the sequence word."
+            "basis": "Stock custom-record header bytes; the main-record marker is not used here."
           }
         ]
       }
-    }
+    },
+    "derived_fields": [
+      {
+        "store": "main",
+        "offset": 10,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Six-byte timer slots occupy eight bytes; their two padding bytes remain erased in the stock startup buffer."
+      },
+      {
+        "store": "main",
+        "offset": 18,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Six-byte timer slots occupy eight bytes; their two padding bytes remain erased in the stock startup buffer."
+      },
+      {
+        "store": "main",
+        "offset": 26,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Six-byte timer slots occupy eight bytes; their two padding bytes remain erased in the stock startup buffer."
+      },
+      {
+        "store": "main",
+        "offset": 34,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Six-byte timer slots occupy eight bytes; their two padding bytes remain erased in the stock startup buffer."
+      },
+      {
+        "store": "main",
+        "offset": 36,
+        "bytes": 1,
+        "source": {
+          "kind": "fill",
+          "value": 100
+        },
+        "basis": "Stock startup seeds the persistent battery/accounting value to 100."
+      },
+      {
+        "store": "main",
+        "offset": 324,
+        "bytes": 164,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Bytes after the main defaults through the version footer retain the erased startup buffer value."
+      },
+      {
+        "store": "main",
+        "offset": 190,
+        "bytes": 32,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 22206
+        },
+        "basis": "Stock initializer copies the bank wireless name into profile +0xae."
+      },
+      {
+        "store": "main",
+        "offset": 65,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_bits",
+          "offset": 22239,
+          "mask": 31
+        },
+        "basis": "Stock initializer copies the low five wireless-name length bits from bank 0x56df."
+      },
+      {
+        "store": "main",
+        "offset": 3,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 0
+            },
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            },
+            {
+              "input": 4,
+              "output": 4
+            },
+            {
+              "input": 5,
+              "output": 5
+            },
+            {
+              "input": 6,
+              "output": 6
+            },
+            {
+              "input": 7,
+              "output": 7
+            },
+            {
+              "input": 8,
+              "output": 8
+            },
+            {
+              "input": 9,
+              "output": 9
+            },
+            {
+              "input": 10,
+              "output": 10
+            },
+            {
+              "input": 11,
+              "output": 11
+            },
+            {
+              "input": 12,
+              "output": 12
+            },
+            {
+              "input": 13,
+              "output": 13
+            },
+            {
+              "input": 14,
+              "output": 14
+            },
+            {
+              "input": 15,
+              "output": 15
+            },
+            {
+              "input": 16,
+              "output": 16
+            },
+            {
+              "input": 17,
+              "output": 17
+            },
+            {
+              "input": 18,
+              "output": 18
+            },
+            {
+              "input": 19,
+              "output": 19
+            },
+            {
+              "input": 20,
+              "output": 20
+            },
+            {
+              "input": 21,
+              "output": 21
+            },
+            {
+              "input": 22,
+              "output": 22
+            },
+            {
+              "input": 23,
+              "output": 23
+            },
+            {
+              "input": 24,
+              "output": 24
+            },
+            {
+              "input": 25,
+              "output": 25
+            },
+            {
+              "input": 26,
+              "output": 26
+            },
+            {
+              "input": 27,
+              "output": 27
+            },
+            {
+              "input": 28,
+              "output": 28
+            },
+            {
+              "input": 29,
+              "output": 29
+            },
+            {
+              "input": 30,
+              "output": 30
+            },
+            {
+              "input": 31,
+              "output": 31
+            },
+            {
+              "input": 32,
+              "output": 32
+            },
+            {
+              "input": 33,
+              "output": 33
+            },
+            {
+              "input": 34,
+              "output": 34
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock main-record language header follows the bank at initialization."
+      },
+      {
+        "store": "main",
+        "offset": 141,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 533,
+          "mask": 96,
+          "values": [
+            {
+              "input": 1,
+              "output": 32
+            },
+            {
+              "input": 2,
+              "output": 64
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock profile +0x75 date order occupies bits 5-6."
+      },
+      {
+        "store": "main",
+        "offset": 121,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 534,
+          "mask": 128,
+          "values": [
+            {
+              "input": 1,
+              "output": 128
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock profile +0x61 contains bank flag 0x216 in bit 7."
+      },
+      {
+        "store": "main",
+        "offset": 128,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 523,
+          "mask": 128,
+          "values": [
+            {
+              "input": 0,
+              "output": 128
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock Japanese-bank optional-profile flag in profile +0x68 bit 7."
+      },
+      {
+        "store": "main",
+        "offset": 146,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 96,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 64
+            },
+            {
+              "input": 1,
+              "output": 64
+            },
+            {
+              "input": 2,
+              "output": 64
+            },
+            {
+              "input": 3,
+              "output": 64
+            },
+            {
+              "input": 4,
+              "output": 32
+            },
+            {
+              "input": 5,
+              "output": 32
+            },
+            {
+              "input": 6,
+              "output": 32
+            },
+            {
+              "input": 129,
+              "output": 32
+            },
+            {
+              "input": 130,
+              "output": 64
+            }
+          ]
+        },
+        "basis": "Stock packed image-size/orientation bank initialization, preserving unrelated bits."
+      },
+      {
+        "store": "main",
+        "offset": 94,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 224,
+          "otherwise": 32,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Stock packed image-size/orientation bank initialization, preserving unrelated bits."
+      },
+      {
+        "store": "main",
+        "offset": 145,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 96,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 32
+            },
+            {
+              "input": 2,
+              "output": 64
+            },
+            {
+              "input": 3,
+              "output": 96
+            }
+          ]
+        },
+        "basis": "Stock packed image-size/orientation bank initialization, preserving unrelated bits."
+      },
+      {
+        "store": "main",
+        "offset": 104,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 520,
+          "mask": 31,
+          "otherwise": 8,
+          "otherwise_high": 1,
+          "values": [
+            {
+              "input": 0,
+              "output": 7
+            },
+            {
+              "input": 1,
+              "output": 7
+            },
+            {
+              "input": 2,
+              "output": 7
+            },
+            {
+              "input": 3,
+              "output": 7
+            },
+            {
+              "input": 4,
+              "output": 8
+            },
+            {
+              "input": 5,
+              "output": 11
+            },
+            {
+              "input": 6,
+              "output": 14
+            },
+            {
+              "input": 7,
+              "output": 17
+            },
+            {
+              "input": 8,
+              "output": 20
+            },
+            {
+              "input": 9,
+              "output": 23
+            },
+            {
+              "input": 10,
+              "output": 25
+            },
+            {
+              "input": 133,
+              "output": 1
+            },
+            {
+              "input": 134,
+              "output": 2
+            },
+            {
+              "input": 135,
+              "output": 3
+            },
+            {
+              "input": 136,
+              "output": 4
+            }
+          ]
+        },
+        "basis": "Stock bank button-selector decoding: positive encodings map to control IDs; unknown negative values map to 1."
+      },
+      {
+        "store": "main",
+        "offset": 103,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 521,
+          "mask": 31,
+          "otherwise": 8,
+          "otherwise_high": 1,
+          "values": [
+            {
+              "input": 0,
+              "output": 7
+            },
+            {
+              "input": 1,
+              "output": 7
+            },
+            {
+              "input": 2,
+              "output": 7
+            },
+            {
+              "input": 3,
+              "output": 7
+            },
+            {
+              "input": 4,
+              "output": 8
+            },
+            {
+              "input": 5,
+              "output": 11
+            },
+            {
+              "input": 6,
+              "output": 14
+            },
+            {
+              "input": 7,
+              "output": 17
+            },
+            {
+              "input": 8,
+              "output": 20
+            },
+            {
+              "input": 9,
+              "output": 23
+            },
+            {
+              "input": 10,
+              "output": 25
+            },
+            {
+              "input": 133,
+              "output": 1
+            },
+            {
+              "input": 134,
+              "output": 2
+            },
+            {
+              "input": 135,
+              "output": 3
+            },
+            {
+              "input": 136,
+              "output": 4
+            }
+          ]
+        },
+        "basis": "Stock bank button-selector decoding: positive encodings map to control IDs; unknown negative values map to 1."
+      },
+      {
+        "store": "main",
+        "offset": 105,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 522,
+          "mask": 31,
+          "otherwise": 8,
+          "otherwise_high": 1,
+          "values": [
+            {
+              "input": 0,
+              "output": 7
+            },
+            {
+              "input": 1,
+              "output": 7
+            },
+            {
+              "input": 2,
+              "output": 7
+            },
+            {
+              "input": 3,
+              "output": 7
+            },
+            {
+              "input": 4,
+              "output": 8
+            },
+            {
+              "input": 5,
+              "output": 11
+            },
+            {
+              "input": 6,
+              "output": 14
+            },
+            {
+              "input": 7,
+              "output": 17
+            },
+            {
+              "input": 8,
+              "output": 20
+            },
+            {
+              "input": 9,
+              "output": 23
+            },
+            {
+              "input": 10,
+              "output": 25
+            },
+            {
+              "input": 133,
+              "output": 1
+            },
+            {
+              "input": 134,
+              "output": 2
+            },
+            {
+              "input": 135,
+              "output": 3
+            },
+            {
+              "input": 136,
+              "output": 4
+            }
+          ]
+        },
+        "basis": "Stock bank button-selector decoding: positive encodings map to control IDs; unknown negative values map to 1."
+      },
+      {
+        "store": "custom",
+        "offset": 37,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 96,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 0,
+              "output": 64
+            },
+            {
+              "input": 1,
+              "output": 64
+            },
+            {
+              "input": 2,
+              "output": 64
+            },
+            {
+              "input": 3,
+              "output": 64
+            },
+            {
+              "input": 4,
+              "output": 32
+            },
+            {
+              "input": 5,
+              "output": 32
+            },
+            {
+              "input": 6,
+              "output": 32
+            },
+            {
+              "input": 129,
+              "output": 32
+            },
+            {
+              "input": 130,
+              "output": 64
+            }
+          ]
+        },
+        "basis": "Stock packed image-size/orientation bank initialization, preserving unrelated bits."
+      },
+      {
+        "store": "custom",
+        "offset": 17,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 224,
+          "otherwise": 32,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ]
+        },
+        "basis": "Stock packed image-size/orientation bank initialization, preserving unrelated bits."
+      },
+      {
+        "store": "custom",
+        "offset": 39,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 96,
+          "otherwise": 0,
+          "values": [
+            {
+              "input": 1,
+              "output": 32
+            },
+            {
+              "input": 2,
+              "output": 64
+            },
+            {
+              "input": 3,
+              "output": 96
+            }
+          ]
+        },
+        "basis": "Stock packed image-size/orientation bank initialization, preserving unrelated bits."
+      },
+      {
+        "store": "custom",
+        "offset": 43,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 520,
+          "mask": 31,
+          "otherwise": 8,
+          "otherwise_high": 1,
+          "values": [
+            {
+              "input": 0,
+              "output": 7
+            },
+            {
+              "input": 1,
+              "output": 7
+            },
+            {
+              "input": 2,
+              "output": 7
+            },
+            {
+              "input": 3,
+              "output": 7
+            },
+            {
+              "input": 4,
+              "output": 8
+            },
+            {
+              "input": 5,
+              "output": 11
+            },
+            {
+              "input": 6,
+              "output": 14
+            },
+            {
+              "input": 7,
+              "output": 17
+            },
+            {
+              "input": 8,
+              "output": 20
+            },
+            {
+              "input": 9,
+              "output": 23
+            },
+            {
+              "input": 10,
+              "output": 25
+            },
+            {
+              "input": 133,
+              "output": 1
+            },
+            {
+              "input": 134,
+              "output": 2
+            },
+            {
+              "input": 135,
+              "output": 3
+            },
+            {
+              "input": 136,
+              "output": 4
+            }
+          ]
+        },
+        "basis": "Stock bank button-selector decoding: positive encodings map to control IDs; unknown negative values map to 1."
+      },
+      {
+        "store": "custom",
+        "offset": 42,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 521,
+          "mask": 31,
+          "otherwise": 8,
+          "otherwise_high": 1,
+          "values": [
+            {
+              "input": 0,
+              "output": 7
+            },
+            {
+              "input": 1,
+              "output": 7
+            },
+            {
+              "input": 2,
+              "output": 7
+            },
+            {
+              "input": 3,
+              "output": 7
+            },
+            {
+              "input": 4,
+              "output": 8
+            },
+            {
+              "input": 5,
+              "output": 11
+            },
+            {
+              "input": 6,
+              "output": 14
+            },
+            {
+              "input": 7,
+              "output": 17
+            },
+            {
+              "input": 8,
+              "output": 20
+            },
+            {
+              "input": 9,
+              "output": 23
+            },
+            {
+              "input": 10,
+              "output": 25
+            },
+            {
+              "input": 133,
+              "output": 1
+            },
+            {
+              "input": 134,
+              "output": 2
+            },
+            {
+              "input": 135,
+              "output": 3
+            },
+            {
+              "input": 136,
+              "output": 4
+            }
+          ]
+        },
+        "basis": "Stock bank button-selector decoding: positive encodings map to control IDs; unknown negative values map to 1."
+      },
+      {
+        "store": "custom",
+        "offset": 44,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 522,
+          "mask": 31,
+          "otherwise": 8,
+          "otherwise_high": 1,
+          "values": [
+            {
+              "input": 0,
+              "output": 7
+            },
+            {
+              "input": 1,
+              "output": 7
+            },
+            {
+              "input": 2,
+              "output": 7
+            },
+            {
+              "input": 3,
+              "output": 7
+            },
+            {
+              "input": 4,
+              "output": 8
+            },
+            {
+              "input": 5,
+              "output": 11
+            },
+            {
+              "input": 6,
+              "output": 14
+            },
+            {
+              "input": 7,
+              "output": 17
+            },
+            {
+              "input": 8,
+              "output": 20
+            },
+            {
+              "input": 9,
+              "output": 23
+            },
+            {
+              "input": 10,
+              "output": 25
+            },
+            {
+              "input": 133,
+              "output": 1
+            },
+            {
+              "input": 134,
+              "output": 2
+            },
+            {
+              "input": 135,
+              "output": 3
+            },
+            {
+              "input": 136,
+              "output": 4
+            }
+          ]
+        },
+        "basis": "Stock bank button-selector decoding: positive encodings map to control IDs; unknown negative values map to 1."
+      },
+      {
+        "store": "main",
+        "offset": 2,
+        "bytes": 1,
+        "source": {
+          "kind": "fill",
+          "value": 0
+        },
+        "basis": "Stock startup sets the main-record header byte at +2 to zero; +3 tracks language."
+      },
+      {
+        "store": "main",
+        "offset": 490,
+        "bytes": 2,
+        "source": {
+          "kind": "fill",
+          "value": 255
+        },
+        "basis": "Two erased bytes follow the stock writer version at +0x1e8/+0x1e9."
+      }
+    ]
   },
   "settings": {
     "debug": {
@@ -151,6 +1112,15 @@
       "values": {
         "done": [
           7
+        ]
+      }
+    },
+    "date_order": {
+      "store": "main",
+      "offset": 141,
+      "values": {
+        "us": [
+          41
         ]
       }
     }

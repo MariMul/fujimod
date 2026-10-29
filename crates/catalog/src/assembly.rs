@@ -9,14 +9,17 @@ use std::collections::BTreeMap;
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct BodyHardware {
     /// Named hardware profiles, selected explicitly by a run preset.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, BodyProfile>"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "Record<string, BodyProfile>")
+    )]
     pub profiles: BTreeMap<String, crate::profiles::BodyProfile>,
     /// Serial endpoints and their processor-side connections.
     pub serial_attachments: Vec<SerialAttachment>,
@@ -34,7 +37,7 @@ pub struct BodyHardware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -46,7 +49,7 @@ pub struct SerialAttachment {
     /// Connection carrying endpoint data.
     pub connection_id: String,
     /// Connection selecting the endpoint, when declared.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub select_connection_id: Option<String>,
 }
 
@@ -56,7 +59,7 @@ pub struct SerialAttachment {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -71,7 +74,7 @@ impl BodyHardware {
     /// Validate installed parts and all physical connection identities.
     pub fn validate(&self, body: &crate::reference::Body) -> Result<(), String> {
         for (id, profile) in &self.profiles {
-            crate::reference::validate_id(id)?;
+            fujimod_catalog_identity::validate_id(id)?;
             if let Some(graph) = &profile.graph {
                 graph.validate()?;
             }
@@ -117,7 +120,7 @@ impl BodyHardware {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -167,13 +170,13 @@ pub enum PeripheralPart {
     /// Serial NOR flash geometry and device identification, when declared.
     SerialNorFlash {
         /// JEDEC identification value, when supplied by the part definition.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         jedec_id: Option<u32>,
         /// Erase-unit capacity in bytes, when declared.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         erase_bytes: Option<u64>,
         /// Program-page capacity in bytes, when declared.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         page_bytes: Option<u64>,
     },
 }

@@ -1,7 +1,7 @@
 /** Real stock execution: a simulated X70 runs its stock bulk query path for a state capture. */
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import type { Catalog } from '../../catalog';
 import type { CameraStore } from '../../cameras/store';
 import type { CameraModel } from '../camera-model';
@@ -57,24 +57,18 @@ try {
   await row.getByRole('button', { name: 'Capture' }).click();
   await row.locator('.cap-count').waitFor({ timeout: 600_000 });
   await page.screenshot({ path: new URL('captured.png', output).pathname, fullPage: true });
+  const capture = page.locator('.files .tree .r', { hasText: /^capture-still-shooting-/ }).first();
+  await capture.waitFor();
+  const name = (await capture.locator('.n').innerText()).trim();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Download captures' }).click(),
+    capture.getByRole('button', { name: `Download ${name}` }).click(),
   ]);
-  const path = new URL('captures.tar', output).pathname;
+  const path = new URL(name, output).pathname;
   await download.saveAs(path);
-  const tar = await readFile(path);
-  const size = parseInt(tar.subarray(124, 136).toString().replace(/\0.*$/s, ''), 8);
-  const manifest = JSON.parse(tar.subarray(512, 512 + size).toString()) as {
-    firmware_id: string;
-    states: { label: string; ranges: { size: number; pieces: { sha256: string }[] }[] }[];
-  };
-  assert.equal(manifest.firmware_id, firmwareId);
-  assert.equal(manifest.states[0].label, 'Still shooting');
-  const bytes = manifest.states[0].ranges.reduce((total, range) => total + range.size, 0);
-  assert.ok(tar.length > bytes, 'archive holds the captured bytes');
+  const bytes = (await readFile(path)).length;
+  assert.ok(bytes > 0, 'the capture file holds the captured bytes');
   assert.deepEqual(errors, []);
-  await writeFile(new URL('manifest.json', output), JSON.stringify(manifest, null, 2));
   console.log(`PASS ${firmwareId}: ${bytes} bytes captured through the stock bulk path`);
 } catch (error) {
   await page.screenshot({ path: new URL('failure.png', output).pathname, fullPage: true });

@@ -84,6 +84,32 @@ fn transmit(unit: &mut LensUnit, host: &mut TestHost, word: u16, at: u64) {
 }
 
 #[test]
+fn repeated_iris_homing_does_not_shift_later_apertures() {
+    let mut unit = unit();
+    unit.mechanics.motors[1].options.travel_limits = [0, 78];
+    unit.mechanics.motors[1].options.boundary = TravelBoundary::EndStop;
+    let aperture = std::sync::Arc::new(std::sync::Mutex::new(0.));
+    unit.attach_aperture(aperture.clone(), vec![(6, 16.), (78, 2.8)]).unwrap();
+    let mut host = TestHost::new();
+    let mut drive = |steps: u16, opening: bool| {
+        let at = host.now;
+        let quantity = steps * 32;
+        transmit(&mut unit, &mut host, 0x4400 | quantity & 0x3ff, at);
+        transmit(&mut unit, &mut host, 0x4800 | quantity >> 10, at);
+        transmit(&mut unit, &mut host, if opening { 0x7e40 } else { 0x7e00 }, at);
+        while let Some(due) = unit.next_deadline(host.now) {
+            host.now = due;
+            unit.advance(&mut host.cx(), due).unwrap();
+        }
+        (unit.position(1).unwrap(), *aperture.lock().unwrap())
+    };
+    assert_eq!(drive(96, true), (78, 2.8 * 2.8));
+    assert_eq!(drive(96, true), (78, 2.8 * 2.8));
+    assert_eq!(drive(72, false), (6, 256.));
+    assert_eq!(host.irqs, [(0, 12); 3]);
+}
+
+#[test]
 fn zero_quantity_completes_at_frame_end_before_a_later_focus_move() {
     let mut unit = unit();
     let mut host = TestHost::new();

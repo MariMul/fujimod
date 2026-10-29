@@ -46,10 +46,10 @@ class Camera:
         return self.frame
 
     def press(self) -> None:
-        index = self.guide.input("right", True, 0)
+        index = self.guide.input("selector.right", True, 0)
         self.guide.frame(self.frame, 0.2)
         self.guide.interaction("menu", "mod/item", input_index=index)
-        self.guide.input("right", False, 0.2)
+        self.guide.input("selector.right", False, 0.2)
 
 
 class WalkthroughTests(unittest.TestCase):
@@ -68,6 +68,24 @@ class WalkthroughTests(unittest.TestCase):
             video=video,
         )
 
+    def test_badge_filter_preserves_every_input_as_coverage_evidence(self) -> None:
+        from unittest.mock import Mock, call
+
+        _, guide = self.guide()
+        guide.recording = Mock(seconds=0)
+        guide.input_badges = frozenset({"control_ring"})
+        for name in ("menu_ok_button", "control_ring"):
+            guide.input(name, True, 0)
+            guide.input(name, False, 0.1)
+        self.assertEqual(
+            [event["name"] for event in guide.report["inputs"]],
+            ["menu_ok_button", "menu_ok_button", "control_ring", "control_ring"],
+        )
+        self.assertEqual(
+            guide.recording.input.call_args_list,
+            [call("control_ring", True, 0), call("control_ring", False, 0.1)],
+        )
+
     def test_multiple_functions_and_filename_identity(self) -> None:
         source = self.root / "example.py"
         source.write_text(
@@ -79,6 +97,38 @@ class WalkthroughTests(unittest.TestCase):
             [(w.name, w.title, w.source) for w in discover(source)],
             [("first", "One", source.resolve()), ("second", "Two", source.resolve())],
         )
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
+    def test_prerequisite_panels_neither_animate_nor_carry_into_the_child(self) -> None:
+        camera, guide = self.guide(video=True)
+
+        def prepare(camera: Camera, guide: Guide[Camera]) -> None:
+            card = guide.show_card(dict(label="OLD", rows=[], highlight=None))
+            assert card.visible
+            card.format(dict(label="", rows=[], highlight=None))
+            assert card.label == "(untitled)"
+            guide.show_display(camera.frame, label="EVF")
+
+        def run(camera: Camera, guide: Guide[Camera]) -> None:
+            with guide.step("Actual camera", hold=0.1):
+                assert guide.recording.frames == 0
+
+        report = guide.run(run, prerequisites=[("prepare", prepare)])
+        assert report["passed"], report.get("error")
+        assert not report.get("overlays")
+        raw = subprocess.check_output([
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(guide.output / "video-clean.mp4"),
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-",
+        ])
+        assert raw and min(raw) > 245
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg required")
     def test_clean_screenshot_and_video_overlay(self) -> None:
@@ -211,7 +261,7 @@ class WalkthroughTests(unittest.TestCase):
 
     def test_timestamp_cadence_preserves_short_samples(self) -> None:
         camera, guide = self.guide()
-        guide.input("right", True, 0)
+        guide.input("selector.right", True, 0)
         for n in range(101):
             guide.frame(camera.frame, n / 100)
         self.assertEqual(guide.recording.frames, 15)
@@ -255,11 +305,11 @@ class WalkthroughTests(unittest.TestCase):
     def test_input_release_and_fixture_input_cannot_earn_coverage(self) -> None:
         camera, guide = self.guide()
         guide._recording = True
-        release = guide.input("right", False, 0)
+        release = guide.input("selector.right", False, 0)
         with self.assertRaises(ValueError):
             guide.interaction("menu", "m/item", input_index=release)
         with guide.fixture("Setup"):
-            setup = guide.input("right", True, 0)
+            setup = guide.input("selector.right", True, 0)
         with self.assertRaises(ValueError):
             guide.interaction("menu", "m/item", input_index=setup)
 

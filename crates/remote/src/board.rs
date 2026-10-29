@@ -1,8 +1,11 @@
 //! In-process board transport. Execution yields between bounded, watched windows.
 use crate::{backend::Backend, connection::Connection, *};
-use fujimod_emulator::session::{
-    Session, checkpoint::Snapshot as Checkpoint, contact_driver::Actuator,
+use fujimod_emulator_session::{
+    Session,
+    checkpoint::Snapshot as Checkpoint,
+    contact_driver::{Actuator, Pose},
 };
+use std::collections::BTreeSet;
 
 /// Access is scoped to stopped-board calls, so language owners can retain a board.
 pub trait SessionOwner {
@@ -34,6 +37,9 @@ pub struct BoardBackend<S> {
     now: u64,
     /// Last position of each finger down, which its release reports.
     touches: std::collections::BTreeMap<String, (u16, u16)>,
+    /// Physical inputs currently held or awaiting a checked position result.
+    active_inputs: BTreeSet<String>,
+    pending_inputs: BTreeSet<String>,
 }
 pub type BoardRemote<S> = Connection<BoardBackend<S>>;
 impl<S: SessionOwner> Connection<BoardBackend<S>> {
@@ -48,6 +54,8 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
                 options,
                 now,
                 touches: Default::default(),
+                active_inputs: Default::default(),
+                pending_inputs: Default::default(),
             },
             facts,
         )
@@ -64,6 +72,9 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
         // A restored panel holds no remote finger.
         self.backend.touches.clear();
         self.touching.clear();
+        self.backend.active_inputs.clear();
+        self.backend.pending_inputs.clear();
+        self.backend.update_guest_profile_phase()?;
         Ok(())
     }
     pub fn set_scene(&mut self, scene: &serde_json::Value) -> Result<()> {
@@ -78,6 +89,18 @@ impl<S: SessionOwner> Connection<BoardBackend<S>> {
         Ok(())
     }
 }
+impl<S: SessionOwner> BoardBackend<S> {
+    fn update_guest_profile_phase(&mut self) -> Result<()> {
+        let phase = if self.active_inputs.is_empty() && self.pending_inputs.is_empty() {
+            fujimod_emulator::board::GuestProfilePhase::Idle
+        } else {
+            fujimod_emulator::board::GuestProfilePhase::Key
+        };
+        self.owner
+            .with_session(|s| s.board.set_guest_profile_phase(phase))?;
+        Ok(())
+    }
+}
 /// The driver actuator a control's press drives: its own contact, or the
 /// press member of a dial or ring whose motion has separate contacts.
 fn actuator<'a>(actuators: &'a [Actuator], id: &str) -> Result<&'a Actuator> {
@@ -89,6 +112,67 @@ fn actuator<'a>(actuators: &'a [Actuator], id: &str) -> Result<&'a Actuator> {
             actuators.iter().find(|a| a.id == member)
         })
         .ok_or_else(|| format!("No physical actuator for {id}"))
+}
+/// The pose an input selects on its actuator.
+fn pose<'a>(actuator: &'a Actuator, state: &InputState) -> Option<&'a Pose> {
+    match state {
+        InputState::Position(position) => actuator.states.iter().find(|p| &p.position == position),
+        InputState::Stage(stage) => actuator
+            .states
+            .iter()
+            .find(|p| p.position == stage.trim_end_matches("_press")),
+        _ => actuator
+            .states
+            .get(usize::from(*state == InputState::Pressed)),
+    }
+}
+/// Drive an actuator to a pose once the contact queue is idle.
+fn drive(s: &mut Session, id: &str, state: &InputState) -> Result<()> {
+    let driver = s
+        .contact_driver
+        .as_ref()
+        .ok_or("BoardRemote requires checked contact acknowledgments")?;
+    if driver.busy() {
+        return Err("Board contact queue is busy".into());
+    }
+    let actuator = actuator(&driver.spec.actuators, id)?;
+    let pose = pose(actuator, state).ok_or("Physical input pose is absent")?;
+    let (actuator, position) = (actuator.id.clone(), pose.position.clone());
+    s.set_position(&actuator, &position)
+}
+/// Whether the stock scanner shows the actuator's pose for an input.
+fn pose_accepted(s: &Session, id: &str, state: &InputState) -> Result<bool> {
+    let driver = s
+        .contact_driver
+        .as_ref()
+        .ok_or("Physical acknowledgment driver is absent")?;
+    // input() resolved aliases; the live panel position identifies the pose.
+    let actuator = actuator(&driver.spec.actuators, id)?;
+    let pose = pose(actuator, state).ok_or("Physical acknowledgment pose is absent")?;
+    for check in pose.ready.iter().chain(&pose.expected) {
+        let address = if let Some(pointer) = check.pointer {
+            let mut raw = [0; 4];
+            s.board.read_physical(pointer, &mut raw)?;
+            u64::from(u32::from_le_bytes(raw))
+                .checked_add(check.address)
+                .ok_or("Acknowledgment address overflow")?
+        } else {
+            check.address
+        };
+        let mut raw = vec![0; check.bytes.len()];
+        s.board.read_physical(address, &mut raw)?;
+        if raw != check.bytes {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+fn edge(pressed: bool) -> InputState {
+    if pressed {
+        InputState::Pressed
+    } else {
+        InputState::Released
+    }
 }
 fn tracked<T>(
     session: &Session,
@@ -147,52 +231,63 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                     u16::try_from(x).map_err(|_| "Touch x exceeds 16 bits")?,
                     u16::try_from(y).map_err(|_| "Touch y exceeds 16 bits")?,
                 );
-                self.owner.with_session(|s| {
+                let ending = input.state == InputState::TouchEnd;
+                if !ending {
+                    self.active_inputs.insert(id.into());
+                    self.update_guest_profile_phase()?;
+                }
+                let result = self.owner.with_session(|s| {
                     let (node, script) = s.touch_input(id, phase, point.0, point.1)?;
                     s.touch(&node, &script)
-                })?;
-                if input.state == InputState::TouchEnd {
+                });
+                if result.is_err() && !ending {
+                    self.active_inputs.remove(id);
+                    let _ = self.update_guest_profile_phase();
+                }
+                result?;
+                if ending {
                     self.touches.remove(id);
+                    self.active_inputs.remove(id);
+                    self.update_guest_profile_phase()?;
                 } else {
                     self.touches.insert(id.into(), point);
                 }
                 return Ok(());
             }
-            self.owner.with_session(|s| match &input.state {
+            let ending = input.state == InputState::Released;
+            let transient = matches!(input.state, InputState::Turn(_) | InputState::Position(_));
+            if !ending {
+                if transient {
+                    self.pending_inputs.insert(id.into());
+                } else {
+                    self.active_inputs.insert(id.into());
+                }
+                self.update_guest_profile_phase()?;
+            }
+            let result = self.owner.with_session(|s| match &input.state {
                 InputState::Turn(steps) => {
                     let (node, cycles) = s.rotation(id, *steps)?;
                     s.rotate(&node, cycles)
                 }
-                _ => {
-                    let driver = s
-                        .contact_driver
-                        .as_ref()
-                        .ok_or("BoardRemote requires checked contact acknowledgments")?;
-                    if driver.busy() {
-                        return Err("Board contact queue is busy".into());
-                    }
-                    let actuator = actuator(&driver.spec.actuators, id)?;
-                    let pose = match &input.state {
-                        InputState::Position(position) => {
-                            actuator.states.iter().find(|p| &p.position == position)
-                        }
-                        InputState::Stage(stage) => actuator
-                            .states
-                            .iter()
-                            .find(|p| p.position == stage.trim_end_matches("_press")),
-                        _ => actuator
-                            .states
-                            .get(usize::from(input.state == InputState::Pressed)),
-                    }
-                    .ok_or("Physical input pose is absent")?;
-                    let (actuator, position) = (actuator.id.clone(), pose.position.clone());
-                    s.set_position(&actuator, &position)
-                }
-            })
+                _ => drive(s, id, &input.state),
+            });
+            if result.is_err() && !ending {
+                self.active_inputs.remove(id);
+                self.pending_inputs.remove(id);
+                let _ = self.update_guest_profile_phase();
+            }
+            result?;
+            if ending {
+                self.active_inputs.remove(id);
+                self.update_guest_profile_phase()?;
+            }
+            Ok(())
         })
     }
     fn accepted(&mut self, input: &Input, facts: &Facts, reads: &mut ReadSet) -> Result<bool> {
         if matches!(input.state, InputState::Turn(_)) {
+            self.pending_inputs.remove(input.control.id());
+            self.update_guest_profile_phase()?;
             return Ok(true);
         }
         if input.state.is_touch() {
@@ -209,47 +304,16 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
                 })
             });
         }
-        self.owner.with_session(|s| {
+        let accepted = self.owner.with_session(|s| {
             tracked(s, reads, |s| {
-                let driver = s
-                    .contact_driver
-                    .as_ref()
-                    .ok_or("Physical acknowledgment driver is absent")?;
-                let id = input.control.id();
-                // input() resolved aliases; the live panel position identifies the pose.
-                let actuator = actuator(&driver.spec.actuators, id)?;
-                let pose = match &input.state {
-                    InputState::Position(position) => {
-                        actuator.states.iter().find(|p| &p.position == position)
-                    }
-                    InputState::Stage(stage) => actuator
-                        .states
-                        .iter()
-                        .find(|p| p.position == stage.trim_end_matches("_press")),
-                    _ => actuator
-                        .states
-                        .get(usize::from(input.state == InputState::Pressed)),
-                }
-                .ok_or("Physical acknowledgment pose is absent")?;
-                for check in pose.ready.iter().chain(&pose.expected) {
-                    let address = if let Some(pointer) = check.pointer {
-                        let mut raw = [0; 4];
-                        s.board.read_physical(pointer, &mut raw)?;
-                        u64::from(u32::from_le_bytes(raw))
-                            .checked_add(check.address)
-                            .ok_or("Acknowledgment address overflow")?
-                    } else {
-                        check.address
-                    };
-                    let mut raw = vec![0; check.bytes.len()];
-                    s.board.read_physical(address, &mut raw)?;
-                    if raw != check.bytes {
-                        return Ok(false);
-                    }
-                }
-                Ok(true)
+                pose_accepted(s, input.control.id(), &input.state)
             })
-        })
+        })?;
+        if accepted && matches!(input.state, InputState::Position(_)) {
+            self.pending_inputs.remove(input.control.id());
+            self.update_guest_profile_phase()?;
+        }
+        Ok(accepted)
     }
     fn frame<'a>(
         &'a mut self,
@@ -322,6 +386,46 @@ impl<S: SessionOwner> Backend for BoardBackend<S> {
             futures_lite::future::yield_now().await;
             Ok(())
         })
+    }
+    fn turn_contact(&mut self, input: &Input) -> Result<Option<String>> {
+        use fujimod_emulator_session::contact_driver::Interface;
+        let InputState::Turn(steps) = input.state else {
+            return Ok(None);
+        };
+        let id = input.control.id();
+        self.owner.with_session(|s| {
+            let Some(driver) = s.contact_driver.as_ref() else {
+                return Ok(None);
+            };
+            let encoder = driver
+                .spec
+                .interfaces
+                .iter()
+                .any(|i| matches!(i, Interface::Rotary { id: found, .. } if found == id));
+            if encoder {
+                return Ok(None);
+            }
+            let member = format!("{id}.{}", if steps < 0 { "decrease" } else { "increase" });
+            Ok(driver
+                .spec
+                .actuators
+                .iter()
+                .any(|a| a.id == member && a.momentary && a.states.len() == 2)
+                .then_some(member))
+        })
+    }
+    fn contact(&mut self, actuator: &str, pressed: bool) -> Result<()> {
+        self.owner
+            .with_session(|s| drive(s, actuator, &edge(pressed)))
+    }
+    fn contact_accepted(
+        &mut self,
+        actuator: &str,
+        pressed: bool,
+        reads: &mut ReadSet,
+    ) -> Result<bool> {
+        self.owner
+            .with_session(|s| tracked(s, reads, |s| pose_accepted(s, actuator, &edge(pressed))))
     }
     fn control_position(&mut self, id: &str) -> Result<Option<String>> {
         self.owner.with_session(|s| {

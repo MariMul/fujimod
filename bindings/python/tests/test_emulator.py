@@ -45,8 +45,6 @@ NATIVE_EXPORTS = frozenset({
     "FrontierEntry",
     "Intervention",
     "gpu_ui_render",
-    "graphics_memo_len",
-    "graphics_memo_clear",
     "UiBatch",
     "ui_batch",
     "ui_initialize",
@@ -79,11 +77,12 @@ NATIVE_EXPORTS = frozenset({
     "VIRTUAL_SCENE_PROFILE",
     "STATISTICS_PROFILE",
     "settings_header",
+    "settings_profile",
 })
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 56
+    assert len(NATIVE_EXPORTS) == 55
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
@@ -314,6 +313,7 @@ def test_boot_report_decodes_the_stopped_guest_observation() -> None:
         "menu_node": 7,
         "pending": False,
         "setup_presses": 2,
+        "translation_cache_size_bytes": 128 << 20,
         "failure": None,
     })
     assert report["status"] == "rec"
@@ -324,25 +324,27 @@ def test_boot_report_decodes_the_stopped_guest_observation() -> None:
         _boot_report({"status": "ready"})
 
 
-def test_failure_poll_does_not_materialize_device_snapshots() -> None:
+def test_failure_poll_preserves_native_values_without_full_observation() -> None:
     class Native:
-        failure: dict[str, object] | None = None
+        failure_value: object = None
 
-        def observation(self) -> str:
+        def failure(self) -> str:
             import json
 
-            return json.dumps({"failure": self.failure})
+            return json.dumps(self.failure_value)
 
-        def state(self) -> str:
-            raise AssertionError("Failure polling must not snapshot devices")
+        def observation(self) -> str:
+            raise AssertionError("Failure polling must not read the full observation")
 
     native_board = Native()
     board = Board.__new__(Board)
     board._native = cast(native.Board, native_board)
     board._closed = False
     assert board.failure is None
-    native_board.failure = {"error": "unmapped access", "address": 0x1000}
-    assert board.failure == native_board.failure
+    native_board.failure_value = "unmapped access"
+    assert board.failure == {"message": "unmapped access"}
+    native_board.failure_value = {"error": "unmapped access", "address": 0x1000}
+    assert board.failure == native_board.failure_value
     board._closed = True
     with pytest.raises(RuntimeError, match="runtime is closed"):
         _ = board.failure

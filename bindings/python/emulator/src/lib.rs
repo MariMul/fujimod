@@ -11,8 +11,9 @@ use pyo3::types::{PyBytes, PyDict, PyModule};
 #[pyfunction]
 #[pyo3(signature = (configuration_id, overlays=Vec::new()))]
 fn prepare_configuration(configuration_id: &str, overlays: Vec<String>) -> PyResult<String> {
-    let prepared = fujimod_emulator::boot::prepare(configuration_id, &overlays).map_err(error)?;
-    serde_json::to_string(&prepared.to_json()).map_err(|failure| error(failure.to_string()))
+    fujimod_python_base::boot::boot()?
+        .prepare(configuration_id, &overlays)
+        .map_err(error)
 }
 
 /// Load explicitly located, identity-checked inputs before constructing a board.
@@ -24,11 +25,11 @@ fn load_input_assets<'py>(
     locations: &str,
     max_asset_bytes: u64,
 ) -> PyResult<Bound<'py, PyDict>> {
-    let assets: Vec<fujimod_catalog::emulator::Asset> = serde_json::from_str(assets)
+    let assets: Vec<fujimod_catalog_assets::Asset> = serde_json::from_str(assets)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let locations = serde_json::from_str(locations)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let provider = fujimod_emulator::inputs::Files::new(
+    let provider = fujimod_catalog_assets::files::Files::new(
         &root,
         &root,
         Default::default(),
@@ -52,7 +53,7 @@ fn load_input_assets<'py>(
 /// Verify each declared asset identity before constructing an execution graph.
 #[pyfunction]
 fn verify_input_assets(manifest: &str, assets: &Bound<'_, PyDict>) -> PyResult<()> {
-    let declared: Vec<fujimod_catalog::emulator::Asset> = serde_json::from_str(manifest)
+    let declared: Vec<fujimod_catalog_assets::Asset> = serde_json::from_str(manifest)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let mut seen = std::collections::BTreeSet::new();
     for asset in declared {
@@ -139,7 +140,7 @@ mod binding {
     #[pymodule_export]
     use fujimod_python_base::discovery::{FrontierEntry, Intervention};
     #[pymodule_export]
-    use super::settings::settings_header;
+    use super::settings::{settings_header, settings_profile};
     #[pymodule_export]
     use fujimod_python_base::values::DeviceRefusal;
 
@@ -158,6 +159,7 @@ mod binding {
 /// Add `fujimod._native.emulator` to `parent`; the host image, graphics and XP4 binding crates
 /// add their functions to it.
 pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    fujimod_python_base::board_session::install(board::borrow_session);
     let module = binding::_PYO3_DEF.make_module(py)?;
     parent.add_submodule(module.bind(py))?;
     let modules = py

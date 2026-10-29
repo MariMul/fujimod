@@ -1,9 +1,9 @@
 //! EXR II SDIO host1, FFF51000. Owns a one-function part; no memory outside
 //! the programmed SDMA extent is inspected. Timing is declared.
+use fujimod_emulator_ip::sdhci::registers::Registers;
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
-use fujimod_emulator_parts_io::wifi_module::{Operation, Protocol, WifiModule};
 use fujimod_emulator_ip::sdhci::Clocks;
-use crate::sdhc::Registers;
+use fujimod_emulator_parts_io::wifi_module::{Operation, Protocol, WifiModule};
 use serde::{Deserialize, Serialize};
 pub const BASE: u64 = 0xfff51000;
 #[derive(Clone, Debug, Deserialize)]
@@ -71,8 +71,16 @@ impl SdioHost {
             scratch: [0; 2560],
         })
     }
-    fn signal(&self, cx: &mut Cx<'_>) -> Result<(), String> {
-        self.irq.drive(cx, self.regs.asserted())
+    fn signal(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        if self.module.interrupt() {
+            self.regs.set(0x30, self.regs.get(0x30) | 0x100);
+        }
+        self.irq.drive(
+            cx,
+            self.regs.asserted()
+                || self.module.interrupt()
+                    && self.regs.get(0x34) & self.regs.get(0x38) & 0x100 != 0,
+        )
     }
     fn plan(&mut self, cx: &mut Cx<'_>, word: u32, arg: u32) -> Result<Request, String> {
         let command = word >> 24 & 63;
@@ -130,7 +138,7 @@ impl SdioHost {
                 r.operation = Some(op);
             }
             53 if self.state == State::Transfer
-                && self.module.protocol() == Protocol::RomDownload =>
+                && self.module.protocol() != Protocol::Enumeration =>
             {
                 let write = arg & 0x80000000 != 0;
                 let function = arg >> 28 & 7;
@@ -155,16 +163,23 @@ impl SdioHost {
                 };
                 if function != 1
                     || increment
-                    || pio && (write || block || address != 0x10 || count != 4)
+                    || pio && (write || block || quantity % 4 != 0)
                     || !pio && word != expected
                     || block
                         && (![3, 5].contains(&count)
                             || self.regs.get(4) != 512
                             || self.regs.get(6) as u32 != count
                             || self.module.block_size() != 512)
-                    || !block && (count != 4 || self.regs.get(4) != 4 || self.regs.get(6) != 0)
+                    || !block
+                        && (self.regs.get(4) as u32 != if count == 0 { 512 } else { count }
+                            || self.regs.get(6) != 0)
                 {
-                    return Err("Unsupported Wi-Fi CMD53 grammar or blocks".into());
+                    return Err(format!(
+                        "Unsupported Wi-Fi CMD53 grammar word={word:#x} arg={arg:#x} block_size={} blocks={} function_block={}",
+                        self.regs.get(4),
+                        self.regs.get(6),
+                        self.module.block_size()
+                    ));
                 }
                 r.quantity = quantity;
                 r.write = write;
@@ -248,7 +263,11 @@ impl SdioHost {
             if !r.write
                 && let Some(address) = r.dma
             {
-                cx.ram_write(address, &op.response.to_le_bytes())?;
+                if op.data.is_empty() {
+                    cx.ram_write(address, &op.response.to_le_bytes())?;
+                } else {
+                    cx.ram_write(address, &op.data)?;
+                }
             }
             if r.pio {
                 r.operation = Some(op);
@@ -284,10 +303,14 @@ impl SdioHost {
         {
             return Err("Wi-Fi PIO requires command ACK and polled data gates".into());
         }
-        let value = if r.pio_reads == 0 {
-            r.operation.as_ref().unwrap().response
+        let op = r.operation.as_ref().unwrap();
+        let offset = r.pio_reads * 4;
+        let value = if op.data.is_empty() {
+            if offset == 0 { op.response } else { 0 }
         } else {
-            0
+            op.data
+                .get(offset..offset + 4)
+                .map_or(0, |bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
         };
         r.pio_reads += 1;
         // A 512-byte FIFO drain returns four wire bytes and 127 empty-latch
@@ -475,8 +498,8 @@ impl Device for SdioHost {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_io::wifi_module;
     use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
+    use fujimod_emulator_parts_io::wifi_module;
     fn model(protocol: Protocol) -> SdioHost {
         SdioHost::new(
             Options {
@@ -489,6 +512,11 @@ mod tests {
                 module: WifiModule::new(wifi_module::Options {
                     protocol,
                     firmware_bytes: 64,
+                    mt5931: (protocol == Protocol::Mt5931).then_some(
+                        wifi_module::mt5931::Options {
+                            mac_address: [2, 0, 0, 0, 0, 1],
+                        },
+                    ),
                 })
                 .unwrap(),
                 irq: InterruptLine::Shared(79),
@@ -508,6 +536,18 @@ mod tests {
         write(m, h, 0x2e, 14);
         write(m, h, 0x34, 0xffff);
         write(m, h, 0x38, 0xffff);
+    }
+    #[test]
+    fn timeout_control_is_readable_as_a_halfword() {
+        let mut m = model(Protocol::Enumeration);
+        let mut h = Ram::new(0);
+        write(&mut m, &mut h, 0x2c, 5);
+        h.now = 2;
+        m.advance(&mut h.cx());
+        write(&mut m, &mut h, 0x2e, 14);
+        let mut cx = h.cx();
+        assert_eq!(m.read(&mut cx, BASE + 0x2e, 2), 14);
+        assert_eq!(cx.refusal(), None);
     }
     fn command(m: &mut SdioHost, h: &mut Ram, word: u32, arg: u32) {
         write(m, h, 0x30, 0xffff);
@@ -579,5 +619,126 @@ mod tests {
             &h.effects[h.effects.len() - 2..],
             &[Effect::Write(0x1000, 4), Effect::Irq(79, true)]
         );
+    }
+    fn configured_module(m: &mut SdioHost) {
+        for (address, value) in [
+            (0x8c, 0x8000u32),
+            (0x8c, 0),
+            (0x90, 1),
+            (0x8c, 1),
+            (0x88, 1),
+            (0x84, 0xff900000),
+        ] {
+            let op = m
+                .module
+                .vendor(address, true, &value.to_le_bytes(), 4)
+                .unwrap();
+            m.module.commit(op);
+        }
+        let mut frame = [0x73; 512];
+        frame[..4].copy_from_slice(&[68, 0, 0, 0]);
+        frame[68..72].fill(0);
+        let op = m.module.vendor(0x80, true, &frame, 512).unwrap();
+        m.module.commit(op);
+        let op = m.module.vendor(0x88, true, &0u32.to_le_bytes(), 4).unwrap();
+        m.module.commit(op);
+        let op = m.module.direct(0x90000802).unwrap();
+        m.module.commit(op);
+        let op = m
+            .module
+            .vendor(0x14, true, &0xffffff0fu32.to_le_bytes(), 4)
+            .unwrap();
+        m.module.commit(op);
+    }
+    #[test]
+    fn mt5931_dma_fifo_reply_deadline_irq_and_atomic_unknown_command() {
+        let mut m = model(Protocol::Mt5931);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        configured_module(&mut m);
+        // Explicit bus transactions: no guest PC, globals, image identity or callbacks.
+        write(&mut m, &mut h, 0, 0x1000);
+        write(&mut m, &mut h, 4, 20);
+        h.bytes[0x1000..0x1014].copy_from_slice(&[
+            20, 0, 0, 0x50, 0xc1, 0, 0x91, 0xa5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ]);
+        command(&mut m, &mut h, 0x353a0001, 0x90005814);
+        let before = m.module.fingerprint();
+        h.now += 9;
+        m.advance(&mut h.cx());
+        assert_eq!(m.module.fingerprint(), before);
+        due(&mut m, &mut h);
+        assert_eq!(
+            m.module.vendor(0x50, false, &[], 4).unwrap().response,
+            20 << 16
+        );
+        write(&mut m, &mut h, 0, 0x2000);
+        h.bytes[0x2000..0x2018].fill(0xa5);
+        command(&mut m, &mut h, 0x353a0011, 0x10006814);
+        assert_eq!(&h.bytes[0x2000..0x2018], &[0xa5; 24]);
+        due(&mut m, &mut h);
+        assert_eq!(
+            &h.bytes[0x2000..0x200e],
+            &[20, 0, 1, 0, 9, 0x91, 0, 0, 2, 0, 0, 0, 0, 1]
+        );
+        assert_eq!(&h.bytes[0x2014..0x2018], &[0xa5; 4]);
+        assert_eq!(m.module.vendor(0x50, false, &[], 4).unwrap().response, 0);
+        assert_eq!(
+            &h.effects[h.effects.len() - 2..],
+            &[Effect::Write(0x2000, 20), Effect::Irq(79, true)]
+        );
+        h.bytes[0x1000 + 4] = 0x80;
+        write(&mut m, &mut h, 0x30, 0xffff);
+        write(&mut m, &mut h, 0, 0x1000);
+        write(&mut m, &mut h, 8, 0x5814);
+        write(&mut m, &mut h, 10, 0x9000);
+        let before = m.module.fingerprint();
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 12, 4, 0x353a0001);
+        assert!(
+            cx.refusal()
+                .unwrap()
+                .contains("capability reply unqualified")
+        );
+        assert!(m.request.is_none());
+        assert_eq!(m.module.fingerprint(), before);
+    }
+    #[test]
+    fn mt5931_pio_returns_complete_rx_packet_and_commits_pop_after_drain() {
+        let mut m = model(Protocol::Mt5931);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        configured_module(&mut m);
+        let op = m.module.direct(0x80022000).unwrap();
+        m.module.commit(op);
+        let op = m.module.direct(0x80022202).unwrap();
+        m.module.commit(op);
+        let packet = [
+            20, 0, 0, 0x50, 0xc1, 0, 0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let op = m.module.vendor(0x2c, true, &packet, 20).unwrap();
+        m.module.commit(op);
+        write(&mut m, &mut h, 4, 20);
+        command(&mut m, &mut h, 0x353a0010, 0x10006814);
+        due(&mut m, &mut h);
+        write(&mut m, &mut h, 0x30, 0xffff);
+        write(&mut m, &mut h, 0x38, 0);
+        let mut bytes = Vec::new();
+        for index in 0..128 {
+            let value = m.read(&mut h.cx(), BASE + 0x20, 4) as u32;
+            bytes.extend_from_slice(&value.to_le_bytes());
+            if index == 4 {
+                assert_eq!(
+                    m.module.vendor(0x50, false, &[], 4).unwrap().response,
+                    20 << 16
+                );
+            }
+        }
+        assert_eq!(&bytes[..8], &[20, 0, 1, 0, 9, 0x42, 0, 0]);
+        assert_eq!(&bytes[20..], &[0; 492]);
+        assert_eq!(m.module.vendor(0x50, false, &[], 4).unwrap().response, 0);
+        assert!(m.request.is_none());
     }
 }

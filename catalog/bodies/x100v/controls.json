@@ -49,12 +49,32 @@
     ]
   },
   "analog_levels": null,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "fn1_button": {
       "name": "Fn1 button",
       "location": "top",
       "manual_page": 251,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -171,7 +191,8 @@
           "label": "C",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -192,7 +213,8 @@
           "full_press": null
         }
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -377,7 +399,8 @@
           "label": "B",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     },
     "sensitivity_dial": {
       "name": "Sensitivity dial",
@@ -432,7 +455,8 @@
           "label": "160–12800",
           "description": null
         }
-      ]
+      ],
+      "short_name": "ISO"
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -482,7 +506,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "aperture_ring": {
       "name": "Aperture ring",
@@ -587,7 +612,8 @@
           "label": "2",
           "description": null
         }
-      ]
+      ],
+      "short_name": "APERTURE"
     },
     "control_ring": {
       "name": "Control ring",
@@ -611,7 +637,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -635,13 +662,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "fn2_button": {
       "name": "Fn2 button",
       "location": "front",
       "manual_page": 251,
-      "face": null,
+      "face": "Fn2",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -694,7 +722,8 @@
           "label": "OVF",
           "description": null
         }
-      ]
+      ],
+      "short_name": "VIEW"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -718,13 +747,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT DIAL"
     },
     "power_switch": {
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 38,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -782,13 +812,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DIOPTER"
     },
     "drive_delete_button": {
       "name": "DRIVE/DELETE button",
       "location": "rear",
       "manual_page": 9,
-      "face": null,
+      "face": "DRIVE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -857,7 +888,7 @@
       "name": "AEL (exposure lock)/AFL (focus lock) button",
       "location": "rear",
       "manual_page": 251,
-      "face": null,
+      "face": "AEL/AFL",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -893,7 +924,8 @@
         },
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "rear_command_dial": {
       "name": "Rear command dial",
@@ -917,13 +949,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "REAR DIAL"
     },
     "q_button": {
       "name": "Q (quick menu) button",
       "location": "rear",
       "manual_page": 251,
-      "face": null,
+      "face": "Q",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -941,7 +974,7 @@
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 23,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -960,7 +993,7 @@
       "location": "rear",
       "manual_page": 47,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -977,7 +1010,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 19,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -1025,7 +1058,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -1044,7 +1078,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

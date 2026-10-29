@@ -1,5 +1,4 @@
 use fujimod_emulator_devices::exr2::{clock, gpio, irq, pulse};
-use fujimod_emulator_imaging::exr2_isp as isp;
 use fujimod_emulator_devices::{bus::InterruptLine, graph::Mapping};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -90,11 +89,11 @@ pub struct Sensor {
 pub enum SensorControls {
     Xtrans16 {
         options: serde_json::Value,
-        calibration: fujimod_emulator_imaging::exposure::Calibration,
+        calibration: serde_json::Value,
         exposure: String,
         aperture: String,
-        projection: Option<fujimod_emulator_imaging::optics::Spec>,
-        frame_clock: Option<fujimod_emulator_imaging::timing::ClockOutput>,
+        projection: Option<serde_json::Value>,
+        frame_clock: Option<serde_json::Value>,
     },
 }
 #[derive(Deserialize)]
@@ -187,6 +186,10 @@ pub enum Model {
     Scanout {
         options: serde_json::Value,
     },
+    SerialAudioDuplex {
+        options: serde_json::Value,
+        routes: String,
+    },
     SerialAudioReceiver {
         options: serde_json::Value,
         routes: String,
@@ -212,8 +215,8 @@ pub enum Model {
         options: serde_json::Value,
     },
     ImageCombination {
-        options: fujimod_emulator_imaging::exr2_isp::options::combination::Options,
-        irq: isp::Irq,
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     I2c {
         options: serde_json::Value,
@@ -230,13 +233,13 @@ pub enum Model {
         medium: String,
     },
     ExternalFrames {
-        options: fujimod_emulator_imaging::scene::clocked::Options,
+        options: serde_json::Value,
         sensor_clock: Option<String>,
         images: String,
         statistics: String,
         activity: Option<InputSignal>,
         position: Option<String>,
-        radiometric: Option<fujimod_emulator_imaging::radiometric::Spec>,
+        radiometric: Option<serde_json::Value>,
         phase_edges: Option<String>,
         frame_period: Option<String>,
     },
@@ -259,6 +262,12 @@ pub enum Model {
         options: serde_json::Value,
         wiring: serde_json::Value,
     },
+    ExrSystemControl {
+        options: serde_json::Value,
+        wiring: serde_json::Value,
+    },
+    ExrClocks { options: serde_json::Value },
+    ExrMemoryInterface,
     Clocks {
         options: clock::Options,
     },
@@ -368,10 +377,10 @@ pub enum Model {
         ram_bytes: u64,
     },
     ImageInput {
-        options: fujimod_emulator_imaging::exr2_isp::options::input::Options,
-        phase_irqs: [isp::Irq; 2],
-        raw_irq: isp::Irq,
-        readback_irq: isp::Irq,
+        options: serde_json::Value,
+        phase_irqs: [fujimod_emulator_devices::exr2::irq_routes::Irq; 2],
+        raw_irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
+        readback_irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
         shutter_output: Option<usize>,
         sensor: Option<Sensor>,
         parameters: Option<String>,
@@ -381,7 +390,7 @@ pub enum Model {
         edges: String,
     },
     OutputChannel {
-        options: fujimod_emulator_imaging::exr2_isp::options::output::Options,
+        options: serde_json::Value,
         base: u64,
         irq: u32,
         channel: usize,
@@ -391,69 +400,72 @@ pub enum Model {
         memory_outputs: Option<String>,
     },
     Statistics {
-        options: fujimod_emulator_imaging::exr2_isp::options::producer::Options,
+        options: serde_json::Value,
         routes: String,
         frames: String,
         images: String,
         grid: Option<String>,
     },
     PhaseDetection {
-        options: fujimod_emulator_imaging::exr2_isp::options::phase_detection::Options,
+        options: serde_json::Value,
         routes: String,
     },
     WindowAnalysis {
-        options: fujimod_emulator_imaging::exr2_isp::options::window_analysis::Options,
+        options: serde_json::Value,
         routes: String,
     },
     Parameters {
-        options: isp::parameters::Options,
+        options: serde_json::Value,
         bank: String,
     },
     RawConversion {
-        options: fujimod_emulator_imaging::exr2_isp::options::raw::RegisterOptions,
+        options: serde_json::Value,
     },
     Prefilter {
-        options: fujimod_emulator_imaging::exr2_isp::options::raw::Options,
-        irq: isp::Irq,
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     RawStatistics {
-        options: fujimod_emulator_imaging::exr2_isp::options::raw::Options,
-        irq: isp::Irq,
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     StillProcessor {
-        options: fujimod_emulator_imaging::exr2_isp::options::still::Options,
-        irq: isp::Irq,
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     Scaler {
-        options: fujimod_emulator_imaging::exr2_isp::options::scaler::Options,
-        irq: isp::Irq,
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     Warp {
-        options: fujimod_emulator_imaging::exr2_isp::options::warp::Options,
-        irq: isp::Irq,
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
         stream: String,
     },
-    VideoEncoder {
-        options: fujimod_catalog::construction::VideoEncoderOptions,
-        irq: isp::Irq,
+    ImageTransfer {
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
+    },
+    AvcCodec {
+        options: serde_json::Value,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     JpegEncoder {
         options: serde_json::Value,
-        irq: isp::Irq,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
         stream: String,
     },
     JpegDecoder {
         options: serde_json::Value,
-        irq: isp::Irq,
+        irq: fujimod_emulator_devices::exr2::irq_routes::Irq,
     },
     Block11000 {
-        options: fujimod_emulator_imaging::exr2_isp::options::block11000::Options,
+        options: serde_json::Value,
     },
     FaceDetector {
-        options: fujimod_emulator_imaging::exr2_isp::options::face_detector::Options,
+        options: serde_json::Value,
     },
     FaceResults {
-        profile: fujimod_emulator_imaging::exr2_isp::options::face_results::Profile,
+        profile: serde_json::Value,
         routes: String,
     },
     Adapter {
@@ -471,6 +483,7 @@ impl Model {
             Model::SdhciClocks { .. } => "sdhci-clocks",
             Model::Usb { .. } => "usb",
             Model::Scanout { .. } => "scanout",
+            Model::SerialAudioDuplex { .. } => "serial-audio-duplex",
             Model::SerialAudioReceiver { .. } => "serial-audio-receiver",
             Model::SerialAudioTransmitter { .. } => "serial-audio-transmitter",
             Model::SerialDmaLink { .. } => "serial-dma-link",
@@ -486,6 +499,9 @@ impl Model {
             Model::DramPhy { .. } => "dram-phy",
             Model::Reset { .. } => "reset",
             Model::Block98000 { .. } => "block-98000",
+            Model::ExrSystemControl { .. } => "exr-system-control",
+            Model::ExrClocks { .. } => "exr-clocks",
+            Model::ExrMemoryInterface => "exr-memory-interface",
             Model::Clocks { .. } => "clocks",
             Model::InterruptController { .. } => "exr2-interrupt-controller",
             Model::CoreRelease { .. } => "core-release",
@@ -521,7 +537,8 @@ impl Model {
             Model::StillProcessor { .. } => "still-processor",
             Model::Scaler { .. } => "scaler",
             Model::Warp { .. } => "warp",
-            Model::VideoEncoder { .. } => "video-encoder",
+            Model::AvcCodec { .. } => "avc-codec",
+            Model::ImageTransfer { .. } => "image-transfer",
             Model::JpegEncoder { .. } => "jpeg-encoder",
             Model::JpegDecoder { .. } => "jpeg-decoder",
             Model::Block11000 { .. } => "block11000",

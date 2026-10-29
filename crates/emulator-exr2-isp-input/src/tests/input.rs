@@ -1,12 +1,13 @@
-use fujimod_emulator_exr2_isp_output::output::{self, OutputChannel};
 use crate::*;
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_imaging::exr2_isp::*;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::test_host::*;
+use fujimod_emulator_exr2_isp_output::output::{self, OutputChannel};
+use fujimod_emulator_imaging::exr2_isp::*;
 
 #[test]
 fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
-    use fujimod_emulator_imaging::raw::Cfa;
+    use fujimod_emulator_image_processing::raw::Cfa;
     let layout: Vec<u8> = (0..36).map(|i| ((i / 6 + i % 6) % 3) as u8).collect();
     let sensor = Cfa::new(layout.clone()).unwrap();
     let mut reference = None;
@@ -332,6 +333,7 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
                         shutter: None,
                         rolling_references: vec![],
                         mode_change_frames: 2,
+                        preview_field: None,
                     },
                     wire.clone(),
                     iris.clone(),
@@ -372,6 +374,7 @@ fn sensor_frames_after_a_drive_mode_change_raise_no_edge() {
     for tick in [10, 20] {
         advance(&mut d, &mut h, tick);
         assert_eq!(edges.lock().unwrap()[0], None);
+        assert_eq!(frames.lock().unwrap().edge, None);
         assert!(h.irqs.is_empty());
     }
     advance(&mut d, &mut h, 30);
@@ -788,7 +791,7 @@ fn disabled_raw_channel_does_not_dma_or_signal_completion() {
 }
 #[test]
 fn packed_raw_readback_matches_u16_with_independent_row_padding() {
-    use fujimod_emulator_imaging::raw::Packing;
+    use fujimod_emulator_image_processing::raw::Packing;
     fn render(packing: Packing, padding: usize, mutate_after_start: bool) -> Vec<Vec<u8>> {
         let mut h = TestHost::new();
         let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
@@ -981,8 +984,11 @@ fn raw_readback_waits_for_both_outputs_then_eof() {
     assert!(!outputs.lock().unwrap().active);
 }
 
-#[test]
-fn raw_readback_flows_through_both_output_channels_before_eof() {
+fn raw_readback_fixture() -> (
+    TestHost, ImageInput, [OutputChannel; 2],
+    fujimod_emulator_imaging::scene::ImageFrames,
+    fujimod_emulator_devices::exr2::irq_routes::IrqRoutes,
+) {
     use fujimod_emulator_imaging::analysis::ImageLayout;
     use fujimod_emulator_imaging::scene::ImageFrames;
     let mut h = TestHost::new();
@@ -996,7 +1002,7 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     })
     .unwrap();
     let channels = fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels::default();
-    let routes = dma::IrqRoutes::default();
+    let routes = fujimod_emulator_devices::exr2::irq_routes::IrqRoutes::default();
     routes.set(44, Some(0)).unwrap();
     routes.set(45, Some(0)).unwrap();
     let make = |channel, base, irq| {
@@ -1038,32 +1044,36 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     let mut wiring = input_wiring();
     wiring.parameters = Some(bank);
     wiring.memory_outputs = Some(memory.clone());
-    let mut input = ImageInput::new(input_options(), wiring).unwrap();
-    // RAW transport consumes sensor edges without reserving the direct image
-    // outputs. Those banks remain available for channel4 memory readback.
+    let input = ImageInput::new(input_options(), wiring).unwrap();
+    (h, input, [a, b], frames, routes)
+}
+
+#[test]
+fn raw_transport_enable_keeps_both_preview_banks_running() {
+    let (mut h, mut input, mut outputs, frames, _) = raw_readback_fixture();
+    // RAW capture can run beside the preview outputs. Enabling FFF10004 bit0
+    // must not starve their first completion after an input reconfiguration.
     write(&mut input, &mut h, 0xfff10004, 0x10001);
-    frames
-        .publish(
-            fujimod_emulator_imaging::scene::FrameEdge { index: 1, tick: 0 },
-            &[7; 32],
-        )
-        .unwrap();
-    advance(&mut a, &mut h, 0);
-    advance(&mut b, &mut h, 0);
-    assert!(h.effects.is_empty());
-    assert!(
-        memory
-            .lock()
-            .unwrap()
-            .destinations
-            .iter()
-            .all(Option::is_some)
-    );
-    let saved = input.checkpoint().unwrap();
-    write(&mut input, &mut h, 0xfff10004, 0);
-    assert!(!memory.lock().unwrap().raw_input);
-    input.restore_checkpoint(&saved).unwrap();
-    assert!(memory.lock().unwrap().raw_input);
+    for index in 1..=2 {
+        let tick = (index - 1) * 6;
+        frames.publish(fujimod_emulator_imaging::scene::FrameEdge { index, tick }, &[7; 32]).unwrap();
+        for output in &mut outputs { advance(output, &mut h, tick); }
+        assert_eq!(h.irqs.len(), (index as usize - 1) * 2);
+        for output in &mut outputs { advance(output, &mut h, tick + 5); }
+        assert_eq!(h.irqs.len(), index as usize * 2);
+        assert_eq!(&h.ram[0x9000..0x9010], &[7; 16]);
+        assert_eq!(&h.ram[0xa000..0xa010], &[7; 16]);
+        for (channel, output) in outputs.iter_mut().enumerate() {
+            write(output, &mut h, 0xfff120d4 + channel as u64 * 0x1000, 1);
+        }
+    }
+    assert_eq!(h.irqs, [(0,44),(0,45),(0,44),(0,45)]);
+}
+
+#[test]
+fn raw_readback_flows_through_both_output_channels_before_eof() {
+    let (mut h, mut input, [mut a, mut b], frames, routes) = raw_readback_fixture();
+    write(&mut input, &mut h, 0xfff10004, 0x10001);
     for (offset, value) in [
         (0x394, 0x1000000),
         (0x398, 6 << 16),
@@ -1077,6 +1087,8 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
     ] {
         write(&mut input, &mut h, 0xfff10000 + offset, value);
     }
+    // An active memory readback owns the banks even if a sensor frame arrives.
+    frames.publish(fujimod_emulator_imaging::scene::FrameEdge { index: 1, tick: 0 }, &[7; 32]).unwrap();
     assert_eq!(a.next_deadline(0), Some(0));
     // Repeating the current geometry is an idempotent register write even
     // while the memory input is filling the latched output raster.
@@ -1141,7 +1153,7 @@ fn raw_readback_only_uses_armed_output_banks_and_their_irq_routes() {
         h.ram[0x9000..0xb000].fill(0xa5);
         let memory: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
         let channels = fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels::default();
-        let routes = dma::IrqRoutes::default();
+        let routes = fujimod_emulator_devices::exr2::irq_routes::IrqRoutes::default();
         let frames = ImageFrames::new(ImageLayout {
             width: 6,
             height: 6,

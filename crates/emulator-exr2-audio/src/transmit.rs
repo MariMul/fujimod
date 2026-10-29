@@ -6,7 +6,7 @@
 //! block and DMA channel share a device, so a guest format write wakes it.
 use super::SerialAudio;
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_imaging::exr2_isp::{Irq, dma::IrqRoutes};
+use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
 use fujimod_emulator_parts_io::audio_sink::AudioSink;
 use fujimod_emulator_exr2_serial::dma::audio::BASE;
 use serde::{Deserialize, Serialize};
@@ -74,7 +74,7 @@ impl Transmitter {
     fn word(&self, o: u16) -> u32 {
         self.state.registers.get(&o).copied().unwrap_or(0)
     }
-    fn configuration(value: u32) -> bool {
+    pub(crate) fn configuration(value: u32) -> bool {
         value & !0x500ff007 == 0x00200010
             && value & 7 == 1
             && matches!(value >> 12 & 15, 0..=2)
@@ -156,6 +156,12 @@ impl Transmitter {
             });
         }
         Ok(())
+    }
+    pub(crate) fn dma_active(&self) -> bool {
+        self.state.active
+    }
+    pub(crate) fn validate_state(&self, value: &Value) -> Result<(), String> {
+        self.decode(value).map(|_| ())
     }
     fn decode(&self, value: &Value) -> Result<(State, SerialAudio), String> {
         let state: State =

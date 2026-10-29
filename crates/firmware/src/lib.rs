@@ -3,7 +3,9 @@
 use sha2::{Digest, Sha256};
 
 mod error;
+mod recompress;
 pub use error::Error;
+pub use recompress::recompress;
 pub type Result<T> = std::result::Result<T, Error>;
 fn require(ok: bool, error: Error) -> Result<()> {
     if ok { Ok(()) } else { Err(error) }
@@ -33,7 +35,10 @@ fn verify_hash(data: &[u8], offset: u64, expected: &str) -> Result<()> {
     }
 }
 pub fn sha256(data: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(data))
+    Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 pub fn invert(data: &[u8]) -> Vec<u8> {
     data.iter().map(|b| !b).collect()

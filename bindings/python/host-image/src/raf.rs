@@ -9,7 +9,7 @@ pub(crate) fn raf_radiance_rgb<'py>(
     py: Python<'py>,
     raf: &[u8],
 ) -> PyResult<(usize, usize, Bound<'py, PyBytes>)> {
-    let scene = fujimod_emulator_imaging::scene::read_raf(std::io::Cursor::new(raf))
+    let scene = fujimod_emulator_image_processing::scene::raf::read_raf(std::io::Cursor::new(raf))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let width = usize::from(scene.crop_width) / 6;
     let height = usize::from(scene.crop_height) / 6;

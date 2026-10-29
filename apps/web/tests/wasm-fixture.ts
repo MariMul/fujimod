@@ -118,7 +118,6 @@ export async function wasmFixture(fault = false) {
           },
       scenario: {
         quantum: 100,
-        translation_cache_bytes: 1024 * 1024,
         firmware: {
           size: dat.length,
           sha256,

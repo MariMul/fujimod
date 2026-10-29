@@ -1,7 +1,8 @@
 //! Shared definition types, without USB ownership or command implementation.
 use super::*;
 use error::{integer, property, record};
-use fujimod_catalog::service as core;
+use fujimod_catalog_firmware_identity::IdentityError;
+use fujimod_catalog_service as core;
 
 include!(concat!(env!("OUT_DIR"), "/definition_codec_javascript.rs"));
 #[wasm_bindgen]
@@ -32,9 +33,9 @@ pub(crate) fn invalid(source: core::DefinitionError) -> JsValue {
             ],
         ),
         E::Schema(schema) => record(K::Schema as u32, &[("schema", schema.into())]),
-        E::EmptyIdentity => record(K::EmptyIdentity as u32, &[]),
-        E::InvalidDigest => record(K::InvalidDigest as u32, &[]),
-        E::FirmwareMismatch => record(K::FirmwareMismatch as u32, &[]),
+        E::Identity(IdentityError::EmptyIdentity) => record(K::EmptyIdentity as u32, &[]),
+        E::Identity(IdentityError::InvalidDigest) => record(K::InvalidDigest as u32, &[]),
+        E::Identity(IdentityError::FirmwareMismatch) => record(K::FirmwareMismatch as u32, &[]),
         E::EmptyModes => record(K::EmptyModes as u32, &[]),
         E::InvalidMailbox => record(K::InvalidMailbox as u32, &[]),
         E::InvalidLayout { code, codec } => record(
@@ -53,15 +54,15 @@ pub(crate) fn invalid(source: core::DefinitionError) -> JsValue {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct FirmwareIdentity {
-    pub(crate) inner: core::FirmwareIdentity,
+    pub(crate) inner: fujimod_catalog_firmware_identity::FirmwareIdentity,
 }
 #[wasm_bindgen]
 impl FirmwareIdentity {
     #[wasm_bindgen(constructor)]
     pub fn new(id: String, sha256: &str) -> Result<Self, JsValue> {
-        core::FirmwareIdentity::new(id, sha256)
+        fujimod_catalog_firmware_identity::FirmwareIdentity::new(id, sha256)
             .map(|inner| Self { inner })
-            .map_err(invalid)
+            .map_err(|error| invalid(error.into()))
     }
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> String {

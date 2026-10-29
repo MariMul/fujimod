@@ -13,10 +13,32 @@ pub enum TransferStage {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("the camera already has an open service session")]
+    SessionAlreadyOpen,
+    #[error("callback slot restoration failed: {0}")]
+    CallbackRestoration(Box<Error>),
+    #[error("callback invocation failed: {source}; slot restoration failure: {restoration:?}")]
+    CallbackInvocation {
+        source: Box<Error>,
+        restoration: Option<Box<Error>>,
+    },
     #[error(transparent)]
     Proxy(#[from] fujimod_usb_proxy::Error),
     #[error("USB device access failed: {0}")]
     Usb(#[from] nusb::Error),
+    #[error("emulator resource {operation:?} failed: {source}")]
+    EmulatorResource {
+        operation: crate::emulator::ResourceOperation,
+        source: crate::emulator::TransferError,
+    },
+    #[error("emulator resource {0:?} timed out")]
+    EmulatorResourceTimeout(crate::emulator::ResourceOperation),
+    #[error("emulator completion during {stage:?} reported {actual} bytes for capacity {capacity}")]
+    EmulatorCompletion {
+        stage: TransferStage,
+        capacity: usize,
+        actual: usize,
+    },
     #[error("USB transfer failed during {stage:?}: {source} ({transferred:?} bytes transferred)")]
     Transfer {
         stage: TransferStage,
@@ -54,18 +76,20 @@ pub enum Error {
     AddressOverflow,
     #[error("requested memory range is outside the selected data window")]
     OutsideDataWindow,
+    #[error(
+        "data range must start on a {address}-byte boundary and span whole {granule}-byte units"
+    )]
+    MisalignedDataRange { address: u32, granule: u32 },
     #[error("length must be nonzero and representable in the protocol")]
     InvalidLength,
     #[error("argument must be a bounded ASCII token")]
     InvalidToken,
-    #[cfg(feature = "testing")]
     #[error("USB replay differs at exchange {position}")]
     ReplayMismatch {
         position: usize,
         expected: Option<Box<crate::testing::Exchange>>,
         actual: Box<crate::testing::Exchange>,
     },
-    #[cfg(feature = "testing")]
     #[error("virtual USB peer failed: {0}")]
     TestPeer(#[source] Box<dyn std::error::Error + Send + Sync>),
     #[error("bulk read failed after {data_len} bytes: {source}")]
@@ -96,7 +120,7 @@ impl From<ProtocolError> for Error {
     }
 }
 
-pub(crate) fn check_limit(requested: u32, limit: u32) -> Result<()> {
+pub fn check_limit(requested: u32, limit: u32) -> Result<()> {
     if requested > limit {
         Err(Error::LengthLimit { requested, limit })
     } else {

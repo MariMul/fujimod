@@ -237,6 +237,14 @@
               255
             ],
             "basis": "Main record marker after the sequence word."
+          },
+          {
+            "offset": 488,
+            "bytes": [
+              1,
+              33
+            ],
+            "basis": "Stock writer 0x69d094 stamps version bytes from 0x7a75d0/0x7a75d3 into main record +0x1e8/+0x1e9. Reader 0x69dac8 rejects a version below 0x0110 and resets the profile, including setup completion."
           }
         ]
       },

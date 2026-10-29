@@ -107,7 +107,6 @@ struct Display {
 #[serde(deny_unknown_fields)]
 struct Scenario {
     quantum: usize,
-    translation_cache_bytes: u32,
     firmware: Firmware,
 }
 #[derive(Deserialize)]
@@ -144,8 +143,8 @@ struct Load {
 pub struct Session {
     pub(super) construction: Option<super::snapshot::Construction>,
     pub(super) capture_order: std::cell::Cell<u64>,
-    pub core: fujimod_emulator::session::Session,
-    pub(super) reset_image: Option<Arc<fujimod_emulator::session::checkpoint::Snapshot>>,
+    pub core: fujimod_emulator_session::Session,
+    pub(super) reset_image: Option<Arc<fujimod_emulator_session::checkpoint::Snapshot>>,
     pub(super) powered_on: bool,
     pub(super) generation: u64,
     /// Identifies this session in its checkpoint IDs and input logs.
@@ -210,6 +209,7 @@ impl Session {
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
                     companion: None,
                     storage: None,
+                    sd: BTreeMap::new(),
                     displays: scanouts,
                 };
                 board::register_all(&mut devices, &windows, &mut resources, &mut |w| {
@@ -237,10 +237,15 @@ impl Session {
             .map(|g| {
                 Ok::<_, String>(InterruptMap {
                     cores: g.affinities.len(),
-                    gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(g.affinities, g.lines)?),
-                    distributor: g.distributor,
-                    redistributor: g.redistributor,
-                    stride: g.stride,
+                    gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(
+                        g.affinities,
+                        g.lines,
+                    )?),
+                    registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                        distributor: g.distributor,
+                        redistributor: g.redistributor,
+                        stride: g.stride,
+                    },
                 })
             })
             .transpose()?;
@@ -305,10 +310,7 @@ impl Session {
             )?,
         };
         let mut board = graph.build(
-            factory::Options {
-                engine: factory::Engine::Unicorn,
-                translation_cache_bytes: config.scenario.translation_cache_bytes,
-            },
+            factory::Options::new(factory::Engine::Unicorn),
             Bus::from_graph(Mode::Strict, devices)?,
             interrupts,
         )?;
@@ -319,7 +321,7 @@ impl Session {
         let mut session = Self {
             construction: Some(construction),
             capture_order: std::cell::Cell::new(1),
-            core: fujimod_emulator::session::Session {
+            core: fujimod_emulator_session::Session {
                 definition,
                 controls: None,
                 contact_driver: None,
@@ -357,7 +359,7 @@ impl Session {
             .into_iter()
             .try_fold(0u64, |sum, n| sum.checked_add(n))
             .ok_or("board instruction count overflow")?;
-        let input = fujimod_emulator::session::history::Input::Run {
+        let input = fujimod_emulator_session::history::Input::Run {
             instructions: u64::MAX - count,
             quantum: self.quantum,
             pause_after: None,
@@ -370,6 +372,19 @@ impl Session {
         }
         self.collect_frames();
         result
+    }
+    pub fn take_host_requests(
+        &mut self,
+    ) -> Result<Vec<(usize, fujimod_emulator_devices::bus::HostRequest)>, String> {
+        self.core.board.take_host_requests()
+    }
+    pub fn complete_host_request(
+        &mut self,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        self.core.board.complete_host_request(device, id, result)
     }
     pub fn input(&mut self, key: &str, pressed: bool, at: u64) -> Result<(), String> {
         if self.history.is_some() {

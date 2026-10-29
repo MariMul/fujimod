@@ -239,8 +239,16 @@ pub fn discover_proxy(
     }))
 }
 
+type WebUsbAttachments = std::rc::Rc<
+    async_lock::Mutex<
+        Vec<(
+            web_sys::UsbDevice,
+            std::sync::Weak<fujimod_usb::owner::DeviceOwner>,
+        )>,
+    >,
+>;
 thread_local! {
-    static ATTACHED: std::rc::Rc<async_lock::Mutex<Vec<(web_sys::UsbDevice, std::sync::Weak<fujimod_usb::owner::DeviceOwner>)>>> = Default::default();
+    static ATTACHED: WebUsbAttachments = Default::default();
 }
 
 /// Attach a host-provided WebUSB implementation without replacing navigator.usb.

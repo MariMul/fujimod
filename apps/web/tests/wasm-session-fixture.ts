@@ -34,7 +34,6 @@ export async function wasmSessionFixture() {
       firmwareId: 'generated-session',
       bootSource: 'internal',
       quantum: 100,
-      translationCacheBytes: 1048576,
       execution: {
         processors: [
           {
@@ -82,6 +81,7 @@ export async function wasmSessionFixture() {
             {
               kind: 'sd-host',
               options: {
+                base: 0xfff70000,
                 protocol: 'sdhc',
                 transfer_ticks: 2,
                 clock_ticks: 2,

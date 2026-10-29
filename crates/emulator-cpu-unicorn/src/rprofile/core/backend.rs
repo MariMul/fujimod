@@ -31,6 +31,38 @@ impl Cpu for Core {
     fn identity(&self) -> Identity {
         self.execution.cpu.identity()
     }
+    fn start_guest_profile(&self) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest profiling requires a stopped processor".into());
+        }
+        e.guest_profile_phase.set(GuestProfilePhase::Idle);
+        *e.guest_profile.borrow_mut() = Some(GuestProfile::default());
+        e.cpu.invalidate_code(None)?;
+        Ok(())
+    }
+    fn guest_profile_phase(&self, phase: GuestProfilePhase) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest profile phase requires a stopped processor".into());
+        }
+        if e.guest_profile.borrow().is_some() {
+            e.guest_profile_phase.set(phase);
+        }
+        Ok(())
+    }
+    fn finish_guest_profile(&self) -> Result<Option<Vec<GuestBlockCount>>, String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest profiling requires a stopped processor".into());
+        }
+        let profile = e.guest_profile
+            .borrow_mut()
+            .take()
+            .map(|profile| profile.blocks.into_values().collect());
+        e.cpu.invalidate_code(None)?;
+        Ok(profile)
+    }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
         if e.memory.run_reserved(e.id.get()) {
@@ -369,6 +401,7 @@ impl Cpu for Core {
         Ok(())
     }
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String> {
+        self.execution.invalidate_loop_failures();
         self.execution.cpu.invalidate_code(range)
     }
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
@@ -381,7 +414,14 @@ impl Cpu for Core {
         let _window = loops::Window(&e.loops.window);
         e.clock_overshoot.set(0);
         e.count.set(0);
+        e.cpu
+            .reset_instruction_counter()
+            .map_err(ExecutionError::Backend)?;
+        if let Some(profile) = e.guest_profile.borrow_mut().as_mut() {
+            profile.pending = None;
+        }
         e.last_span.set(None);
+        e.thumb_entry_ready.set(false);
         if request.until.is_some() || request.instructions.is_none() {
             e.loops.window.set(false);
         }
@@ -423,6 +463,7 @@ impl Cpu for Core {
             }
         }
         let result = self.execute(request, begin);
+        e.finish_guest_profile_run();
         e.clock_overshoot
             .set(if e.policy.get() == ExecutionPolicy::Interactive {
                 e.count.get().saturating_sub(e.cap.get())
@@ -614,11 +655,115 @@ impl Cpu for Core {
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
         let mut counters = self.execution.cpu.exit_counters()?;
         let l = &self.execution.loops;
+        #[cfg(debug_assertions)]
+        l.log_unsupported_models();
         counters.insert("loop_poll_instructions", l.poll_instructions.get());
+        counters.insert(
+            "loop_clock_poll_instructions",
+            l.clock_poll_instructions.get(),
+        );
         counters.insert("loop_counted_instructions", l.counted_instructions.get());
         counters.insert(
             "loop_accelerated_instructions",
             l.accelerated_instructions.get(),
+        );
+        counters.insert("loop_candidate_entries", l.candidate_entries.get());
+        counters.insert("loop_proofs_attempted", l.proofs_attempted.get());
+        counters.insert(
+            "loop_proofs_failed_structural",
+            l.proofs_failed_structural.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_window_inactive",
+            l.proofs_failed_window_inactive.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_memory_flush_pending",
+            l.proofs_failed_memory_flush_pending.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_instruction_observer",
+            l.proofs_failed_instruction_observer.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_block_observer",
+            l.proofs_failed_block_observer.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_read_observer",
+            l.proofs_failed_read_observer.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_loop_bytes_unavailable",
+            l.proofs_failed_loop_bytes_unavailable.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_cpsr_e_or_j",
+            l.proofs_failed_cpsr_e_or_j.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_loop_condition_not_taken",
+            l.proofs_failed_loop_condition_not_taken.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_loop_read_unavailable",
+            l.proofs_failed_loop_read_unavailable.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_iteration_model_unsupported",
+            l.proofs_failed_iteration_model_unsupported.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_iteration_model_unsupported_pcs",
+            l.unsupported_model_pc_count() as u64,
+        );
+        counters.insert(
+            "loop_proofs_failed_counter_at_boundary",
+            l.proofs_failed_counter_at_boundary.get(),
+        );
+        counters.insert(
+            "loop_proofs_failed_budget_room",
+            l.proofs_failed_budget_room.get(),
+        );
+        counters.insert(
+            "code_watch_block_hooks_elided",
+            self.execution.code_watch_block_hooks_elided.get(),
+        );
+        counters.insert(
+            "block_hook_executions",
+            self.execution.block_hook_executions.get(),
+        );
+        counters.insert(
+            "block_hook_reason_block_observer",
+            self.execution.block_hook_block_observer.get(),
+        );
+        counters.insert(
+            "block_hook_reason_thumb",
+            self.execution.block_hook_thumb.get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_remaining_budget",
+            self.execution
+                .block_hook_budget_fallback_remaining_budget
+                .get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_accounting_ring",
+            self.execution
+                .block_hook_budget_fallback_accounting_ring
+                .get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_guest_clock",
+            self.execution.block_hook_budget_fallback_guest_clock.get(),
+        );
+        counters.insert(
+            "block_hook_reason_budget_fallback_other",
+            self.execution.block_hook_budget_fallback_other.get(),
+        );
+        counters.insert(
+            "block_hook_reason_other",
+            self.execution.block_hook_other.get(),
         );
         counters.insert(
             "synchronization_requested",
@@ -646,6 +791,7 @@ impl Core {
     /// whole cache for it re-translates all firmware on every watch.
     fn retranslate(&self, range: HookRange) -> Result<(), String> {
         let e = &self.execution;
+        e.invalidate_loop_failures();
         let pages = match range {
             HookRange::Inclusive { begin, end } => {
                 e.memory

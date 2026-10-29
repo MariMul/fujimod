@@ -101,18 +101,22 @@ impl<R: RemoteReader + ?Sized> RemoteReader for Tracked<'_, R> {
             Ok(v)
         })
     }
-    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+    fn readiness<'a>(&'a mut self, control: Option<&'a Control>) -> LocalFuture<'a, Readiness> {
         Box::pin(async move {
-            let v = self.remote.readiness().await?;
+            let v = self.remote.readiness(control).await?;
             self.reads.extend(v.reads.clone());
             Ok(v)
         })
     }
 }
 /// Wait until the firmware accepts a new input.
-pub async fn wait_ready<R: Remote + ?Sized>(r: &mut R, deadline: u64) -> Result<()> {
+pub async fn wait_ready<R: Remote + ?Sized>(
+    r: &mut R,
+    control: Option<&Control>,
+    deadline: u64,
+) -> Result<()> {
     loop {
-        let readiness = r.readiness().await?;
+        let readiness = r.readiness(control).await?;
         if readiness.ready {
             return Ok(());
         }
@@ -300,7 +304,7 @@ async fn step<R: Remote + ?Sized>(
         // Readiness is observed only once the state has changed, so the wait
         // for the change watches the state reads alone.
         if value.state != before.state {
-            let readiness = r.readiness().await?;
+            let readiness = r.readiness(None).await?;
             if readiness.ready {
                 return Ok(value);
             }
@@ -429,7 +433,7 @@ async fn focus<R: Remote + ?Sized>(
                 value.state
             ));
         }
-        let readiness = r.readiness().await?;
+        let readiness = r.readiness(None).await?;
         if !readiness.ready {
             if r.now() >= deadline {
                 return Err(format!(

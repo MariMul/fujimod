@@ -263,10 +263,7 @@ fn board(released: Vec<bool>) -> (Board, Readings) {
     .unwrap();
     let board = graph
         .build(
-            Options {
-                engine: Engine::Unicorn,
-                translation_cache_bytes: 1024 * 1024,
-            },
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )

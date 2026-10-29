@@ -61,7 +61,7 @@ fn seal(ticket: &Ticket, peer: &str, value: Value) -> Result<String> {
     let aad = format!("{}/{peer}", ticket.room);
     let encrypted = cipher(ticket)?
         .encrypt(
-            Nonce::from_slice(&iv),
+            &Nonce::from(iv),
             Payload {
                 msg: value.to_string().as_bytes(),
                 aad: aad.as_bytes(),
@@ -80,7 +80,7 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
     let aad = format!("{}/{peer}", ticket.room);
     let decoded = cipher(ticket)?
         .decrypt(
-            Nonce::from_slice(&bytes[..12]),
+            &Nonce::try_from(&bytes[..12]).map_err(error)?,
             Payload {
                 msg: &bytes[12..],
                 aad: aad.as_bytes(),

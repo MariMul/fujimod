@@ -1,4 +1,4 @@
-use fujimod_emulator_imaging::exr2_isp::dma::IrqRoutes;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use crate::*;
 use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_devices::Cx;
@@ -97,12 +97,12 @@ fn packed12_aperture_and_unselected_arithmetic_refusal() {
         curve.iter().enumerate().min_by_key(|(_, v)| *v).unwrap().0 as i32 - 20,
         3
     );
-    let decoded = fujimod_emulator_imaging::raw::RawView {
+    let decoded = fujimod_emulator_image_processing::raw::RawView {
         bytes: &[0xbc, 0x3a, 0x12],
         width: 2,
         height: 1,
         pitch: 3,
-        packing: fujimod_emulator_imaging::raw::Packing::Packed12,
+        packing: fujimod_emulator_image_processing::raw::Packing::Packed12,
     };
     decoded.validate().unwrap();
     assert_eq!(decoded.phase_sample(0, 0), 0x2af0);

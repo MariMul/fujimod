@@ -136,12 +136,14 @@
           0.0031663181818181816
         ]
       ],
+      "mode_change_frames": 2,
+      "preview_field": [2496, 3344],
       "rolling_references": [
         {
           "mode": 236,
           "horizontal": 706,
           "vertical": 9348,
-          "lines": 856
+          "lines": 857
         },
         {
           "mode": 236,
@@ -166,7 +168,12 @@
         "focal_length_mm": 18.5,
         "subject_distance_mm": 2000.0,
         "sensor_width_mm": 23.6,
-        "relative_illumination": "cosine-fourth"
+        "relative_illumination": {
+          "radial-polynomial": {
+            "r2": 0.651,
+            "r4": 0.492
+          }
+        }
       }
     }
   }

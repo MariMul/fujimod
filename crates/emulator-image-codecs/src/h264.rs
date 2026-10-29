@@ -1,8 +1,10 @@
 //! Host compression backends. No guest memory, clocks or device effects.
 //! Software uses scalar Rust and libm; VideoToolbox requires hardware encoding.
-pub use fujimod_catalog::construction::VideoEncoderBackend as Backend;
+pub use fujimod_catalog_construction::VideoEncoderBackend as Backend;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+pub mod decode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
@@ -17,8 +19,8 @@ impl Config {
     pub fn validate(self) -> Result<(), String> {
         if !(16..=1920).contains(&self.width)
             || !(16..=1088).contains(&self.height)
-            || self.width % 16 != 0
-            || self.height % 16 != 0
+            || !self.width.is_multiple_of(16)
+            || !self.height.is_multiple_of(16)
             || !(1..=60).contains(&self.frames_per_second)
             || !(10_000..=100_000_000).contains(&self.bitrate)
             || !(1..=51).contains(&self.max_qp)
@@ -216,8 +218,8 @@ pub fn transport_frame(stream: &[u8], previous: &[u8]) -> Result<(Vec<u8>, Vec<u
 pub fn planar_420(width: usize, height: usize, packed: &[u8]) -> Result<Vec<u8>, String> {
     if width == 0
         || height == 0
-        || width % 2 != 0
-        || height % 2 != 0
+        || !width.is_multiple_of(2)
+        || !height.is_multiple_of(2)
         || width > 1920
         || height > 1088
         || packed.len() != width * height * 2
@@ -234,8 +236,9 @@ pub fn planar_420(width: usize, height: usize, packed: &[u8]) -> Result<Vec<u8>,
             if row % 2 == 0 {
                 let q = p + width * 2;
                 let c = row / 2 * (width / 2) + col;
-                out[y + c] = ((packed[p + 2] as u16 + packed[q + 2] as u16 + 1) / 2) as u8;
-                out[y + y / 4 + c] = ((packed[p + 3] as u16 + packed[q + 3] as u16 + 1) / 2) as u8;
+                out[y + c] = (packed[p + 2] as u16 + packed[q + 2] as u16).div_ceil(2) as u8;
+                out[y + y / 4 + c] =
+                    (packed[p + 3] as u16 + packed[q + 3] as u16).div_ceil(2) as u8;
             }
         }
     }

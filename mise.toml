@@ -26,6 +26,10 @@ run = "python scripts/git/install_hooks.py"
 dir = "{{config_root}}/apps/web"
 run = "npm run build"
 
+[tasks.share]
+description = "Publish a local file and print its public share URL"
+run = "node scripts/cloudflare/share.ts"
+
 [tasks.web-check]
 dir = "{{config_root}}/apps/web"
 run = "npm run check"
@@ -61,7 +65,7 @@ description = "Check that the workspace-hack crate matches the dependency graph"
 run = ["cargo hakari generate --diff", "cargo hakari manage-deps --dry-run", "cargo hakari verify"]
 
 [tasks.rust-wasm-test]
-run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb --target wasm32-unknown-unknown --features testing --lib --test wasm_core'
+run = 'PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod-usb-app80 --target wasm32-unknown-unknown --lib --test wasm_core'
 
 [tasks.javascript-build]
 dir = "{{config_root}}/bindings/javascript"

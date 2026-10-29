@@ -45,6 +45,9 @@ npm run test:browser
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select an explicitly installed Chromium
 binary. Permission UI and physical camera integration remain unvalidated.
 
+For worker CPU profiling and boot timing, see
+[browser performance](../../crates/emulator/BROWSER_PERFORMANCE.md).
+
 ## Emulator runtime
 
 The `fujimod/emulator` entry loads the emulator module and exports its `Camera`
@@ -52,9 +55,10 @@ class and types. The Rust crate in `emulator/` declares that interface once:
 wasm-bindgen generates the class and its glue from `#[wasm_bindgen]` items, and
 tsify generates the TypeScript types of the serde values they exchange. Emscripten
 links the crate with Unicorn and runs wasm-bindgen on the result
-(`-sWASM_BINDGEN`). A loaded module is configured once with its execution policy
-and JIT tier, then constructs cameras with `Camera.fromGraph`, `fromPrepared`,
-`fromResolved` or `fromSnapshot`. Failures throw `Error`; once the guest has
+(`-sWASM_BINDGEN`). A loaded module is configured once with its execution policy,
+JIT tier, and DMP renderer preference. Configuration resolves after any requested
+WebGPU device is ready, then the module constructs cameras with `Camera.fromGraph`,
+`fromPrepared`, `fromResolved` or `fromSnapshot`. Failures throw `Error`; once the guest has
 failed, their name is `GuestExecutionError`.
 
 The build writes the generated declarations to `emulator/camera.generated.ts`,
@@ -83,6 +87,12 @@ generated `build.json` records the toolchain and artifact hashes. Runtime input
 manifests remain the caller's responsibility. Guest conformance scripts can run against a built module with
 `npm run test:emulator:guest` and `npm run test:emulator:devices`; each accepts
 an optional path to `camera.mjs`.
+
+The final module is optimized with the pinned SDK's Binaryen, using WebAssembly
+GC support to refine indirect-call types. The optimizer validates the module
+and preserves its import/export interface before replacing the linked file.
+`build.json` records the optimizer version, flags, sizes and hashes. Runtime
+browsers must support WebAssembly GC, shared memory and exception handling.
 
 Run the emulator in a dedicated browser worker. The runtime uses shared Wasm
 memory and two persistent device threads; serve the page and runtime assets with
@@ -156,7 +166,14 @@ bytes are copied across the Wasm boundary rather than exposing a borrowed view.
 
 ## Commands and composed operations
 
-Session methods such as `readMemory`, `writeMemory`, `readConfiguration`,
+Memory of any size goes through `session.memory(firmwareId)`. It qualifies
+the firmware's stock bulk path once; `read` uses it for anything larger than one
+packet, `write` splits larger writes into packet-sized commands, and `close`
+restores any bulk source override. `readSinglePacket` and `writeSinglePacket`
+send exactly one memory command of at most `packetBytes` (256 on the X70) and
+refuse anything longer.
+
+Session methods such as `readSinglePacket`, `readConfiguration`,
 `diagnosticQuery`, `submitConsole` and `pollConsole` each perform one command.
 `configurationGeometry`, `prepareCapabilities` and the two firmware-download
 status methods retain typed metadata and raw replies. `readLog` is consuming
@@ -167,10 +184,8 @@ Pending never cause implicit waits, retries or cleanup.
 
 Higher-level operations live in their own groups:
 
-- `usb.memory.readRange` / `writeRange` compose bounded memory commands.
-- `usb.memory.readChunks(session, address, length)` returns an async iterator
-  with `bytesCompleted` and an explicit `close()`.
-- `usb.data.readChunks(session, window, address, length)` streams E1 ranges;
+- `usb.data.readChunks(session, window, address, length)` streams E1 ranges as
+  an async iterator with `bytesCompleted` and an explicit `close()`;
   `DataWindow` requires an explicit base, aperture, capacity and offset mode.
 - `usb.data.upload(session, bytes, pieceBytes, mode)` owns setup, E0 pieces and
   E8 as one operation, preserving raw setup fields and final acknowledgment.
@@ -180,13 +195,12 @@ Higher-level operations live in their own groups:
   bodies with an explicit reply capacity. Only the common header is validated.
 
 ```ts
-const chunks = usb.memory.readChunks(session, address, length);
+const memory = await session.memory('x70-110');
 try {
-  for await (const bytes of chunks) {
-    await sink.write(bytes);
-  }
+  const bytes = await memory.read(address, length);
+  await sink.write(bytes);
 } finally {
-  chunks.close();
+  await memory.close();
 }
 ```
 

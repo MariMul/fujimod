@@ -1,4 +1,4 @@
-//! Execution-owner permission for exact, instruction-proven loop acceleration.
+//! Execution-owner permission for bounded, instruction-proven loop acceleration.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LoopMode {
     Disabled,

@@ -141,7 +141,6 @@ function configuration(quantum: number) {
       firmwareId: 'generated',
       bootSource: 'internal',
       quantum,
-      translationCacheBytes: 1 << 20,
       execution: {
         processors: [
           {

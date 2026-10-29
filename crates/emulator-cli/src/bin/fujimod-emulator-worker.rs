@@ -1,8 +1,8 @@
 //! Signed native owner for the common board factory. JSON-lines transport and
 //! raw-frame publication are outside guest execution and never supply its time.
-use fujimod_catalog::emulator::Asset;
+use fujimod_catalog_assets::Asset;
 use fujimod_emulator::board::{self, Board, InterruptMap, aprofile, bus::Bus, factory, mprofile};
-use fujimod_emulator::inputs::{Files, Location};
+use fujimod_catalog_assets::files::{Files, Location};
 use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::Source, pins::DriveInput}};
 use fujimod_emulator_parts_controls::resistor_keys::{Key, Options as ResistorKeysOptions, ResistorKeys};
@@ -192,9 +192,11 @@ impl Gic {
         }
         Ok(InterruptMap {
             gic: Box::new(gic),
-            distributor: self.distributor,
-            redistributor: self.redistributor,
-            stride: self.stride,
+            registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                distributor: self.distributor,
+                redistributor: self.redistributor,
+                stride: self.stride,
+            },
             cores: self.affinities.len(),
         })
     }
@@ -269,6 +271,8 @@ enum Devices {
         controls: ControlInput,
         companion: Option<Companion>,
         storage: Option<String>,
+        #[serde(default)]
+        sd: Vec<xp5_board::sd::MediaInputs>,
         displays: Vec<Scanout>,
     },
 }
@@ -278,7 +282,6 @@ struct Config {
     schema: u32,
     engine: Engine,
     mode: Mode,
-    translation_cache_bytes: u32,
     instructions_per_tick: [u64; 2],
     quantum: usize,
     ram: Vec<Ram>,
@@ -302,9 +305,13 @@ enum Command {
         until: u64,
     },
     State,
+    MemoryFingerprint,
     Progress,
+    InstructionPoints { core: usize, addresses: Vec<u64> },
+    InstructionEvent { core: usize },
     RunInstructions {
         count: u64,
+        until: Option<u64>,
     },
     ReadMemory {
         core: usize,
@@ -402,6 +409,7 @@ struct Worker {
     output_directory: PathBuf,
     archive: u64,
     unmodeled_devices: Vec<String>,
+    instruction_points: BTreeMap<usize, Box<board::observation::InstructionPoints>>,
 }
 impl Worker {
     fn new(config: Config) -> Result<Self, String> {
@@ -418,11 +426,13 @@ impl Worker {
         let storage_id = match &config.devices {
             Devices::Xp5 { storage, .. } => storage.as_deref(),
         };
+        let sd_ids: Vec<_> = match &config.devices { Devices::Xp5 { sd, .. } => sd.iter().flat_map(|media| media.files.iter().map(|(_, id)| id.as_str())).collect() };
         let used: BTreeSet<_> = config
             .images
             .iter()
             .map(|image| image.asset.as_str())
             .chain(storage_id)
+            .chain(sd_ids.iter().copied())
             .collect();
         if used != assets.keys().map(String::as_str).collect() {
             return Err("worker image/storage references differ from declared assets".into());
@@ -447,6 +457,7 @@ impl Worker {
             .map(|image| Ok((image.address, load(&image.asset)?)))
             .collect::<Result<Vec<_>, String>>()?;
         let storage_image = storage_id.map(load).transpose()?;
+        let sd_assets = sd_ids.into_iter().map(|id| Ok((id.to_owned(), load(id)?))).collect::<Result<BTreeMap<_,_>,String>>()?;
         let mode = config.mode.runtime();
         let mut graph = DeviceGraph::new();
         let mut unmodeled_devices = vec![];
@@ -456,6 +467,7 @@ impl Worker {
                 controls,
                 companion,
                 storage: _,
+                sd,
                 displays,
             } => {
                 let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
@@ -477,6 +489,7 @@ impl Worker {
                     );
                 }
                 let mut resources = xp5_board::Resources {
+                    sd: xp5_board::sd::resolve(sd, &sd_assets)?,
                     controls: input.clone(),
                     pins,
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
@@ -503,6 +516,7 @@ impl Worker {
                         Ok(())
                     }
                 })?;
+                if !resources.sd.is_empty() { return Err("unused SD media configuration".into()); }
                 if !resources.displays.is_empty() {
                     return Err("unused scanout configuration".into());
                 }
@@ -583,23 +597,23 @@ impl Worker {
             )?,
         };
         let mut board = graph.build(
-            factory::Options {
-                engine: match config.engine {
-                    Engine::Unicorn => factory::Engine::Unicorn,
-                    Engine::Hypervisor => factory::Engine::Hypervisor,
-                },
-                translation_cache_bytes: config.translation_cache_bytes,
-            },
+            factory::Options::new(match config.engine {
+                Engine::Unicorn => factory::Engine::Unicorn,
+                Engine::Hypervisor => factory::Engine::Hypervisor,
+            }),
             bus,
             config.interrupts.map(Gic::runtime).transpose()?,
         )?;
         for (core, controller) in controllers.into_iter().enumerate() {
             if let Some(c) = controller {
-                board.configure_aprofile(core, c)?;
+                board.configure_aprofile(core, c)
+                    .map_err(|error| format!("CPU{core} A-profile: {error}"))?;
             }
         }
         for (address, image) in images {
-            board.write_memory(0, address, &image)?;
+            board.write_memory(0, address, &image).map_err(|error| {
+                format!("Image {address:#x}+{:#x}: {error}", image.len())
+            })?;
         }
         Ok(Self {
             board,
@@ -609,6 +623,7 @@ impl Worker {
             output_directory: config.output_directory,
             archive: 0,
             unmodeled_devices,
+            instruction_points: BTreeMap::new(),
         })
     }
     fn state(&self) -> Value {
@@ -623,8 +638,8 @@ impl Worker {
                     json!({"now":self.board.now(),"failure":result.err(),"console":self.board.take_console()}),
                 )
             }
-            Command::RunInstructions { count } => {
-                let result = self.board.run_for_instructions(count, self.quantum);
+            Command::RunInstructions { count, until } => {
+                let result = self.board.run_with_limits(count, self.quantum, None, until);
                 Ok(
                     json!({"now":self.board.now(),"instructions":self.board.instruction_counts(),"failure":result.err(),"console":self.board.take_console()}),
                 )
@@ -632,7 +647,21 @@ impl Worker {
             Command::Progress => {
                 Ok(json!({"now":self.board.now(),"instructions":self.board.instruction_counts()}))
             }
+            Command::InstructionPoints { core, addresses } => {
+                self.board.cpu(core)?;
+                if let Some(mut points) = self.instruction_points.remove(&core) {
+                    self.board.instruction_points_end(core, &mut points)?;
+                }
+                if !addresses.is_empty() {
+                    self.instruction_points.insert(core, self.board.instruction_points_begin(core, addresses)?);
+                }
+                Ok(Value::Null)
+            }
+            Command::InstructionEvent { core } => Ok(self.instruction_points.get(&core).and_then(|points| {
+                points.event().map(|address| json!({"core":core,"address":address}))
+            }).unwrap_or(Value::Null)),
             Command::State => Ok(self.state()),
+            Command::MemoryFingerprint => self.board.memory_fingerprint(),
             Command::ReadMemory {
                 core,
                 address,

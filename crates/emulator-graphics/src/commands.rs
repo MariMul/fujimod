@@ -14,10 +14,10 @@ pub struct Write {
 
 impl Write {
     pub fn mask(self) -> u64 {
-        (0..4)
-            .filter(|lane| self.lanes >> lane & 1 != 0)
-            .map(|lane| 255u64 << (8 * lane))
-            .sum()
+        (u64::from(self.lanes & 1 != 0) * 0xff)
+            | (u64::from(self.lanes & 2 != 0) * 0xff00)
+            | (u64::from(self.lanes & 4 != 0) * 0xff0000)
+            | (u64::from(self.lanes & 8 != 0) * 0xff000000)
     }
 
     pub fn apply(self, previous: u64) -> u64 {
@@ -47,11 +47,17 @@ pub fn geometry_words(code: u32) -> Option<usize> {
 }
 
 pub fn decode(words: &[u32], path: bool) -> Result<Vec<Command<'_>>> {
+    let mut commands = Vec::new();
+    visit(words, path, |command| commands.push(command))?;
+    Ok(commands)
+}
+
+/// Validate framing and visit commands without allocating a command list.
+pub fn visit<'a>(words: &'a [u32], path: bool, mut visitor: impl FnMut(Command<'a>)) -> Result<()> {
     let fail = |message: &str| Unsupported(format!("Graphics {message}"));
     if words.is_empty() || !words.len().is_multiple_of(16) {
         return Err(fail("commands require complete 16-word-aligned lists"));
     }
-    let mut commands = Vec::new();
     let mut position = 0;
     while position < words.len() {
         let header = words[position];
@@ -70,7 +76,7 @@ pub fn decode(words: &[u32], path: bool) -> Result<Vec<Command<'_>>> {
             if lanes == 0 {
                 return Err(fail("register write selects no byte lanes"));
             }
-            commands.push(Command::Write(Write {
+            visitor(Command::Write(Write {
                 index: header & 0xffff,
                 lanes,
                 value,
@@ -82,7 +88,7 @@ pub fn decode(words: &[u32], path: bool) -> Result<Vec<Command<'_>>> {
                     "geometry has unsupported flags or incomplete operands",
                 ));
             }
-            commands.push(Command::Geometry {
+            visitor(Command::Geometry {
                 code: header >> 24,
                 flags: header >> 16 & 0x3f,
                 operands: &words[position..position + count],
@@ -92,7 +98,7 @@ pub fn decode(words: &[u32], path: bool) -> Result<Vec<Command<'_>>> {
             return Err(Unsupported(format!("Graphics unknown command {header:#x}")));
         }
     }
-    Ok(commands)
+    Ok(())
 }
 
 #[cfg(test)]

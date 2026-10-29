@@ -1,93 +1,44 @@
-import { For, Show, createSignal, createEffect, createMemo, untrack } from 'solid-js';
+import { For, createSignal, createEffect, createMemo, untrack } from 'solid-js';
 import type { Engine } from '../engine/api';
 import type { CardEntry, CardState } from 'fujimod/emulator';
-import { zipFiles } from '../archive';
-import { flags } from '../flags';
-import { Icon } from './icons';
+import { zipBlob } from '../archive';
+import { FileList, type FileListItem } from './file-list';
 import { downloadBlob } from './download';
+import { shownError } from './shown-error';
 
-function downloadable(entry: CardEntry) {
-  return flags.allowSdCardBootDownload || !/^ff(?:boot|sys)\.bin$/i.test(entry.name);
-}
-
-function visibleEntries(entries: CardEntry[]): CardEntry[] {
+function visibleEntries(
+  entries: CardEntry[],
+  canDownload: (entry: CardEntry) => boolean,
+): CardEntry[] {
   return entries
-    .filter((entry) => entry.kind === 'directory' || downloadable(entry))
+    .filter((entry) => entry.kind === 'directory' || canDownload(entry))
     .map((entry) =>
       entry.kind === 'directory'
-        ? { ...entry, children: visibleEntries(entry.children ?? []) }
+        ? { ...entry, children: visibleEntries(entry.children ?? [], canDownload) }
         : entry,
     );
 }
 
-function CardEntryRow(props: { entry: CardEntry; download: (entry: CardEntry) => Promise<void> }) {
-  const [open, setOpen] = createSignal(true),
-    [busy, setBusy] = createSignal(false);
-  const size = () =>
-    props.entry.bytes >= 1024 ** 2
-      ? `${(props.entry.bytes / 1024 ** 2).toFixed(1)} MB`
-      : props.entry.bytes >= 1024
-        ? `${Number((props.entry.bytes / 1024).toFixed(1))} KB`
-        : `${props.entry.bytes} B`;
-  return (
-    <Show
-      when={props.entry.kind === 'directory'}
-      fallback={
-        <div class="r">
-          <span class="tw" />
-          <Icon name={/\.(jpe?g|png)$/i.test(props.entry.name) ? 'image' : 'file'} />
-          <span class="n">{props.entry.name}</span>
-          <span class="s">{size()}</span>
-          <button
-            class="dl"
-            aria-label={`Download ${props.entry.name}`}
-            disabled={busy()}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await props.download(props.entry);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <Icon name="download" size={15} />
-          </button>
-        </div>
-      }
-    >
-      <div class="r folder">
-        <button
-          type="button"
-          aria-expanded={open() ? 'true' : 'false'}
-          aria-label={props.entry.name}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span class={['tw', { closed: !open() }]}>
-            <Icon name="chevron" size={13} />
-          </span>
-          <Icon name="folder" />
-          <span class="n">{props.entry.name}</span>
-        </button>
-      </div>
-      <div class="kids" hidden={!open()}>
-        <For each={props.entry.children ?? []} keyed={(entry) => entry.path}>
-          {(entry) => <CardEntryRow entry={entry()} download={props.download} />}
-        </For>
-      </div>
-    </Show>
+function listItems(entries: readonly CardEntry[]): FileListItem[] {
+  return entries.map((entry) =>
+    entry.kind === 'directory'
+      ? { key: entry.path, name: entry.name, children: listItems(entry.children ?? []) }
+      : { key: entry.path, name: entry.name, bytes: entry.bytes },
   );
 }
 
 /** All observations/downloads are bound to the engine and the card revision that supplied them. */
 export function CardBrowser(props: {
   engine?: Engine;
+  canDownload?: (entry: CardEntry) => boolean;
   present: (value: boolean) => Promise<void>;
   format: () => Promise<void>;
 }) {
   const [state, setState] = createSignal<CardState>();
   const [tree, setTree] = createSignal<{ revision: number; entries: CardEntry[] }>();
-  const entries = createMemo(() => visibleEntries(tree()?.entries ?? []));
+  const entries = createMemo(() =>
+    visibleEntries(tree()?.entries ?? [], (entry) => props.canDownload?.(entry) ?? true),
+  );
   const files = createMemo(() => {
     const result: CardEntry[] = [];
     const visit = (items: CardEntry[]) => {
@@ -141,7 +92,7 @@ export function CardBrowser(props: {
             setTree({ revision: value.revision, entries: value.entries });
           })
           .catch((error) => {
-            if (current === generation && observed === observation) setStatus(String(error));
+            if (current === generation && observed === observation) setStatus(shownError(error));
           })
           .finally(() => {
             if (pendingRevision === revision) pendingRevision = undefined;
@@ -158,14 +109,14 @@ export function CardBrowser(props: {
     try {
       await task();
     } catch (error) {
-      if (current === generation) setStatus(String(error));
+      if (current === generation) setStatus(shownError(error));
     }
   }
   async function download(entry: CardEntry) {
     const engine = props.engine,
       current = generation,
       revision = tree()?.revision;
-    if (!engine || revision === undefined || !downloadable(entry)) return;
+    if (!engine || revision === undefined || props.canDownload?.(entry) === false) return;
     await perform(async () => {
       const bytes = await engine.readCardFile(entry.path, { revision });
       if (current === generation) downloadBlob(new Blob([bytes.slice().buffer]), entry.name);
@@ -180,17 +131,22 @@ export function CardBrowser(props: {
     await perform(async () => {
       if (downloads.reduce((sum, item) => sum + item.bytes, 0) > 64 * 1024 ** 2)
         throw Error('Card download exceeds the 64 MiB browser archive limit.');
-      const files: [string, Uint8Array<ArrayBuffer>][] = [];
+      const files: { path: string; data: Blob }[] = [];
       for (const entry of downloads) {
         const bytes = await engine.readCardFile(entry.path, { revision: listing.revision });
         if (current !== generation) return;
-        files.push([entry.path.replace(/^[A-Za-z]:[\\/]/, '').replace(/^\//, ''), bytes.slice()]);
+        files.push({
+          path: entry.path.replace(/^[A-Za-z]:[\\/]/, '').replace(/^\//, ''),
+          data: new Blob([bytes.slice().buffer]),
+        });
       }
-      downloadBlob(zipFiles(files), 'sd-card.zip');
+      const zip = await zipBlob(files);
+      if (current === generation) downloadBlob(zip, 'sd-card.zip');
     });
   }
   return (
-    <div class="sd" id="card-section" aria-label="SD card" hidden={state()?.supported === false}>
+    <div class="sd" id="card-section" aria-label="SD card" hidden={!state()?.supported}>
+      <hr />
       <div class="head" id="card-header">
         <b>SD CARD</b>
         <span id="card-capacity">
@@ -214,11 +170,14 @@ export function CardBrowser(props: {
           </For>
         </div>
       </div>
-      <div class="tree" id="card-files">
-        <For each={entries()} keyed={(entry) => entry.path}>
-          {(entry) => <CardEntryRow entry={entry()} download={download} />}
-        </For>
-      </div>
+      <FileList
+        id="card-files"
+        items={listItems(entries())}
+        download={(item) => {
+          const entry = files().find((file) => file.path === item.key);
+          return entry && download(entry);
+        }}
+      />
       <div class="row" style={{ 'margin-top': '10px' }}>
         <button
           class="pill"

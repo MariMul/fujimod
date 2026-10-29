@@ -2,15 +2,23 @@
 //! sensor-command transport, declared physical phase clocks, and RAW channels
 //! 2/4. No startup ledger, program signature, or instruction inspection.
 mod registers;
-use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
-use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{Raster, Transfer, physical}, due, parameters::ParameterHandle, word};
-use fujimod_emulator_imaging::film::Film;
-use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
-use fujimod_emulator_parts_sensor::sensor::Sensor;
-use fujimod_emulator_imaging::scene::FrameEdge;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
+use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
+use fujimod_emulator_imaging::exr2_isp::options::input::{
+    ClockMode, ClockSource, Command, Options, PhaseAck,
+};
+use fujimod_emulator_imaging::exr2_isp::{
+    dma::{Raster, Transfer, physical},
+    due,
+    parameters::ParameterHandle,
+    word,
+};
+use fujimod_emulator_imaging::film::Film;
+use fujimod_emulator_imaging::scene::FrameEdge;
+use fujimod_emulator_parts_sensor::sensor::Sensor;
 use serde::{Deserialize, Serialize};
-use fujimod_emulator_imaging::exr2_isp::options::input::{Options, Command, PhaseAck, ClockMode, ClockSource};
 
 pub struct Wiring {
     pub frame_period: Option<fujimod_emulator_imaging::timing::FramePeriod>,
@@ -577,18 +585,10 @@ impl ImageInput {
         } else {
             v
         };
-        if o == 4 {
-            self.publish_input_route();
-        }
         if matches!(o, 0x28 | 0x2c) {
             self.publish_grid()?;
         }
         self.sync_clocks(cx.now())
-    }
-    fn publish_input_route(&self) {
-        if let Some(outputs) = &self.wiring.memory_outputs {
-            outputs.lock().unwrap().raw_input = self.state.r[1] & 1 != 0;
-        }
     }
     fn publish_grid(&self) -> Result<(), String> {
         if let Some(grid) = &self.wiring.statistics_grid {
@@ -627,8 +627,11 @@ impl ImageInput {
         let Some(sensor) = &mut self.wiring.sensor else {
             return Ok(true);
         };
-        sensor.latch(cx.now())?;
-        if !sensor.readout_valid() {
+        sensor.preview_view([
+            (self.state.r[0x28 / 4] >> 16 & 0x3fff) as usize,
+            (self.state.r[0x28 / 4] & 0xfff) as usize + 1,
+        ])?;
+        if sensor.latch(cx.now())?.is_none() {
             return Ok(false);
         }
         let State {
@@ -906,7 +909,6 @@ impl Device for ImageInput {
             sensor.restore_checkpoint(&saved.children()[0])?;
         }
         self.state = state;
-        self.publish_input_route();
         self.publish_grid()?;
         self.cfa = cfa;
         self.film = film;

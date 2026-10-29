@@ -1,6 +1,6 @@
 //! File-based construction and synchronous execution on the Python owner thread.
 use super::*;
-use fujimod_emulator::boot;
+use fujimod_python_base::boot::{Inputs, boot};
 use std::{
     marker::PhantomData,
     ptr::NonNull,
@@ -8,26 +8,28 @@ use std::{
 };
 
 struct Owner<'a> {
-    session: NonNull<fujimod_emulator::session::Session>,
+    session: NonNull<fujimod_emulator_session::Session>,
     thread: ThreadId,
-    _loan: PhantomData<&'a mut fujimod_emulator::session::Session>,
+    _loan: PhantomData<&'a mut fujimod_emulator_session::Session>,
 }
 // This is a synchronous, lifetime-bound detach capability, not a Send Session.
 // Dereferencing is guarded by the original thread ID and Drop never uses it.
 unsafe impl Send for Owner<'_> {}
 impl<'a> Owner<'a> {
-    fn new(session: &'a mut fujimod_emulator::session::Session) -> Self {
+    fn new(session: &'a mut fujimod_emulator_session::Session) -> Self {
         Self {
             session: NonNull::from(session),
             thread: thread::current().id(),
             _loan: PhantomData,
         }
     }
-    fn run(mut self, limit: u64) -> Result<boot::RecReport, String> {
+    fn run(mut self, limit: u64) -> PyResult<String> {
         if self.thread != thread::current().id() {
-            return Err("session execution moved from its owner thread".into());
+            return Err(error("session execution moved from its owner thread".into()));
         }
-        boot::to_rec(unsafe { self.session.as_mut() }, limit)
+        boot()?
+            .to_rec(unsafe { self.session.as_mut() }, limit)
+            .map_err(error)
     }
 }
 
@@ -46,7 +48,8 @@ impl Board {
         preferred_languages: Vec<String>,
         camera: Option<PathBuf>,
     ) -> PyResult<Self> {
-        let session = boot::open(boot::Options {
+        let session = boot()?
+            .open(Inputs {
             configuration_id,
             overlays,
             update,
@@ -56,8 +59,8 @@ impl Board {
             clock_seconds_2000,
             preferred_languages,
             camera,
-        })
-        .map_err(error)?;
+            })
+            .map_err(error)?;
         let graph: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
             .map_err(|e| error(e.to_string()))?;
         let read_limit = graph
@@ -84,6 +87,7 @@ impl Board {
             objects: BTreeMap::new(),
             failures: Failures::default(),
             read_limit,
+            last_continuation_stop: None,
         })
     }
     #[getter]
@@ -105,15 +109,12 @@ impl Board {
             ));
         }
         let owner = Owner::new(self.session_mut()?);
-        let report = py
-            .detach(move || owner.run(instruction_limit))
-            .map_err(error)?;
-        serde_json::to_string(&report).map_err(|e| error(e.to_string()))
+        py.detach(move || owner.run(instruction_limit))
     }
     fn screenshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(
             py,
-            &boot::screenshot(self.session()?).map_err(error)?,
+            &boot()?.screenshot(self.session()?).map_err(error)?,
         ))
     }
 }

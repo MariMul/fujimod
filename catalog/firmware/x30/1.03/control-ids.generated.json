@@ -3818,7 +3818,8 @@
       "event": 42,
       "debug_key": "CMD_PUSH",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "command_dial"
       },
       "scanner": {
         "index": 15,
@@ -3844,7 +3845,8 @@
       "event": 546,
       "debug_key": "VIEW",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "view_mode_button"
       },
       "scanner": {
         "index": 16,
@@ -5116,17 +5118,6 @@
       "target": {
         "kind": "control",
         "control_id": "zoom_power_ring"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-37",
-      "event": 37,
-      "debug_key": "EVF_LCD",
-      "target": {
-        "kind": "control",
-        "control_id": "view_mode_button"
       },
       "scanner": null,
       "electrical": null

@@ -1,5 +1,6 @@
 //! Board execution and device scheduling above the CPU backend boundary.
 pub mod aprofile;
+pub mod armv7a;
 pub mod bus;
 pub mod continuation;
 pub mod decoder;
@@ -30,24 +31,19 @@ mod tests;
 #[cfg(test)]
 mod workers_tests;
 use bus::Bus;
+pub use fujimod_emulator_cpu::GuestProfilePhase;
 use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
 use fujimod_emulator_cpu::{
     Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run,
 };
-use fujimod_emulator_devices::gic::InterruptController;
 use fujimod_emulator_devices::{Host, Record};
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 use std::rc::{Rc, Weak};
 
-pub struct InterruptMap {
-    pub gic: Box<dyn InterruptController>,
-    pub distributor: u64,
-    pub redistributor: u64,
-    pub stride: u64,
-    pub cores: usize,
-}
+mod interrupts;
+pub use interrupts::{InterruptMap, InterruptRegisters};
 struct CoreInterruptMap {
     device: usize,
     inputs: Box<dyn fujimod_emulator_devices::bus::CoreInterrupts>,
@@ -68,6 +64,7 @@ fn prepare_device_workers(policy: ExecutionPolicy, preference: usize) -> Result<
 
 struct State {
     continuation: Rc<RefCell<continuation::Stops>>,
+    host_pause: Rc<Cell<bool>>,
     execution_policy: ExecutionPolicy,
     // Host computation preference; absent from fingerprints and keyframes.
     device_workers: usize,
@@ -97,6 +94,8 @@ struct State {
     outputs: std::collections::BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Profile>>,
     aprofile: Vec<Option<aprofile::Profile>>,
+    armv7a: Vec<Option<armv7a::Profile>>,
+    entry_points: Vec<Vec<Weak<observation::EntryPoints>>>,
     implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: std::collections::BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
@@ -114,6 +113,7 @@ struct State {
 struct Binding {
     state: Rc<RefCell<State>>,
     cpus: Weak<Vec<Rc<dyn Cpu>>>,
+    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     core: usize,
     base: u64,
 }
@@ -126,6 +126,9 @@ pub struct Board {
     bindings: Vec<Box<Binding>>,
     hooks: Vec<(usize, HookId)>,
     mmio: Vec<(usize, u64, usize)>,
+    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
+    interactive_windows: Cell<u64>,
+    interactive_host_duration_ns: Cell<u128>,
     next_core: Cell<usize>,
     slice_left: Cell<usize>,
     quantum: Cell<Option<usize>>,
@@ -133,6 +136,9 @@ pub struct Board {
     retained_engines: Option<factory::Engines>,
     physical_memory: Rc<memory::Memory>,
     host_pause: Rc<Cell<bool>>,
+    // Passive host reporting; excluded from modeled state and checkpoints.
+    progress_observer: Option<Box<dyn FnMut(u64)>>,
+    guest_profile_active: Cell<bool>,
     isolated_core: Cell<Option<usize>>,
     continuation: Option<Box<continuation::StoreWatch>>,
     /// Processor address views of RAM, from the checked graph.
@@ -141,8 +147,13 @@ pub struct Board {
     watches: Vec<Box<observe::Watch>>,
     entries: Rc<RefCell<observe::Entries>>,
     discovery_stub_contexts: Vec<Box<discovery::CalleeStubContext>>,
+    translation_cache_size_bytes: u32,
 }
 impl Board {
+    /// Per processor translation cache size selected when the board was built.
+    pub fn translation_cache_size_bytes(&self) -> u32 {
+        self.translation_cache_size_bytes
+    }
     /// Host parallelism used for Interactive device computations. Defaults to
     /// zero on every target; Exact stays inline for any preference.
     pub fn device_worker_preference(&self) -> usize {
@@ -150,6 +161,41 @@ impl Board {
     }
     pub fn device_worker_count(&self) -> usize {
         device_workers(self.execution_policy(), self.device_worker_preference())
+    }
+    /// Take device work that paused guest execution for an external async host
+    /// operation. Each request is paired with its owning device index.
+    pub fn take_host_requests(
+        &mut self,
+    ) -> Result<Vec<(usize, fujimod_emulator_devices::bus::HostRequest)>, String> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "host requests require a stopped board")?;
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
+            return Err("host requests require a stopped board".into());
+        }
+        Ok(state.bus.take_host_requests())
+    }
+    /// Deliver an async host result to the device that published its request.
+    pub fn complete_host_request(
+        &mut self,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "host result requires a stopped board")?;
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
+            return Err("host result requires a stopped board".into());
+        }
+        state.with_host(&self.cpus, |bus, host| {
+            bus.complete_host_request(host, device, id, result)
+        })?;
+        self.host_pause.set(false);
+        state.refresh_deadlines()?;
+        state.refresh_processors()
     }
     /// Drain derived work before changing a stopped owner's executor. Joining
     /// computation never publishes its DMA payload or interrupts.
@@ -250,25 +296,8 @@ impl Board {
         if cpus.is_empty() || cpus.len() != released.len() || !released.iter().any(|r| *r) {
             return Err("invalid released processor set".into());
         }
-        if interrupts
-            .as_ref()
-            .is_some_and(|g| g.cores > cpus.len() || g.stride < 0x20000 || g.stride % 0x10000 != 0)
-        {
-            return Err("invalid GIC processor map".into());
-        }
         if let Some(g) = &interrupts {
-            if g.cores == 0
-                || g.distributor.checked_add(0x10000).is_none()
-                || g.stride
-                    .checked_mul(g.cores as u64)
-                    .and_then(|n| g.redistributor.checked_add(n))
-                    .is_none()
-            {
-                return Err("invalid GIC address geometry".into());
-            }
-            for core in 0..g.cores {
-                g.gic.pins(core)?;
-            }
+            g.validate(cpus.len())?;
         }
         let n = cpus.len();
         let reset_contexts = cpus
@@ -288,9 +317,12 @@ impl Board {
         }
         let count = bus.len();
         let memory = Rc::new(memory);
+        let mmio_callback_counts = Rc::new(RefCell::new(vec![0; n]));
         let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
+        let host_pause = Rc::new(Cell::new(false));
         let state = Rc::new(RefCell::new(State {
             continuation,
+            host_pause: host_pause.clone(),
             execution_policy: ExecutionPolicy::Exact,
             device_workers: 0,
             clock_limit: None,
@@ -318,6 +350,8 @@ impl Board {
             outputs: Default::default(),
             mprofile: (0..n).map(|_| None).collect(),
             aprofile: (0..n).map(|_| None).collect(),
+            armv7a: (0..n).map(|_| None).collect(),
+            entry_points: (0..n).map(|_| Vec::new()).collect(),
             implementation_cluster: Default::default(),
             unmodeled_system: Default::default(),
             processor_deadlines: vec![None; n],
@@ -332,7 +366,9 @@ impl Board {
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
-            host_pause: Default::default(),
+            host_pause,
+            progress_observer: None,
+            guest_profile_active: Cell::new(false),
             isolated_core: Cell::new(None),
             continuation: None,
             mappings: vec![],
@@ -340,11 +376,15 @@ impl Board {
             watches: vec![],
             entries: Default::default(),
             discovery_stub_contexts: vec![],
+            translation_cache_size_bytes: 0,
             cpus: Rc::new(cpus.into_iter().map(Rc::from).collect()),
             state,
             bindings: vec![],
             hooks: vec![],
             mmio: vec![],
+            mmio_callback_counts,
+            interactive_windows: Cell::new(0),
+            interactive_host_duration_ns: Cell::new(0),
             next_core: Cell::new(0),
             slice_left: Cell::new(0),
             quantum: Cell::new(None),
@@ -358,6 +398,7 @@ impl Board {
             let binding = Box::new(Binding {
                 state: board.state.clone(),
                 cpus: Rc::downgrade(&board.cpus),
+                mmio_callback_counts: board.mmio_callback_counts.clone(),
                 core,
                 base: 0,
             });
@@ -417,6 +458,22 @@ impl Board {
     pub fn instruction_counts(&self) -> Vec<u64> {
         self.state.borrow().instructions.clone()
     }
+    /// Serviced board MMIO callbacks, indexed by processor.
+    pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
+        self.mmio_callback_counts.borrow().clone()
+    }
+    /// Interactive run windows completed by the board scheduler.
+    pub fn interactive_window_count(&self) -> u64 {
+        self.interactive_windows.get()
+    }
+    /// Mean host duration of completed interactive windows, in nanoseconds.
+    pub fn mean_interactive_window_host_duration_ns(&self) -> Option<u64> {
+        let count = self.interactive_windows.get();
+        (count != 0).then(|| {
+            u64::try_from(self.interactive_host_duration_ns.get() / u128::from(count))
+                .unwrap_or(u64::MAX)
+        })
+    }
     /// Processor address views of RAM, as continuation watches take them.
     pub fn mappings(&self) -> &[factory::MemoryMap] {
         &self.mappings
@@ -433,12 +490,62 @@ impl Board {
             .collect::<Result<_, _>>()?;
         self.state.borrow_mut().bus.start_host_profile(baseline)
     }
+    /// Begin block-level guest observations while all processors are stopped.
+    pub fn start_guest_profile(&self) -> Result<(), String> {
+        if self.guest_profile_active.get() {
+            return Err("guest profile is already active".into());
+        }
+        let mut started = Vec::<usize>::new();
+        for (index, cpu) in self.cpus.iter().enumerate() {
+            if let Err(error) = cpu.start_guest_profile() {
+                for started_index in started {
+                    let _ = self.cpus[started_index].finish_guest_profile();
+                }
+                return Err(format!("processor {index} guest profile: {error}"));
+            }
+            started.push(index);
+        }
+        self.guest_profile_active.set(true);
+        Ok(())
+    }
+    /// Finish block-level guest observations after a board run.
+    pub fn guest_profile(&self) -> Value {
+        let cores: Vec<_> = self
+            .cpus
+            .iter()
+            .enumerate()
+            .filter_map(|(core, cpu)| match cpu.finish_guest_profile() {
+                Ok(Some(blocks)) => Some(serde_json::json!({"core": core, "blocks": blocks})),
+                Ok(None) => None,
+                Err(error) => Some(serde_json::json!({"core": core, "error": error})),
+            })
+            .collect();
+        self.guest_profile_active.set(false);
+        serde_json::json!({
+            "version": 1,
+            "phase_semantics": {
+                "idle": "no physical key or touch input is active",
+                "key": "a physical key or touch input is active"
+            },
+            "cores": cores
+        })
+    }
     /// Observe phase costs while all processors are stopped after a board run.
     pub fn host_profile(&self) -> Value {
         self.state
             .borrow()
             .bus
             .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect())
+    }
+    /// Set the phase used for subsequent optional guest profile entries.
+    pub fn set_guest_profile_phase(&self, phase: GuestProfilePhase) -> Result<(), String> {
+        if !self.guest_profile_active.get() {
+            return Ok(());
+        }
+        for cpu in self.cpus.iter() {
+            cpu.guest_profile_phase(phase)?;
+        }
+        Ok(())
     }
     /// Observation only: every released processor is waiting for an input.
     /// Device deadlines may still wake a processor in a later run.
@@ -584,6 +691,7 @@ impl Board {
         let binding = Box::new(Binding {
             state: self.state.clone(),
             cpus: Rc::downgrade(&self.cpus),
+            mmio_callback_counts: self.mmio_callback_counts.clone(),
             core,
             base: physical,
         });
@@ -595,11 +703,17 @@ impl Board {
             .fast_reads(physical, bytes)
             .into_iter()
             .map(|(offset, value)| match value {
+                fujimod_emulator_devices::bus::FastReadValue::AtomicU16(value) => {
+                    fujimod_emulator_cpu::FastMmioRead::atomic_u16(offset, value)
+                }
                 fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => {
                     fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)
                 }
                 fujimod_emulator_devices::bus::FastReadValue::ClockedU32(read) => {
                     fujimod_emulator_cpu::FastMmioRead::clocked_u32(offset, read)
+                }
+                fujimod_emulator_devices::bus::FastReadValue::ConsumingU32(read) => {
+                    fujimod_emulator_cpu::FastMmioRead::consuming_u32(offset, read)
                 }
             })
             .collect();
@@ -609,6 +723,12 @@ impl Board {
         self.bindings.push(binding);
         self.mmio.push((core, address, bytes));
         Ok(())
+    }
+    /// Observe guest ticks every 100,000 executed instructions, at existing scheduler
+    /// boundaries. The listener receives no board access and does not change guest
+    /// scheduling or stop criteria.
+    pub fn set_progress_observer(&mut self, observer: Option<Box<dyn FnMut(u64)>>) {
+        self.progress_observer = observer;
     }
     /// Execute to a guest tick. Exact uses deterministic round-robin slices;
     /// Interactive workers finish blocks and join at device/owner barriers.
@@ -691,11 +811,24 @@ impl Board {
             return Err("processor quantum is fixed for a board run".into());
         }
         self.quantum.set(Some(quantum));
-        self.host_pause.set(false);
+        if !self.state.borrow().bus.has_host_requests() {
+            self.host_pause.set(false);
+        }
         self.state.borrow_mut().code_run = None;
         self.state.borrow_mut().clock_limit = until;
         let mut completed_slice = None;
+        let mut next_progress = 0;
         loop {
+            if let Some(observer) = &mut self.progress_observer {
+                let (instructions, now) = {
+                    let s = self.state.borrow();
+                    (s.total_instructions()?, s.timeline.now())
+                };
+                if instructions >= next_progress {
+                    observer(now);
+                    next_progress = instructions.saturating_add(100_000);
+                }
+            }
             let mut s = self.state.borrow_mut();
             s.apply_memory(&self.cpus)?;
             s.refresh_processors()?;
@@ -882,7 +1015,29 @@ impl Board {
             if let Some(error) = s.error.take() {
                 return Err(error);
             }
-            let exit = result.map_err(|e| e.to_string())?;
+            let exit = result.map_err(|error| {
+                if cpu.model() == fujimod_emulator_cpu::Model::ArmV8A {
+                    let stop_pc = scalar(&**cpu, Register::Pc).unwrap_or(pc);
+                    let mut bytes = [0; 4];
+                    let word = cpu
+                        .read_virtual(
+                            stop_pc,
+                            fujimod_emulator_cpu::Access::Fetch,
+                            &mut bytes,
+                        )
+                        .map(|()| format!("{:#010x}", u32::from_le_bytes(bytes)))
+                        .unwrap_or_else(|_| "unavailable".into());
+                    let x0 = scalar(&**cpu, Register::X(0))
+                        .map(|value| format!("{value:#x}"))
+                        .unwrap_or_else(|_| "unavailable".into());
+                    format!(
+                        "CPU{core} {} at PC {stop_pc:#x}, instruction {word}, X0 {x0}: {error}",
+                        error.kind()
+                    )
+                } else {
+                    format!("CPU{core}: {error}")
+                }
+            })?;
             s.apply_memory(&self.cpus)?;
             s.finish_exit(&**cpu, core, pc, exit)?;
             let entered = s.instructions[core]
@@ -914,7 +1069,7 @@ impl Board {
         self.track_all_devices(&s.bus);
         let mut value = json!({"execution_mode":s.bus.mode().name(),"execution_policy":s.execution_policy.name(),"counts_as_boot":s.bus.mode()==bus::Mode::Strict,
             "timeline":s.timeline.save(),"instructions":s.instructions,"released":s.released,"waiting":s.waiting,"waiting_event":s.waiting_event,"events":s.events,"next_core":self.next_core.get(),"slice_left":self.slice_left.get(),"quantum":self.quantum.get(),"failure":s.error,
-            "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
+            "memory_decoders":s.decoders.state(),"dma_mappings":s.memory.state(),"gic":s.interrupts.as_ref().map(|g|g.gic.save()),"core_interrupt_devices":s.core_interrupts.iter().map(|c|c.as_ref().map(|c|c.device)).collect::<Vec<_>>(),"outputs":s.outputs,"implementation_cluster":s.implementation_cluster,"unmodeled_system":s.unmodeled_system.iter().map(|(&(core,register,pc),&(reads,writes))|json!({"core":core,"register":register,"pc":pc,"reads":reads,"writes":writes})).collect::<Vec<_>>(),"armv7a":s.armv7a,"aprofile":s.aprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()).unwrap_or_else(|e|json!({"error":e})))).collect::<Vec<_>>(),"mprofile":s.mprofile.iter().map(|p|p.as_ref().map(|p|p.state(s.timeline.now()))).collect::<Vec<_>>()});
         value["bus"] = bus;
         value["discovery_callee_stubs"] = self.discovery_callee_stubs();
         value
@@ -1002,6 +1157,15 @@ impl State {
         exit: Exit,
     ) -> Result<(), String> {
         match exit {
+            Exit::BeforeInstruction(word) => {
+                if cpu.model() != fujimod_emulator_cpu::Model::ArmV8A {
+                    return Err("unsupported framework instruction exit".into());
+                }
+                self.aarch64_instruction(cpu, core, scalar(cpu, Register::Pc)?, word)?;
+                self.timeline.advance_instructions(1)?;
+                self.instructions[core] = self.instructions[core]
+                    .checked_add(1).ok_or("instruction counter overflow")?;
+            }
             Exit::Stopped => (),
             Exit::Hint(hint) => self.hint(core, hint),
             Exit::Trap(t) if t.syndrome >> 26 == 1 => {
@@ -1225,6 +1389,7 @@ impl State {
         let Self {
             execution_policy,
             device_workers,
+            host_pause,
             bus,
             memory,
             timeline,
@@ -1250,6 +1415,7 @@ impl State {
         let mut host = Services {
             execution_policy: *execution_policy,
             device_workers: *device_workers,
+            host_pause,
             memory,
             timeline,
             interrupts,
@@ -1327,8 +1493,10 @@ impl State {
             for core in 0..g.cores {
                 let pins = g.gic.pins(core)?;
                 if pins != self.pins[core] {
-                    cpus[core].set_interrupt(Interrupt::Irq, pins.0)?;
-                    cpus[core].set_interrupt(Interrupt::Fiq, pins.1)?;
+                    if cpus[core].features().architectural_exits {
+                        cpus[core].set_interrupt(Interrupt::Irq, pins.0)?;
+                        cpus[core].set_interrupt(Interrupt::Fiq, pins.1)?;
+                    }
                     self.pins[core] = pins;
                     changed = true;
                 }
@@ -1388,25 +1556,12 @@ impl State {
                 return Ok(result);
             }
         }
-        if let Some(g) = &mut self.interrupts {
-            if address >= g.distributor && address < g.distributor + 0x10000 {
-                let result = g.gic.distributor(address - g.distributor, size, value)?;
-                self.push_pins(cpus)?;
-                self.tighten(&*cpus[core], core)?;
-                return Ok(result);
-            }
-            if address >= g.redistributor && address < g.redistributor + g.stride * g.cores as u64 {
-                let offset = address - g.redistributor;
-                let result = g.gic.redistributor(
-                    (offset / g.stride) as usize,
-                    offset % g.stride,
-                    size,
-                    value,
-                )?;
-                self.push_pins(cpus)?;
-                self.tighten(&*cpus[core], core)?;
-                return Ok(result);
-            }
+        if let Some(g) = &mut self.interrupts
+            && let Some(result) = g.access(core, address, size, value) {
+            let result = result?;
+            self.push_pins(cpus)?;
+            self.tighten(&*cpus[core], core)?;
+            return Ok(result);
         }
         self.memory_access = value.is_some();
         let result = self.with_host(cpus, |bus, host| {
@@ -1439,6 +1594,7 @@ impl State {
         };
         let write = if read { None } else { Some(value.unwrap_or(0)) };
         let value = if r == 0xc230
+            || r == 0xf665
             || (r >> 14 == 3
                 && (r >> 11) & 7 == 0
                 && (r >> 7) & 15 == 12
@@ -1487,6 +1643,7 @@ impl State {
 struct Services<'a> {
     execution_policy: ExecutionPolicy,
     device_workers: usize,
+    host_pause: &'a Cell<bool>,
     memory: &'a memory::Memory,
     timeline: &'a mut Timeline,
     interrupts: &'a mut Option<InterruptMap>,
@@ -1538,16 +1695,31 @@ impl Host for Services<'_> {
             // An MMIO callback is inside the selecting instruction. A raw
             // stop can leave its PC unchanged and replay it on resume.
             let cpu = &self.cpus[core];
-            cpu.tighten_instruction_limit(
-                cpu.instruction_progress()
-                    .ok_or("memory decoder requires instruction progress")?,
-            )
+            if let Some(progress)=cpu.instruction_progress() {
+                cpu.tighten_instruction_limit(progress)
+            }else{
+                // The all-instruction hook stops before the next instruction,
+                // after this MMIO instruction has retired and advanced its PC.
+                Ok(())
+            }
         } else {
             self.decoders.apply(self.cpus, self.memory)
         }
     }
     fn now(&self) -> u64 {
         self.timeline.now()
+    }
+    fn request_pause(&mut self) -> Result<(), String> {
+        let core = self
+            .active_core
+            .ok_or("host request pause requires an active guest instruction")?;
+        let cpu = self.cpus.get(core).ok_or("host pause targets absent CPU")?;
+        let progress = cpu
+            .instruction_progress()
+            .ok_or("CPU cannot pause at the current instruction boundary")?;
+        cpu.tighten_instruction_limit(progress)?;
+        self.host_pause.set(true);
+        Ok(())
     }
     fn schedule(&mut self, device: usize, at: u64, token: u64) {
         let r = self
@@ -1665,6 +1837,10 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         let mut s = b.state.borrow_mut();
         s.sync(cpu, b.core)?;
         s.due(&cpus)?;
+        if s.decoders.pending() {
+            cpu.stop()?;
+            return Ok(());
+        }
         if s.push_pins(&cpus)? {
             cpu.stop()?;
             return Ok(());
@@ -1689,6 +1865,15 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             // Restart before counting or executing its stale translation.
             cpu.stop()?;
             return Ok(());
+        }
+        if let Some(p) = &s.armv7a[b.core]
+            && s.pins[b.core].0 && p.enter_irq(cpu)? { return Ok(()); }
+        if s.observe_entry(b.core,pc,cpu)? {return Ok(());}
+        let now = s.timeline.now();
+        if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
+        if let Some(p) = &mut s.armv7a[b.core] {
+            let entry = p.before(cpu, pc, now)?;
+            if let armv7a::Entry::Hint(hint) = entry { s.hint(b.core, hint); }
         }
         if let Some(p) = &mut s.mprofile[b.core] {
             let entry = p.before(cpu, pc)?;
@@ -1788,6 +1973,9 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
     let result = (|| {
         let address = b.base.checked_add(offset).ok_or("MMIO address overflow")?;
         let size = u8::try_from(size).map_err(|_| "MMIO width overflow")?;
+        if let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core) {
+            *count = count.saturating_add(1);
+        }
         b.state
             .borrow_mut()
             .access(&cpus, b.core, address, size, value)

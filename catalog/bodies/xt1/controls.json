@@ -58,6 +58,25 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "ae_lock_button"
+        },
+        {
+          "id": "fn2_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "ae_lock_button": {
       "name": "AE-L (exposure lock) button",
@@ -136,7 +155,7 @@
       "positions": []
     },
     "delete_button": {
-      "name": "b (delete) button",
+      "name": "Delete button",
       "location": "rear",
       "manual_page": 30,
       "face": null,
@@ -327,13 +346,14 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "fn1_button": {
       "name": "Fn1 button (function button 1)",
       "location": "front",
       "manual_page": 39,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -346,24 +366,32 @@
     },
     "fn2_button": {
       "name": "Fn2 button (function button 2)",
-      "location": "front",
+      "location": "top",
       "manual_page": 41,
-      "face": null,
+      "face": "Fn2",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
       "assignable": true,
       "default_function": "Default shooting role: connect to a smartphone or tablet using Wi-Fi. In playback mode the manual labels it the Wi-Fi button and it opens wireless options.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
+      },
+      "pushable": true,
       "positions": []
     },
     "focus_assist_button": {
       "name": "FOCUS ASSIST button",
       "location": "rear",
       "manual_page": 62,
-      "face": null,
+      "face": "FOCUS/ASSIST",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -431,7 +459,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -446,7 +475,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT DIAL"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -525,14 +555,15 @@
           "label": "icon",
           "description": "Exposure is set to the average for the entire frame. Provides consistent exposure across multiple shots with the same lighting, and is particularly effective for landscapes and portraits of subjects dressed in black or white."
         }
-      ]
+      ],
+      "short_name": "METER"
     },
     "movie_record_button": {
       "name": "Movie-record button",
       "location": "top",
       "manual_page": 31,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Start or stop movie recording.",
@@ -549,7 +580,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 26,
       "face": null,
@@ -668,7 +699,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "REAR DIAL"
     },
     "selector": {
       "name": "Selector/function buttons",
@@ -710,7 +742,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "sensitivity_dial": {
       "name": "Sensitivity dial",
@@ -867,7 +900,8 @@
           "label": "H2",
           "description": null
         }
-      ]
+      ],
+      "short_name": "ISO"
     },
     "sensitivity_dial_lock_release": {
       "name": "Dial lock release",
@@ -917,7 +951,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -932,7 +967,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SPEED"
     },
     "shutter_speed_dial_lock_release": {
       "name": "Dial lock release",
@@ -953,7 +989,7 @@
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 19,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,

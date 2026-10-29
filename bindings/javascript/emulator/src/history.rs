@@ -3,7 +3,7 @@ use super::{
     results::{Checkpoint as CheckpointResult, ErrorReport, InputLog, Point},
     session::Session,
 };
-use fujimod_emulator::session::{
+use fujimod_emulator_session::{
     checkpoint::Snapshot,
     history::{Boundary, Entry, History as CoreHistory, Input},
 };
@@ -339,7 +339,7 @@ mod tests {
     fn session(policy: ExecutionPolicy) -> Session {
         let code = 0xeafffffeu32.to_le_bytes();
         let config = json!({"schema":1,"firmwareId":"loop","bootSource":"internal","graph":{
-            "schema":1,"firmwareId":"loop","bootSource":"internal","quantum":17,"translationCacheBytes":1048576,
+            "schema":1,"firmwareId":"loop","bootSource":"internal","quantum":17,
             "execution":{"processors":[{"model":"cortex-r5f","registers":[["Pc",65536],["Pstate",211]],"released":true,"mprofile":null,"rprofile":{"cp14_identity":16387,"tcm":{"atcm":{"bytes":0,"reset":0},"btcm":{"bytes":0,"reset":0}}}}],
                 "ram":[{"base":65536,"size":4096}],"dma_mappings":[{"address":65536,"physical":65536,"size":4096,"permissions":3}],
                 "mappings":[{"core":0,"address":65536,"physical":65536,"size":4096,"permissions":7}],
@@ -370,14 +370,12 @@ mod tests {
         let sensor = Arc::new(Mutex::new(SensorFrames::new(
             SensorFrame::new(1, 1, FramePixels::Rgb24(vec![0; 3].into())).unwrap(),
         )));
-        session
-            .core
-            .resources
-            .inputs
+        fujimod_emulator_exr2_images::images_mut(&mut session.core.resources)
+            .unwrap()
             .sensors
             .insert("sensor".into(), sensor.clone());
         session.reset_image = Some(Arc::new(session.core.checkpoint(None).unwrap()));
-        let frame = Arc::new(
+        let frame: Arc<SensorFrame> = Arc::new(
             SensorFrame::new(
                 7,
                 3,
@@ -391,7 +389,10 @@ mod tests {
         session
             .apply_marked_input(Input::SensorRaf {
                 source: "sensor".into(),
-                frame: frame.clone(),
+                frame: fujimod_emulator_exr2_resources::SensorFrame {
+                    frame: frame.clone(),
+                    bytes: 0,
+                },
             })
             .unwrap();
         let fingerprint = frame.fingerprint();

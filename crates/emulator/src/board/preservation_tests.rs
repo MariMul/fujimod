@@ -44,10 +44,7 @@ fn board(alias: bool) -> Board {
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
     .build(
-        Options {
-            engine: Engine::Unicorn,
-            translation_cache_bytes: 1 << 20,
-        },
+        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
         Bus::new(Mode::Strict),
         None,
     )
@@ -98,10 +95,7 @@ fn two_core_board() -> Board {
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
     .build(
-        Options {
-            engine: Engine::Unicorn,
-            translation_cache_bytes: 1 << 20,
-        },
+        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
         Bus::new(Mode::Strict),
         None,
     )

@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import presentation from './presentation.json';
+import presentation from '../../../../catalog/input-presentation.json';
 
 type Control = { label: string; text?: string; icon?: string };
 type Shape = { lines?: number[][][]; circle?: number[] };

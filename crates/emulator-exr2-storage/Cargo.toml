@@ -11,6 +11,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-emulator-parts-io.workspace = true
@@ -19,7 +20,6 @@ fujimod-emulator-devices.workspace = true
 serde_json = "1"
 serde = { version = "1", features = ["derive", "rc"] }
 fujimod-workspace-hack.workspace = true
-
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

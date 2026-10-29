@@ -22,14 +22,10 @@ zune-core = { version = "0.5", default-features = false, features = ["std"] }
 ciborium = "0.2.2"
 rusty_h264-encoder = { version = "=0.16.1", default-features = false, features = ["libm"] }
 rusty_h264-common = { version = "=0.16.1", default-features = false, features = ["libm"] }
-tsify = { workspace = true, optional = true }
-serde-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen = { workspace = true, optional = true }
+tsify.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
 fujimod-workspace-hack.workspace = true
-
-[features]
-# TypeScript declarations for host-facing device reports in wasm-bindgen builds.
-typescript = ["dep:tsify", "dep:serde-wasm-bindgen", "dep:wasm-bindgen"]
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

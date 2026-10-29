@@ -814,7 +814,9 @@ mod native_tests {
             .find(|read| read.offset == 0x30)
             .and_then(|read| match read.value {
                 fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => Some(value),
-                fujimod_emulator_devices::bus::FastReadValue::ClockedU32(_) => None,
+                fujimod_emulator_devices::bus::FastReadValue::AtomicU16(_)
+                | fujimod_emulator_devices::bus::FastReadValue::ClockedU32(_)
+                | fujimod_emulator_devices::bus::FastReadValue::ConsumingU32(_) => None,
             })
             .unwrap();
         let status_value = || status.load(Ordering::Acquire);

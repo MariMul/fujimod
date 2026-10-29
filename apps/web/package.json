@@ -10,7 +10,8 @@
     "test": "npm --prefix ../../packages/emulator-ui test && vp test run",
     "build:local-preview": "vp check --no-fmt && vp build --mode local-preview && node scripts/prerender.ts dist-local-preview",
     "test:watch": "vp test",
-    "check": "vp check --no-fmt && npm --prefix ../../packages/emulator-ui run check",
+    "check": "vp check --no-fmt && node scripts/icon-metrics.ts --check && npm --prefix ../../packages/emulator-ui run check",
+    "icons:metrics": "node scripts/icon-metrics.ts",
     "lint": "vp lint && npm --prefix ../../packages/emulator-ui run lint",
     "format": "vp fmt && npm --prefix ../../packages/emulator-ui run format",
     "docs:solid": "node scripts/fetch-solid-docs.ts",
@@ -29,10 +30,9 @@
   },
   "dependencies": {
     "@fujimod/emulator-ui": "file:../../packages/emulator-ui",
-    "@solidjs/web": "2.0.0-rc.15",
-    "animejs": "4.5.0",
+    "@solidjs/web": "2.0.0-rc.17",
     "fujimod": "file:../../bindings/javascript",
-    "solid-js": "2.0.0-rc.15"
+    "solid-js": "2.0.0-rc.17"
   },
   "devDependencies": {
     "@solidjs/vite-plugin": "3.0.0-next.50",

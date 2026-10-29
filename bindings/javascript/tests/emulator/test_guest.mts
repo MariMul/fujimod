@@ -204,7 +204,6 @@ function configuration(
       firmwareId: 'generated',
       bootSource: 'internal',
       quantum,
-      translationCacheBytes: 1 << 20,
       execution: {
         processors,
         ram: [{ base: 0x10000, size: 0x30000 }],

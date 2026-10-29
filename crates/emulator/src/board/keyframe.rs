@@ -25,6 +25,7 @@ struct Saved {
     deadlines: Vec<Option<u64>>,
     generations: Vec<u64>,
     error: Option<String>,
+    #[serde(with = "portable::records")]
     records: Vec<Record>,
     console: Vec<String>,
     #[serde(with = "portable::frames")]
@@ -32,6 +33,7 @@ struct Saved {
     outputs: BTreeMap<usize, Value>,
     mprofile: Vec<Option<mprofile::Checkpoint>>,
     aprofile: Vec<Option<aprofile::Profile>>,
+    armv7a: Vec<Option<armv7a::Profile>>,
     implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: BTreeMap<(usize, u16, u64), (u64, u64)>,
     processor_deadlines: Vec<Option<u64>>,
@@ -93,6 +95,7 @@ impl State {
         let Self {
             execution_policy,
             device_workers: _,
+            host_pause: _,
             clock_limit: _,
             memory: _,
             bus: _,
@@ -118,6 +121,8 @@ impl State {
             outputs,
             mprofile,
             aprofile,
+            armv7a,
+            entry_points: _,
             implementation_cluster,
             unmodeled_system,
             processor_deadlines,
@@ -156,6 +161,7 @@ impl State {
                 .map(|p| p.as_ref().map(|p| p.checkpoint()))
                 .collect(),
             aprofile: aprofile.clone(),
+            armv7a: armv7a.clone(),
             implementation_cluster: implementation_cluster.clone(),
             unmodeled_system: unmodeled_system.clone(),
             processor_deadlines: processor_deadlines.clone(),
@@ -192,6 +198,7 @@ impl State {
             }
         }
         self.aprofile.clone_from(&saved.aprofile);
+        self.armv7a.clone_from(&saved.armv7a);
         self.implementation_cluster
             .clone_from(&saved.implementation_cluster);
         self.unmodeled_system.clone_from(&saved.unmodeled_system);
@@ -294,6 +301,7 @@ impl Board {
                 .mprofile
                 .iter()
                 .map(Option::is_some))
+            || state.armv7a.iter().map(|p|p.as_ref().map(|p|&p.config)).ne(saved.saved.armv7a.iter().map(|p|p.as_ref().map(|p|&p.config)))
             || state.aprofile.iter().map(Option::is_some).ne(saved
                 .saved
                 .aprofile

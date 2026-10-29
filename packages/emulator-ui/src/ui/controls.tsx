@@ -4,7 +4,13 @@ import type { ControlInput } from 'fujimod/emulator';
 import type { LCDViewer } from '../viewer/lcd';
 import type { ControlNode, DevicePanel, NodePath, PowerCombo } from './layout';
 import type { LayoutEditor } from './layout-editor';
-import { Icon } from './icons';
+import type { PhysicalControls } from 'fujimod';
+import type { JSX } from '@solidjs/web';
+import { KeyFace, ShutterFace, ControlFace, PositionsFace } from './control-faces';
+import { marking, type Marking } from './control-part';
+
+type ShutterStage = 'half' | 'full';
+import { PowerComboKeys } from './power-combo';
 import type { DetentSound } from '../feedback/detent-sound';
 import { DetentFeedback } from '../feedback/detent';
 
@@ -17,6 +23,7 @@ export class ControlSession {
     return this;
   }
   data?: DevicePanel;
+  physicalControls?: PhysicalControls;
   detent = new DetentFeedback();
   detentSounds: Record<string, DetentSound> = {};
   inputs = new Map<string, ControlInput>();
@@ -34,6 +41,7 @@ export class ControlSession {
   stopRotation?: () => void;
   rotation?: { dial: HTMLElement; fraction: number; center?: number };
   private pulseQueue: Promise<unknown> = Promise.resolve();
+  private shutterQueue: Promise<unknown> = Promise.resolve();
   constructor(
     readonly viewer: Pick<LCDViewer, 'pressFeedback'>,
     readonly error: (error: unknown) => void,
@@ -112,80 +120,19 @@ export class ControlSession {
       glow: this.active.includes(id) && this.glowing,
     };
   }
-  shutterDown(
-    id: string,
-    tray: HTMLElement,
-    state: (stage: string, left: string) => void,
-    event: PointerEvent,
-  ) {
-    if (!this.ready || !this.powered) return;
-    event.preventDefault();
-    tray.setPointerCapture(event.pointerId);
-    const started = performance.now(),
-      bounds = tray.getBoundingClientRect(),
-      origin = event.clientX,
-      engine = this.engine!;
-    let full = false,
-      moved = false;
-    const stage = (value: 'half' | 'full') => {
-      full = value === 'full';
-      state(value, '');
-      void engine.press(id, value).catch((error) => {
-        if (this.engine === engine && this.ready) this.error(error);
-      });
-    };
-    stage('half');
-    const move = (next: PointerEvent) => {
-      if (next.pointerId !== event.pointerId) return;
-      const delta = next.clientX - origin;
-      moved ||= Math.abs(delta) > 5;
-      const travel = Math.max(1, bounds.width - 70);
-      if (delta >= travel && !full) stage('full');
-      else if (delta < travel * 0.8 && full) stage('half');
-      state(full ? 'full' : 'half', full ? '' : `${3 + Math.max(0, Math.min(travel, delta))}px`);
-    };
-    const cleanup = (release = false) => {
-      if (release) {
-        const engine = this.engine;
-        void engine?.release(id).catch((error) => {
-          if (this.engine === engine && this.ready) this.error(error);
-        });
-      }
-      state('idle', '');
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
-      this.stopShutter = undefined;
-    };
-    const finish = (up: PointerEvent) => {
-      if (up.pointerId !== event.pointerId) return;
-      if (up.type !== 'pointercancel' && !moved && !full && performance.now() - started < 250)
-        stage('full');
-      const engine = this.engine!;
-      void engine.release(id).catch((error) => {
-        if (this.engine === engine && this.ready) this.error(error);
-      });
-      cleanup();
-    };
-    this.stopShutter = cleanup;
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
-  }
-  shutterKey(id: string, event: KeyboardEvent) {
-    if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) {
-      event.preventDefault();
-      if (this.ready && this.powered) {
-        const engine = this.engine!;
-        void engine
-          .press(id, 'half')
-          .then(() => engine.press(id, 'full'))
-          .then(() => engine.release(id))
-          .catch((error) => {
-            if (this.engine === engine && this.ready) this.error(error);
-          });
-      }
-    }
+  /** Move the shutter between stages; full is always reached through half. */
+  shutterStage(id: string, from: ShutterStage | undefined, to: ShutterStage | undefined) {
+    const engine = this.engine;
+    if (!engine || from === to) return;
+    const step = () =>
+      !to
+        ? engine.release(id)
+        : to === 'full' && !from
+          ? engine.press(id, 'half').then(() => engine.press(id, 'full'))
+          : engine.press(id, to);
+    this.shutterQueue = this.shutterQueue.then(step).catch((error) => {
+      if (this.engine === engine && this.ready) this.error(error);
+    });
   }
   private clampFraction(id: string, fraction: number) {
     const positions = this.inputs.get(id)?.positions;
@@ -466,17 +413,42 @@ export class ControlSession {
   }
 }
 
+function nodeMarking(
+  node: Pick<ControlNode, 'face' | 'icon' | 'variant'> & { caption?: string },
+): Marking {
+  const icon = node.variant === 'record' ? 'record' : node.icon;
+  return {
+    ...(node.face ? { face: node.face } : {}),
+    ...(icon ? { icon } : {}),
+    ...(node.caption ? { shortName: node.caption } : {}),
+  };
+}
+
+function panelMarking(
+  session: ControlSession,
+  id: string,
+  node: Pick<ControlNode, 'face' | 'icon' | 'variant' | 'caption'>,
+): Marking {
+  // A device panel's explicit face or icon wins; otherwise the catalog marks the control.
+  if (node.face?.length || node.icon) return nodeMarking(node);
+  const control = session.physicalControls?.controls[id.split('.')[0]!];
+  return control ? marking(control) : nodeMarking(node);
+}
+
 function Key(props: {
   session: ControlSession;
   id: string;
   node: Pick<ControlNode, 'face' | 'icon' | 'hint' | 'variant'>;
   class?: string;
+  /** One tappable part of a larger control, drawn by that control's face. */
+  region?: boolean;
+  children?: JSX.Element;
 }) {
   return (
     <button
       type="button"
       class={[
-        'key',
+        !props.region && 'key-wrapper',
         props.class,
         { rec: props.node.variant === 'record', wifi: !!props.node.hint },
         props.session.classes(props.id),
@@ -500,59 +472,99 @@ function Key(props: {
       }}
     >
       <Show
-        when={props.node.variant === 'record'}
+        when={props.region}
         fallback={
-          <Show
-            when={props.node.icon}
-            fallback={
-              <span class={{ two: (props.node.face?.length ?? 0) > 1 }}>
-                {props.node.face?.join('\n') ??
-                  props.session.inputs.get(props.id)?.label ??
-                  props.id}
-              </span>
+          <KeyFace
+            part={{ kind: 'key', marking: panelMarking(props.session, props.id, props.node) }}
+            size="panel"
+            hint={props.node.hint}
+            held={
+              props.session.read().holds.size > 0 &&
+              [...props.session.holds.values()].includes(props.id)
             }
-          >
-            <Icon name={props.node.icon!} />
-          </Show>
+          />
         }
       >
-        <i />
-      </Show>
-      <Show when={props.node.hint}>
-        <em>{props.node.hint}</em>
+        {props.children}
       </Show>
     </button>
   );
 }
 function Shutter(props: { session: ControlSession; id: string }) {
-  const [stage, setStage] = createSignal('idle'),
-    [left, setLeft] = createSignal('');
-  const state = (value: string, offset: string) => {
-    setStage(value);
-    setLeft(offset);
+  const [stage, setStage] = createSignal<ShutterStage>();
+  // Each segment is held by pointers or the keyboard; FULL wins while both are held.
+  const holders = { half: new Set<number | string>(), full: new Set<number | string>() };
+  const update = () => {
+    const next = holders.full.size ? 'full' : holders.half.size ? 'half' : undefined;
+    props.session.shutterStage(props.id, stage(), next);
+    setStage(next);
   };
+  const hold = (button: ShutterStage, holder: number | string, down: boolean) => {
+    if (down) {
+      if (!props.session.ready || !props.session.powered) return;
+      holders[button].add(holder);
+    } else if (!holders[button].delete(holder)) return;
+    update();
+  };
+  const stop = (release = false) => {
+    holders.half.clear();
+    holders.full.clear();
+    if (release) props.session.shutterStage(props.id, stage(), undefined);
+    setStage(undefined);
+  };
+  onSettled(() => {
+    const session = props.session;
+    session.stopShutter = stop;
+    return () => {
+      if (session.stopShutter === stop) session.stopShutter = undefined;
+    };
+  });
+  const label = () => props.session.inputs.get(props.id)?.label ?? props.id;
+  const stageKey = (event: KeyboardEvent) => event.key === ' ' || event.key === 'Enter';
   return (
-    <div
-      class={['slide', stage(), props.session.classes(props.id)]}
-      tabindex="0"
-      data-id={props.id}
-      role="button"
-      aria-label={props.session.inputs.get(props.id)?.label ?? props.id}
-      aria-disabled={props.session.disabled(props.id) ? 'true' : 'false'}
-      onPointerDown={(event) =>
-        props.session.shutterDown(props.id, event.currentTarget, state, event)
-      }
-      onKeyDown={(event) => props.session.shutterKey(props.id, event)}
-    >
-      <span class="thumb" style={{ left: left() }}>
-        {stage() === 'idle' ? '' : stage().toUpperCase()}
-      </span>
-      <span class="end">FULL</span>
-    </div>
+    <ShutterFace
+      part={{ kind: 'shutter', marking: {}, ...(stage() ? { stage: stage() } : {}) }}
+      size="panel"
+      renderKey={(action, className, content) => {
+        const button = action as ShutterStage;
+        const release = (event: PointerEvent) => hold(button, event.pointerId, false);
+        return (
+          <button
+            type="button"
+            data-value={action}
+            class={[className, props.session.classes(props.id), { on: stage() === button }]}
+            aria-label={`${label()} ${action}`}
+            aria-pressed={stage() === button ? 'true' : 'false'}
+            disabled={props.session.disabled(props.id)}
+            aria-disabled={props.session.disabled(props.id) ? 'true' : 'false'}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              hold(button, event.pointerId, true);
+            }}
+            onPointerUp={release}
+            onPointerCancel={release}
+            onLostPointerCapture={release}
+            onKeyDown={(event) => {
+              if (!stageKey(event) || event.repeat) return;
+              event.preventDefault();
+              hold(button, 'key', true);
+            }}
+            onKeyUp={(event) => {
+              if (stageKey(event)) hold(button, 'key', false);
+            }}
+            onBlur={() => hold(button, 'key', false)}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            {content}
+          </button>
+        );
+      }}
+    />
   );
 }
 function Dial(props: { session: ControlSession; id: string; node: ControlNode }) {
-  let dial!: HTMLDivElement, values!: HTMLDivElement;
+  let dial!: HTMLDivElement, values!: HTMLSpanElement;
   const positions = untrack(() => props.session.inputs.get(props.id)?.positions ?? []);
   const selected = () => props.session.read().positions.get(props.id);
   let pending = false;
@@ -611,7 +623,7 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
   return (
     <div
       ref={dial}
-      class={['dial', { ticks: props.node.variant === 'ticks' }, props.session.classes(props.id)]}
+      class={['dial-wrapper', props.session.classes(props.id)]}
       tabindex="0"
       role="slider"
       aria-label={props.session.inputs.get(props.id)?.label ?? props.node.caption ?? props.id}
@@ -629,24 +641,28 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
           props.session.detent.step(props.session.detentSounds[props.id]);
       }}
     >
-      <div
-        ref={values}
-        class="vals"
-        style={{
+      <PositionsFace
+        part={{
+          kind: 'positions',
+          marking: panelMarking(props.session, props.id, props.node),
+          position: selected(),
+        }}
+        size="panel"
+        variant={props.node.variant === 'ticks' ? 'ticks' : 'dial'}
+        positions={positions.map((p) => ({
+          id: p.id,
+          label: props.node.labels?.[p.id] ?? p.label,
+        }))}
+        valuesRef={(element) => {
+          values = element;
+        }}
+        valuesStyle={{
           'background-position-x':
             props.node.variant === 'ticks'
               ? `${((props.session.read().relativeSteps.get(props.id) ?? 0) + (props.session.read().rotation?.dial === dial ? props.session.read().rotation!.fraction : 0)) * 16}px`
               : undefined,
         }}
-      >
-        <For each={positions}>
-          {(position) => (
-            <span data-value={position.id} class={{ on: position.id === selected() }}>
-              {props.node.labels?.[position.id] ?? position.label}
-            </span>
-          )}
-        </For>
-      </div>
+      />
     </div>
   );
 }
@@ -678,20 +694,6 @@ function Node(props: {
   const input = () => props.session.inputs.get(id());
   const positions = () =>
     input()?.positions ?? Object.keys(props.node.labels ?? {}).map((id) => ({ id, label: id }));
-  const keys = () =>
-    props.node.kind === 'command'
-      ? [
-          ['left', '◀', 'side l'],
-          ['center', '', 'tab'],
-          ['right', '▶', 'side r'],
-        ]
-      : [
-          ['up', '▲', 'a u'],
-          ['down', '▼', 'a d'],
-          ['left', '◀', 'a l'],
-          ['right', '▶', 'a r'],
-          ['center', props.node.face?.join('\n') ?? '', 'ok'],
-        ];
   const editing = () => props.editor?.editing() ?? false;
   const layoutPath = () => (editing() ? props.path.join('.') : undefined);
   const selected = () => (props.editor?.isSelected(props.path) ? 'true' : undefined);
@@ -705,31 +707,57 @@ function Node(props: {
       <Match when={props.node.kind === 'space'}>
         <div class="sp" />
       </Match>
-      <Match when={props.node.kind === 'command' || props.node.kind === 'dpad'}>
+      <Match
+        when={
+          props.node.kind === 'command' ||
+          props.node.kind === 'rocker' ||
+          props.node.kind === 'dpad'
+        }
+      >
         <div
-          class={props.node.kind === 'command' ? 'cmd' : 'dpad'}
+          class="control-cluster"
           data-layout-path={layoutPath()}
           data-layout-selected={selected()}
         >
           <RemoveBadge editor={props.editor} path={props.path} label={label()} />
-          <Show when={props.node.kind === 'command'}>
+          <Show when={props.node.caption}>
             <div class="cap">{props.node.caption}</div>
           </Show>
-          <div
-            class={props.node.kind === 'command' ? 'knurl' : 'dpad-keys'}
-            style={props.node.kind === 'dpad' ? { display: 'contents' } : {}}
-          >
-            <For each={keys()}>
-              {(key) => (
-                <Key
-                  session={props.session}
-                  id={props.node.bindings![key[0]]}
-                  node={{ face: key[1].split('\n') }}
-                  class={key[2]}
-                />
-              )}
-            </For>
-          </div>
+          {(() => {
+            const renderKey = (action: string, className: string, content: JSX.Element) => {
+              const slot =
+                { decrease: 'left', increase: 'right', press: 'center' }[action] ?? action;
+              const bound = props.node.bindings?.[slot];
+              return bound ? (
+                <Key session={props.session} id={bound} node={{}} class={className} region>
+                  {content}
+                </Key>
+              ) : (
+                <span class={className}>{content}</span>
+              );
+            };
+            return (
+              <ControlFace
+                part={{
+                  kind:
+                    props.node.kind === 'dpad'
+                      ? 'pad'
+                      : props.node.kind === 'rocker'
+                        ? 'rocker'
+                        : 'command',
+                  marking: panelMarking(
+                    props.session,
+                    props.node.kind === 'dpad'
+                      ? (props.node.bindings?.center ?? props.node.bindings?.up ?? '')
+                      : (props.node.bindings?.left ?? ''),
+                    props.node,
+                  ),
+                }}
+                size="panel"
+                renderKey={renderKey}
+              />
+            );
+          })()}
         </div>
       </Match>
       <Match when={props.node.kind !== 'control'}>
@@ -792,34 +820,34 @@ function Node(props: {
           </Show>
           <Switch>
             <Match when={props.node.variant === 'segment'}>
-              <div
-                class="seg wide"
-                role="group"
-                aria-label={input()?.label ?? props.node.caption ?? id()}
-              >
-                <For each={positions()}>
-                  {(position) => (
-                    <button
-                      type="button"
-                      data-value={position.id}
-                      class={[
-                        '',
-                        { on: props.session.read().positions.get(id()) === position.id },
-                        props.session.classes(id()),
-                      ]}
-                      aria-pressed={
-                        props.session.read().positions.get(id()) === position.id ? 'true' : 'false'
-                      }
-                      aria-label={`${input()?.label ?? props.node.caption ?? id()} ${props.node.labels?.[position.id] ?? position.label}`}
-                      disabled={props.session.disabled(id())}
-                      aria-disabled={props.session.disabled(id()) ? 'true' : 'false'}
-                      onClick={() => props.session.position(id(), position.id)}
-                    >
-                      {props.node.labels?.[position.id] ?? position.label}
-                    </button>
-                  )}
-                </For>
-              </div>
+              <PositionsFace
+                part={{
+                  kind: 'positions',
+                  marking: panelMarking(props.session, id(), props.node),
+                  position: props.session.read().positions.get(id()),
+                }}
+                size="panel"
+                positions={positions().map((p) => ({
+                  id: p.id,
+                  label: props.node.labels?.[p.id] ?? p.label,
+                }))}
+                renderKey={(position, className, content) => (
+                  <button
+                    type="button"
+                    data-value={position}
+                    class={[className, props.session.classes(id())]}
+                    aria-pressed={
+                      props.session.read().positions.get(id()) === position ? 'true' : 'false'
+                    }
+                    aria-label={`${input()?.label ?? props.node.caption ?? id()} ${position}`}
+                    disabled={props.session.disabled(id())}
+                    aria-disabled={props.session.disabled(id()) ? 'true' : 'false'}
+                    onClick={() => props.session.position(id(), position)}
+                  >
+                    {content}
+                  </button>
+                )}
+              />
             </Match>
             <Match when={props.node.variant === 'shutter'}>
               <Shutter session={props.session} id={id()} />
@@ -863,18 +891,9 @@ function Combo(props: { session: ControlSession; item: PowerCombo }) {
         if (props.session.ready) void props.session.combo(props.item).catch(props.session.error);
       }}
     >
-      <For each={props.item.keys}>
-        {(key) => (
-          <span class={['mini', { rec: key.record }]}>
-            <Show
-              when={key.record}
-              fallback={key.icon ? <Icon name={key.icon} size={12} /> : (key.face ?? '')}
-            >
-              <i />
-            </Show>
-          </span>
-        )}
-      </For>
+      <Show when={props.session.physicalControls}>
+        {(controls) => <PowerComboKeys controls={controls()} modes={props.item.modes} />}
+      </Show>
       <span class="plus">+ POWER</span>
       <span class="what">{props.item.label}</span>
     </button>

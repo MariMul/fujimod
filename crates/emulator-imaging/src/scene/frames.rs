@@ -1,6 +1,50 @@
-use super::{FrameEdge, Recorded};
+use super::{Frame, FrameEdge, Recorded};
 use crate::analysis::ImageLayout;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
+use std::any::Any;
 use std::sync::{Arc, Mutex};
+
+/// A latched sensor image that the image implementation renders on demand.
+pub trait SensorImage: Any + Send + Sync {
+    fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String>;
+    fn checkpoint(&self) -> Result<Checkpoint, String>;
+    fn fingerprint(&self) -> serde_json::Value;
+    /// Inspect the pre-ISP ADC values at pixel centers on this uniform grid,
+    /// through the immutable sensor view and optical projection. Axis center
+    /// `(i + 0.5) / grid` spans the full readout rectangle (the full field when
+    /// no view is declared), then maps by floor to the prepared raster. The
+    /// prepared raster bins the scene to min(grid, source extent) on each axis.
+    /// Returns row-major RGB little-endian U16 values, bounded to 14-bit ADC.
+    fn sensor_sample_rgb(&self, width: usize, height: usize) -> Result<Vec<u8>, String>;
+}
+/// The radiance sampled at an image's exposure edge, kept for its metering.
+pub trait SensorExposure: Any + Send + Sync {
+    fn checkpoint(&self) -> Result<Checkpoint, String>;
+    fn fingerprint(&self) -> serde_json::Value;
+}
+/// The image implementation's decoders of sensor inputs: checkpointed sensor images and
+/// exposures, and RAF files.
+#[derive(Clone, Copy)]
+pub struct SensorDecoders {
+    pub image: fn(&Checkpoint) -> Result<Arc<dyn SensorImage>, String>,
+    pub exposure: fn(&Checkpoint) -> Result<Arc<dyn SensorExposure>, String>,
+    pub raf: fn(&[u8]) -> Result<Frame, String>,
+}
+static SENSOR_DECODERS: std::sync::OnceLock<SensorDecoders> = std::sync::OnceLock::new();
+
+/// Install the image implementation's sensor decoders; there is one per process.
+pub fn install_sensor_decoders(decoders: SensorDecoders) {
+    assert!(SENSOR_DECODERS.set(decoders).is_ok(), "two sensor decoders");
+}
+
+/// The installed sensor decoders, if an image implementation installed them.
+pub fn sensor_decoders() -> Option<&'static SensorDecoders> {
+    SENSOR_DECODERS.get()
+}
+
+fn decoders(decoders: Option<&SensorDecoders>) -> Result<&SensorDecoders, String> {
+    decoders.ok_or_else(|| "sensor image checkpoints need the image decoders".into())
+}
 
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum ImageSource {
@@ -10,7 +54,7 @@ pub enum ImageSource {
 }
 pub enum Pixels {
     Packed(Arc<[u8]>),
-    Sensor(Arc<crate::radiometric::Image>),
+    Sensor(Arc<dyn SensorImage>),
 }
 impl Pixels {
     pub fn render(&self, layout: ImageLayout, workers: usize) -> Result<Arc<[u8]>, String> {
@@ -34,10 +78,11 @@ impl Pixels {
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         match self {
-            Self::Packed(p) => Ok(
-                fujimod_emulator_devices::checkpoint::Checkpoint::encode("image-pixels", &false)?
-                    .with_blobs(vec![p.clone()]),
-            ),
+            Self::Packed(p) => Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+                "image-pixels",
+                &false,
+            )?
+            .with_blobs(vec![p.clone()])),
             Self::Sensor(image) => Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
                 "image-pixels",
                 &true,
@@ -46,17 +91,18 @@ impl Pixels {
         }
     }
     fn from_checkpoint(
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+        saved: &Checkpoint,
         layout: ImageLayout,
+        sensor: Option<&SensorDecoders>,
     ) -> Result<Self, String> {
         let physical: bool = saved.decode("image-pixels")?;
         if physical {
             if saved.children().len() != 1 || !saved.blobs().is_empty() {
                 return Err("invalid physical image pixels checkpoint".into());
             }
-            Ok(Self::Sensor(Arc::new(
-                crate::radiometric::Image::from_checkpoint(&saved.children()[0])?,
-            )))
+            Ok(Self::Sensor((decoders(sensor)?.image)(
+                &saved.children()[0],
+            )?))
         } else {
             if !saved.children().is_empty()
                 || saved.blobs().len() != 1
@@ -69,7 +115,9 @@ impl Pixels {
     }
     fn fingerprint(&self) -> serde_json::Value {
         match self {
-            Self::Packed(p) => serde_json::json!({"packed":fujimod_emulator_devices::fingerprint::bytes(p)}),
+            Self::Packed(p) => {
+                serde_json::json!({"packed":fujimod_emulator_devices::fingerprint::bytes(p)})
+            }
             Self::Sensor(image) => serde_json::json!({"sensor":image.fingerprint()}),
         }
     }
@@ -80,7 +128,7 @@ pub struct ImageFrame {
     pub pixels: Pixels,
     pub prepared: Option<Arc<[u8]>>,
     pub source: ImageSource,
-    pub radiance: Option<crate::exposure::ExposedFrame>,
+    pub radiance: Option<Arc<dyn SensorExposure>>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImageState {
@@ -122,7 +170,10 @@ impl ImageFrames {
                 .with_children(children),
         )
     }
-    fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<ImageFrame, String> {
+    fn from_checkpoint(
+        saved: &Checkpoint,
+        sensor: Option<&SensorDecoders>,
+    ) -> Result<ImageFrame, String> {
         let state: ImageState = saved.decode("image-frame")?;
         let bytes = state.layout.bytes()?;
         if saved.blobs().len() != usize::from(state.prepared)
@@ -134,23 +185,30 @@ impl ImageFrames {
         Ok(ImageFrame {
             edge: state.edge,
             layout: state.layout,
-            pixels: Pixels::from_checkpoint(&saved.children()[0], state.layout)?,
+            pixels: Pixels::from_checkpoint(&saved.children()[0], state.layout, sensor)?,
             prepared: state.prepared.then(|| saved.blobs()[0].clone()),
             source: state.source,
             radiance: if state.radiance {
-                Some(crate::exposure::ExposedFrame::from_checkpoint(
-                    &saved.children()[1],
-                )?)
+                Some((decoders(sensor)?.exposure)(&saved.children()[1])?)
             } else {
                 None
             },
         })
     }
-    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        Self::from_checkpoint(saved).map(|_| ())
+    /// `sensor` decodes sensor images and exposures; checkpoints of packed pixels need none.
+    pub fn validate_checkpoint(
+        &self,
+        saved: &Checkpoint,
+        sensor: Option<&SensorDecoders>,
+    ) -> Result<(), String> {
+        Self::from_checkpoint(saved, sensor).map(|_| ())
     }
-    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        let frame = Self::from_checkpoint(saved)?;
+    pub fn restore_checkpoint(
+        &self,
+        saved: &Checkpoint,
+        sensor: Option<&SensorDecoders>,
+    ) -> Result<(), String> {
+        let frame = Self::from_checkpoint(saved, sensor)?;
         *self.0.lock().map_err(|_| "image-frame poisoned")? = frame;
         Ok(())
     }
@@ -273,11 +331,17 @@ impl StatisticsFrames {
             &*self.0.lock().map_err(|_| "statistics-frame poisoned")?,
         )
     }
-    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let _: StatisticsFrame = saved.decode("statistics-frame")?;
         Ok(())
     }
-    pub fn restore_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn restore_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         *self.0.lock().map_err(|_| "statistics-frame poisoned")? =
             saved.decode::<StatisticsFrame>("statistics-frame")?;
         Ok(())
@@ -386,7 +450,7 @@ mod checkpoint_tests {
             &image.0.lock().unwrap().pixels.render(layout, 0).unwrap()
         ));
         image.use_analytic();
-        image.restore_checkpoint(&pending).unwrap();
+        image.restore_checkpoint(&pending, None).unwrap();
         assert_eq!(image.fingerprint(), before);
         assert!(Arc::ptr_eq(
             &pending.children()[0].blobs()[0],
@@ -404,7 +468,7 @@ mod checkpoint_tests {
         )
         .unwrap()
         .with_blobs(vec![Arc::from([0u8; 4])]);
-        assert!(image.restore_checkpoint(&invalid).is_err());
+        assert!(image.restore_checkpoint(&invalid, None).is_err());
         assert_eq!(image.fingerprint(), before);
     }
 }

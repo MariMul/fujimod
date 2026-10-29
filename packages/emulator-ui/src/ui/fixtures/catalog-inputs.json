@@ -71,7 +71,7 @@
    "supported": true
   },
   {
-   "id": "afl_ael_button",
+   "id": "af_ae_lock_button",
    "label": "AFL/AEL (focus lock/exposure) button",
    "kind": "button",
    "supported": true
@@ -166,7 +166,7 @@
    "unavailable": "Physical key has no electrical source: EVF_LCD"
   },
   {
-   "id": "q_button",
+   "id": "quick_menu_button",
    "label": "Q (quick menu) button",
    "kind": "button",
    "supported": false,
@@ -229,7 +229,7 @@
    "supported": true
   },
   {
-   "id": "ael_afl_button",
+   "id": "af_ae_lock_button",
    "label": "AEL/AFL (autoexposure/autofocus lock) button",
    "kind": "button",
    "supported": true
@@ -241,31 +241,31 @@
    "supported": true
   },
   {
-   "id": "selector_button.down",
+   "id": "selector.down",
    "label": "Selector button / down",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.left",
+   "id": "selector.left",
    "label": "Selector button / left",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.press",
+   "id": "selector.press",
    "label": "Selector button / press",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.right",
+   "id": "selector.right",
    "label": "Selector button / right",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.up",
+   "id": "selector.up",
    "label": "Selector button / up",
    "kind": "button",
    "supported": true
@@ -334,7 +334,7 @@
    "unavailable": "A declared action or position has no physical key"
   },
   {
-   "id": "q_button",
+   "id": "quick_menu_button",
    "label": "Q button",
    "kind": "button",
    "supported": false,
@@ -718,25 +718,25 @@
    "supported": true
   },
   {
-   "id": "selector_function_buttons.down",
+   "id": "selector.down",
    "label": "Selector/function buttons / down",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_function_buttons.left",
+   "id": "selector.left",
    "label": "Selector/function buttons / left",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_function_buttons.right",
+   "id": "selector.right",
    "label": "Selector/function buttons / right",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_function_buttons.up",
+   "id": "selector.up",
    "label": "Selector/function buttons / up",
    "kind": "button",
    "supported": true
@@ -862,7 +862,7 @@
    "unavailable": "A declared action or position has no physical key"
   },
   {
-   "id": "on_off_switch",
+   "id": "power_switch",
    "label": "ON/OFF switch",
    "kind": "switch",
    "supported": false,
@@ -904,7 +904,7 @@
    "unavailable": "No electronic action or position is established"
   },
   {
-   "id": "movie_recording_button",
+   "id": "movie_record_button",
    "label": "t (movie recording) button",
    "kind": "button",
    "supported": false,
@@ -932,7 +932,7 @@
    "unavailable": "ADC calibration bytes are unavailable"
   },
   {
-   "id": "display_back_button",
+   "id": "disp_back_button",
    "label": "DISP (display)/BACK button",
    "kind": "button",
    "supported": false,
@@ -983,7 +983,7 @@
    "unavailable": "A declared action or position has no physical key"
   },
   {
-   "id": "on_off_switch",
+   "id": "power_switch",
    "label": "ON/OFF switch",
    "kind": "switch",
    "supported": false,
@@ -1011,7 +1011,7 @@
    "unavailable": "No electronic action or position is established"
   },
   {
-   "id": "movie_recording_button",
+   "id": "movie_record_button",
    "label": "t (movie recording) button",
    "kind": "button",
    "supported": false,
@@ -1141,7 +1141,7 @@
    "supported": true
   },
   {
-   "id": "display_back_button",
+   "id": "disp_back_button",
    "label": "DISP (display)/BACK button",
    "kind": "button",
    "supported": true
@@ -1195,7 +1195,7 @@
    "unavailable": "No electronic action or position is established"
   },
   {
-   "id": "flash_popup_button",
+   "id": "flash_pop_up_button",
    "label": "N (flash pop-up) button",
    "kind": "button",
    "supported": false,
@@ -1283,31 +1283,31 @@
    ]
   },
   {
-   "id": "q_button",
+   "id": "quick_menu_button",
    "label": "Q (quick menu) button",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_pad.down",
+   "id": "selector.down",
    "label": "Selector / down",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_pad.left",
+   "id": "selector.left",
    "label": "Selector / left",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_pad.right",
+   "id": "selector.right",
    "label": "Selector / right",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_pad.up",
+   "id": "selector.up",
    "label": "Selector / up",
    "kind": "button",
    "supported": true
@@ -1320,13 +1320,13 @@
    "relative": true
   },
   {
-   "id": "ae_l_button",
+   "id": "ae_lock_button",
    "label": "AE-L (exposure lock) button",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "af_l_button",
+   "id": "af_lock_button",
    "label": "AF-L (focus lock) button",
    "kind": "button",
    "supported": true
@@ -1386,7 +1386,7 @@
    "unavailable": "No electronic action or position is established"
   },
   {
-   "id": "flash_popup_button",
+   "id": "flash_pop_up_button",
    "label": "N (flash pop-up) button",
    "kind": "button",
    "supported": false,
@@ -1479,7 +1479,7 @@
    "unavailable": "A declared action or position has no physical key"
   },
   {
-   "id": "on_off_switch",
+   "id": "power_switch",
    "label": "ON/OFF switch",
    "kind": "switch",
    "supported": false,
@@ -1521,7 +1521,7 @@
    "unavailable": "No electronic action or position is established"
   },
   {
-   "id": "movie_recording_button",
+   "id": "movie_record_button",
    "label": "t (movie recording) button",
    "kind": "button",
    "supported": false,
@@ -1542,7 +1542,7 @@
    "unavailable": "ADC calibration bytes are unavailable"
   },
   {
-   "id": "q_button",
+   "id": "quick_menu_button",
    "label": "Q (quick menu) button",
    "kind": "button",
    "supported": false,
@@ -1586,25 +1586,25 @@
    "supported": true
   },
   {
-   "id": "selector_button.down",
+   "id": "selector.down",
    "label": "Selector button / down",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.left",
+   "id": "selector.left",
    "label": "Selector button / left",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.right",
+   "id": "selector.right",
    "label": "Selector button / right",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.up",
+   "id": "selector.up",
    "label": "Selector button / up",
    "kind": "button",
    "supported": true
@@ -1622,7 +1622,7 @@
    "supported": true
   },
   {
-   "id": "movie_recording_button",
+   "id": "movie_record_button",
    "label": "● (movie recording) button",
    "kind": "button",
    "supported": true
@@ -1635,7 +1635,7 @@
    "unavailable": "A declared action or position has no physical key"
   },
   {
-   "id": "on_off_button",
+   "id": "power_button",
    "label": "ON/OFF button",
    "kind": "button",
    "supported": false,
@@ -1721,25 +1721,25 @@
    "supported": true
   },
   {
-   "id": "selector_button.down",
+   "id": "selector.down",
    "label": "Selector button / down",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.left",
+   "id": "selector.left",
    "label": "Selector button / left",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.right",
+   "id": "selector.right",
    "label": "Selector button / right",
    "kind": "button",
    "supported": true
   },
   {
-   "id": "selector_button.up",
+   "id": "selector.up",
    "label": "Selector button / up",
    "kind": "button",
    "supported": true
@@ -1757,7 +1757,7 @@
    "supported": true
   },
   {
-   "id": "movie_recording_button",
+   "id": "movie_record_button",
    "label": "t (movie recording) button",
    "kind": "button",
    "supported": true
@@ -1798,7 +1798,7 @@
    "unavailable": "Physical key has no electrical source: K_PLAY"
   },
   {
-   "id": "e_fn_wifi_button",
+   "id": "e_fn_button",
    "label": "E-Fn (extended function) button; Wi-Fi button (playback mode)",
    "kind": "button",
    "supported": false,
@@ -1877,7 +1877,7 @@
    "supported": true
   },
   {
-   "id": "view_button",
+   "id": "view_mode_button",
    "label": "VIEW button",
    "kind": "button",
    "supported": true
@@ -1932,7 +1932,7 @@
    "unavailable": "A declared action or position has no physical key"
   },
   {
-   "id": "on_off_switch",
+   "id": "power_switch",
    "label": "ON/OFF switch",
    "kind": "switch",
    "supported": false,
@@ -1953,7 +1953,7 @@
    "unavailable": "No electronic action or position is established"
   },
   {
-   "id": "ae_l_button",
+   "id": "ae_lock_button",
    "label": "AE-L (exposure lock) button",
    "kind": "button",
    "supported": false,
@@ -1967,14 +1967,14 @@
    "unavailable": "Physical key has no electrical source: CMD_LEFT"
   },
   {
-   "id": "af_l_button",
+   "id": "af_lock_button",
    "label": "AF-L (focus lock) button",
    "kind": "button",
    "supported": false,
    "unavailable": "Physical key has no electrical source: AF-LOCK"
   },
   {
-   "id": "q_button",
+   "id": "quick_menu_button",
    "label": "Q (quick menu) button",
    "kind": "button",
    "supported": false,

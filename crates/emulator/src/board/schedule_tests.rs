@@ -31,7 +31,7 @@ impl Device for ResetLine {
 fn board(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>>) {
     let library = Library::linked().unwrap();
     let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
-    let memory = rprofile::memory::Memory::default();
+    let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
     let cpus = (0..2)
         .map(|core| {
             let raw = library.open(Model::CortexR5F, 1024 * 1024).unwrap();
@@ -156,7 +156,8 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
 #[test]
 fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_slice_boundary() {
     use factory::{Engine, Graph, MemoryMap, Options, Peripheral, Processor, Ram};
-    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters, Resources};
+    use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters};
+    use fujimod_emulator_exr2_resources::Resources;
     for pause in [None, Some(100), Some(137)] {
         let plan=Plan::parse(&serde_json::to_vec(&json!({
             "schema":1,"boot_entry":"loader","wires":{"release":"software-pulse"},"nodes":[
@@ -215,10 +216,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
         };
         let mut b = graph
             .build(
-                Options {
-                    engine: Engine::Unicorn,
-                    translation_cache_bytes: 1024 * 1024,
-                },
+                Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
                 Bus::from_graph(bus::Mode::Strict, built.graph).unwrap(),
                 None,
             )
@@ -409,4 +407,46 @@ fn quiescent_observes_released_processors_without_advancing_time() {
     assert!(board.quiescent()); // The unreleased peer does not prevent idle.
     assert!(board.quiescent());
     assert_eq!(board.state(), before);
+}
+
+#[test]
+fn progress_reporting_preserves_guest_scheduling_and_state() {
+    for counted in [false, true] {
+        let (mut observed, observed_writes) = board(counted);
+        let (mut plain, plain_writes) = board(counted);
+        let progress = Rc::new(RefCell::new(Vec::new()));
+        let received = progress.clone();
+        observed.set_progress_observer(Some(Box::new(move |count| {
+            received.borrow_mut().push(count)
+        })));
+        observed.run_until(250_000, 50).unwrap();
+        plain.run_until(250_000, 50).unwrap();
+        assert_eq!(observed.state(), plain.state());
+        assert_eq!(
+            *observed_writes.lock().unwrap(),
+            *plain_writes.lock().unwrap()
+        );
+        for core in 0..2 {
+            for register in [
+                Register::Pc,
+                Register::Pstate,
+                fujimod_emulator_cpu::arm::CORE[3],
+                fujimod_emulator_cpu::arm::CORE[4],
+            ] {
+                assert_eq!(
+                    observed.read_register(core, register).unwrap(),
+                    plain.read_register(core, register).unwrap()
+                );
+            }
+        }
+        let counts = progress.borrow();
+        assert!(counts.len() >= 3);
+        assert_eq!(counts[0], 0);
+        assert!(counts.windows(2).all(|pair| pair[0] < pair[1]));
+        drop(counts);
+        observed.set_progress_observer(None);
+        let count = progress.borrow().len();
+        observed.run_until(300_000, 50).unwrap();
+        assert_eq!(progress.borrow().len(), count);
+    }
 }

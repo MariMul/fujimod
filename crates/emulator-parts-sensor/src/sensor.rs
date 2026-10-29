@@ -2,8 +2,10 @@
 //! black level, active image area and reference white are body data. The RGB spectral response
 //! is a declared linear sRGB approximation, not measured sensor calibration.
 //! RGB light maps to the active image area; explicit RAW spans the clock raster.
-use fujimod_emulator_imaging::exposure::{ApertureHandle, Calibration, ExposedFrame, ExposureHandle};
-use fujimod_emulator_imaging::raw::{Cfa, Packing};
+use fujimod_emulator_devices::parts::optics::ApertureHandle;
+use fujimod_emulator_image_formation::exposure::ExposedFrame;
+use fujimod_emulator_image_processing::raw::{Cfa, Packing};
+use fujimod_emulator_imaging::exposure::{Calibration, ExposureHandle};
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFramesHandle};
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
@@ -17,6 +19,10 @@ pub trait Controls: Send {
     /// Complete one physical exposure/readout edge before sampling its pixels.
     /// Returns whether the readout carries a valid frame.
     fn frame(&mut self) -> Result<bool, String>;
+    fn preview_view(
+        &self,
+        horizontal: [usize; 2],
+    ) -> Result<Option<fujimod_emulator_imaging::scene::view::View>, String>;
     fn timing(
         &mut self,
         horizontal: u32,
@@ -36,7 +42,7 @@ mod tests {
 
     #[test]
     fn cropped_samples_keep_full_raster_projection_and_cfa_phase() {
-        use fujimod_emulator_imaging::raw::RawView;
+        use fujimod_emulator_image_processing::raw::RawView;
         let frames = Arc::new(Mutex::new(SensorFrames::new(
             Frame::new(
                 8,
@@ -127,6 +133,7 @@ mod tests {
                             shutter: None,
                             rolling_references: vec![],
                             mode_change_frames: 0,
+                            preview_field: None,
                         },
                         wire.clone(),
                         iris.clone(),
@@ -145,7 +152,7 @@ mod tests {
             .unwrap();
         let focus = Arc::new(Mutex::new(0.));
         sensor.attach_projection(
-            fujimod_emulator_imaging::optics::Projection::new(
+            fujimod_emulator_image_formation::optics::Projection::new(
                 fujimod_emulator_imaging::optics::Spec {
                     focus: "lens".into(),
                     focal_length_mm: 18.5,
@@ -357,8 +364,7 @@ pub struct Sensor {
     controls: Option<Box<dyn Controls>>,
     radiometry: Option<(Calibration, ExposureHandle, ApertureHandle)>,
     exposed: Option<ExposedFrame>,
-    projection: Option<fujimod_emulator_imaging::optics::Projection>,
-    readout_valid: bool,
+    projection: Option<fujimod_emulator_image_formation::optics::Projection>,
 }
 /// A validated readout from one accepted exposure. It retains immutable image
 /// inputs, never the live sensor, controller, frame clock, or exposure handles.
@@ -424,7 +430,6 @@ impl Sensor {
             radiometry: None,
             exposed: None,
             projection: None,
-            readout_valid: true,
         })
     }
     pub fn attach_controls(
@@ -438,7 +443,7 @@ impl Sensor {
         self.controls = Some(controls);
         Ok(())
     }
-    pub fn attach_projection(&mut self, projection: fujimod_emulator_imaging::optics::Projection) {
+    pub fn attach_projection(&mut self, projection: fujimod_emulator_image_formation::optics::Projection) {
         self.projection = Some(projection);
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {
@@ -574,22 +579,32 @@ impl Sensor {
             state
         })
     }
-    pub fn latch(&mut self, tick: u64) -> Result<FrameEdge, String> {
-        self.readout_valid = match &mut self.controls {
+    pub fn preview_view(&mut self, horizontal: [usize; 2]) -> Result<(), String> {
+        if let Some(controls) = &self.controls {
+            self.frames
+                .lock()
+                .map_err(|_| "sensor frame poisoned")?
+                .view = controls.preview_view(horizontal)?;
+        }
+        Ok(())
+    }
+    pub fn latch(&mut self, tick: u64) -> Result<Option<FrameEdge>, String> {
+        let valid = match &mut self.controls {
             Some(controls) => controls.frame()?,
             None => true,
         };
+        // The controller still advances integration during sync acquisition,
+        // but no completed readout exists for RAW or live statistics yet.
+        if !valid {
+            return Ok(None);
+        }
         if let Some((calibration, exposure, aperture)) = &self.radiometry {
             self.exposed = ExposedFrame::capture(&self.frames, exposure, aperture, *calibration)?;
             if let (Some(projection), Some(frame)) = (&self.projection, &mut self.exposed) {
                 frame.focus_shift_mm = Some(projection.focus()?);
             }
         }
-        self.frames.lock().unwrap().latch(tick)
-    }
-    /// Whether the last latched readout carried a valid frame.
-    pub fn readout_valid(&self) -> bool {
-        self.readout_valid
+        self.frames.lock().unwrap().latch(tick).map(Some)
     }
     pub fn freeze_readout(
         &mut self,

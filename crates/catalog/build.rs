@@ -59,8 +59,8 @@ fn main() {
             ("Firmware", "first-start.generated.json") => "FirstStart",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "settings.generated.json") => "Settings",
-            // Bring-up progress is website data, not an emulator input.
-            ("Firmware", "progress.generated.json") => continue,
+            ("Firmware", "flash.generated.json") => "Flash",
+            ("Firmware", "state.generated.json") => "State",
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
             _ => kind,
@@ -79,62 +79,4 @@ fn main() {
     let output =
         PathBuf::from(env::var_os("OUT_DIR").expect("output directory")).join("bundled_catalog.rs");
     fs::write(output, source).expect("write embedded catalog index");
-
-    let configurations = root.join("configurations/emulator");
-    println!("cargo:rerun-if-changed={}", configurations.display());
-    let mut configuration_files = Vec::new();
-    json_files(&configurations, &mut configuration_files);
-    configuration_files.sort();
-    let mut configuration_source =
-        String::from("const BUNDLED_RUN_CONFIGURATIONS: &[(&str, &str)] = &[\n");
-    let mut overlay_source = String::from("const BUNDLED_RUN_OVERLAYS: &[(&str, &str)] = &[\n");
-    let mut hardware_input_source =
-        String::from("const BUNDLED_HARDWARE_INPUTS: &[(&str, &str)] = &[\n");
-    for path in configuration_files {
-        let Some(relative) = path.strip_prefix(&root).ok() else {
-            continue;
-        };
-        let Some(parent) = path.parent() else {
-            continue;
-        };
-        let include = relative.to_string_lossy().replace('\\', "/");
-        if path.file_name().is_some_and(|name| name == "run.json") {
-            let Some(id) = parent.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            configuration_source.push_str(&format!(
-                "    ({id:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))),\n"
-            ));
-            println!("cargo:rerun-if-changed={}", path.display());
-        } else if parent.file_name().is_some_and(|name| name == "overlays") {
-            let Some(id) = path.file_stem().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            overlay_source.push_str(&format!(
-                "    ({id:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))),\n"
-            ));
-            println!("cargo:rerun-if-changed={}", path.display());
-        } else if path
-            .file_name()
-            .is_some_and(|name| name == "hardware-inputs.json")
-        {
-            let Some(id) = parent.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            hardware_input_source.push_str(&format!(
-                "    ({id:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))),\n"
-            ));
-            println!("cargo:rerun-if-changed={}", path.display());
-        }
-    }
-    configuration_source.push_str("];\n");
-    overlay_source.push_str("];\n");
-    hardware_input_source.push_str("];\n");
-    let output = PathBuf::from(env::var_os("OUT_DIR").expect("output directory"))
-        .join("bundled_configurations.rs");
-    fs::write(
-        &output,
-        configuration_source + &overlay_source + &hardware_input_source,
-    )
-    .expect("write embedded run-configuration index");
 }

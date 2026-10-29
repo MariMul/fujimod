@@ -6,15 +6,13 @@
 //! depends on no model crate, so a model edit rebuilds neither the plan nor the
 //! board.
 pub mod construction;
-mod resources;
 pub mod serial;
 mod spec;
 use fujimod_emulator_devices::{
     Device,
     graph::{DeviceGraph, Mapping, validate_mappings},
 };
-pub use resources::checkpoint::ResourceSnapshot;
-pub use resources::{CardPins, CoreInterrupts, Inputs, Resources, Wire};
+use fujimod_emulator_exr2_resources::{CoreInterrupts, Resources};
 pub use spec::{
     Adapter, BootEntry, Card, FocusAxis, InputSignal, Iris, Model, Node, Plan, Sensor,
     SensorControls, SerialEndpoint, SerialRoute, SoftwareOutput, WireKind,

@@ -2,7 +2,8 @@
 //! (FFF1C000). Masks follow the declared register fields. Sparse repair/gain are
 //! declared identity approximations; no unselected conversion DMA is synthesized.
 use fujimod_emulator_imaging::exr2_isp::dma::physical;
-use fujimod_emulator_imaging::exr2_isp::{Irq, due, word};
+use fujimod_emulator_imaging::exr2_isp::{due, word};
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -1,6 +1,6 @@
 use super::read as read_bulk;
 use super::*;
-use fujimod_catalog::bulk::{BULK_SCHEMA_URI, CaptureScope, CodeCheck, NamedRange};
+use fujimod_catalog_bulk::{BULK_SCHEMA_URI, BulkDma, CaptureScope, CodeCheck, NamedRange};
 use fujimod_usb::{
     ff80::{commands::memory::DebugMemoryLimits, framing::RequestKind},
     operations::checks::sha256_bytes,
@@ -27,6 +27,7 @@ fn facts(source: BulkSource) -> FirmwareBulk {
             address: 0x1000,
             size: 0x1000,
         },
+        dma: None,
         code_checks: vec![CodeCheck {
             name: "e1".into(),
             address: 0x1000,
@@ -51,7 +52,7 @@ fn facts(source: BulkSource) -> FirmwareBulk {
     facts.validate().unwrap();
     facts
 }
-fn query_camera() -> FirmwareBulk {
+pub(crate) fn query_camera() -> FirmwareBulk {
     facts(BulkSource::Query {
         tag: 0x80,
         callback_table: 0x1100,
@@ -63,14 +64,14 @@ fn query_camera() -> FirmwareBulk {
         wrapping: true,
     })
 }
-fn zero_base_camera() -> FirmwareBulk {
+pub(crate) fn zero_base_camera() -> FirmwareBulk {
     facts(BulkSource::PatternZeroBase {
         registered_buffer: 0x1300,
         source_state: 0x1400,
         capacity: 32,
     })
 }
-fn limits() -> Limits {
+pub(crate) fn limits() -> Limits {
     Limits {
         memory: DebugMemoryLimits {
             read: NonZeroU32::new(64).unwrap(),
@@ -94,7 +95,7 @@ fn envelope(kind: RequestKind, offset: u32, size: u32, session: u16) -> [u8; 12]
     raw[10..12].copy_from_slice(&session.to_be_bytes());
     raw
 }
-fn opened(steps: Vec<E>) -> (Session, Script) {
+pub(crate) fn opened(steps: Vec<E>) -> (Session, Script) {
     let mut all = vec![
         E::Control(envelope(RequestKind::Open, 0, 8, 0)),
         E::Read {
@@ -106,7 +107,7 @@ fn opened(steps: Vec<E>) -> (Session, Script) {
     let script = Script::new(all);
     (block_on(script.begin_session(65536, None)).unwrap(), script)
 }
-fn exchange_max(request: Vec<u8>, reply: Vec<u8>, maximum: usize) -> Vec<E> {
+pub(crate) fn exchange_max(request: Vec<u8>, reply: Vec<u8>, maximum: usize) -> Vec<E> {
     vec![
         E::Control(envelope(
             RequestKind::WriteCommand,
@@ -127,11 +128,11 @@ fn exchange_max(request: Vec<u8>, reply: Vec<u8>, maximum: usize) -> Vec<E> {
         },
     ]
 }
-fn exchange(request: Vec<u8>, reply: Vec<u8>) -> Vec<E> {
+pub(crate) fn exchange(request: Vec<u8>, reply: Vec<u8>) -> Vec<E> {
     let maximum = reply.len();
     exchange_max(request, reply, maximum)
 }
-fn info(selector: u32, text: &str) -> Vec<E> {
+pub(crate) fn info(selector: u32, text: &str) -> Vec<E> {
     let mut request = vec![0; 32];
     request[..4].copy_from_slice(&0x150000u32.to_le_bytes());
     request[16..20].copy_from_slice(&selector.to_le_bytes());
@@ -149,19 +150,19 @@ fn memory_request(function: u32, at: u32, size: u32) -> Vec<u8> {
         .flat_map(u32::to_le_bytes)
         .collect()
 }
-fn read(at: u32, bytes: &[u8]) -> Vec<E> {
+pub(crate) fn read(at: u32, bytes: &[u8]) -> Vec<E> {
     let request = memory_request(2, at, bytes.len() as u32);
     let mut reply = request.clone();
     reply.extend_from_slice(bytes);
     exchange(request, reply)
 }
-fn write(at: u32, bytes: &[u8]) -> Vec<E> {
+pub(crate) fn write(at: u32, bytes: &[u8]) -> Vec<E> {
     let mut request = memory_request(3, at, bytes.len() as u32);
     request.extend_from_slice(bytes);
     let reply = request[..36].to_vec();
     exchange(request, reply)
 }
-fn diagnostic(opcode: u32, argument: u32, capacity: u32) -> Vec<E> {
+pub(crate) fn diagnostic(opcode: u32, argument: u32, capacity: u32) -> Vec<E> {
     let mut request = vec![0; 32];
     request[..4].copy_from_slice(&opcode.to_le_bytes());
     request[16..20].copy_from_slice(&argument.to_le_bytes());
@@ -169,7 +170,7 @@ fn diagnostic(opcode: u32, argument: u32, capacity: u32) -> Vec<E> {
     reply[20..24].copy_from_slice(&capacity.to_le_bytes());
     exchange(request, reply)
 }
-fn data(offset: u32, bytes: &[u8]) -> Vec<E> {
+pub(crate) fn data(offset: u32, bytes: &[u8]) -> Vec<E> {
     vec![
         E::Control(envelope(
             RequestKind::ReadData,
@@ -183,10 +184,10 @@ fn data(offset: u32, bytes: &[u8]) -> Vec<E> {
         },
     ]
 }
-fn words(values: &[u32]) -> Vec<u8> {
+pub(crate) fn words(values: &[u32]) -> Vec<u8> {
     values.iter().flat_map(|v| v.to_le_bytes()).collect()
 }
-fn qualified() -> Vec<E> {
+pub(crate) fn qualified() -> Vec<E> {
     let mut steps = info(4, "X-M5");
     steps.extend(info(8, "2.06"));
     steps.extend(read(0x1000, CODE));
@@ -285,6 +286,39 @@ fn reads_outside_the_window_or_from_another_camera_send_nothing_further() {
         "{error}"
     );
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn dma_constraints_refuse_unaligned_ranges_before_any_request() {
+    let mut camera = query_camera();
+    camera.dma = Some(BulkDma {
+        address_alignment: 4,
+        length_granule: 4,
+    });
+    camera.validate().unwrap();
+    for target in [
+        BulkRange {
+            address: 0x1802,
+            size: 0x20,
+        },
+        BulkRange {
+            address: 0x1800,
+            size: 0x22,
+        },
+    ] {
+        let (mut session, script) = opened(vec![]);
+        let error = block_on(read_bulk(&mut session, &camera, limits(), target)).unwrap_err();
+        assert!(error.to_string().contains("not aligned"), "{error}");
+        assert_eq!(script.remaining(), 0);
+    }
+    camera.dma = Some(BulkDma {
+        address_alignment: 4,
+        length_granule: 64,
+    });
+    assert!(
+        camera.validate().is_err(),
+        "4-byte probe is not a whole granule"
+    );
 }
 
 #[test]

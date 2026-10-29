@@ -27,6 +27,25 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "sub_command_dial.press"
+        },
+        {
+          "id": "fn_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -82,11 +101,11 @@
       "positions": []
     },
     "flash_pop_up_button": {
-      "name": "N (flash pop-up) button",
+      "name": "Flash pop-up button",
       "location": "rear",
       "manual_page": 27,
       "face": null,
-      "icon": "flash pop-up",
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Press to raise the flash.",
@@ -100,7 +119,7 @@
       "name": "Fn (function) button",
       "location": "top",
       "manual_page": 64,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [
         "controls-gpio-0-11"
@@ -162,7 +181,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "MAIN DIAL"
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
@@ -368,14 +388,15 @@
           "label": "B",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "movie_record_button": {
-      "name": "t (movie recording) button",
+      "name": "Movie recording button",
       "location": "rear",
       "manual_page": 30,
       "face": null,
-      "icon": "movie recording",
+      "icon": "record",
       "connection_ids": [
         "controls-adc-9"
       ],
@@ -394,7 +415,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 20,
       "face": null,
@@ -521,7 +542,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -559,7 +581,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "sub_command_dial": {
       "name": "Sub-command dial",
@@ -595,7 +618,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SUB DIAL"
     }
   }
 }

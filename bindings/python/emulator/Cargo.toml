@@ -12,13 +12,19 @@ test = false
 doctest = false
 
 [dependencies]
+fujimod-emulator-session.workspace = true
+fujimod-emulator-xpp.workspace = true
+fujimod-emulator-xp5-board.workspace = true
+fujimod-emulator-exr2-resources.workspace = true
 fujimod-python-base = { path = "../base" }
 fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-storage.workspace = true
+fujimod-emulator-preparation.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
-fujimod-catalog.workspace = true
+fujimod-catalog-assets.workspace = true
+fujimod-catalog-settings.workspace = true
 fujimod-settings.workspace = true
 pyo3.workspace = true
 serde.workspace = true

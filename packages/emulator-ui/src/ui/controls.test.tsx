@@ -1,3 +1,5 @@
+import type { PhysicalControls } from 'fujimod';
+import x70 from '../../../../catalog/bodies/x70/controls.json';
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { beforeAll, afterEach, expect, test, vi } from 'vite-plus/test';
@@ -23,6 +25,7 @@ function mount(
   inputs: ControlInput[],
   data: DevicePanel,
   onLayoutChange?: (panel: DevicePanel) => void | Promise<void>,
+  physicalControls?: PhysicalControls,
 ) {
   const host = document.createElement('div');
   document.body.append(host);
@@ -36,13 +39,15 @@ function mount(
   const viewer = {
     pressFeedback: vi.fn(),
   };
+  const combo = vi.fn(async () => {});
   const session = new ControlSession(
     viewer,
     (error) => {
       throw error;
     },
-    async () => {},
+    combo,
   );
+  session.physicalControls = physicalControls;
   session.render(inputs, engine as unknown as Engine, data);
   session.ready = true;
   const editor = new LayoutEditor({ runtime: { panel: session }, onLayoutChange });
@@ -56,7 +61,7 @@ function mount(
     host,
   );
   flush();
-  return { host, engine, viewer, session, editor };
+  return { host, engine, viewer, session, editor, combo };
 }
 test('every segment selects through the engine and remains synchronized after power off and rollback', async () => {
   const { host, engine, session } = mount(
@@ -345,4 +350,81 @@ test('importing a layout lists ids this camera does not have', async () => {
   expect(host.querySelector('[data-id="missing-input"] .cap')?.textContent).toBe('Missing');
   expect(session.data).toEqual(imported);
   expect(onLayoutChange).toHaveBeenLastCalledWith(imported);
+});
+
+test("a device panel's explicit face wins over the catalog marking", () => {
+  const { host } = mount(
+    [{ id: 'quick_menu_button', label: 'Q (quick menu) button', kind: 'button', supported: true }],
+    {
+      schema: 1,
+      body: 'x70',
+      layout: [{ kind: 'control', id: 'quick_menu_button', variant: 'key', face: ['QM'] }],
+      combos: [],
+    },
+    undefined,
+    x70 as PhysicalControls,
+  );
+  expect(host.querySelector('button[data-id="quick_menu_button"]')?.textContent).toBe('QM');
+});
+
+test('the live panel uses catalog markings and runs combos through the session', () => {
+  const item = {
+    label: 'SD card boot',
+    modes: ['sd'] as import('fujimod').BootMode[],
+    inputs: [{ id: 'command_control.press' }, { id: 'movie_record_button' }],
+  };
+  const { host, combo, session } = mount(
+    [{ id: 'playback_button', label: 'Unrelated manual name', kind: 'button', supported: true }],
+    {
+      schema: 1,
+      body: 'x70',
+      layout: [{ kind: 'control', id: 'playback_button', variant: 'key' }],
+      combos: [item],
+    },
+    undefined,
+    x70 as PhysicalControls,
+  );
+  expect(host.querySelector('button[data-id="playback_button"] .key svg')).not.toBeNull();
+  expect(host.querySelector('.combo .rocker-drawing .drawing-arrow.push')).not.toBeNull();
+  expect(host.querySelector('.combo .control-short-name')?.textContent).toBe('COMMAND');
+  const button = host.querySelector<HTMLButtonElement>('.combo')!;
+  button.dispatchEvent(new Event('pointerenter'));
+  expect(session.active).toEqual(item.inputs.map((input) => input.id));
+  button.click();
+  expect(combo).toHaveBeenCalledWith(item);
+});
+
+test('rocker halves and tab send separate native contact presses and releases', async () => {
+  const ids = ['command_control.decrease', 'command_control.press', 'command_control.increase'];
+  const { host, engine, session } = mount(
+    ids.map((id) => ({ id, label: id, kind: 'button', supported: true })),
+    {
+      schema: 1,
+      body: 'x70',
+      combos: [],
+      layout: [{ kind: 'rocker', bindings: { left: ids[0]!, center: ids[1]!, right: ids[2]! } }],
+    },
+    undefined,
+    x70 as PhysicalControls,
+  );
+  const stop = session.listen();
+  session.powered = true;
+  flush();
+  expect(host.querySelector('[data-part="rocker"] .knurl')).toBeTruthy();
+  for (const [index, id] of ids.entries()) {
+    const button = host.querySelector<HTMLButtonElement>(`button[data-id="${id}"]`)!;
+    button.setPointerCapture = vi.fn();
+    button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    expect(engine.press).toHaveBeenLastCalledWith(id, undefined);
+    button.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }));
+    expect(engine.release).toHaveBeenLastCalledWith(id);
+    session.feedback([id], true);
+    flush();
+    expect(host.querySelectorAll('[data-part="rocker"] .glow')).toHaveLength(1);
+    expect(host.querySelector('[data-part="rocker"] .glow')?.getAttribute('data-id')).toBe(
+      ids[index],
+    );
+  }
+  expect(engine.rotate).not.toHaveBeenCalled();
+  stop();
 });

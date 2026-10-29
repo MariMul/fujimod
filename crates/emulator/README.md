@@ -51,13 +51,21 @@ or execution frontier, and 1 for invalid inputs or screenshot errors. A requeste
 PNG captures the currently composed LCD without advancing the guest. Input
 files are read only; firmware-written settings remain in the session's medium.
 
-Rust embedding uses `fujimod_emulator::boot::{Options, open, to_rec, screenshot}`;
+Rust embedding uses `fujimod_emulator_boot::{Options, open, to_rec, screenshot}`;
 set `Options.configuration_id` and `Options.overlays` to select the run.
-`open` returns an unexecuted `session::Session`; its `board` owns execution and
+`open` returns an unexecuted `fujimod_emulator_session::Session`; its `board` owns execution and
 its other methods supply external inputs and passive observations. `to_rec`
 returns a stopped report while retaining the session for inspection. No Python
 runtime is required. The Python package exposes the same construction through
 `fujimod.emulator.Board.from_inputs`.
+
+## Generic SDHC embedding
+
+`fujimod_emulator_ip::sdhci::host::SdHost` takes `Options` and `Wiring { card, contacts, irq }`; `SdHost::new_polled` accepts an unconnected interrupt output. Register base, protocol, transfer and clock ticks, RCA, and RAM extent are caller inputs. `Card` bounds sector access and dirty storage; the host bounds DMA and PIO transfers and supports multi-block data CRC faults through `inject_data_fault`.
+
+`Options.initialization_fault` is a typed `InitializationFault` policy, defaulting to `None` when omitted from constructor JSON. `RejectCmd8` makes a valid CMD8 finish after `transfer_ticks` with Command Timeout Error (`0x32` bit 0) and Error Interrupt (`0x30` bit 15), without Command Complete or a new response. Error status and signal enables control the routed IRQ. W1C clears the latched statuses; resetting the controller or retrying CMD8 does not remove the policy. Checkpoints retain pending command timing and reject a receiving host with a different policy. Diagnostic state and fingerprints include the policy.
+
+Physical contacts remain independent: clone `fujimod_emulator_devices::parts::card_contacts::Contacts` for host and board wiring, and use `Contacts::set(present, protected)` to change them. An initialization fault does not change card detect, write protection, or media content. Present State reports presence; protected writes, absent-card commands, and contact changes during a transfer refuse execution. `replace_card` requires an idle host and advances the medium revision. EXR II `Model::SdHost.options` and XP5 SD `controller` options accept `initialization_fault: "reject_cmd8"` without changing their contact or interrupt wiring. Session card presence/protection controls remain separate from this construction-time policy.
 
 ## Durable snapshots
 
@@ -89,10 +97,10 @@ a fresh session directly. Browser reports include this complete
 ## XP5 board and session API
 
 Rust callers can open an XP5 board through
-`fujimod_emulator::boot::open_xp5`. `Xp5OpenOptions` supplies a validated CPU
+`fujimod_emulator_xp5_board::boot::open`. `OpenOptions` supplies a validated CPU
 graph, explicit device windows, interrupt state, A-profile setup, resistor-key
 options, device resources, and initial memory images. The function builds the
-same `board::factory::Graph`, strict device bus and `session::Session` used by
+same `board::factory::Graph`, strict device bus and `fujimod_emulator_session::Session` used by
 the rest of the emulator. `xp5_device_windows` converts a selected SoC
 hardware profile to device windows; callers supply any run-specific device
 options and firmware bytes.

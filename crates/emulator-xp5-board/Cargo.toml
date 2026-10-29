@@ -11,12 +11,18 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-emulator-session.workspace = true
+fujimod-emulator-storage.workspace = true
 fujimod-catalog.workspace = true
+fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
 fujimod-emulator.workspace = true
+fujimod-emulator-boot.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-sensor-input.workspace = true
 fujimod-emulator-devices.workspace = true
+fujimod-emulator-graphics.workspace = true
 fujimod-emulator-ip.workspace = true
 fujimod-emulator-ip-arm.workspace = true
 fujimod-emulator-ip-dmp.workspace = true

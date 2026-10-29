@@ -49,6 +49,26 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "ae_lock_button": {
       "name": "AE-L (exposure lock) button",
@@ -138,7 +158,7 @@
       "positions": []
     },
     "delete_button": {
-      "name": "b (delete) button",
+      "name": "Delete button",
       "location": "rear",
       "manual_page": 50,
       "face": null,
@@ -321,7 +341,8 @@
           "label": "icon",
           "description": "Panorama"
         }
-      ]
+      ],
+      "short_name": "DRIVE"
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -450,28 +471,35 @@
           "label": "C",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "fn1_button": {
       "name": "Fn1 button",
       "location": "top",
       "manual_page": 226,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
       "default_function": "Face/eye detection setting.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
+      },
+      "pushable": true,
       "positions": []
     },
     "fn2_button": {
       "name": "Fn2 button",
       "location": "front",
       "manual_page": 226,
-      "face": null,
+      "face": "Fn2",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -539,7 +567,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "focus_stick": {
       "name": "Focus stick (focus lever)",
@@ -578,7 +607,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -611,7 +641,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT DIAL"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -739,10 +770,11 @@
           "label": "icon",
           "description": "Exposure is set to the average for the entire frame. Provides consistent exposure across multiple shots with the same lighting, and is particularly effective for landscapes and portraits of subjects dressed in black or white."
         }
-      ]
+      ],
+      "short_name": "METER"
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 49,
       "face": null,
@@ -860,7 +892,8 @@
         "endless": true
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "REAR DIAL"
     },
     "selector": {
       "name": "Selector",
@@ -896,7 +929,8 @@
         "press": null
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "sensitivity_dial": {
       "name": "Sensitivity dial",
@@ -911,7 +945,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "ISO"
     },
     "sensitivity_dial_lock_release": {
       "name": "Dial lock release",
@@ -961,7 +996,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -1207,7 +1243,8 @@
           "label": "B",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     },
     "shutter_speed_dial_lock_release": {
       "name": "Dial lock release",
@@ -1245,7 +1282,7 @@
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 14,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,

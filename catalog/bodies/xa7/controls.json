@@ -59,13 +59,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "REAR DIAL"
     },
     "fn1_button": {
       "name": "Fn1 button",
       "location": "top",
       "manual_page": 178,
-      "face": null,
+      "face": "Fn1",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -83,7 +84,7 @@
       "name": "ON/OFF button",
       "location": "top",
       "manual_page": 28,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -240,14 +241,15 @@
           "label": "Adv.",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "flash_pop_up_switch": {
-      "name": "N (flash pop-up) switch",
+      "name": "Flash pop-up switch",
       "location": "left",
       "manual_page": 88,
       "face": null,
-      "icon": null,
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "pushable": false,
@@ -276,7 +278,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -300,7 +303,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT DIAL"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -332,7 +336,8 @@
           "label": "full press",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SHUTTER"
     },
     "touchscreen": {
       "name": "Touch screen",
@@ -352,10 +357,10 @@
       "positions": []
     },
     "drive_delete_button": {
-      "name": "DRIVE button / b (delete) button (playback mode)",
+      "name": "DRIVE button / Delete button (playback mode)",
       "location": "rear",
       "manual_page": 5,
-      "face": null,
+      "face": "DRIVE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -370,11 +375,11 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 36,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -409,13 +414,14 @@
         },
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 14,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -433,7 +439,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 11,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -464,7 +470,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -483,7 +490,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

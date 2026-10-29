@@ -3,10 +3,10 @@
 mod interface;
 pub use interface::register_interface_models;
 
-use crate::{BuiltBoard, Model, Resources};
+use crate::{BuiltBoard, Model};
+use fujimod_emulator_exr2_resources::Resources;
 use fujimod_emulator_devices::exr2::irq;
 use fujimod_emulator_devices::{Device, bus::InterruptLine, graph::Mapping};
-use fujimod_emulator_imaging::exr2_isp as isp;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
@@ -17,17 +17,7 @@ pub fn decode<T: serde::de::DeserializeOwned>(
     serde_json::from_value(value.borrow().clone()).map_err(|e| format!("EXR II model options: {e}"))
 }
 
-/// The named wire of the given kind, recorded as used by node `$id`.
-#[macro_export]
-macro_rules! wire {
-    ($resources:expr, $id:expr, $name:expr, $kind:ident) => {
-        match $resources.wire(&$name, $id)? {
-            $crate::Wire::$kind(value) => value.clone(),
-            _ => return Err(format!("{} requires a {} wire", $name, stringify!($kind))),
-        }
-    };
-}
-pub fn route(route: isp::Irq) -> Result<isp::Irq, String> {
+pub fn route(route: fujimod_emulator_devices::exr2::irq_routes::Irq) -> Result<fujimod_emulator_devices::exr2::irq_routes::Irq, String> {
     if route.core >= 2 || route.line >= 128 {
         return Err("EXR II interrupt route exceeds two cores/128 sources".into());
     }

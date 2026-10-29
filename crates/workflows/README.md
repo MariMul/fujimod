@@ -101,3 +101,57 @@ then reinsert the battery before normal startup. The workflow issues no shutdown
 reset or cleanup command and leaves the volatile read gate for battery removal
 to discard. A protocol error retains the USB core's completion fence; no transfer
 or write is retried. Live use requires caller authorization and qualified facts.
+
+## Service preparation and captures
+
+`service_mode::prepare_service_session` performs the reset-guard checks and
+leaves debug access enabled in configuration RAM until restart. It reports both
+original flags and never stores a setting. `arm_reset_guard` retains its existing
+behavior of leaving debug access disabled after success.
+
+`state::dump` reads the selected catalog state regions through the qualified
+bulk reader. Constant regions must agree across two reads; all-zero and all-FF
+constants are omitted as masked. Each delivered region carries a SHA-256.
+Its byte-progress callback advances during each bulk transfer, including both
+reads of constant regions and excluding path qualification.
+
+`flash::backup` uses the catalog flash contract and a separately built
+flash-reader payload. `xp5-cmd-callback` uses a temporary command callback and
+zero executable reservation. `exr2-query-heap` uses a stock query callback and
+an allocation returned by stock `malloc`. Both verify
+the stock reader and transport instructions, translation state, driver state,
+payload upload, request/result ABI and update-backed control before delivering
+backup chunks. Camera-only chunks are delivered first; the returned SHA-256
+covers flash-offset order. Cleanup verifies ownership and restores the callback,
+executable reservation, source, scratch and original debug gate. Unknown
+completion sends no further commands. A sink error stops capture and runs the
+same cleanup.
+`flash::Callbacks` supplies chunk delivery and byte progress separately.
+Progress starts at zero, advances after each delivered chunk and excludes the
+control read. Progress callback errors follow the same cleanup path as sink
+errors. JavaScript's final `ByteProgress` argument is optional for both capture
+methods.
+
+The EXR II payload reads corrected physical NAND main-area pages, one stock
+page-reader call at a time, under the located driver lock. It supports 512-byte
+and 2 KiB page contracts. It does not initialize or shut down the high-level
+driver and sends no FTL, journal, program or erase request. It preserves the
+located DMA and geometry state, restores query outputs after every callback,
+and frees the allocation and restores the compiled bootstrap only after known
+completion and verified ownership.
+
+JavaScript exposes `Session.prepareServiceSession`, `backupFlash` and
+`dumpState`; each holds the session lease for the complete workflow, including
+chunk callbacks and cleanup. `flash_reader_plan` validates a built artifact
+against the bundled catalog without opening USB.
+
+The `artifact-build` feature adds `flash::build`: native, offline verification
+of compiled reader artifacts, initialized update sources, callback BSS, cache
+instructions, executable translations, and control hashes. The
+`flash_reader_build` example accepts an explicit staging recipe with source
+files and a compiler command, then writes separate binary and JSON artifacts.
+It replaces the runtime catalog only after every declared reader validates.
+EXR II preparation also requires an explicit function index, checks its
+allocator/configuration candidates against initialized update bytes, locates
+CPU0 cache helpers by immutable fingerprints, and rejects absolute references
+into the compiled entrypoints' link image.

@@ -3,14 +3,19 @@
 //! access or guest clock and cannot drive execution or a camera transport.
 mod badges;
 pub mod cache;
+mod canvas;
+mod card_panel;
+pub use card_panel::CardPanel;
 pub mod frame;
+mod overlays;
+mod text;
 mod timeline;
 mod touches;
 mod video;
 pub use frame::{Frame, Result};
 pub use timeline::{Metrics, Recorder, seconds};
 pub use touches::TouchPhase;
-pub const CONTROLS: &str = include_str!("../assets/controls.json");
+pub const CONTROLS: &str = include_str!("../../../catalog/input-presentation.json");
 
 /// Annotate a host copy; clean captures and their source pixels stay immutable.
 pub fn annotate(frame: &Frame, labels: &[(String, u8)]) -> Result<Frame> {

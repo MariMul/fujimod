@@ -1,4 +1,30 @@
 use super::*;
+
+#[test]
+fn recompress_preserves_unmodified_tokens_and_prevents_dictionary_edit_propagation() {
+    let original = stream(&[1, b'A', 0x80, 0x1f, 0x80, 0x1f], 31);
+    let mut replacement = vec![b'A'; 31];
+    assert_eq!(recompress(&original, &replacement).unwrap(), original);
+    for index in [0, 1, 15, 16, 30] {
+        replacement[index] = b'B';
+        let packed = recompress(&original, &replacement).unwrap();
+        assert_eq!(decompress(&packed).unwrap().0, replacement);
+        replacement[index] = b'A';
+    }
+    assert!(recompress(&original, b"short").is_err());
+    assert!(recompress(&original[..21], &replacement).is_err());
+}
+#[test]
+fn sha256_matches_standard_vectors() {
+    assert_eq!(
+        sha256(b""),
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
+    assert_eq!(
+        sha256(b"abc"),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+}
 fn stream(body: &[u8], size: u32) -> Vec<u8> {
     let packed = body.len() as u32 + 20;
     [

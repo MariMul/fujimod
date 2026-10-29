@@ -3,9 +3,15 @@
 //! DCT arithmetic is modeled; only q<=3 is measured. Timing is declared.
 //! DMA bytes/count/status precede IRQ77. Entropy output beyond 0x110 completes
 //! with status 0x20 instead of READY (0x10), count 0 and no RAM write.
-use fujimod_emulator_imaging::exr2_isp::{Irq, dma::{Transfer, physical}, due, stream::{State, StreamHandle}, word};
-use fujimod_emulator_image_codecs::jpeg::{Codec, OUTPUT_OVERFLOW};
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_image_codecs::jpeg::{Codec, OUTPUT_OVERFLOW};
+use fujimod_emulator_imaging::exr2_isp::{
+    dma::{Transfer, physical},
+    due,
+    stream::{State, StreamHandle},
+    word,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 #[derive(Deserialize)]
@@ -134,12 +140,10 @@ impl Encoder {
             cx.ram_read(src, Arc::get_mut(&mut self.source).unwrap())?;
             None
         };
-        if let Err(e) = self.dma.prepare_variable(
-            cx.now(),
-            self.options.completion_ticks,
-            dst + 2,
-            capacity - 2,
-        ) {
+        if let Err(e) =
+            self.dma
+                .prepare_variable(cx.now(), self.options.completion_ticks, dst, capacity)
+        {
             if streaming {
                 self.stream.lock().unwrap().state = State::Ready;
             }
@@ -155,6 +159,9 @@ impl Encoder {
                 };
                 codec.encode(pixels, w, h, restart, &mut out, capacity - 2)
             })();
+            if result.is_ok() {
+                out.splice(0..0, [0xff, 0xd8]);
+            }
             match result {
                 // Overflow completes as a hardware error with no output;
                 // a successful stream is never empty.
@@ -295,7 +302,7 @@ impl Device for Encoder {
                     cx.fail(error);
                     return;
                 }
-                if self.dma.pixels.len() == 0 {
+                if self.dma.pixels.is_empty() {
                     // Output overflow: stock channel8_complete takes a
                     // completion without READY (0x10) as status 2 with no
                     // bytes, and metadata_retry_compression_result retries at
@@ -312,7 +319,7 @@ impl Device for Encoder {
                     self.pending = None;
                     return;
                 }
-                let produced = (self.dma.pixels.len() + 2) as u32;
+                let produced = self.dma.pixels.len() as u32;
                 match self.dma.write(cx) {
                     Ok(true) => {}
                     Ok(false) => return,

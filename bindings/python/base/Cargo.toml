@@ -12,6 +12,7 @@ test = false
 doctest = false
 
 [dependencies]
+fujimod-emulator-session.workspace = true
 fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true

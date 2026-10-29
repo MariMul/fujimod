@@ -3,6 +3,7 @@ export interface AssetProgress {
   label: string;
   loaded: number;
   total?: number;
+  unit?: 'ticks';
   status: 'waiting' | 'loading' | 'complete' | 'failed';
   rate?: number;
   remaining?: number;
@@ -45,6 +46,10 @@ export function loadingStep(
     total: bytes,
     status,
   };
+}
+/** Guest ticks of the fixed boot run, distinct from download bytes; completion belongs to REC observation. */
+export function bootProgress(ticks: number, total?: number): AssetProgress {
+  return { ...loadingStep('boot', 'loading'), loaded: ticks, total, unit: 'ticks' };
 }
 /** Every row of a boot, in order, before any starts; a download with the same label replaces its placeholder. */
 export function expectedAssets(patch: boolean): AssetProgress[] {

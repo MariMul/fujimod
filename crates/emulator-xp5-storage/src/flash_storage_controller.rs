@@ -107,7 +107,7 @@ impl Controller {
                         })
                         .collect(),
                     _ => flash_storage
-                        .read(self.state.regs[0x50 / 4] as u64, count)?
+                        .read_device(self.state.regs[0x50 / 4] as u64, count)?
                         .into(),
                 };
                 self.state.complete = true;
@@ -147,7 +147,7 @@ impl Controller {
         if !self.state.active {
             return Err("flash storage FIFO read outside transaction".into());
         }
-        let s = self.flash_storage.lock().unwrap();
+        let mut s = self.flash_storage.lock().unwrap();
         let b = match self.cmd() {
             0x05 => (s.session.write_enable as u8) << 1,
             0x9f => {
@@ -157,7 +157,7 @@ impl Controller {
                     0xff
                 }
             }
-            0x03 | 0x13 | 0x0b | 0x0c | 0xeb | 0xec => s.read(
+            0x03 | 0x13 | 0x0b | 0x0c | 0xeb | 0xec => s.read_device(
                 self.state.regs[0x50 / 4] as u64 + self.state.cursor as u64,
                 1,
             )?[0],
@@ -293,5 +293,34 @@ impl Device for Controller {
         self.state = serde_json::from_value(v.clone())
             .map_err(|e| format!("invalid storage controller checkpoint: {e}"))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flash_storage::Storage;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn pio_reads_count_transferred_bytes_once_and_exclude_identity_commands() {
+        let storage = Arc::new(Mutex::new(Storage::new((0..32).collect()).unwrap()));
+        let mut controller = Controller::new(storage.clone(), 0xef4018);
+        controller.state.regs[0] = 1;
+        controller.state.regs[0x40 / 4] = 0x03;
+        controller.state.regs[0x50 / 4] = 8;
+        controller.state.regs[0xa0 / 4] = 3;
+        controller.begin().unwrap();
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 4);
+        for value in 8..12 {
+            assert_eq!(controller.rx().unwrap(), value);
+        }
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 4);
+        assert_eq!(controller.rx().unwrap(), 12);
+        assert_eq!(storage.lock().unwrap().session.reads.ranges, [(8, 13)]);
+        controller.state.regs[0x40 / 4] = 0x9f;
+        controller.begin().unwrap();
+        assert_eq!(controller.rx().unwrap(), 0xef);
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 5);
     }
 }

@@ -213,7 +213,7 @@ impl PartAttachment {
             }
         }
         for route in self.serial_routes.iter().flatten() {
-            crate::reference::validate_id(&route.endpoint_part_id)?;
+            fujimod_catalog_identity::validate_id(&route.endpoint_part_id)?;
             if route.formats.is_empty() || route.transfer_ticks == 0 {
                 return Err("part serial route has no format or transfer latency".into());
             }

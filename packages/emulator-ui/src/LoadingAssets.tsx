@@ -16,9 +16,11 @@ export function LoadingAssets(props: { assets: readonly AssetProgress[] }) {
                 {asset().status === 'failed'
                   ? 'Failed'
                   : asset().status === 'complete'
-                    ? `✓${asset().loaded ? ` ${size(asset().loaded)}` : ''}`
+                    ? `✓${asset().loaded && asset().unit !== 'ticks' ? ` ${size(asset().loaded)}` : ''}`
                     : asset().status === 'loading' && asset().total
-                      ? `${mib(asset().loaded)} / ${mib(asset().total!)} MiB`
+                      ? asset().unit === 'ticks'
+                        ? `${Math.min(99, Math.floor((100 * asset().loaded) / asset().total!))}%`
+                        : `${mib(asset().loaded)} / ${mib(asset().total!)} MiB`
                       : ''}
               </span>
               <progress
@@ -28,7 +30,10 @@ export function LoadingAssets(props: { assets: readonly AssetProgress[] }) {
                     ? 100
                     : asset().status === 'loading'
                       ? asset().total
-                        ? Math.min(100, (100 * asset().loaded) / asset().total!)
+                        ? Math.min(
+                            asset().unit === 'ticks' ? 99 : 100,
+                            (100 * asset().loaded) / asset().total!,
+                          )
                         : undefined
                       : 0
                 }

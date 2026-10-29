@@ -149,7 +149,7 @@ try {
     const rec = await header();
     await tap('menu_ok_button');
     await until(async () => (await header()) !== rec, 60_000_000);
-    await tap('selector_function_buttons.down');
+    await tap('selector.down');
     await advance(3_600_000);
     await tap('disp_back_button');
     await until(async (p) => ready(p) && (await header()) === rec, 60_000_000);

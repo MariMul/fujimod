@@ -3,9 +3,10 @@
 //! uses programmed black, WB/exposure, radial shading and the measured film
 //! law. Spatial filtering remains unmodeled.
 use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
-use fujimod_emulator_imaging::exr2_isp::{Irq, word};
+use fujimod_emulator_imaging::exr2_isp::word;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_imaging::film::{Film, still_offset};
-use fujimod_emulator_imaging::raw::{Cfa, Packing, RawView};
+use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::Arc;
 use fujimod_emulator_imaging::exr2_isp::options::still::Options;
@@ -266,6 +267,12 @@ impl Device for StillProcessor {
             }
         }
         self.r[o / 4] = v as u32;
+    }
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        match name {
+            "raw-input" => Ok(&self.source),
+            _ => Err(format!("unknown still-processor diagnostic buffer: {name}")),
+        }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.dma

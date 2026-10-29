@@ -1,5 +1,18 @@
 # FujiMod
 
+This repo contains open source tooling that can help developers access camera
+internals and work on mods. We’re gathering on the
+[FujiHack.org Discord](https://discord.gg/UZXDktvAZP) to collaborate.
+
+The FujiMod firmware modification itself is not yet open source, but we’re
+working on it!
+
+If you want to help by testing FujiMod firmware on your camera,
+[head to fujimod.com](https://fujimod.com/). Due to copyright, we can’t distribute
+ready-made builds of FujiMod since it’s based on the official firmware. Use the
+search box on the site to find the download link from Fujifilm for your camera.
+Then upload it to fujimod.com so we can build the mod for your camera.
+
 Camera tools, emulation and firmware mods. The browser application lives in
 [apps/web](apps/web/README.md), including its body definitions, patch
 interpreter, runtime adapter and browser checks. The shared
@@ -28,11 +41,16 @@ The `fujimod` facade exposes components through optional features; enable `usb`
 for `fujimod::usb`. The [mod installation crate](crates/mod-install/README.md)
 provides checked uploads and borrowed callback batches. The [USB crate](crates/usb/README.md) provides the initial
 asynchronous service/debug protocol implementation.
-The [catalog crate](crates/catalog/README.md) loads caller-selected firmware
-data through `fujimod::catalog`, shared by USB and the emulator.
+The [catalog crates](crates/catalog/README.md) load caller-selected firmware
+data: the reference catalog through `fujimod::catalog`, and the service
+definitions USB uses through `fujimod::catalog_service`.
 Enable the `emulator` feature for `fujimod::emulator`; execution, device models
 and processor backends live in separate crates under `crates/emulator*`.
 The Python package exposes the same execution core through `fujimod.emulator`.
+
+External EXR II board composers can consume `fujimod_emulator_exr2_boot_serial::BootSerialBlocks::devices()` into their device graph. Register each `Some(Mapping)` window and attach each `None` entry as an unmapped event device; the returned devices share one serial state and coordinator.
+
+`fujimod_emulator_devices::parts::nand::Nand` exports committed media through `committed_image()` and imports it into a fresh medium through `restore_committed()`. The caller supplies the board geometry and immutable base; import checks both geometry and base identity, then restores overlays, spare inputs, programmed pages and erased pages without CPU/controller/session state. Equivalent committed state produces deterministic bytes. The schema belongs to FujiMod, not a board-specific retained emulator format.
 
 ```sh
 cargo test --workspace --all-features

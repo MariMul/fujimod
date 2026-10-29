@@ -185,10 +185,7 @@ try {
     .click();
   await count(0);
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
-  await owner
-    .getByRole('form', { name: 'Read memory', exact: true })
-    .getByRole('button', { name: 'Read', exact: true })
-    .click();
+  await owner.getByRole('form', { name: 'Read memory', exact: true }).waitFor({ state: 'hidden' });
   await owner
     .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })

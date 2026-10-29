@@ -175,7 +175,12 @@ impl Compositor {
         }
         Ok(())
     }
-    pub fn complete(&mut self, token: u64, _now: i64, actions: &mut Vec<fujimod_emulator_devices::Action>) {
+    pub fn complete(
+        &mut self,
+        token: u64,
+        _now: i64,
+        actions: &mut Vec<fujimod_emulator_devices::Action>,
+    ) {
         let (i, generation, cpu) = reset_fields(token);
         let p = &mut self.pipes[i];
         if generation == p.generation {
@@ -394,7 +399,6 @@ impl Compositor {
                 let mut s = c.plane_state();
                 s.set("requested_prefix_bytes", S::Int(count));
                 s.set("captured_bytes", S::Int(raw.len() as i64));
-                s.set("sha256", S::str(&sha256(&raw)));
                 s.set("raw", S::Bytes(raw));
                 captures.push(s);
             }
@@ -544,7 +548,7 @@ impl Compositor {
             ("frame_sha256", frame_hash(host, &raw)),
             (
                 "png_sha256",
-                png.as_ref().map_or(S::None, |png| S::str(&sha256(png))),
+                png.as_ref().map_or(S::None, |png| frame_hash(host, png)),
             ),
             (
                 "kind",
@@ -585,17 +589,14 @@ impl Compositor {
         pixels: bool,
         host: &mut dyn ScanoutHost,
     ) -> Result<Option<Frame>> {
-        let rectangles = super::rectangles::decode(&self.pipes[i], self.rectangle_composition)?;
         let Some(mut frame) = self.plane_frame(i, cpu, pixels, host)? else {
-            if !rectangles.is_empty() {
-                return Err("Rectangles have no initialized display plane".into());
-            }
             return Ok(None);
         };
+        let rectangles = super::rectangles::decode(&self.pipes[i], self.rectangle_composition)?;
         super::rectangles::compose(&mut frame, &rectangles, host.diagnostic_hashes());
         if let Some(rgb) = &frame.rgb {
             if let Some(png) = host.encode_png(rgb, frame.width, frame.height)? {
-                frame.state.set("png_sha256", S::str(&sha256(&png)));
+                frame.state.set("png_sha256", frame_hash(host, &png));
                 frame.png = Some(png);
             }
         }
@@ -897,7 +898,7 @@ impl Compositor {
             ("frame_sha256", frame_hash(host, &raw)),
             (
                 "png_sha256",
-                png.as_ref().map_or(S::None, |p| S::str(&sha256(p))),
+                png.as_ref().map_or(S::None, |p| frame_hash(host, p)),
             ),
             (
                 "kind",

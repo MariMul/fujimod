@@ -4,7 +4,7 @@ use super::{
     results::{Point, SessionSnapshot},
     session::Session,
 };
-use fujimod_emulator::session::checkpoint::Snapshot;
+use fujimod_emulator_session::checkpoint::Snapshot;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::{checkpoint::Checkpoint as Encoded, graphics::scanout::Frame};
 use serde::{Deserialize, Serialize};

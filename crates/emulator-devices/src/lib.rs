@@ -16,12 +16,14 @@ pub mod gic;
 pub mod graph;
 pub mod graphics;
 pub mod keyed_io;
+pub mod exr;
 pub mod lz_osd;
 pub mod map;
 pub mod parts;
 pub mod math;
 pub mod record;
 pub mod signals;
+pub mod storage_reads;
 #[doc(hidden)]
 pub mod test_host;
 pub mod work;

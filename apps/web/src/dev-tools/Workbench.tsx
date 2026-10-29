@@ -1,3 +1,4 @@
+import { BatteryCycleIcon } from '../ui/battery-cycle';
 import {
   Match,
   Show,
@@ -9,21 +10,29 @@ import {
   onSettled,
   untrack,
 } from 'solid-js';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { CameraModel } from './camera-model';
 import { CameraDetails } from './CameraDetails';
 import { CameraStrip } from './CameraStrip';
-import { CameraTools, emptyReadings, type Readings } from './CameraTools';
+import { CameraTools } from './CameraTools';
+import { BugReports } from './reports/BugReports';
 import { Wizard, toolAt, toolPath } from './routes';
 import { ConsoleLog } from './ConsoleLog';
 import { ToolDeck, type SavedCamera } from './ToolDeck';
 import { CameraStore } from '../cameras/store';
-import { DebugModeWizard, WizardConnection } from './debug-mode/Wizard';
+import { GuideConnection, ServiceModeGuide } from './ServiceModeGuide';
+import { GettingStarted, type PathResults } from './GettingStarted';
+import { executionSelection, bulkSupportError } from './captures/capture';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
 import { StateCaptures } from './captures/StateCaptures';
 import { MapControls } from './captures/MapControls';
 import type { CaptureSet } from './captures/capture';
+import { createLogFiles, shelfCamera } from './log-file';
+import { FileShelf, type AddFile } from '../files/shelf';
+import { FilesPane } from '../files/FilesPane';
+import { shelfContribute } from '../files/shelf-contribute';
 import './workbench.css';
 
 /** Dev Tools: the splash until a camera is known, then the workbench. */
@@ -44,7 +53,7 @@ export function Workbench(props: {
   onCleanup(() => globalThis.removeEventListener?.('popstate', follow));
   const [connecting, setConnecting] = createSignal(false);
   const [connectError, setConnectError] = createSignal('');
-  const [readings, setReadings] = createSignal<ReadonlyMap<string, Readings>>(new Map());
+  const shelf = new FileShelf();
   const [captures, setCaptures] = createSignal<ReadonlyMap<string, CaptureSet>>(new Map());
   const [countdown, setCountdown] = createSignal<Countdown>();
   const owner = createOwnerCountdown(setCountdown);
@@ -64,13 +73,21 @@ export function Workbench(props: {
   const cameras = () => props.model.cameras();
   // Follow the newest camera unless one is chosen; keep a chosen camera even once unplugged.
   createEffect(
-    () => cameras().map((camera) => camera.id),
-    (ids) => {
-      const current = selected();
+    () => ({ ids: cameras().map((camera) => camera.id), current: selected() }),
+    ({ ids, current }) => {
       if (!current || !ids.includes(current)) setSelected(ids.at(-1));
     },
   );
   const camera = createMemo(() => cameras().find((entry) => entry.id === selected()));
+  const logs = createLogFiles(() => props.model.log(), cameras);
+  const files = createMemo(() => [...shelf.files(), ...logs.files()]);
+  /** Adds a tool's output to the Files pane under the camera the tool started on. */
+  const fileFor =
+    (id: string | undefined): AddFile =>
+    (name, blob, meta) => {
+      const current = cameras().find((entry) => entry.id === id);
+      if (current) shelf.add(shelfCamera(current), name, blob, meta);
+    };
 
   async function connect() {
     if (connecting()) return;
@@ -82,7 +99,7 @@ export function Workbench(props: {
       const added = cameras().find((entry) => !known.has(entry.id));
       if (added) setSelected(added.id);
     } catch (error) {
-      setConnectError(error instanceof Error ? error.message : String(error));
+      setConnectError(shownError(error));
     } finally {
       setConnecting(false);
     }
@@ -95,21 +112,20 @@ export function Workbench(props: {
     try {
       await start.call(props.model, savedCamera);
     } catch (error) {
-      setConnectError(error instanceof Error ? error.message : String(error));
+      setConnectError(shownError(error));
     } finally {
       setConnecting(false);
     }
   }
-  const wizardConnection = () => {
-    if (!props.usbSupported) return WizardConnection.Unsupported;
-    if (connecting()) return WizardConnection.Choosing;
+  const guideConnection = () => {
+    if (!props.usbSupported) return GuideConnection.Unsupported;
+    if (connecting()) return GuideConnection.Choosing;
     const current = camera();
     return current?.present && current.transport === 'usb'
-      ? WizardConnection.Connected
-      : WizardConnection.Disconnected;
+      ? GuideConnection.Connected
+      : GuideConnection.Disconnected;
   };
-  // Depend on the camera's id only: a session changes the camera's fields, and new
-  // operations would restart the wizard's reset-guard step.
+  // Depend on the camera's id only: a session changes the camera's fields.
   const usbCamera = createMemo(() => {
     const current = camera();
     return current?.transport === 'usb' ? current.id : undefined;
@@ -121,11 +137,21 @@ export function Workbench(props: {
       props.model.withSession(id, tool, (session) => operation(session.debug)),
     );
   });
-  const cameraReadings = () => readings().get(selected() ?? '') ?? emptyReadings();
-  function updateReadings(update: (current: Readings) => Readings) {
+  const leave = () =>
+    operations() && {
+      leave(progress: (line: string) => void) {
+        const debug = operations();
+        const firmwareId = executionSelection(camera()?.identity)?.firmware.id;
+        if (!debug || !firmwareId) throw Error(bulkSupportError(camera()?.identity));
+        return debug.leave(firmwareId, progress);
+      },
+    };
+  const [paths, setPaths] = createSignal<ReadonlyMap<string, PathResults>>(new Map());
+  const cameraPath = () => paths().get(selected() ?? '') ?? {};
+  function updatePath(update: (current: PathResults) => PathResults) {
     const id = selected();
     if (!id) return;
-    setReadings((map) => new Map(map).set(id, update(map.get(id) ?? emptyReadings())));
+    setPaths((map) => new Map(map).set(id, update(map.get(id) ?? {})));
   }
   const closeWizard = () => setWizard(undefined);
   const cameraCaptures = () => captures().get(selected() ?? '');
@@ -172,85 +198,106 @@ export function Workbench(props: {
           <div class="wb-service" role="alert">
             <strong>Service mode</strong>
             <span>
-              Switching the camera off in service mode restores factory settings. Remove the battery
-              to leave service mode.
+              Switching the camera off in service mode restores factory settings.{' '}
+              <BatteryCycleIcon />
+              Remove the battery to leave service mode.
             </span>
           </div>
         </Show>
         <div class="wb-bench">
           <aside class="wb-tools" aria-label="Tools">
-            <Show when={connectError()}>
-              <p class="wb-status" role="alert">
-                {connectError()}
-              </p>
-            </Show>
-            <Switch>
-              <Match when={wizard() === Wizard.Service}>
-                <DebugModeWizard
-                  purpose="service"
-                  connection={wizardConnection()}
-                  onConnect={() => void connect()}
-                  onClose={closeWizard}
-                />
-              </Match>
-              <Match when={wizard() === Wizard.Enable}>
-                <DebugModeWizard
-                  connection={wizardConnection()}
-                  onConnect={() => void connect()}
-                  operations={operations()}
-                  onClose={closeWizard}
-                />
-              </Match>
-              <Match when={wizard() === Wizard.Disable}>
-                <LeaveDebugMode
-                  connected={wizardConnection() === WizardConnection.Connected}
-                  operation={operations()}
-                  onClose={closeWizard}
-                />
-              </Match>
-              <Match when={wizard() === Wizard.StateCaptures}>
-                <StateCaptures
-                  camera={camera()}
-                  model={props.model}
-                  set={cameraCaptures()}
-                  onSet={updateCaptures}
-                  onConnect={() => void connect()}
-                  onClose={closeWizard}
-                />
-              </Match>
-              <Match when={wizard() === Wizard.MapControls}>
-                <MapControls
-                  camera={camera()}
-                  model={props.model}
-                  set={cameraCaptures()}
-                  onSet={updateCaptures}
-                  onConnect={() => void connect()}
-                  onClose={closeWizard}
-                />
-              </Match>
-              <Match when={camera()}>
-                {(current) => (
-                  <>
-                    <CameraDetails camera={current()} model={props.model} />
-                    <CameraTools
-                      camera={current()}
-                      model={props.model}
-                      readings={cameraReadings()}
-                      onReadings={updateReadings}
-                      onWizard={setWizard}
-                    />
-                  </>
-                )}
-              </Match>
-            </Switch>
-            <div class="wb-foot">
-              <button class="wb-text" onClick={() => setWizard(Wizard.Service)}>
-                Service mode instructions
-              </button>
-              <a class="wb-text" href="../bug/">
-                Bug report
-              </a>
+            <div class="wb-tools-scroll">
+              <Show when={connectError()}>
+                <p class="wb-status" role="alert">
+                  {connectError()}
+                </p>
+              </Show>
+              <Switch>
+                <Match when={wizard() === Wizard.Service}>
+                  <ServiceModeGuide
+                    connection={guideConnection()}
+                    onConnect={() => void connect()}
+                    onClose={closeWizard}
+                  />
+                </Match>
+                <Match when={wizard() === Wizard.Disable}>
+                  <LeaveDebugMode
+                    connected={guideConnection() === GuideConnection.Connected}
+                    operation={leave()}
+                    onClose={closeWizard}
+                  />
+                </Match>
+                <Match when={wizard() === Wizard.StateCaptures}>
+                  <StateCaptures
+                    camera={camera()}
+                    model={props.model}
+                    set={cameraCaptures()}
+                    onSet={updateCaptures}
+                    onFile={fileFor(selected())}
+                    onConnect={() => void connect()}
+                    onClose={closeWizard}
+                  />
+                </Match>
+                <Match when={wizard() === Wizard.MapControls}>
+                  <MapControls
+                    camera={camera()}
+                    model={props.model}
+                    set={cameraCaptures()}
+                    onSet={updateCaptures}
+                    onFile={fileFor(selected())}
+                    onConnect={() => void connect()}
+                    onClose={closeWizard}
+                  />
+                </Match>
+                <Match when={camera()}>
+                  {(current) => (
+                    <>
+                      <CameraDetails camera={current()} model={props.model} />
+                      <GettingStarted
+                        camera={current()}
+                        model={props.model}
+                        results={cameraPath()}
+                        onResults={updatePath}
+                        onFile={fileFor(current().id)}
+                        debug={operations()}
+                        onWizard={setWizard}
+                      />
+                      <BugReports
+                        camera={current()}
+                        model={props.model}
+                        onFile={fileFor(current().id)}
+                      />
+                      <CameraTools
+                        camera={current()}
+                        model={props.model}
+                        onFile={fileFor(current().id)}
+                        onWizard={setWizard}
+                      />
+                    </>
+                  )}
+                </Match>
+              </Switch>
+              <div class="wb-foot">
+                <button class="wb-text" onClick={() => setWizard(Wizard.Service)}>
+                  Service mode instructions
+                </button>
+                <a class="wb-text" href="../bug/">
+                  Bug report
+                </a>
+              </div>
             </div>
+            <FilesPane
+              files={files()}
+              newest={shelf.newest()}
+              onRemove={(file) =>
+                logs.isLog(file) ? logs.remove(file.camera.id) : shelf.remove(file.key)
+              }
+              onRemoveCamera={(id) => {
+                shelf.removeCamera(id);
+                logs.remove(id);
+              }}
+              contribute={shelfContribute}
+            />
           </aside>
           <ConsoleLog
             entries={props.model.log()}

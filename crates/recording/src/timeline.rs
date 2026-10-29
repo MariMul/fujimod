@@ -1,5 +1,8 @@
 use crate::{
-    Frame, Result, badges,
+    CardPanel, Frame, Result, badges,
+    canvas::Canvas,
+    card_panel,
+    overlays::{DisplayPanel, Motion},
     touches::{self, Mark, Touch, TouchPhase},
     video::Encoders,
 };
@@ -8,6 +11,10 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
+
+/// LCD frames are sampled at most this often; the video itself runs at the
+/// recorder's fps, so badges and touches animate at the full frame rate.
+const SAMPLE_FPS: u32 = 15;
 
 #[derive(Default, Clone, Serialize)]
 pub struct Metrics {
@@ -23,6 +30,11 @@ pub struct Metrics {
 struct Badge {
     name: String,
     released: Option<u64>,
+}
+struct CardOverlay {
+    panel: CardPanel,
+    motion: Motion,
+    formatting: Option<u64>,
 }
 pub struct Recorder {
     output: PathBuf,
@@ -45,10 +57,14 @@ pub struct Recorder {
     encoders: Option<Encoders>,
     size: Option<(u32, u32)>,
     fitted: Option<Frame>,
+    touched: Vec<u8>,
     annotated: Vec<u8>,
     labels: Vec<(String, u8)>,
     marks: Vec<Mark>,
     has_poster: bool,
+    card_panel: Option<CardOverlay>,
+    display_panel: Option<DisplayPanel>,
+    overlays_changed: bool,
 }
 pub fn seconds(value: f64) -> Result<f64> {
     if value.is_finite() && value >= 0. {
@@ -86,14 +102,93 @@ impl Recorder {
             encoders: None,
             size: None,
             fitted: None,
+            touched: Vec::new(),
             annotated: Vec::new(),
             labels: Vec::new(),
             marks: Vec::new(),
             has_poster: false,
+            card_panel: None,
+            display_panel: None,
+            overlays_changed: false,
         })
+    }
+    pub fn card_panel(&mut self, snapshot: Option<CardPanel>) -> Result<()> {
+        if self.finished {
+            return Err("Recording is already finished".into());
+        }
+        match (snapshot, &mut self.card_panel) {
+            (Some(panel), Some(current)) => {
+                current.panel = panel;
+                current.formatting = None;
+                current.motion.set(true, self.frames, self.fps);
+            }
+            (Some(panel), None) => {
+                self.card_panel = Some(CardOverlay {
+                    panel,
+                    motion: Motion::new(self.frames),
+                    formatting: None,
+                })
+            }
+            (None, Some(current)) => {
+                current.motion.set(false, self.frames, self.fps);
+                current.formatting = None;
+            }
+            (None, None) => (),
+        }
+        self.overlays_changed = true;
+        self.latest_shown = false;
+        self.idle_kept = 0.;
+        Ok(())
+    }
+    pub fn card_formatting(&mut self) -> Result<()> {
+        if self.finished {
+            return Err("Recording is already finished".into());
+        }
+        let card = self
+            .card_panel
+            .as_mut()
+            .filter(|card| card.motion.target == 1.)
+            .ok_or("Show the SD card before formatting it")?;
+        card.formatting = Some(self.frames);
+        self.overlays_changed = true;
+        Ok(())
+    }
+    pub fn display_panel(&mut self, frame: Option<Frame>, label: String, width: f32) -> Result<()> {
+        if self.finished {
+            return Err("Recording is already finished".into());
+        }
+        if let Some(frame) = frame {
+            let panel = DisplayPanel::new(frame, label, width, self.frames)?;
+            if let Some(current) = &mut self.display_panel {
+                current.frame = panel.frame;
+                current.label = panel.label;
+                current.width = panel.width;
+                current.motion.set(true, self.frames, self.fps);
+            } else {
+                self.display_panel = Some(panel);
+            }
+        } else if let Some(current) = &mut self.display_panel {
+            current.motion.set(false, self.frames, self.fps);
+        }
+        self.overlays_changed = true;
+        self.latest_shown = false;
+        self.idle_kept = 0.;
+        Ok(())
+    }
+    /// Advance presentation time over the last real camera frame, never guest time.
+    pub fn animate(&mut self, duration: f64) -> Result<()> {
+        let frame = self
+            .last
+            .clone()
+            .ok_or("No camera frame for overlay animation")?;
+        self.still(frame, duration)
     }
     pub fn seconds(&self) -> f64 {
         self.frames as f64 / f64::from(self.fps)
+    }
+    /// How often LCD frames are sampled; the video runs at `fps`.
+    pub fn sample_fps(&self) -> u32 {
+        self.fps.min(SAMPLE_FPS)
     }
     pub fn has_poster(&self) -> bool {
         self.has_poster
@@ -107,7 +202,7 @@ impl Recorder {
             && (force
                 || self
                     .last_sample
-                    .is_none_or(|last| time - last >= 1. / f64::from(self.fps))))
+                    .is_none_or(|last| time - last >= 1. / f64::from(self.sample_fps()))))
     }
     fn advance(&mut self, time: f64) -> Result<()> {
         seconds(time)?;
@@ -205,7 +300,7 @@ impl Recorder {
         Ok(())
     }
     /// One finger's touch at `x`, `y` in the coordinates of the frames being
-    /// recorded. Drawn only on the annotated video.
+    /// recorded. Drawn on both videos; screenshots stay unmarked.
     pub fn touch(&mut self, phase: TouchPhase, x: f64, y: f64, time: f64) -> Result<()> {
         if !(x.is_finite() && y.is_finite() && x >= 0. && y >= 0.) {
             return Err("Touch position must be finite and nonnegative".into());
@@ -221,7 +316,12 @@ impl Recorder {
         self.advance(time)?;
         self.idle_kept = 0.;
         match (phase, down) {
-            (TouchPhase::Start, _) => self.touches.push(Touch { x, y, lifted: None }),
+            (TouchPhase::Start, _) => self.touches.push(Touch {
+                x,
+                y,
+                down: self.frames,
+                lifted: None,
+            }),
             (_, Some(index)) => {
                 let touch = &mut self.touches[index];
                 (touch.x, touch.y) = (x, y);
@@ -289,9 +389,8 @@ impl Recorder {
     }
     fn write(&mut self) -> Result<()> {
         if !self.video {
-            let fade = touches::fade_frames(self.fps);
-            self.touches
-                .retain(|t| t.lifted.is_none_or(|at| self.frames - at < fade));
+            let (frames, fps) = (self.frames, self.fps);
+            self.touches.retain(|t| touches::showing(t, frames, fps));
             self.frames += 1;
             return Ok(());
         }
@@ -305,16 +404,41 @@ impl Recorder {
         let labels = self.current_labels();
         let marks = touches::marks(&mut self.touches, self.frames, self.fps, source, size);
         let fitted = self.fitted.as_ref().unwrap();
-        if changed || labels != self.labels || marks != self.marks {
+        let animating = self.card_panel.as_ref().is_some_and(|card| {
+            card.motion.active(self.frames, self.fps) || card.formatting.is_some()
+        }) || self
+            .display_panel
+            .as_ref()
+            .is_some_and(|panel| panel.motion.active(self.frames, self.fps));
+        if changed
+            || self.overlays_changed
+            || animating
+            || labels != self.labels
+            || marks != self.marks
+        {
             let start = Instant::now();
-            let mut canvas = badges::Canvas {
-                pixels: fitted.pixels().to_vec(),
-                width: fitted.width() as i32,
-                height: fitted.height() as i32,
-            };
+            let mut canvas = Canvas::from_rgb(fitted.pixels(), fitted.width(), fitted.height());
+            if let Some(panel) = &self.card_panel {
+                let shake = panel.formatting.map_or((0., 0.), |start| {
+                    let t = (self.frames - start) as f32 / self.fps as f32;
+                    ((t * 81.7).sin() * 4., (t * 107.3).sin() * 2.5)
+                });
+                card_panel::draw(
+                    &mut canvas,
+                    &panel.panel,
+                    panel.motion.value(self.frames, self.fps),
+                    shake,
+                );
+            }
+            if let Some(panel) = &self.display_panel {
+                panel.draw(&mut canvas, self.frames, self.fps)?;
+            }
+            self.overlays_changed = animating;
+            // Both videos show touches; only the annotated one shows badges.
             touches::draw_on(&mut canvas, &marks);
+            self.touched = canvas.rgb();
             badges::draw_on(&mut canvas, &labels);
-            self.annotated = canvas.pixels;
+            self.annotated = canvas.rgb();
             self.metrics.annotation_seconds += start.elapsed().as_secs_f64();
             self.metrics.annotated_frames += 1;
             self.labels = labels;
@@ -327,7 +451,7 @@ impl Recorder {
             .encoders
             .as_mut()
             .unwrap()
-            .write(&self.annotated, fitted.pixels())?;
+            .write(&self.annotated, &self.touched)?;
         for (total, part) in self.metrics.encoder_write_seconds.iter_mut().zip(elapsed) {
             *total += part;
         }

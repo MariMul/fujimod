@@ -1,6 +1,6 @@
 //! Asynchronous remote primitives.
 use crate::{Control, Reference};
-use fujimod_catalog::controls::ControlOperation;
+use fujimod_catalog_controls::ControlOperation;
 use fujimod_recording::Frame;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, future::Future, pin::Pin};
@@ -187,7 +187,7 @@ pub trait RemoteReader {
     fn read_memory<'a>(&'a mut self, address: u64, size: usize) -> LocalFuture<'a, MemoryRead>;
     fn frame(&mut self) -> LocalFuture<'_, Capture>;
     /// Evaluate every input-readiness check now.
-    fn readiness(&mut self) -> LocalFuture<'_, Readiness>;
+    fn readiness<'a>(&'a mut self, control: Option<&'a Control>) -> LocalFuture<'a, Readiness>;
 }
 pub trait Remote: RemoteReader {
     fn set_input<'a>(&'a mut self, input: &'a Input, deadline: u64) -> LocalFuture<'a, ()>;

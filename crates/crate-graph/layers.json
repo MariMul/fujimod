@@ -3,6 +3,8 @@
   "layers": {
     "interface": [
       "fujimod-emulator-devices",
+      "fujimod-emulator-exr2-resources",
+      "fujimod-emulator-exr2-images",
       "fujimod-emulator-imaging",
       "fujimod-emulator-storage"
     ],
@@ -24,6 +26,8 @@
       "fujimod-emulator-exr2-system",
       "fujimod-emulator-graphics",
       "fujimod-emulator-image-codecs",
+      "fujimod-emulator-image-formation",
+      "fujimod-emulator-image-processing",
       "fujimod-emulator-ip",
       "fujimod-emulator-ip-arm",
       "fujimod-emulator-ip-dmp",
@@ -38,32 +42,39 @@
       "fujimod-emulator-xp5-display",
       "fujimod-emulator-xp5-imaging",
       "fujimod-emulator-xp5-io",
-      "fujimod-emulator-xp5-storage",
-      "fujimod-emulator-xppro"
+      "fujimod-emulator-xp5-storage"
     ],
     "plan": [
       "fujimod-emulator-exr2-plan"
     ],
     "board": [
       "fujimod-emulator-exr2-board",
+      "fujimod-emulator-preparation",
       "fujimod-emulator-xp4-board",
-      "fujimod-emulator-xp5-board"
+      "fujimod-emulator-xp5-board",
+      "fujimod-emulator-xpp"
     ],
     "engine": [
       "fujimod-emulator",
+      "fujimod-emulator-boot",
       "fujimod-emulator-cpu",
       "fujimod-emulator-cpu-hvf",
       "fujimod-emulator-cpu-unicorn",
+      "fujimod-emulator-session",
       "fujimod-unicorn-sys"
     ],
     "library": [
       "fujimod",
+      "fujimod-python-app80",
+      "fujimod-python-app80-values",
       "fujimod-python-base",
       "fujimod-python-catalog",
       "fujimod-python-emulator",
       "fujimod-python-recording",
       "fujimod-python-remote",
+      "fujimod-python-service",
       "fujimod-python-usb",
+      "fujimod-python-usb-base",
       "fujimod-remote"
     ],
     "final": [
@@ -71,6 +82,7 @@
       "fujimod-emulator-javascript",
       "fujimod-emulator-models",
       "fujimod-javascript",
+      "fujimod-javascript-testing",
       "fujimod-python-graphics",
       "fujimod-python-host-image",
       "fujimod-python-module",
@@ -79,20 +91,37 @@
     "other": [
       "fujimod-bindgen",
       "fujimod-catalog",
+      "fujimod-catalog-assets",
+      "fujimod-catalog-bulk",
+      "fujimod-catalog-workflows",
+      "fujimod-catalog-configuration",
+      "fujimod-catalog-construction",
+      "fujimod-catalog-controls",
+      "fujimod-catalog-firmware-identity",
+      "fujimod-catalog-identity",
+      "fujimod-catalog-resolution",
+      "fujimod-catalog-remote",
+      "fujimod-catalog-run-inputs",
+      "fujimod-catalog-schemas",
+      "fujimod-catalog-service",
+      "fujimod-catalog-settings",
       "fujimod-corpus",
       "fujimod-crate-graph",
       "fujimod-emulator-exr2-isp-testing",
       "fujimod-firmware",
       "fujimod-recording",
       "fujimod-settings",
-      "fujimod-simulation",
       "fujimod-usb",
+      "fujimod-usb-app80",
+      "fujimod-usb-app80-types",
       "fujimod-usb-proxy",
+      "fujimod-virtual-scene",
       "fujimod-workflows",
       "fujimod-workspace-hack"
     ]
   },
   "remaining": {
+    "untested_libraries": [],
     "model_dependencies": {
       "fujimod-emulator-xp5-board": [
         "fujimod-emulator-ip",
@@ -113,8 +142,12 @@
         "fujimod-emulator-sensor-input",
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
-        "fujimod-emulator-xp4-storage",
-        "fujimod-emulator-xppro"
+        "fujimod-emulator-xp4-storage"
+      ],
+      "fujimod-emulator-xpp": [
+        "fujimod-emulator-ip",
+        "fujimod-emulator-ip-arm",
+        "fujimod-emulator-xp4-io"
       ]
     },
     "oversize_models": [],
@@ -127,9 +160,7 @@
       "fujimod-emulator-devices/src/keyed_io.rs",
       "fujimod-emulator-devices/src/lz_osd.rs",
       "fujimod-emulator-devices/src/parts/controls.rs",
-      "fujimod-emulator-devices/src/parts/hdmi_sink.rs",
-      "fujimod-emulator-imaging/src/exr2_isp/parameters.rs",
-      "fujimod-emulator-imaging/src/scene/clocked.rs"
+      "fujimod-emulator-devices/src/parts/hdmi_sink.rs"
     ]
   }
 }

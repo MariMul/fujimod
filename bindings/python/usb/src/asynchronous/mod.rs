@@ -8,10 +8,13 @@ use std::{
     task::{Context, Poll},
 };
 
+mod callback;
 mod commands;
+pub(super) mod connection;
 mod install;
 mod operations;
 mod reader;
+mod runtime;
 mod sequence;
 mod workflows;
 
@@ -45,10 +48,11 @@ fn lock<T>(mutex: &Mutex<T>) -> PyResult<MutexGuard<'_, T>> {
         .lock()
         .map_err(|_| binding_error(BindingError::Poisoned))
 }
-fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
+/// Python bytes of a native buffer.
+pub fn bytes(data: impl AsRef<[u8]>) -> Py<PyBytes> {
     Python::attach(|py| PyBytes::new(py, data.as_ref()).unbind())
 }
-type Operation<'a, T> = Pin<Box<dyn Future<Output = usb::Result<T>> + Send + 'a>>;
+use fujimod_python_usb_base::{Operation, Running, Sessions};
 
 enum Slot {
     Open(Box<ff80::Session>),
@@ -80,6 +84,10 @@ pub struct AsyncSession {
     packet_bytes: u32,
 }
 impl AsyncSession {
+    /// The firmware's configuration command limit in bytes.
+    pub fn configuration_limit(&self) -> u32 {
+        self.limits.configuration.get()
+    }
     pub(super) fn new(native: ff80::Session, limits: FirmwareLimits) -> Self {
         Self {
             token: native.info().id,
@@ -88,7 +96,8 @@ impl AsyncSession {
             limits,
         }
     }
-    async fn with<T: Send>(
+    /// Run a native ff80 operation on the open session.
+    pub async fn with<T: Send>(
         &self,
         operation: impl for<'a> FnOnce(&'a mut ff80::Session) -> Operation<'a, T> + Send,
     ) -> PyResult<T> {
@@ -176,25 +185,36 @@ async fn interfaces(device: Device) -> PyResult<Vec<InterfaceSelection>> {
         })
         .map_err(error)
 }
-pub(super) fn register(
-    py: Python<'_>,
-    module: &Bound<'_, PyModule>,
-    app80: &Bound<'_, PyModule>,
-) -> PyResult<()> {
+pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<AsyncSession>()?;
+    callback::register(module)?;
+    runtime::register(module)?;
+    connection::register(module)?;
     module.add_class::<sequence::CommandSequence>()?;
     install::register(module)?;
     module.add_class::<reader::Reader>()?;
     module.add_function(wrap_pyfunction!(self::discover, module)?)?;
     module.add_function(wrap_pyfunction!(self::discover_proxy, module)?)?;
     module.add_function(wrap_pyfunction!(self::interfaces, module)?)?;
-    operations::register(py, module, app80)
+    operations::register(py, module)
 }
 
-impl AsyncSession {
-    pub fn remote_lease(&self) -> PyResult<Lease> {
-        Lease::new(self).map(|(lease, _)| lease)
-    }
+/// Lend Python `fujimod.usb.Session` objects to the binding crates built on
+/// `fujimod-python-usb-base`.
+pub(super) fn install() {
+    fujimod_python_usb_base::install(Sessions {
+        lease: |session| {
+            let session = session.cast::<AsyncSession>()?.get();
+            Lease::new(session).map(|(lease, _)| fujimod_python_usb_base::Lease::new(lease))
+        },
+        run: |session, operation| {
+            let session = session.cast::<AsyncSession>()?.get().clone();
+            Ok(Box::pin(async move { session.with(operation).await }) as Running)
+        },
+        configuration_limit: |session| {
+            Ok(session.cast::<AsyncSession>()?.get().configuration_limit())
+        },
+    });
 }
 impl std::borrow::Borrow<ff80::Session> for Lease {
     fn borrow(&self) -> &ff80::Session {

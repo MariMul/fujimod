@@ -754,7 +754,8 @@
       "event": 2,
       "debug_key": "UP",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector.up"
       },
       "scanner": {
         "index": 11,
@@ -785,7 +786,8 @@
       "event": 3,
       "debug_key": "DOWN",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector.down"
       },
       "scanner": {
         "index": 12,
@@ -816,7 +818,8 @@
       "event": 4,
       "debug_key": "LEFT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector.left"
       },
       "scanner": {
         "index": 13,
@@ -847,7 +850,8 @@
       "event": 5,
       "debug_key": "RIGHT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector.right"
       },
       "scanner": {
         "index": 14,

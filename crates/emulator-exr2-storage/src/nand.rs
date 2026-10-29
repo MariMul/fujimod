@@ -58,6 +58,7 @@ pub struct NandController {
     aperture: [u8; 512],
     scratch: Box<[u8]>,
     pending: Option<Pending>,
+    jobs_started: u64,
     staged: Option<u64>,
     cache: Option<Cache>,
 }
@@ -77,6 +78,7 @@ impl NandController {
             aperture: [255; 512],
             scratch: vec![0; 0x20000].into_boxed_slice(),
             pending: None,
+            jobs_started: 0,
             staged: None,
             cache: None,
         })
@@ -112,11 +114,16 @@ impl NandController {
             .now()
             .checked_add(delay)
             .ok_or("NAND deadline overflow")?;
+        let jobs_started = self
+            .jobs_started
+            .checked_add(1)
+            .ok_or("NAND job counter overflow")?;
         self.pending = Some(Pending {
             due,
             core: cx.cpu,
             operation,
         });
+        self.jobs_started = jobs_started;
         self.set(4, self.get(4) | 4);
         self.set(0x54, self.get(0x54) & !1);
         match operation {
@@ -556,6 +563,7 @@ impl Device for NandController {
                 self.aperture.as_slice(),
                 &self.scratch,
                 &self.pending,
+                self.jobs_started,
                 self.staged,
                 &self.cache,
             ),
@@ -568,6 +576,7 @@ impl Device for NandController {
             Vec<u8>,
             Box<[u8]>,
             Option<Pending>,
+            u64,
             Option<u64>,
             Option<Cache>,
         ) = saved.decode(self.name())?;
@@ -585,11 +594,12 @@ impl Device for NandController {
     }
     fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let (regs, aperture, scratch, pending, staged, cache): (
+        let (regs, aperture, scratch, pending, jobs_started, staged, cache): (
             Box<[u32]>,
             Vec<u8>,
             Box<[u8]>,
             Option<Pending>,
+            u64,
             Option<u64>,
             Option<Cache>,
         ) = saved.decode(self.name())?;
@@ -598,6 +608,7 @@ impl Device for NandController {
         self.aperture.copy_from_slice(&aperture);
         self.scratch = scratch;
         self.pending = pending;
+        self.jobs_started = jobs_started;
         self.staged = staged;
         self.cache = cache;
         Ok(())
@@ -607,7 +618,7 @@ impl Device for NandController {
         Ok(
             serde_json::json!({"medium":self.medium.fingerprint(),"registers":&*self.regs,
             "aperture":fujimod_emulator_devices::fingerprint::bytes(&self.aperture),"scratch":fujimod_emulator_devices::fingerprint::bytes(&self.scratch),
-            "pending":self.pending,"staged":self.staged,"cache":self.cache.as_ref().map(|c|
+            "pending":self.pending,"jobs_started":self.jobs_started,"staged":self.staged,"cache":self.cache.as_ref().map(|c|
                 serde_json::json!({"row":c.row,"sector":c.sector,"metadata":c.metadata,"data":fujimod_emulator_devices::fingerprint::bytes(&c.data)}))}),
         )
     }
@@ -716,7 +727,7 @@ impl Device for NandController {
         size == 4 && matches!(address, 0xfff52004 | 0xfff52054 | 0xfff52810 | 0xfff52890)
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!({"registers":&*self.regs,"busy":self.busy(),"deadline":self.pending.map(|p|p.due),"cached_sector":self.cache.as_ref().map(|c|c.sector),"page_bytes":self.medium.options().page_bytes})
+        serde_json::json!({"registers":&*self.regs,"busy":self.busy(),"jobs_started":self.jobs_started,"deadline":self.pending.map(|p|p.due),"cached_sector":self.cache.as_ref().map(|c|c.sector),"page_bytes":self.medium.options().page_bytes})
     }
 }
 #[cfg(test)]

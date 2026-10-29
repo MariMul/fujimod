@@ -4,6 +4,7 @@ import * as native from '../pkg/fujimod.js';
 export { default as initialize } from '../pkg/fujimod.js';
 export type {
   Session,
+  Memory,
   ResetGuardResult,
   DebugModeResult,
   Device,
@@ -113,6 +114,12 @@ function isServiceCommandError(error: unknown): error is ServiceCommandError {
 export const catalog = Object.freeze({
   /** Every bundled catalog firmware with its body, SoC, parts and generated facts. */
   selections: native.catalogSelections,
+  /** Public/internal release identities, including bodies without emulator support. */
+  firmwareVersions: native.catalogFirmwareVersions,
+  /** Located bulk profiles, including releases without execution profiles. */
+  bulkProfiles: native.catalogBulkProfiles,
+  /** Table generation outcomes for every attempted firmware. */
+  generationResults: native.catalogGenerationResults,
   FirmwareIdentity: native.FirmwareIdentity,
   DefinitionFailureKind: native.DefinitionFailureKind,
   isError: isDefinitionError,
@@ -125,6 +132,12 @@ export const catalog = Object.freeze({
     ModeAvailabilityKind: native.ModeAvailabilityKind,
     ModeTransitionKind: native.ModeTransitionKind,
   }),
+});
+/** Construct an SD recovery card from an identity-checked official update. */
+export const recovery = Object.freeze({
+  availability: native.recoveryAvailability,
+  build: native.buildRecoveryCard,
+  buildGreenLed: native.buildGreenLedCard,
 });
 export const usb = Object.freeze({
   Device: native.Device,
@@ -168,13 +181,6 @@ export const usb = Object.freeze({
   InstallQueries: native.InstallQueries,
   OwnedUpload: native.OwnedUpload,
   OffsetMode: native.OffsetMode,
-  memory: Object.freeze({
-    readRange: native.readMemoryRange,
-    writeRange: native.writeMemoryRange,
-    readChunks(session: native.Session, address: number, length: number): ChunkIterator {
-      return new ChunkIterator(native.memoryChunks(session, address, length));
-    },
-  }),
   data: Object.freeze({
     upload: native.uploadData,
     readChunks(

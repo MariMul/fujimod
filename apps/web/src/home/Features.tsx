@@ -1,347 +1,84 @@
-// @generated
-// This file is code generated. Do not edit directly.
-// Update the feature documentation sources and regenerate the catalog.
-import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
+import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import featureIcons from '../ui/assets/feature-icons.svg?url';
+import iconMetrics from '../ui/assets/feature-icon-metrics.generated.json';
+import catalogData from './features.generated.json';
 import { FeatureTile } from './FeatureTile';
 import { fadeLoop } from './fade-loop';
 import { featureMedia, type Media } from './feature-media';
 import './features.css';
 
+/** Inline Markdown from the docs: text, bold, italic and links. */
+type Inline = string | { b: Inline[] } | { i: Inline[] } | { href: string; text: Inline[] };
+type Credits = { premiere: boolean; inspired: Inline[][]; thanks: Inline[][] };
+/** A hover card: one control, its options and what FujiMod changed. */
 type Card = {
   title: string;
   path: string[];
   summary: string | null;
   choices: Record<string, string>;
   related: { card: string; reason: string }[];
-  manual: string | null;
   changes: string | null;
+  credits: Credits;
+  choice_credits: Record<string, Credits>;
 };
+type Choice = { label: string; stock: boolean; icon: string | null };
+type Control = {
+  title: string;
+  primary: boolean;
+  card: string | null;
+  choices: Choice[];
+  actions: string[];
+};
+/** A catalog tile: one feature, its controls and the cards its preview may come from. */
+type Feature = {
+  id: string;
+  group: string;
+  icon: string;
+  title: string;
+  path: string[];
+  summary: string;
+  card: string | null;
+  media_cards: string[];
+  controls: Control[];
+  credits: Credits;
+};
+/** The docs' website copy (python -m tools.walkthroughs docs --site-data). */
+type Catalog = { schema: 1; groups: string[]; features: Feature[]; cards: Record<string, Card> };
+/** Ink box and the symbol's own viewBox (symbol units), and the optical width and height (scripts/icon-metrics.ts). */
+type IconMetric = { box: number[]; view: number[]; width: number; height: number };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
-const MANUAL = 'https://fujifilm-dsc.com/en/manual/x70/';
+const catalog = catalogData as Catalog;
+const CARDS = catalog.cards;
+const GROUP_TITLES: Record<string, string> = {
+  photography: 'Photography',
+  videography: 'Videography',
+  recipes: 'Recipes',
+  system: 'System & Setup',
+};
 const MEDIA = '/artifacts/docs/';
-/** An X70 manual page, optionally with an anchor ("menu_setup/screen_set-up#framing_guidline"). */
-const manualUrl = (manual: string) => {
-  const [page, anchor] = manual.split('#');
-  return `${MANUAL}${page}/index.html${anchor ? `#${anchor}` : ''}`;
-};
-const CARDS: Record<string, Card> = {
-  image_size: {
-    title: 'IMAGE SIZE',
-    path: ['SHOOTING MENU'],
-    summary: null,
-    choices: {},
-    related: [],
-    manual: 'menu_shooting/image_size',
-    changes:
-      'Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO; IMAGE SIZE now sets L, M or S only.',
-  },
-  shape_aspect_item: {
-    title: 'ASPECT RATIO',
-    path: ['SHOOTING MENU', 'SHAPE & ASPECT'],
-    summary: 'Choose the shape of still pictures: wide, square or tall.',
-    choices: {
-      '3:2': "The sensor's full frame, uncropped.",
-      '16:9': 'Widescreen, like a TV or movie.',
-      '1:1': 'A square frame.',
-      '4:3': 'A taller frame, like most phones.',
-      '65:24': 'A panoramic strip, as on the Hasselblad XPan.',
-      '17:6': 'A wide panoramic strip.',
-      '3:4': 'A tall portrait frame.',
-      '7:6': 'A near-square frame, like 6×7 film.',
-      '5:4': 'A frame like 4×5 large-format film.',
-    },
-    related: [
-      {
-        card: 'image_size',
-        reason: 'the crop fits within the image size',
-      },
-    ],
-    manual: null,
-    changes: null,
-  },
-  shape_surround_item: {
-    title: 'SURROUND VIEW',
-    path: ['SHOOTING MENU', 'SHAPE & ASPECT'],
-    summary: 'Choose how the area outside the frame is shown.',
-    choices: {
-      MASKED: 'The area outside the frame is black.',
-      DARKENED: 'The area outside the frame is darkened.',
-      'WHITE BORDER': 'A white line marks the frame.',
-    },
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  shape_desqueeze_item: {
-    title: 'DESQUEEZE',
-    path: ['SHOOTING MENU', 'SHAPE & ASPECT'],
-    summary: 'Choose the squeeze factor of your anamorphic adapter.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  shape_jpeg_item: {
-    title: 'DESQUEEZE JPEG',
-    path: ['SHOOTING MENU', 'SHAPE & ASPECT'],
-    summary: 'Choose whether JPEG pictures are also recorded at their corrected width.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  c: {
-    title: 'FRAMING GUIDELINE',
-    path: ['SET-UP', 'SCREEN SET-UP'],
-    summary: null,
-    choices: {
-      'GOLDEN RATIO': 'Lines that divide the frame at the golden ratio.',
-      'GOLDEN SPIRAL - BOTTOM LEFT':
-        'A golden logarithmic spiral with its focal point at the lower-left golden-section intersection.',
-      'GOLDEN SPIRAL - BOTTOM RIGHT':
-        'A golden logarithmic spiral with its focal point at the lower-right golden-section intersection.',
-      'GOLDEN SPIRAL - TOP LEFT':
-        'A golden logarithmic spiral with its focal point at the upper-left golden-section intersection.',
-      'GOLDEN SPIRAL - TOP RIGHT':
-        'A golden logarithmic spiral with its focal point at the upper-right golden-section intersection.',
-    },
-    related: [],
-    manual: 'menu_setup/screen_set-up#framing_guidline',
-    changes:
-      'Adds GOLDEN RATIO and four GOLDEN SPIRAL focal-point placements. All guides follow the selected image bounds and aspect ratio.',
-  },
-  film_simulation: {
-    title: 'FILM SIMULATION',
-    path: ['SHOOTING MENU'],
-    summary: null,
-    choices: {},
-    related: [],
-    manual: 'menu_shooting/film_simulation',
-    changes:
-      'Adds ETERNA, Neutral and approximations of four film simulations from newer cameras, and films saved on the memory card. Approximations are marked (approx.) in the camera.',
-  },
-  film_editor_item: {
-    title: 'FILM EDITOR',
-    path: ['SHOOTING MENU'],
-    summary: 'Create and edit film simulations, saved as files on the memory card.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  photometry: {
-    title: 'PHOTOMETRY',
-    path: ['SHOOTING MENU'],
-    summary: null,
-    choices: {
-      HIGHLIGHT:
-        'Exposure is reduced when bright areas dominate the scene. A small bright detail may still be overexposed.',
-      'RAW HIGHLIGHT':
-        'RAW HIGHLIGHT: Exposure is set so that the brightest areas of the frame are recorded as brightly as possible without loss of detail in RAW images. Available when a RAW option is selected for IMAGE QUALITY.',
-    },
-    related: [],
-    manual: 'menu_shooting/photometry',
-    changes:
-      'Adds HIGHLIGHT, which reduces exposure when bright areas dominate the scene. The shooting, Fn and Q displays mark it with an asterisk in brackets.',
-  },
-  f_log_recording_item: {
-    title: 'F-Log RECORDING',
-    path: ['SHOOTING MENU', 'MOVIE SET-UP'],
-    summary: 'Choose F-Log processing for movies.',
-    choices: {
-      OFF: 'Use the selected picture settings.',
-      ON: 'Use F-Log movie processing.',
-    },
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  hdmi_rec_behavior_item: {
-    title: 'HDMI OUTPUT',
-    path: ['SET-UP'],
-    summary: 'Choose whether an HDMI device shows the shooting view or playback only.',
-    choices: {
-      'LIVE VIEW': 'The HDMI device shows the shooting view.',
-      'PLAYBACK ONLY': 'The HDMI device shows playback only, as on an unmodified camera.',
-    },
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_exposure_compensation_dial: {
-    title: 'EV DIAL',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose an action and the value each EV notch selects.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_command_control: {
-    title: 'COMMAND CONTROL',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the setting the command control adjusts.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_auto_mode_selector_lever: {
-    title: 'AUTO LEVER',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose an action and the value each Auto-lever position selects.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_shutter_speed_dial: {
-    title: 'SHUTTER DIAL',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose an action and the value each shutter notch selects.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_aperture_ring: {
-    title: 'APERTURE RING',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose an action and the value each aperture notch selects.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_focus_mode_selector: {
-    title: 'FOCUS MODE',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose an action and the value S, C and M each select.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_af_ae_lock_button: {
-    title: 'AE-L/AF-L',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the AE-L/AF-L button action and press operation.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_drive_button: {
-    title: 'DRIVE BUTTON',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the DRIVE button action and press operation.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_quick_menu_button: {
-    title: 'Q BUTTON',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the Q button action and press operation.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bindings_row_command_control_press: {
-    title: 'COMMAND PRESS',
-    path: ['SET-UP', 'BUTTON/DIAL SETTING'],
-    summary: 'Choose the command control press action and press operation.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  control_ring_setting: {
-    title: 'CONTROL RING SETTING',
-    path: ['SHOOTING MENU'],
-    summary: null,
-    choices: {},
-    related: [],
-    manual: 'menu_shooting/control_ring_setting',
-    changes:
-      'Adds EXPOSURE COMP., STILLS/MOVIE and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.',
-  },
-  menu_theme_item: {
-    title: 'MENU THEME',
-    path: ['SET-UP'],
-    summary: 'Choose the appearance of the menus.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  edit_save_custom_setting: {
-    title: 'EDIT/SAVE CUSTOM SETTING',
-    path: ['SHOOTING MENU'],
-    summary: null,
-    choices: {},
-    related: [],
-    manual: 'menu_shooting/edit-save_custom_setting',
-    changes:
-      'Each slot C1–C7 holds a recipe saved as a named file on the memory card. Choose SAVE CURRENT SETTINGS, SAVE AS NEW RECIPE, CHOOSE FROM SD CARD or CLEAR SLOT.',
-  },
-  snap_menu_item: {
-    title: 'MF SNAP FOCUS',
-    path: ['SHOOTING MENU'],
-    summary: 'Choose the distance used by the SNAP FOCUS action in manual focus mode.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  bug_report_shortcut: {
-    title: 'BUG REPORT SHORTCUT',
-    path: ['SET-UP', 'FUJIMOD DEVTOOLS'],
-    summary: 'Choose whether the side Fn button and DISP/BACK save a bug report.',
-    choices: {},
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  sd_volume_name_item: {
-    title: 'DATE CARD NAME',
-    path: ['SET-UP', 'SAVE DATA SET-UP'],
-    summary: 'Choose whether FORMAT names the memory card after the date, such as 2026-10-22.',
-    choices: {
-      ON: 'Formatted cards are named after the date.',
-      OFF: 'Formatted cards are left unnamed, as on an unmodified camera.',
-    },
-    related: [],
-    manual: null,
-    changes: null,
-  },
-  date_folders_item: {
-    title: 'DATE FOLDERS',
-    path: ['SET-UP', 'SAVE DATA SET-UP'],
-    summary:
-      'Choose whether the first picture of each day starts a new folder named after the date.',
-    choices: {
-      ON: 'Each day starts a new folder, such as 101_1022 for October 22.',
-      OFF: 'Pictures are stored in folders as on an unmodified camera.',
-    },
-    related: [],
-    manual: null,
-    changes: null,
-  },
-};
-/** Recordings rendered for exactly this catalog text, else none. */
-const media = featureMedia('d1b1dde3e1d9a0f1c5deb64c');
+const media = featureMedia();
+const RATIO = /^ratio:(\d+):(\d+)$/;
 
+/** A sprite icon cropped to its ink, sized by the context's --icon-size so every icon has the same optical size. */
 function Icon(props: { name: string }) {
+  const metric = () => (iconMetrics as Record<string, IconMetric>)[props.name];
   return (
-    <svg class="catalog-icon" aria-hidden="true">
-      <use href={`${featureIcons}#${props.name}`} />
+    <svg
+      class="catalog-icon"
+      aria-hidden="true"
+      viewBox={metric().box.join(' ')}
+      style={{ '--w': metric().width, '--h': metric().height }}
+    >
+      <use
+        href={`${featureIcons}#${props.name}`}
+        x={metric().view[0]}
+        y={metric().view[1]}
+        width={metric().view[2]}
+        height={metric().view[3]}
+      />
     </svg>
   );
 }
@@ -359,6 +96,109 @@ function Ratio(props: { width: number; height: number }) {
         rx="1"
       />
     </svg>
+  );
+}
+
+/** A chip's icon: a sprite symbol, or "ratio:W:H" drawn as its frame. */
+function ChipIcon(props: { name: string }) {
+  const ratio = () => RATIO.exec(props.name);
+  return (
+    <Show when={ratio()} fallback={<Icon name={props.name} />}>
+      {(match) => <Ratio width={Number(match()[1])} height={Number(match()[2])} />}
+    </Show>
+  );
+}
+
+/** Summary text, keeping slot ranges such as C1–C7 on one line. */
+function Prose(props: { text: string }) {
+  return (
+    <For each={props.text.split(/(C\d–C\d)/).filter(Boolean)}>
+      {(part) => (/^C\d–C\d$/.test(part) ? <span class="nowrap">{part}</span> : part)}
+    </For>
+  );
+}
+
+function Rich(props: { inline: Inline[] }) {
+  return (
+    <For each={props.inline}>
+      {(part) =>
+        typeof part === 'string' ? (
+          part
+        ) : 'b' in part ? (
+          <b>
+            <Rich inline={part.b} />
+          </b>
+        ) : 'i' in part ? (
+          <i>
+            <Rich inline={part.i} />
+          </i>
+        ) : (
+          <a href={part.href} target="_blank" rel="noreferrer">
+            <Rich inline={part.text} />
+          </a>
+        )
+      }
+    </For>
+  );
+}
+
+/** First offered in any digital camera. */
+function Premiere() {
+  return (
+    <div class="catalog-premiere">
+      <Icon name="ticket" />
+      WORLD PREMIERE
+    </div>
+  );
+}
+
+function CreditList(props: { credits: Credits }) {
+  return (
+    <Show when={props.credits.inspired.length || props.credits.thanks.length}>
+      <ul class="catalog-credits">
+        <For each={props.credits.inspired}>
+          {(line) => (
+            <li>
+              <Icon name="heart" />
+              <b>INSPIRED BY</b>: <Rich inline={line} />
+            </li>
+          )}
+        </For>
+        <For each={props.credits.thanks}>
+          {(line) => (
+            <li>
+              <Icon name="gift" />
+              <b>THANKS</b>: <Rich inline={line} />
+            </li>
+          )}
+        </For>
+      </ul>
+    </Show>
+  );
+}
+
+/** What tiles and hover cards share: the menus above the title, the title, WORLD PREMIERE, the description,
+    the credits, then the rest (options or Related). */
+function Entry(props: {
+  path: string[];
+  title: JSX.Element;
+  description: JSX.Element;
+  credits: Credits;
+  children?: JSX.Element;
+}) {
+  return (
+    <>
+      <Show when={props.path.length}>
+        <div class="catalog-path">{`${props.path.join(' › ')} ›`}</div>
+      </Show>
+      {props.title}
+      <Show when={props.credits.premiere}>
+        <Premiere />
+      </Show>
+      {props.description}
+      <CreditList credits={props.credits} />
+      {props.children}
+    </>
   );
 }
 
@@ -399,41 +239,50 @@ function CardVideo(props: { media: Media; choice?: string }) {
   );
 }
 
+const NO_CREDITS: Credits = { premiere: false, inspired: [], thanks: [] };
+
 function CardBody(props: { target: Target }) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
-  const path = () => [...card().path, card().title, ...(choice() ? [choice()!] : [])].join(' › ');
+  /** The menus above the title: a control's menus, and for an option its control too. */
+  const crumbs = () => (choice() ? [...card().path, card().title] : card().path);
+  const credits = () =>
+    choice() ? (card().choice_credits[choice()!] ?? NO_CREDITS) : card().credits;
   return (
     <>
       <Show when={media(props.target.card)}>
         {(found) => <CardVideo media={found()} choice={choice()} />}
       </Show>
-      <div class="catalog-card-title">{choice() ?? card().title}</div>
-      <Show
-        when={choice()}
-        fallback={
-          <Show when={card().changes} fallback={<p>{card().summary}</p>}>
-            <p>In FujiMod: {card().changes}</p>
-            <a href={manualUrl(card().manual!)} target="_blank" rel="noreferrer">
-              X70 manual
-            </a>
+      <Entry
+        path={crumbs()}
+        title={<div class="catalog-card-title">{choice() ?? card().title}</div>}
+        credits={credits()}
+        description={
+          <Show
+            when={choice()}
+            fallback={
+              <Show when={card().changes} fallback={<p>{card().summary}</p>}>
+                <p>In FujiMod: {card().changes}</p>
+              </Show>
+            }
+          >
+            <p>{card().choices[choice()!]}</p>
           </Show>
         }
       >
-        <p>{card().choices[choice()!]}</p>
-      </Show>
-      <div class="catalog-card-path">{path()}</div>
-      <Show when={!choice() && card().related.length}>
-        <ul class="catalog-card-related">
-          <For each={card().related}>
-            {(related) => (
-              <li>
-                <b>{CARDS[related.card].title}</b>: {related.reason}
-              </li>
-            )}
-          </For>
-        </ul>
-      </Show>
+        <Show when={!choice() && card().related.length}>
+          <h5 class="catalog-card-heading">Related</h5>
+          <ul class="catalog-card-related">
+            <For each={card().related}>
+              {(related) => (
+                <li>
+                  <b>{CARDS[related.card].title}</b>: {related.reason}
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
+      </Entry>
     </>
   );
 }
@@ -443,7 +292,36 @@ export function FeatureCatalog() {
   const [position, setPosition] = createSignal({ left: 0, top: 0 });
   let timer: ReturnType<typeof setTimeout> | undefined;
   let card: HTMLDivElement | undefined;
+  let pinned = false;
   onCleanup(() => clearTimeout(timer));
+  const close = () => {
+    clearTimeout(timer);
+    pinned = false;
+    setTarget();
+  };
+  onSettled(() => {
+    const outside = (event: Event) => {
+      const anchor = target()?.anchor;
+      if (
+        anchor &&
+        event.target instanceof Node &&
+        !anchor.contains(event.target) &&
+        !card?.contains(event.target)
+      )
+        close();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  });
 
   const place = (anchor: HTMLElement) => {
     const r = anchor.getBoundingClientRect();
@@ -457,6 +335,7 @@ export function FeatureCatalog() {
     });
   };
   const show = (next: Target) => {
+    clearTimeout(timer);
     setTarget(next);
     place(next.anchor);
     requestAnimationFrame(() => place(next.anchor));
@@ -466,364 +345,153 @@ export function FeatureCatalog() {
     timer = setTimeout(action, ms);
   };
   /** A control or option with a hover card: after a short hover, on focus or on tap. */
-  const Ref = (props: { card: string; choice?: string; class?: string; children: JSX.Element }) => (
-    <span
-      class={props.class ? `${props.class} catalog-ref` : 'catalog-ref'}
-      tabindex="0"
-      onMouseEnter={(event) => {
-        const anchor = event.currentTarget;
-        later(() => show({ card: props.card, choice: props.choice, anchor }), 250);
-      }}
-      onMouseLeave={() => later(() => setTarget(), 150)}
-      onFocus={(event) =>
-        show({ card: props.card, choice: props.choice, anchor: event.currentTarget })
+  const Ref = (props: { card: string; choice?: string; class?: string; children: JSX.Element }) => {
+    let pointerPinned: boolean | undefined;
+    const activate = (anchor: HTMLElement, dismiss = pinned && target()?.anchor === anchor) => {
+      // Focus can open the card before the same tap delivers its click. Only
+      // an already pinned card should toggle closed on activation.
+      if (dismiss) close();
+      else {
+        pinned = true;
+        show({ card: props.card, choice: props.choice, anchor });
       }
-      onBlur={() => later(() => setTarget(), 150)}
-      onClick={(event) => {
-        const anchor = event.currentTarget;
-        if (target()?.anchor === anchor) setTarget();
-        else show({ card: props.card, choice: props.choice, anchor });
-      }}
-    >
-      {props.children}
-    </span>
+    };
+    return (
+      <span
+        class={props.class ? `${props.class} catalog-ref` : 'catalog-ref'}
+        role="button"
+        tabindex="0"
+        onPointerDown={(event) => {
+          // Safari can move focus to the tile during a tap. Keep the state
+          // from before that focus change so a second tap still dismisses.
+          pointerPinned = pinned && target()?.anchor === event.currentTarget;
+        }}
+        onPointerCancel={() => {
+          pointerPinned = undefined;
+        }}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'mouse' || pinned) return;
+          const anchor = event.currentTarget;
+          later(() => show({ card: props.card, choice: props.choice, anchor }), 250);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse' && !pinned) later(close, 150);
+        }}
+        onFocus={(event) => {
+          // Opening during pointer focus can cover the trigger before mouseup
+          // in Safari, retargeting the click. Let the completed tap open it.
+          if (pointerPinned !== undefined) return;
+          if (target()?.anchor !== event.currentTarget) pinned = false;
+          show({ card: props.card, choice: props.choice, anchor: event.currentTarget });
+        }}
+        onBlur={(event) => {
+          if (
+            !pinned &&
+            !(event.relatedTarget instanceof Node && card?.contains(event.relatedTarget))
+          )
+            later(close, 150);
+        }}
+        onClick={(event) => {
+          activate(event.currentTarget, pointerPinned);
+          pointerPinned = undefined;
+        }}
+        onKeyDown={(event) => {
+          if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) {
+            event.preventDefault();
+            activate(event.currentTarget);
+          }
+        }}
+      >
+        {props.children}
+      </span>
+    );
+  };
+
+  /** An option chip; the X70's own options are dimmed. Options with a card description open it. */
+  const Chip = (props: { choice: Choice; card: string | null }) => {
+    const cls = () => (props.choice.stock ? 'catalog-chip stock' : 'catalog-chip');
+    const body = (
+      <>
+        <Show when={props.choice.icon}>{(name) => <ChipIcon name={name()} />}</Show>
+        {props.choice.label}
+      </>
+    );
+    return (
+      <Show
+        when={props.card && props.choice.label in CARDS[props.card].choices && props.card}
+        fallback={<span class={cls()}>{body}</span>}
+      >
+        {(card) => (
+          <Ref card={card()} choice={props.choice.label} class={cls()}>
+            {body}
+          </Ref>
+        )}
+      </Show>
+    );
+  };
+
+  const Chips = (props: { control: Control }) => (
+    <div class="catalog-chips">
+      <For each={props.control.choices}>
+        {(choice) => <Chip choice={choice} card={props.control.card} />}
+      </For>
+      <For each={props.control.actions}>
+        {(action) => <span class="catalog-chip action">{action}</span>}
+      </For>
+    </div>
+  );
+
+  const Tile = (props: { feature: Feature }) => (
+    <FeatureTile media={media(...props.feature.media_cards)}>
+      <Entry
+        path={props.feature.path}
+        title={
+          <h3>
+            <Icon name={props.feature.icon} />
+            <Show when={props.feature.card} fallback={<span>{props.feature.title}</span>}>
+              {(card) => <Ref card={card()}>{props.feature.title}</Ref>}
+            </Show>
+          </h3>
+        }
+        credits={props.feature.credits}
+        description={
+          <p>
+            <Prose text={props.feature.summary} />
+          </p>
+        }
+      >
+        <For each={props.feature.controls}>
+          {(control) => (
+            <Show when={!control.primary} fallback={<Chips control={control} />}>
+              <div class="catalog-sub">
+                <h4>
+                  <Show when={control.card} fallback={control.title}>
+                    {(card) => <Ref card={card()}>{control.title}</Ref>}
+                  </Show>
+                </h4>
+                <Chips control={control} />
+              </div>
+            </Show>
+          )}
+        </For>
+      </Entry>
+    </FeatureTile>
   );
 
   return (
-    <section class="catalog" id="features" aria-labelledby="catalog-heading">
-      <h2 id="catalog-heading">Features</h2>
-      <h3>Making pictures</h3>
-      <div class="catalog-grid">
-        <FeatureTile media={media('film_simulation')}>
-          <h4>
-            <Icon name="film" />
-            <Ref card="film_simulation">FILM SIMULATION</Ref>
-          </h4>
-          <p>
-            Simulate the effects of additional types of film. Create your own film simulations in
-            FILM EDITOR.
-          </p>
-          <div class="catalog-chips">
-            <span class="catalog-chip">
-              <Icon name="eterna" />
-              ETERNA
-            </span>
-            <span class="catalog-chip">
-              <Icon name="classic-neg" />
-              Classic Neg. (approx.)
-            </span>
-            <span class="catalog-chip">
-              <Icon name="bleach-bypass" />
-              Bleach Bypass (approx.)
-            </span>
-            <span class="catalog-chip">
-              <Icon name="nostalgic-neg" />
-              Nostalgic Neg. (approx.)
-            </span>
-            <span class="catalog-chip">
-              <Icon name="reala-ace" />
-              REALA ACE (approx.)
-            </span>
-            <span class="catalog-chip">Neutral</span>
-          </div>
-          <div class="catalog-where">SHOOTING MENU</div>
-        </FeatureTile>
-        <FeatureTile media={media()}>
-          <h4>
-            <Icon name="film" />
-            <span>Card Films</span>
-          </h4>
-          <p>Load custom film simulations from the memory card.</p>
-        </FeatureTile>
-        <FeatureTile media={media('film_editor_item')}>
-          <h4>
-            <Icon name="film" />
-            <Ref card="film_editor_item">FILM EDITOR</Ref>
-          </h4>
-          <p>Create and edit your own film simulations, saved as files on the memory card.</p>
-          <div class="catalog-where">SHOOTING MENU</div>
-        </FeatureTile>
-        <FeatureTile media={media('photometry')}>
-          <h4>
-            <Icon name="highlight" />
-            <Ref card="photometry">PHOTOMETRY</Ref>
-          </h4>
-          <p>Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.</p>
-          <div class="catalog-chips">
-            <span class="catalog-chip stock">MULTI</span>
-            <span class="catalog-chip stock">SPOT</span>
-            <span class="catalog-chip stock">AVERAGE</span>
-            <Ref card="photometry" choice="HIGHLIGHT" class="catalog-chip">
-              HIGHLIGHT
-            </Ref>
-            <Ref card="photometry" choice="RAW HIGHLIGHT" class="catalog-chip">
-              RAW HIGHLIGHT
-            </Ref>
-          </div>
-          <div class="catalog-where">SHOOTING MENU</div>
-        </FeatureTile>
-        <FeatureTile media={media('edit_save_custom_setting')}>
-          <h4>
-            <Icon name="recipes" />
-            <span>Unlimited Recipes</span>
-          </h4>
-          <p>
-            Store custom settings as named files on the memory card and load them into{' '}
-            <span class="nowrap">C1–C7</span>.
-          </p>
-          <div class="catalog-chips">
-            <span class="catalog-chip action">SAVE CURRENT SETTINGS</span>
-            <span class="catalog-chip action">SAVE AS NEW RECIPE</span>
-            <span class="catalog-chip action">CHOOSE FROM SD CARD</span>
-          </div>
-          <div class="catalog-where">SHOOTING MENU › EDIT/SAVE CUSTOM SETTING</div>
-        </FeatureTile>
-        <FeatureTile media={media('shape_aspect_item')}>
-          <h4>
-            <Icon name="aspect" />
-            <Ref card="shape_aspect_item">ASPECT RATIO</Ref>
-          </h4>
-          <p>Choose the aspect ratio of still pictures.</p>
-          <div class="catalog-chips">
-            <Ref card="shape_aspect_item" choice="3:2" class="catalog-chip stock">
-              <Ratio width={3} height={2} />
-              3:2
-            </Ref>
-            <Ref card="shape_aspect_item" choice="16:9" class="catalog-chip stock">
-              <Ratio width={16} height={9} />
-              16:9
-            </Ref>
-            <Ref card="shape_aspect_item" choice="1:1" class="catalog-chip stock">
-              <Ratio width={1} height={1} />
-              1:1
-            </Ref>
-            <Ref card="shape_aspect_item" choice="4:3" class="catalog-chip">
-              <Ratio width={4} height={3} />
-              4:3
-            </Ref>
-            <Ref card="shape_aspect_item" choice="65:24" class="catalog-chip">
-              <Ratio width={65} height={24} />
-              65:24
-            </Ref>
-            <Ref card="shape_aspect_item" choice="17:6" class="catalog-chip">
-              <Ratio width={17} height={6} />
-              17:6
-            </Ref>
-            <Ref card="shape_aspect_item" choice="3:4" class="catalog-chip">
-              <Ratio width={3} height={4} />
-              3:4
-            </Ref>
-            <Ref card="shape_aspect_item" choice="7:6" class="catalog-chip">
-              <Ratio width={7} height={6} />
-              7:6
-            </Ref>
-            <Ref card="shape_aspect_item" choice="5:4" class="catalog-chip">
-              <Ratio width={5} height={4} />
-              5:4
-            </Ref>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
-        </FeatureTile>
-        <FeatureTile media={media('shape_surround_item')}>
-          <h4>
-            <Icon name="aspect" />
-            <Ref card="shape_surround_item">SURROUND VIEW</Ref>
-          </h4>
-          <p>Choose how the area outside the frame is shown.</p>
-          <div class="catalog-chips">
-            <Ref card="shape_surround_item" choice="MASKED" class="catalog-chip">
-              MASKED
-            </Ref>
-            <Ref card="shape_surround_item" choice="DARKENED" class="catalog-chip">
-              DARKENED
-            </Ref>
-            <Ref card="shape_surround_item" choice="WHITE BORDER" class="catalog-chip">
-              WHITE BORDER
-            </Ref>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
-        </FeatureTile>
-        <FeatureTile media={media('c')}>
-          <h4>
-            <Icon name="golden-ratio" />
-            <Ref card="c">FRAMING GUIDELINE</Ref>
-          </h4>
-          <p>
-            Choose a guide to display in the shooting view, including Golden Ratio and four Golden
-            Spiral focal points.
-          </p>
-          <div class="catalog-chips">
-            <span class="catalog-chip stock">GRID 9</span>
-            <span class="catalog-chip stock">GRID 24</span>
-            <span class="catalog-chip stock">HD FRAMING</span>
-            <Ref card="c" choice="GOLDEN RATIO" class="catalog-chip">
-              GOLDEN RATIO
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - BOTTOM LEFT" class="catalog-chip">
-              GOLDEN SPIRAL - BOTTOM LEFT
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - BOTTOM RIGHT" class="catalog-chip">
-              GOLDEN SPIRAL - BOTTOM RIGHT
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - TOP LEFT" class="catalog-chip">
-              GOLDEN SPIRAL - TOP LEFT
-            </Ref>
-            <Ref card="c" choice="GOLDEN SPIRAL - TOP RIGHT" class="catalog-chip">
-              GOLDEN SPIRAL - TOP RIGHT
-            </Ref>
-          </div>
-          <div class="catalog-where">SET-UP › SCREEN SET-UP</div>
-        </FeatureTile>
-        <FeatureTile media={media('shape_desqueeze_item')}>
-          <h4>
-            <Icon name="anamorphic" />
-            <span>Anamorphic Lenses</span>
-          </h4>
-          <p>
-            Display and record pictures taken through an anamorphic adapter at their corrected
-            width.
-          </p>
-          <div class="catalog-sub">
-            <h5>
-              <Ref card="shape_desqueeze_item">DESQUEEZE</Ref>
-            </h5>
-            <div class="catalog-chips">
-              <span class="catalog-chip">1.25X</span>
-              <span class="catalog-chip">1.33X</span>
-              <span class="catalog-chip">1.50X</span>
-              <span class="catalog-chip">1.60X</span>
-              <span class="catalog-chip">1.80X</span>
-              <span class="catalog-chip">2.00X</span>
+    <div class="catalog" id="features">
+      <For each={catalog.groups.filter((group) => catalog.features.some((f) => f.group === group))}>
+        {(group) => (
+          <section class="catalog-group" aria-labelledby={`catalog-${group}-heading`}>
+            <h2 id={`catalog-${group}-heading`}>{GROUP_TITLES[group]}</h2>
+            <div class="catalog-grid">
+              <For each={catalog.features.filter((f) => f.group === group)}>
+                {(feature) => <Tile feature={feature} />}
+              </For>
             </div>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
-        </FeatureTile>
-        <FeatureTile media={media('shape_jpeg_item')}>
-          <h4>
-            <Icon name="anamorphic" />
-            <span>Desqueeze JPEG</span>
-          </h4>
-          <p>
-            Display and record pictures taken through an anamorphic adapter at their corrected
-            width.
-          </p>
-          <div class="catalog-sub">
-            <h5>
-              <Ref card="shape_jpeg_item">DESQUEEZE JPEG</Ref>
-            </h5>
-            <div class="catalog-chips">
-              <span class="catalog-chip">ON</span>
-              <span class="catalog-chip">OFF</span>
-            </div>
-          </div>
-          <div class="catalog-where">{'SHOOTING MENU › SHAPE & ASPECT'}</div>
-        </FeatureTile>
-        <FeatureTile media={media('snap_menu_item')}>
-          <h4>
-            <Icon name="snap" />
-            <Ref card="snap_menu_item">MF SNAP FOCUS</Ref>
-          </h4>
-          <p>
-            In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset
-            distance.
-          </p>
-          <div class="catalog-where">SHOOTING MENU</div>
-        </FeatureTile>
-        <FeatureTile media={media('date_folders_item')}>
-          <h4>
-            <Icon name="folder" />
-            <Ref card="date_folders_item">DATE FOLDERS</Ref>
-          </h4>
-          <p>{"Keep each day's pictures in their own folder, named after the date."}</p>
-          <div class="catalog-where">SET-UP › SAVE DATA SET-UP</div>
-        </FeatureTile>
-      </div>
-      <h3>Making movies</h3>
-      <div class="catalog-grid">
-        <FeatureTile media={media('f_log_recording_item')}>
-          <h4>
-            <Icon name="movie" />
-            <Ref card="f_log_recording_item">F-Log RECORDING</Ref>
-          </h4>
-          <p>Record movies with the F-Log transfer and F-Gamut color matrix.</p>
-          <div class="catalog-where">SHOOTING MENU › MOVIE SET-UP</div>
-        </FeatureTile>
-      </div>
-      <h3>Handling and display</h3>
-      <div class="catalog-grid">
-        <FeatureTile
-          media={media(
-            'bindings_row_exposure_compensation_dial',
-            'bindings_row_command_control',
-            'control_ring_setting',
-            'bindings_row_auto_mode_selector_lever',
-            'bindings_row_shutter_speed_dial',
-            'bindings_row_aperture_ring',
-            'bindings_row_focus_mode_selector',
-            'bindings_row_af_ae_lock_button',
-            'bindings_row_drive_button',
-            'bindings_row_quick_menu_button',
-            'bindings_row_command_control_press',
-          )}
-        >
-          <h4>
-            <Icon name="controls" />
-            <span>Unlocked Controls</span>
-          </h4>
-          <p>
-            Assign settings to the EV dial, shutter dial, aperture ring, command control, control
-            ring, focus selector, Auto lever and unlocked buttons.
-          </p>
-        </FeatureTile>
-        <FeatureTile media={media('hdmi_rec_behavior_item')}>
-          <h4>
-            <Icon name="hdmi" />
-            <Ref card="hdmi_rec_behavior_item">HDMI OUTPUT</Ref>
-          </h4>
-          <p>Display the shooting view on an HDMI device.</p>
-          <div class="catalog-where">SET-UP</div>
-        </FeatureTile>
-        <FeatureTile media={media('menu_theme_item')}>
-          <h4>
-            <Icon name="theme" />
-            <Ref card="menu_theme_item">MENU THEME</Ref>
-          </h4>
-          <p>Choose the appearance of the menus.</p>
-          <div class="catalog-where">SET-UP</div>
-        </FeatureTile>
-        <FeatureTile media={media()}>
-          <h4>
-            <Icon name="autofocus" />
-            <span>Autofocus</span>
-          </h4>
-          <p>
-            In AF-S mode, when phase detection fails, the camera estimates focus and measures again
-            before using contrast detection.
-          </p>
-        </FeatureTile>
-        <FeatureTile media={media('sd_volume_name_item')}>
-          <h4>
-            <Icon name="card" />
-            <Ref card="sd_volume_name_item">DATE CARD NAME</Ref>
-          </h4>
-          <p>Name memory cards after the date they are formatted.</p>
-          <div class="catalog-where">SET-UP › SAVE DATA SET-UP</div>
-        </FeatureTile>
-      </div>
-      <h3>When something goes wrong</h3>
-      <div class="catalog-grid">
-        <FeatureTile media={media('bug_report_shortcut')}>
-          <h4>
-            <Icon name="bug" />
-            <span>Bug Reports</span>
-          </h4>
-          <p>
-            Hold the side Fn button and press DISP/BACK to save a diagnostic report to the memory
-            card and display a QR code.
-          </p>
-          <div class="catalog-where">SET-UP › FUJIMOD DEVTOOLS › BUG REPORT SHORTCUT</div>
-        </FeatureTile>
-      </div>
+          </section>
+        )}
+      </For>
       <div
         ref={(element) => {
           card = element;
@@ -831,11 +499,15 @@ export function FeatureCatalog() {
         class={['catalog-card', { on: !!target() }]}
         role="tooltip"
         style={{ left: `${position().left}px`, top: `${position().top}px` }}
-        onMouseEnter={() => clearTimeout(timer)}
-        onMouseLeave={() => later(() => setTarget(), 150)}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') clearTimeout(timer);
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse' && !pinned) later(close, 150);
+        }}
       >
         <Show when={target()}>{(current) => <CardBody target={current()} />}</Show>
       </div>
-    </section>
+    </div>
   );
 }

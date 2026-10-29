@@ -1,5 +1,6 @@
 //! Read-only NOR flash-storage aperture and sparse session NOR storage. Evidence and
 //! erased-tail behavior is an explicit storage assumption.
+use fujimod_emulator_devices::storage_reads::StorageReads;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,6 +18,7 @@ pub struct Session {
     pub program_mode: bool,
     #[serde(default)]
     pub controller_complete: bool,
+    pub reads: StorageReads,
 }
 pub struct Storage {
     image: Vec<u8>,
@@ -60,6 +62,12 @@ impl Storage {
                     .copy_from_slice(&page[(lo - page_start) as usize..(hi - page_start) as usize]);
             }
         }
+        Ok(bytes)
+    }
+    /// A controller or DMA transfer; observational host reads use `read`.
+    pub fn read_device(&mut self, offset: u64, n: usize) -> Result<Vec<u8>, String> {
+        let bytes = self.read(offset, n)?;
+        self.session.reads.record(offset, n as u64, SIZE)?;
         Ok(bytes)
     }
     fn page(&mut self, index: u64) -> &mut Vec<u8> {
@@ -116,7 +124,7 @@ impl Device for Aperture {
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
         let o = address.wrapping_sub(BASE);
-        match self.0.lock().unwrap().read(o, n as usize) {
+        match self.0.lock().unwrap().read_device(o, n as usize) {
             Ok(b) => b
                 .iter()
                 .enumerate()
@@ -134,8 +142,9 @@ impl Device for Aperture {
         serde_json::to_value(&self.0.lock().unwrap().session).unwrap()
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
-        let session = serde_json::from_value(v.clone())
+        let session: Session = serde_json::from_value(v.clone())
             .map_err(|e| format!("invalid flash storage checkpoint: {e}"))?;
+        session.reads.validate(SIZE)?;
         self.0.lock().unwrap().session = session;
         Ok(())
     }
@@ -143,6 +152,34 @@ impl Device for Aperture {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn guest_reads_are_checkpointed_but_host_inspection_is_observational() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0xa5; 16]).unwrap()));
+        let mut aperture = Aperture(storage.clone());
+        let mut host = RecordingHost::default();
+        assert_eq!(
+            aperture.read(&mut Cx::new(&mut host, 0, 0, 0), BASE + 4, 4),
+            0xa5a5a5a5
+        );
+        assert_eq!(storage.lock().unwrap().session.reads.ranges, [(4, 8)]);
+        let saved = aperture.save();
+        for _ in 0..2 {
+            storage.lock().unwrap().read(0, 16).unwrap();
+            aperture.save();
+        }
+        assert_eq!(aperture.save(), saved);
+        // The erased tail is still an internal-medium dependency.
+        storage.lock().unwrap().read_device(SIZE - 1, 1).unwrap();
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 5);
+        aperture.restore(&saved).unwrap();
+        assert_eq!(aperture.save(), saved);
+        let mut invalid = saved;
+        invalid["reads"]["ranges"] = serde_json::json!([[SIZE, SIZE + 1]]);
+        assert!(aperture.restore(&invalid).is_err());
+        assert!(storage.lock().unwrap().read_device(SIZE - 1, 2).is_err());
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 4);
+    }
     #[test]
     fn nor_overlay_crosses_pages_and_restores_without_mutating_image() {
         let mut s = Storage::new(vec![0xa5; PAGE + 2]).unwrap();

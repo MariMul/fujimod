@@ -1,5 +1,8 @@
 //! ARMv7-R word exclusive transfers. Other widths explicitly refuse.
 use super::*;
+
+#[cfg(test)]
+mod tests;
 enum Instruction {
     Clear,
     Load {
@@ -46,6 +49,10 @@ fn arm(word: u32) -> Result<Option<Instruction>, String> {
         return Err("R-profile nonword exclusive execution is not implemented".into());
     }
     Ok(None)
+}
+/// ARM word exclusives and CLREX replace their translated body.
+pub(super) fn replaced(word: u32) -> bool {
+    matches!(arm(word), Ok(Some(_)))
 }
 fn thumb(word: u32) -> Result<Option<Instruction>, String> {
     if !super::thumb_atomic(word) {
@@ -106,6 +113,7 @@ impl Execution {
         address: u64,
         size: u32,
         cpsr: u32,
+        replaced: bool,
     ) -> Result<bool, String> {
         let instruction = if self.thumb.get() {
             thumb(word)?
@@ -203,12 +211,23 @@ impl Execution {
                         if self.memory.written(self.id.get(), target, 4)? {
                             self.memory.prepare_external_write()?;
                         }
+                        // Completed-store observers see this store at the next
+                        // block boundary, like a native store's publication.
+                        if !self.observer_index.borrow().stores.at(target).is_empty() {
+                            self.pending_stores.borrow_mut().push(StorePublication {
+                                access: Access::Write,
+                                address: target,
+                                size: 4,
+                                value: i64::from(value),
+                            });
+                            self.reset_budget();
+                        }
                     }
                     self.set(arm::CORE[status], u32::from(!success))?;
                 }
             }
         }
-        self.advance(address, size, cpsr)?;
+        self.complete(replaced, address, size, cpsr)?;
         Ok(true)
     }
 }

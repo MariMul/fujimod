@@ -77,7 +77,6 @@ class Definition:
     scene: Mapping[str, object] = field(default_factory=dict)
     engine: Literal["unicorn", "hypervisor"] = "unicorn"
     quantum: int = 1000
-    translation_cache_bytes: int = 16 << 20
     mode: Literal["strict", "discovery"] = "strict"
     continue_refusals: bool = False
     adapters: Mapping[str, object] = field(default_factory=dict)

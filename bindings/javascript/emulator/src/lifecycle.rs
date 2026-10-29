@@ -1,7 +1,7 @@
 //! Cold power boundaries and portable committed storage for an owned camera.
 //! CPU contexts and pending device operations never enter the durable format.
 use super::{results::SavedMedia, session::Session};
-use fujimod_emulator::session::durable::Media;
+use fujimod_emulator_session::durable::Media;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -88,6 +88,20 @@ impl Session {
             if !seen.insert(&input.id) || input.stage.is_some() && input.position.is_some() {
                 return Err("duplicate or ambiguous boot input".into());
             }
+            // USB boot conditions drive the declared cable wire, rather than
+            // looking up a button in the physical contact catalog.
+            if input.id == "usb" {
+                if input.stage.is_some() {
+                    return Err("USB boot input requires an explicit cable position".into());
+                }
+                let connected = match input.position.as_deref() {
+                    Some("on") => true,
+                    Some("off") => false,
+                    _ => return Err("USB boot position must be on or off".into()),
+                };
+                self.core.logic_input("usb_cable", connected)?;
+                continue;
+            }
             let position = if let Some(p) = &input.position {
                 p.clone()
             } else {
@@ -100,6 +114,27 @@ impl Session {
             self.core.set_position(&input.id, &position)?;
         }
         Ok(())
+    }
+    pub(super) fn release_boot_inputs(
+        &mut self,
+        inputs: &[BootInput],
+    ) -> Result<super::results::SessionState, String> {
+        let driver = self
+            .core
+            .contact_driver
+            .as_ref()
+            .ok_or("boot release requires the generated contact catalog")?;
+        let poses = inputs
+            .iter()
+            .filter(|input| input.position.is_none())
+            .map(|input| Ok((input.id.clone(), driver.boot_release_position(&input.id)?)))
+            .collect::<Result<Vec<_>, String>>()?;
+        // Boot holds are physical setup, not queued gestures. Service mode can
+        // stop scanning ordinary controls after recognizing its power-on chord.
+        for (id, position) in poses {
+            self.core.set_position(&id, &position)?;
+        }
+        self.session_state()
     }
     fn cold(
         &mut self,
@@ -153,6 +188,14 @@ impl Session {
             if !seen.insert(&input.id) || input.stage.is_some() && input.position.is_some() {
                 return Err("duplicate or ambiguous boot input".into());
             }
+            if input.id == "usb" {
+                if input.stage.is_some() || !matches!(input.position.as_deref(), Some("on" | "off"))
+                {
+                    return Err("USB boot position must be on or off".into());
+                }
+                self.core.resources.logic_level("usb_cable")?;
+                continue;
+            }
             let position = if let Some(p) = &input.position {
                 p.clone()
             } else {
@@ -174,34 +217,12 @@ impl Session {
         }
         // External RAF input is a physical scene, independent of a cold reset.
         // Preserve its immutable frame instead of retaining and reparsing the file.
-        let mosaic = self
-            .core
-            .resources
-            .inputs
-            .sensors
-            .iter()
-            .map(|(name, input)| {
-                let frame = input
-                    .lock()
-                    .map_err(|_| "sensor input is poisoned")?
-                    .current
-                    .clone();
-                Ok((name.clone(), frame))
-            })
-            .collect::<Result<Vec<_>, String>>()?
-            .into_iter()
-            .filter(|(_, frame)| {
-                matches!(
-                    frame.pixels,
-                    fujimod_emulator_imaging::scene::FramePixels::Mosaic { .. }
-                )
-            })
-            .collect::<Vec<_>>();
+        let mosaic = self.core.resources.images()?.mosaic_frames()?;
         // This image was captured before the first instruction or caller holds.
         // Reuse the same execution owner and RAM reservation across cold resets.
         self.core.restore(&reset)?;
         for (name, frame) in &mosaic {
-            self.core.sensor_frame(name, frame.clone())?;
+            self.core.sensor_frame(name, frame)?;
         }
         if !mosaic.is_empty()
             && let Some(scene) = &metadata.scene
@@ -214,6 +235,10 @@ impl Session {
         saved.media.apply(&mut self.core, &metadata.storage)?;
         for (id, p) in poses {
             self.core.set_position(&id, &p)?;
+        }
+        if let Some(input) = inputs.iter().find(|input| input.id == "usb") {
+            self.core
+                .logic_input("usb_cable", input.position.as_deref() == Some("on"))?;
         }
         if !saved.powered_on {
             for old in self.frames.values_mut() {

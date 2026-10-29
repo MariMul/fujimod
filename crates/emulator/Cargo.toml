@@ -11,40 +11,22 @@ name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [dependencies]
-fujimod-emulator-imaging = { path = "../../crates/emulator-imaging" }
-fujimod-emulator-storage = { path = "../../crates/emulator-storage" }
-fujimod-settings = { path = "../../crates/settings" }
-fujimod-recording = { path = "../recording" }
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
-fujimod-emulator-exr2-plan = { path = "../emulator-exr2-plan" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
-fujimod-catalog = { path = "../catalog" }
 serde_json = "1"
 toml = "0.9"
 sha2 = "0.10"
-tsify = { workspace = true, optional = true }
-serde-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen = { workspace = true, optional = true }
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
-fujimod-emulator-exr2-io = { path = "../../crates/emulator-exr2-io" }
-fujimod-emulator-exr2-storage = { path = "../../crates/emulator-exr2-storage" }
+fujimod-emulator-ip-arm.workspace = true
+fujimod-emulator-exr2-resources.workspace = true
+fujimod-emulator-exr2-plan = { path = "../emulator-exr2-plan" }
 fujimod-emulator-exr2-system = { path = "../../crates/emulator-exr2-system" }
 fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }
 fujimod-emulator-models = { path = "../emulator-models" }
-
-[features]
-# TypeScript declarations for host session reports in wasm-bindgen builds.
-typescript = [
-  "dep:tsify",
-  "dep:serde-wasm-bindgen",
-  "dep:wasm-bindgen",
-  "fujimod-emulator-devices/typescript",
-  "fujimod-emulator-storage/typescript",
-]
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

@@ -8,8 +8,20 @@ pub use fujimod_workflows as workflows;
 #[cfg(feature = "catalog")]
 pub use fujimod_catalog as catalog;
 
-#[cfg(feature = "simulation")]
-pub use fujimod_simulation as simulation;
+#[cfg(feature = "catalog-configuration")]
+pub use fujimod_catalog_configuration as catalog_configuration;
+
+#[cfg(feature = "catalog-resolution")]
+pub use fujimod_catalog_resolution as catalog_resolution;
+
+#[cfg(feature = "catalog-workflows")]
+pub use fujimod_catalog_workflows as catalog_workflows;
+
+#[cfg(feature = "catalog-firmware-identity")]
+pub use fujimod_catalog_firmware_identity as catalog_firmware_identity;
+
+#[cfg(feature = "catalog-service")]
+pub use fujimod_catalog_service as catalog_service;
 
 #[cfg(feature = "emulator")]
 pub use fujimod_emulator as emulator;

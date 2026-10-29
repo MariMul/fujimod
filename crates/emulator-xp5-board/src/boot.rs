@@ -9,9 +9,9 @@ use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
 };
+use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog::{
-    application_inputs::ApplicationRunScene,
-    configuration::ResolvedConfiguration,
     firmware::FirmwareProfile,
     profiles::RegisterWindow,
     reference::{ProcessorModel, ResolvedSelection, SocBlockKind},
@@ -31,7 +31,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// firmware startup profile. The profile is data; opening the board does not
 /// inspect firmware instructions or select a profile by firmware identity.
 pub struct FirmwareStartup {
-    pub processors: Vec<fujimod_emulator::boot::graph::ProcessorStart>,
+    pub processors: Vec<fujimod_emulator_boot::graph::ProcessorStart>,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
 }
@@ -126,7 +126,7 @@ pub fn startup_from_profile(
                 }
             }
             insert_start_register(&mut registers, "MPIDR_EL1", *affinity)?;
-            Ok(fujimod_emulator::boot::graph::ProcessorStart {
+            Ok(fujimod_emulator_boot::graph::ProcessorStart {
                 processor_id: processor.id.clone(),
                 released: cpu.running,
                 registers,
@@ -206,9 +206,11 @@ pub fn startup_from_profile(
             }
             Some(InterruptMap {
                 gic: Box::new(gic),
-                distributor: block_base(distributor_block_id)?,
-                redistributor: block_base(redistributor_block_id)?,
-                stride: *redistributor_stride,
+                registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                    distributor: block_base(distributor_block_id)?,
+                    redistributor: block_base(redistributor_block_id)?,
+                    stride: *redistributor_stride,
+                },
                 cores: affinity_values.len(),
             })
         }
@@ -235,7 +237,11 @@ pub fn startup_from_profile(
             .and_then(|clock| clock.frequency_hz)
             .ok_or_else(|| format!("SoC clock {id} has no declared frequency"))
     };
-    let distributor = interrupts.as_ref().map(|gic| gic.distributor).unwrap_or(0);
+    let distributor = match interrupts.as_ref().map(|gic| &gic.registers) {
+        Some(fujimod_emulator::board::InterruptRegisters::GicV3 { distributor, .. }) => *distributor,
+        None => 0,
+        _ => return Err("XP5 requires GICv3 interrupt registers".into()),
+    };
     let timer_config = aprofile::Config {
         clock: generic_timer::Clock {
             counter_hz: clock_frequency(counter_clock_id)?,
@@ -464,6 +470,7 @@ pub fn windows(
 
 /// An XP5 device bus assembled from the selected SoC profile.
 pub struct DeviceAssembly {
+    pub contacts: BTreeMap<String, fujimod_emulator_devices::parts::card_contacts::Contacts>,
     pub bus: Bus,
     pub inputs: crate::session::Inputs,
     pub nodes: BTreeMap<String, usize>,
@@ -479,6 +486,7 @@ pub fn assemble_devices(
     mut resources: xp5_board::Resources,
     mode: Mode,
 ) -> Result<DeviceAssembly, String> {
+    let contacts = resources.sd.iter().map(|(base, media)| (format!("{base:#x}"), media.contacts.clone())).collect();
     let input_driver: Arc<dyn DriveInput> = resources.pins.clone();
     let controls = Arc::new(ResistorKeys::new(input_driver, controls_options)?);
     controls.start(Duration::ZERO);
@@ -492,6 +500,7 @@ pub fn assemble_devices(
         ))
     };
     xp5_board::register_all(&mut graph, &windows, &mut resources, &mut unknown)?;
+    if !resources.sd.is_empty() { return Err("XP5 profile has unused card media".into()); }
     if !resources.displays.is_empty() {
         return Err("XP5 profile has unused display configurations".into());
     }
@@ -527,6 +536,7 @@ pub fn assemble_devices(
     }
     let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
+        contacts,
         bus,
         inputs: crate::session::Inputs::new(
             resources.pins,
@@ -600,7 +610,7 @@ fn validate_images(graph: &factory::Graph, images: &[MemoryImage]) -> Result<(),
 /// selection and byte identity policy belong to caller.
 pub fn open(
     options: OpenOptions,
-) -> Result<(fujimod_emulator::session::Session, crate::session::Inputs), String> {
+) -> Result<(fujimod_emulator_session::Session, crate::session::Inputs), String> {
     validate_images(&options.processors, &options.images)?;
     options.processors.validate()?;
     let assembly = assemble_devices(
@@ -610,10 +620,7 @@ pub fn open(
         options.mode,
     )?;
     let mut board = options.processors.build(
-        factory::Options {
-            engine: options.engine,
-            translation_cache_bytes: 16 << 20,
-        },
+        factory::Options::new(options.engine),
         assembly.bus,
         options.interrupts,
     )?;
@@ -626,14 +633,14 @@ pub fn open(
     if let Some(scene) = options.scene.as_ref() {
         board.set_scene(scene)?;
     }
-    let session = fujimod_emulator::session::Session {
+    let session = fujimod_emulator_session::Session {
         definition: options.definition,
         board,
         controls: None,
         contact_driver: None,
         resources: Default::default(),
         nodes: assembly.nodes,
-        contacts: BTreeMap::new(),
+        contacts: assembly.contacts,
         recording_frames: Default::default(),
     };
     Ok((session, assembly.inputs))

@@ -1,8 +1,9 @@
 //! Bounded FAT32 host view and formatter. Guest file publication is exclusively
 //! sector writes through the SD host; reading this view never changes media.
 //! Supports one MBR partition, mirrored or explicitly active FATs, and 8.3
-//! names. Long names are skipped; malformed chains and directory aliases refuse.
+//! names and bounded ASCII long names; malformed chains and directory aliases refuse.
 mod edit;
+mod long_names;
 pub use edit::merge;
 
 use fujimod_emulator_devices::parts::sd_card::{Card, Options as CardOptions};
@@ -10,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Complete startup cards include both boot images and an official update.
+/// Host file reads retain their separate per-request bound.
+pub const MAX_PRELOAD_BYTES: usize = 512 * 1024 * 1024;
 pub const MAX_ENTRIES: usize = 4096;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,13 +28,15 @@ pub struct Options {
 }
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub enum CardEntryKind {
     File,
     Directory,
 }
 #[derive(Clone, Debug, Serialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub struct CardEntry {
     pub name: String,
     pub path: String,
@@ -222,6 +228,7 @@ impl<'a> Reader<'a> {
         let mut entries = Vec::new();
         let mut names = BTreeSet::new();
         // Validate the complete directory chain even if its first sector ends early.
+        let mut long = long_names::Pending::default();
         for cluster in self.chain(first, 64)? {
             for sector in 0..self.spc {
                 let block = self
@@ -231,7 +238,12 @@ impl<'a> Reader<'a> {
                     if raw[0] == 0 {
                         return Ok(entries);
                     }
-                    if raw[0] == 0xe5 || raw[11] == 15 || raw[11] & 8 != 0 {
+                    if raw[0] == 0xe5 || raw[11] & 8 != 0 && raw[11] != 15 {
+                        long.clear();
+                        continue;
+                    }
+                    if raw[11] == 15 {
+                        long.push(raw)?;
                         continue;
                     }
                     if !raw[..11].is_ascii() {
@@ -247,6 +259,7 @@ impl<'a> Reader<'a> {
                     } else {
                         format!("{base}.{ext}")
                     };
+                    let name = long.finish(&raw[..11])?.unwrap_or(name);
                     if name.is_empty() || !names.insert(name.clone()) {
                         return err("Empty or duplicate FAT short name");
                     }
@@ -373,7 +386,7 @@ impl<'a> Reader<'a> {
 }
 fn normalize_path(path: &str, drive: bool) -> Result<String, String> {
     if path.is_empty() || path.len() > 260 || !path.is_ascii() {
-        return err("Expected bounded ASCII short path");
+        return err("Expected bounded ASCII path");
     }
     let replaced = path.replace('\\', "/").to_ascii_uppercase();
     let mut path = replaced.trim_start_matches('/');
@@ -381,8 +394,8 @@ fn normalize_path(path: &str, drive: bool) -> Result<String, String> {
         path = path[2..].trim_start_matches('/');
     }
     let parts: Vec<_> = path.split('/').collect();
-    if !(1..=8).contains(&parts.len()) || parts.iter().any(|p| short_name(p).is_err()) {
-        return err("Expected up to eight valid 8.3 path components");
+    if !(1..=8).contains(&parts.len()) || parts.iter().any(|p| !long_names::valid(p)) {
+        return err("Expected up to eight valid ASCII path components");
     }
     Ok(parts.join("/"))
 }
@@ -436,13 +449,15 @@ pub fn normalize_paths(files: &[(String, Vec<u8>)]) -> Result<Vec<String>, Strin
     let mut paths = BTreeSet::new();
     let mut directories = BTreeSet::new();
     let mut normalized = Vec::new();
-    let mut bytes = 0;
+    let mut bytes = 0usize;
     for (path, payload) in files {
         let path = normalize_path(path, false)?;
         let parts: Vec<_> = path.split('/').collect();
         let parents: Vec<_> = (1..parts.len()).map(|i| parts[..i].join("/")).collect();
-        bytes += payload.len();
-        if bytes > MAX_BYTES
+        bytes = bytes
+            .checked_add(payload.len())
+            .ok_or("Preload size overflows")?;
+        if bytes > MAX_PRELOAD_BYTES
             || paths.len() >= MAX_ENTRIES
             || paths.contains(&path)
             || directories.contains(&path)
@@ -488,6 +503,20 @@ pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, St
         return err("Geometry is not FAT32");
     }
     let normalized = normalize_paths(files)?;
+    let mut reserved = BTreeMap::<String, BTreeSet<[u8; 11]>>::new();
+    for path in &normalized {
+        let mut parent = String::new();
+        for part in path.split('/') {
+            if let Ok(short) = short_name(part) {
+                reserved.entry(parent.clone()).or_default().insert(short);
+            }
+            parent = if parent.is_empty() {
+                part.into()
+            } else {
+                format!("{parent}/{part}")
+            };
+        }
+    }
     let read_only = options
         .read_only_files
         .iter()
@@ -584,9 +613,14 @@ pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, St
                         0,
                     ),
                 )?;
+                let (short, records) =
+                    long_names::records(part, reserved.entry(parent.clone()).or_default())?;
+                for record in records {
+                    add(folders.get_mut(&parent).unwrap(), &record)?;
+                }
                 add(
                     folders.get_mut(&parent).unwrap(),
-                    &dir_record(short_name(part)?, 0x10, cluster, 0),
+                    &dir_record(short, 0x10, cluster, 0),
                 )?;
                 folders.insert(current.clone(), folder);
             }
@@ -607,10 +641,15 @@ pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, St
                 },
             );
         }
+        let (short, records) =
+            long_names::records(leaf, reserved.entry(parent.clone()).or_default())?;
+        for record in records {
+            add(folders.get_mut(&parent).unwrap(), &record)?;
+        }
         add(
             folders.get_mut(&parent).unwrap(),
             &dir_record(
-                short_name(leaf)?,
+                short,
                 0x20 | u8::from(read_only.contains(&path)),
                 first,
                 payload.len() as u32,
@@ -650,7 +689,7 @@ pub fn format(options: &Options, files: &[(String, Vec<u8>)]) -> Result<Card, St
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn options() -> Options {
+    pub(super) fn options() -> Options {
         Options {
             sectors: 0x800000,
             max_dirty_sectors: 65536,
@@ -729,11 +768,58 @@ mod tests {
         o.sectors_per_cluster = 128;
         assert!(format(&o, &[]).is_err());
     }
+
+    #[test]
+    fn startup_card_can_place_the_update_after_a_boot_file_larger_than_64_mib() {
+        let boot_size = 65 * 1024 * 1024;
+        let card = format(
+            &options(),
+            &[
+                ("FFBOOT.BIN".into(), vec![0; boot_size]),
+                ("FWUP0008.DAT".into(), vec![0x59; 512]),
+            ],
+        )
+        .unwrap();
+        let reader = Reader::new(&card).unwrap();
+        let tree = reader.tree().unwrap();
+        assert_eq!(
+            tree.iter().find(|f| f.name == "FFBOOT.BIN").unwrap().bytes as usize,
+            boot_size
+        );
+        assert_eq!(reader.read("FWUP0008.DAT", 512).unwrap(), vec![0x59; 512]);
+        assert!(reader.read("FFBOOT.BIN", MAX_BYTES).is_err());
+    }
 }
 
 #[cfg(test)]
 mod input_tests {
     use super::*;
+    #[test]
+    fn long_names_round_trip_and_reserve_explicit_short_aliases() {
+        let card = format(
+            &super::tests::options(),
+            &[
+                ("MARBLE_INIT.BIN".into(), vec![1, 2, 3]),
+                ("MARBLE~1.BIN".into(), vec![4]),
+                ("LONG_DIRECTORY/THIRTEENCHARS".into(), vec![5]),
+            ],
+        )
+        .unwrap();
+        let reader = Reader::new(&card).unwrap();
+        assert_eq!(reader.read("marble_init.bin", 3).unwrap(), [1, 2, 3]);
+        assert_eq!(reader.read("MARBLE~1.BIN", 1).unwrap(), [4]);
+        assert_eq!(reader.read("LONG_DIRECTORY/THIRTEENCHARS", 1).unwrap(), [5]);
+        let offset = reader.data as u64 * 512 + 32 + 13;
+        let mut broken = card.clone();
+        broken.write_bytes(offset, &[0]).unwrap();
+        assert!(
+            Reader::new(&broken)
+                .unwrap()
+                .tree()
+                .unwrap_err()
+                .contains("long-name")
+        );
+    }
     #[test]
     fn formatter_keeps_declared_read_only_attributes_and_short_aliases() {
         let options = Options {

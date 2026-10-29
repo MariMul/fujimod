@@ -10,7 +10,7 @@ pub const FIRST_START_SCHEMA_URI: &str =
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -45,7 +45,7 @@ pub struct FirstStartMenu {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -61,8 +61,8 @@ pub struct FirstStartLanguage {
 impl FirstStartMenu {
     /// Validate document identity, bounded rows and unambiguous language values.
     pub fn validate(&self) -> Result<(), String> {
-        crate::reference::validate_id(&self.id)?;
-        crate::reference::validate_id(&self.firmware_id)?;
+        fujimod_catalog_identity::validate_id(&self.id)?;
+        fujimod_catalog_identity::validate_id(&self.firmware_id)?;
         if self.schema_uri != FIRST_START_SCHEMA_URI
             || self.schema != 1
             || self.menu_node == 0

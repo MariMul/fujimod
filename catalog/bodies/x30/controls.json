@@ -44,12 +44,31 @@
     ]
   },
   "analog_levels": 1024,
+  "boot": {
+    "sd": {
+      "hold": [
+        {
+          "id": "command_dial.press"
+        },
+        {
+          "id": "view_mode_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "af_ae_lock_button": {
       "name": "[AEL/AFL] (autoexposure/autofocus lock) button",
       "location": "rear",
       "manual_page": 225,
-      "face": null,
+      "face": "AEL/AFL",
       "icon": null,
       "connection_ids": [
         "controls-adc-8"
@@ -104,14 +123,29 @@
       "manual_page": 16,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-10"
+      ],
       "assignable": false,
       "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
       "role": null,
       "mechanical": false,
-      "behavior": null,
-      "pushable": false,
-      "positions": []
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": null,
+          "increase": null
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        },
+        "endless": null
+      },
+      "pushable": true,
+      "positions": [],
+      "short_name": "COMMAND"
     },
     "control_ring": {
       "name": "Control ring",
@@ -141,13 +175,14 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "control_ring_options_button": {
       "name": "Control ring options button",
       "location": "top",
       "manual_page": 17,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -159,11 +194,11 @@
       "positions": []
     },
     "delete_button": {
-      "name": "(delete) button (playback mode)",
+      "name": "Delete button (playback mode)",
       "location": "rear",
       "manual_page": 64,
       "face": null,
-      "icon": null,
+      "icon": "delete",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Deletes pictures in playback; the manual describes frame, selected-frame, and all-frame deletion.",
@@ -198,7 +233,7 @@
       "name": "[DISP] (display)/[BACK] button",
       "location": "rear",
       "manual_page": 24,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [
         "controls-adc-8"
@@ -221,7 +256,7 @@
       "name": "[DRIVE] button",
       "location": "rear",
       "manual_page": 28,
-      "face": null,
+      "face": "DRIVE",
       "icon": null,
       "connection_ids": [
         "controls-gpio-2-11"
@@ -253,14 +288,15 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "flash_pop_up_switch": {
-      "name": "(flash pop-up) switch",
+      "name": "Flash pop-up switch",
       "location": "rear",
       "manual_page": 112,
       "face": null,
-      "icon": null,
+      "icon": "flash",
       "connection_ids": [],
       "assignable": false,
       "default_function": "Raises the built-in flash.",
@@ -327,7 +363,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "mode_dial": {
       "name": "Mode dial",
@@ -497,14 +534,15 @@
           "label": "MOTION PANORAMA 360",
           "description": null
         }
-      ]
+      ],
+      "short_name": "MODE"
     },
     "movie_record_button": {
       "name": "Movie-record button (function button 1)",
       "location": "top",
       "manual_page": 68,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": true,
       "default_function": "Starts and stops movie recording by default; its function-button role is assignable.",
@@ -521,11 +559,11 @@
       "positions": []
     },
     "playback_button": {
-      "name": "(playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 47,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [
         "controls-gpio-2-9"
       ],
@@ -547,7 +585,7 @@
       "name": "[Q] (quick menu) button; RAW conversion button (playback mode)",
       "location": "rear",
       "manual_page": 98,
-      "face": null,
+      "face": "Q",
       "icon": null,
       "connection_ids": [
         "controls-adc-8"
@@ -605,7 +643,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "shutter_button": {
       "name": "Shutter button",
@@ -643,15 +682,18 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "view_mode_button": {
       "name": "[VIEW MODE] button",
       "location": "rear",
       "manual_page": 19,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
       "assignable": false,
       "default_function": "Cycles through the viewfinder and monitor display modes.",
       "role": null,
@@ -660,7 +702,7 @@
         "kind": "button",
         "press": {
           "kind": "debug_key",
-          "name": "EVF_LCD"
+          "name": "VIEW"
         }
       },
       "pushable": true,
@@ -670,7 +712,7 @@
       "name": "[Fn] button (function button 6); [Wi-Fi] button (playback mode)",
       "location": "rear",
       "manual_page": 236,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -715,7 +757,8 @@
         "endless": false
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "ZOOM"
     }
   }
 }

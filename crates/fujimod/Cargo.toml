@@ -7,15 +7,20 @@ repository.workspace = true
 publish.workspace = true
 
 [lib]
+test = false
 doctest = false
 
 [features]
 remote = ["dep:fujimod-remote"]
 default = []
-simulation = ["dep:fujimod-simulation"]
 catalog = ["dep:fujimod-catalog"]
-usb = ["catalog", "dep:fujimod-usb"]
-workflows = ["usb", "dep:fujimod-workflows"]
+catalog-firmware-identity = ["dep:fujimod-catalog-firmware-identity"]
+catalog-workflows = ["catalog-firmware-identity", "dep:fujimod-catalog-workflows"]
+catalog-service = ["catalog-firmware-identity", "dep:fujimod-catalog-service"]
+catalog-configuration = ["dep:fujimod-catalog-configuration"]
+catalog-resolution = ["catalog", "catalog-configuration", "dep:fujimod-catalog-resolution"]
+usb = ["dep:fujimod-usb"]
+workflows = ["usb", "catalog-workflows", "dep:fujimod-workflows"]
 emulator = [
   "dep:fujimod-emulator",
   "emulator-devices",
@@ -30,8 +35,12 @@ emulator-cpu-hvf = ["emulator-cpu", "dep:fujimod-emulator-cpu-hvf"]
 
 [dependencies]
 fujimod-remote = { workspace = true, optional = true }
-fujimod-simulation = { workspace = true, optional = true }
 fujimod-catalog = { workspace = true, optional = true }
+fujimod-catalog-workflows = { workspace = true, optional = true }
+fujimod-catalog-firmware-identity = { workspace = true, optional = true }
+fujimod-catalog-service = { workspace = true, optional = true }
+fujimod-catalog-configuration = { workspace = true, optional = true }
+fujimod-catalog-resolution = { workspace = true, optional = true }
 fujimod-usb = { workspace = true, optional = true }
 fujimod-workflows = { workspace = true, optional = true }
 fujimod-emulator = { workspace = true, optional = true }

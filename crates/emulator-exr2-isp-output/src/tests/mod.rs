@@ -1,3 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
+mod avc;
+mod avc_decode;
 mod checkpoint;
 mod dma;
 mod fingerprints;
@@ -6,6 +9,5 @@ mod output;
 mod parameters;
 mod scaler;
 mod still;
-#[cfg(not(target_arch = "wasm32"))]
-mod video;
+mod transfer;
 mod warp;

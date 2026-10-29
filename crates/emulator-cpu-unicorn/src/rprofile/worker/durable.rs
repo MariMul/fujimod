@@ -50,7 +50,7 @@ mod tests {
     use super::*;
     fn processor() -> CpuWorker {
         let cpu = spawn(Config {
-            translation_cache_bytes: 1 << 20,
+            translation_cache_size_bytes: 1 << 20,
             options: core::Options {
                 cp14_identity: 7,
                 ..Default::default()

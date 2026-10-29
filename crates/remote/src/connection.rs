@@ -32,8 +32,8 @@ impl<B: Backend> Connection<B> {
     pub fn observe(&mut self, observer: Option<Observer>) {
         self.observer = observer;
     }
-    async fn ready(&mut self, deadline: u64) -> Result<()> {
-        crate::operations::wait_ready(self, deadline).await
+    async fn ready(&mut self, control: &Control, deadline: u64) -> Result<()> {
+        crate::operations::wait_ready(self, Some(control), deadline).await
     }
     pub async fn press(&mut self, control: &Control, deadline: u64) -> Result<()> {
         crate::operations::press(self, control, deadline).await
@@ -105,14 +105,14 @@ impl<B: Backend> RemoteReader for View<'_, B> {
                 .await
         })
     }
-    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+    fn readiness<'a>(&'a mut self, control: Option<&'a Control>) -> LocalFuture<'a, Readiness> {
         Box::pin(async move {
             Memory {
                 backend: self.backend,
                 facts: self.facts,
                 reads: ReadSet::default(),
             }
-            .readiness()
+            .readiness(control)
             .await
         })
     }
@@ -148,13 +148,13 @@ impl<B: Backend> RemoteReader for Connection<B> {
                 .await
         })
     }
-    fn readiness(&mut self) -> LocalFuture<'_, Readiness> {
+    fn readiness<'a>(&'a mut self, control: Option<&'a Control>) -> LocalFuture<'a, Readiness> {
         Box::pin(async move {
             View {
                 backend: &mut self.backend,
                 facts: &self.facts,
             }
-            .readiness()
+            .readiness(control)
             .await
         })
     }
@@ -199,7 +199,7 @@ impl<B: Backend> Remote for Connection<B> {
                 input.state,
                 InputState::Released | InputState::TouchMove { .. } | InputState::TouchEnd
             ) {
-                self.ready(deadline).await?;
+                self.ready(&input.control, deadline).await?;
                 let read_result = self
                     .read(&Reference::Control(input.control.clone()))
                     .await?;
@@ -212,6 +212,45 @@ impl<B: Backend> Remote for Connection<B> {
                 ) {
                     return Err(format!("Control {} is unavailable", input.control.id()));
                 }
+            }
+            if let InputState::Turn(steps) = input.state
+                && let Some(actuator) = self.backend.turn_contact(input)?
+            {
+                self.facts.physical_controls.action(
+                    &self.facts.control_ids,
+                    id,
+                    input.state.operation(),
+                )?;
+                if steps.unsigned_abs() > 4096 {
+                    return Err("Rotation exceeds 4096 steps".into());
+                }
+                // Each step is one press and release of the direction's
+                // contact, accepted by the scanner like a button's.
+                for step in 0..steps.unsigned_abs() {
+                    for pressed in [true, false] {
+                        if pressed && step > 0 {
+                            self.ready(&input.control, deadline).await?;
+                        }
+                        self.backend.contact(&actuator, pressed)?;
+                        loop {
+                            let mut reads = ReadSet::default();
+                            if self
+                                .backend
+                                .contact_accepted(&actuator, pressed, &mut reads)?
+                            {
+                                break;
+                            }
+                            if self.now() >= deadline {
+                                return Err(format!(
+                                    "Timed out waiting for {actuator} {} in {input:?}",
+                                    if pressed { "press" } else { "release" }
+                                ));
+                            }
+                            self.wait(&reads, deadline).await?;
+                        }
+                    }
+                }
+                return Ok(());
             }
             // Backends validate the complete physical action before applying it.
             // OFF must not depend on live state reads that can block its release.

@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import {
+  encodeIntoSharedMemory,
+  sharedStringEncoding,
+} from '../../emulator/shared-memory-encoding.ts';
 import {
   buildPlan,
   declarationModule,
@@ -8,10 +15,34 @@ import {
   pinnedToolchain,
   rustExports,
   shellWords,
+  unicornCacheMatches,
 } from '../../emulator/build.mts';
 
 test('builder reads the pinned public toolchains from the package root configuration', () => {
   assert.deepEqual(pinnedToolchain(), { nightly: 'nightly-2026-10-10', emsdk: '6.0.13' });
+});
+
+test('generated UTF-8 encoding preserves shared-memory slices and code point boundaries', () => {
+  const encoder = new class extends TextEncoder {
+    override encodeInto(text: string, target: Uint8Array<ArrayBuffer>) {
+      assert(target.buffer instanceof ArrayBuffer, 'Browser encoders refuse shared destinations');
+      return super.encodeInto(text, target);
+    }
+  }();
+  for (const [text, capacity] of [['MENU', 8], ['Aé🎞Z', 7], ['🎞', 3], ['é', 0]] as const) {
+    const expected = new Uint8Array(capacity);
+    const result = encoder.encodeInto(text, expected);
+    const shared = new Uint8Array(new SharedArrayBuffer(capacity + 4));
+    shared.fill(0xcc);
+    assert.deepEqual(encodeIntoSharedMemory(encoder, text, shared.subarray(2, 2 + capacity)), result);
+    assert.deepEqual(shared.subarray(2, 2 + result.written), expected.subarray(0, result.written));
+    assert(shared.subarray(0, 2).every((byte) => byte === 0xcc));
+    assert(shared.subarray(2 + result.written).every((byte) => byte === 0xcc));
+  }
+  const patched = sharedStringEncoding('const ret=cachedTextEncoder.encodeInto(arg,view);');
+  assert.match(patched, /encodeIntoSharedMemory\(cachedTextEncoder,arg,view\)/);
+  assert.doesNotMatch(patched, /cachedTextEncoder\.encodeInto/);
+  assert.throws(() => sharedStringEncoding(''), /Expected one/);
 });
 
 test('build options keep artifacts in the requested output and validate tool flags', () => {
@@ -23,6 +54,11 @@ test('build options keep artifacts in the requested output and validate tool fla
   assert.equal(selected.rustSimd128, true);
   assert.equal(selected.cSimd128, true);
   assert.equal(selected.allocator, 'emmalloc');
+  const incremental = options(['--incremental'], '/tmp/project');
+  assert.equal(incremental.incremental, true);
+  assert.equal(incremental.lto, 'off');
+  assert.equal(incremental.optLevel, '2');
+  assert.equal(incremental.codegenUnits, 256);
   assert.throws(() => options(['--lto', 'invalid']), /Invalid --lto/);
   assert.throws(() => options(['--codegen-units', '0']), /positive integer/);
 });
@@ -48,7 +84,8 @@ test('build plan targets the public static library and preserves encoded Rust fl
     'target-feature=+simd128',
   ]);
   assert(plan.cFlags.includes('-pthread'));
-  assert(plan.cmakeConfigure.includes('--fresh'));
+  assert(!plan.cmakeConfigure.includes('--fresh'));
+  assert(plan.link.includes('-Oz'));
   assert(plan.link.includes('-pthread'));
   assert(plan.link.includes('-sPTHREAD_POOL_SIZE=2'));
   assert(plan.rust.includes('-Zbuild-std=std,panic_abort'));
@@ -61,6 +98,53 @@ test('build plan targets the public static library and preserves encoded Rust fl
   assert(plan.link.includes('-sEXPORTED_FUNCTIONS=@/tmp/emulator/exports.json'));
   assert(plan.link.includes('-sWASM_BINDGEN'));
   assert(plan.link.includes('-sENVIRONMENT=web,worker,node'));
+});
+
+test('incremental build plan keeps the fast Cargo profile and light Emscripten link', () => {
+  const selected = options(['--out', '/tmp/emulator', '--incremental'], '/tmp/project');
+  const plan = buildPlan(selected, { EMSDK: '/toolchain/emsdk', PATH: '/toolchain/bin' });
+  assert.equal(plan.env.CARGO_PROFILE_DIST_LTO, 'off');
+  assert.equal(plan.env.CARGO_PROFILE_DIST_OPT_LEVEL, '2');
+  assert.equal(plan.env.CARGO_PROFILE_DIST_CODEGEN_UNITS, '256');
+  assert.equal(plan.env.CARGO_PROFILE_DIST_INCREMENTAL, 'true');
+  assert(plan.link.includes('-O1'));
+  assert(!plan.link.includes('-Oz'));
+});
+
+test('Unicorn cache reuse requires the configured source and toolchain settings', () => {
+  const selected = options(['--out', '/tmp/emulator'], '/tmp/project');
+  const plan = buildPlan(selected, {
+    EMSDK: '/toolchain/emsdk',
+    PATH: '/toolchain/bin',
+  });
+  const source = plan.cmakeConfigure[plan.cmakeConfigure.indexOf('-S') + 1]!;
+  const entries = {
+    BUILD_SHARED_LIBS: 'OFF',
+    CMAKE_BUILD_TYPE: 'Release',
+    CMAKE_C_FLAGS: plan.cFlags.join(' '),
+    CMAKE_GENERATOR: 'Ninja',
+    CMAKE_HOME_DIRECTORY: source,
+    CMAKE_TOOLCHAIN_FILE:
+      '/toolchain/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake',
+    UNICORN_ARCH: 'arm',
+    UNICORN_BUILD_TESTS: 'OFF',
+    UNICORN_INSTALL: 'OFF',
+    UNICORN_LEGACY_STATIC_ARCHIVE: 'OFF',
+    UNICORN_TCG_INTERPRETER: 'ON',
+  };
+  const directory = mkdtempSync(join(tmpdir(), 'unicorn-cache-test-'));
+  const cachePath = join(directory, 'CMakeCache.txt');
+  writeFileSync(
+    cachePath,
+    Object.entries(entries).map(([name, value]) => `${name}:INTERNAL=${value}`).join('\n'),
+  );
+  try {
+    assert(unicornCacheMatches(cachePath, plan));
+    writeFileSync(cachePath, `CMAKE_HOME_DIRECTORY:INTERNAL=/different/source\n`);
+    assert(!unicornCacheMatches(cachePath, plan));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('Rust flag tokenizer honors quoted groups without evaluating shell syntax', () => {
@@ -98,7 +182,7 @@ interface BindgenModule {
   /**
   * Configure once.
   */
-    configure(options: ModuleOptions): void;
+    configure(options: ModuleOptions): Promise<void>;
   /**
   * A card file.
   */
@@ -128,7 +212,7 @@ test('bindgen declarations move out of the Emscripten module interface', () => {
   );
   assert.match(
     hoisted,
-    /interface BindgenModule \{\n {2}\/\* tslint:disable \*\/\n {2}\/\*\*\n {2}\* Configure once\.\n {2}\*\/\n {4}configure\(options: ModuleOptions\): void;\n {4}Camera: typeof Camera;\n\}/,
+    /interface BindgenModule \{\n {2}\/\* tslint:disable \*\/\n {2}\/\*\*\n {2}\* Configure once\.\n {2}\*\/\n {4}configure\(options: ModuleOptions\): Promise<void>;\n {4}Camera: typeof Camera;\n\}/,
   );
   const module = declarationModule(hoisted);
   assert.match(module, /^\/\/ Generated by emulator\/build\.mts/);

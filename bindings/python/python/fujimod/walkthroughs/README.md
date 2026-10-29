@@ -68,9 +68,9 @@ interactions. Frame sampling never drives device state. Only non-fixture press
 inputs or touch starts can anchor coverage. Report inputs carry `kind`
 (`control` or `touch`); a touch also records its `phase`, `x` and `y`, with
 `pressed` true at the start, false at the lift and null while moving. The
-annotated video draws a translucent circle at a finger while it is down,
-following its moves and fading after the lift; clean video and screenshots
-stay unmarked. Input badges push onto a bottom-right stack, newest
+videos draw a translucent circle at a finger while it is down, following its
+moves; a tap ends in a ripple and a longer contact fades where it lifts. The
+clean video shows touches too, so a tap is always visible. Screenshots stay unmarked. Input badges push onto a bottom-right stack, newest
 at the bottom, retaining up to five presses. Repeated presses have separate
 entries; each remains visible for five presentation seconds after release,
 fading only during the final 0.4 seconds. New presses push the oldest entries
@@ -100,6 +100,41 @@ at most 0.4 seconds of guest waiting; transitions and input intervals remain.
 Input records retain their actual guest times and presentation timestamps.
 Neither video pacing nor holds change emulator execution or CPU speed.
 
+Presentation panels cover part of the video while keeping the camera canvas at
+its original size. The camera adapter supplies observed snapshots and frames:
+
+```python
+card = guide.show_card(snapshot)
+assert card.visible
+assert card.label == "(untitled)"
+assert "/DCIM/100_FUJI/DSCF0001.JPG" in card.paths
+
+# After the camera has formatted the card, reveal its observed new contents.
+card.format(formatted_snapshot)
+assert not card.paths
+card.hide()
+
+display = guide.show_display(hdmi_frame, label="HDMI", width=.6)
+display.update(next_hdmi_frame)
+assert display.visible and display.label == "HDMI"
+display.hide()
+```
+
+`CardSnapshot` contains `label`, `rows` and `highlight`. Each of at most six
+`CardRow` entries contains `name`, `path`, `depth`, `directory` and `bytes`.
+Adapters prune the tree before presenting it. Card handles expose immutable
+snapshot copies, the displayed label and paths for assertions. An empty label
+is displayed as `(untitled)`. `guide.format_card(snapshot)` and
+`guide.hide_card()` operate on the guide's current card too.
+
+Cards slide in with cubic easing. Formatting rapidly shakes the old card before
+the new label and files appear. `show_display` uses the same rounded panel style
+for HDMI, EVF or a labeled reference image. Its width is a fraction of the main
+canvas, from `.25` to `.75`. Show/hide animations add half a second of
+presentation time; frame updates add no holds or guest time. These overlays
+appear in both videos, and their events are recorded under `overlays` in the
+report. Native screenshots and option-coverage evidence remain clean.
+
 Use `guide.pause(1.5)` after opening a menu before navigating within it. The
 shared `open_menu` starter adds this pause automatically, after activation.
 
@@ -117,7 +152,7 @@ screenshot may still show a highlighted destination before activation.
 trailing inputs, and can extend beyond the last step's `video_end`.
 The host records `start_from` as the parent identity so consumers can link guides.
 Failed runs retain diagnostics and never qualify coverage. The Rust recorder
-owns screenshot encoding, frame reuse, badges and optional 15 fps video.
+owns screenshot encoding, frame reuse, badges and optional 30 fps video.
 `media` identifies `screenshots` or `video`; only video reports contain
 `video.mp4` and `video-clean.mp4`. Websites request video recordings explicitly.
 Image assertions can call `camera.capture().png()`; video sampling and holds

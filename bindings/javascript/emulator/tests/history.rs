@@ -152,7 +152,7 @@ fn create_policy(
     let firmware: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
     let mapping = json!({"address":0x10000,"physical":0x10000,"size":0x4000,"permissions":3});
     let mut config = json!({"schema":1,"firmwareId":"generated","bootSource":"internal","initialPositions":{},"graph":{
-        "schema":1,"firmwareId":"generated","bootSource":"internal","quantum":17,"translationCacheBytes":1048576,
+        "schema":1,"firmwareId":"generated","bootSource":"internal","quantum":17,
         "execution":{"processors":[{"model":"cortex-r5f","released":true,"registers":[["Pc",0x10000]],"mprofile":null,"rprofile":{"cp14_identity":0x4003,"tcm":{"atcm":{"bytes":0,"reset":0},"btcm":{"bytes":0,"reset":0}}}}],
             "ram":[{"base":0x10000,"size":0x4000}],"mappings":[{"core":0,"address":0x10000,"physical":0x10000,"size":0x4000,"permissions":7}],"dma_mappings":[mapping],"decoders":[],"instructions_per_tick":[24,1],"peripherals":[{"core":0,"address":0xfffb3000u64,"physical":0xfffb3000u64,"size":4096}]},
         "devices":{"schema":1,"boot_entry":"loader","wires":{},"nodes":[{"name":"irq","boot_entries":["loader"],"windows":[{"base":0xfffb3000u64,"size":4096}],"dependencies":[],"model":{"kind":"exr2-interrupt-controller","options":{"arbitration":"unique"},"core":0,"base":0xfffb3000u64,"routes":null,"software":[]}}]},
@@ -311,7 +311,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
         schema: u32,
         owner: u32,
         generation: u64,
-        entries: Vec<fujimod_emulator::session::history::Entry>,
+        entries: Vec<fujimod_emulator_session::history::Entry>,
     }
     let mut h = create(false);
     let cold = command(&mut h, "fingerprint", json!({}), &[]).unwrap().0;
@@ -335,7 +335,7 @@ fn cbor_history_preserves_u64_runs_and_restores_failed_replay_at_ratio_24() {
     let mut log: Log = ciborium::from_reader(bytes.as_slice()).unwrap();
     assert!(matches!(
         log.entries[0].input,
-        fujimod_emulator::session::history::Input::Run {
+        fujimod_emulator_session::history::Input::Run {
             instructions: u64::MAX,
             ..
         }

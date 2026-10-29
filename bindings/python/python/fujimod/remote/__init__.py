@@ -214,8 +214,8 @@ class Camera:
     async def readiness(self) -> Readiness:
         return await _drive(self._task("readiness", None, 0))
 
-    async def wait_until_ready(self, *, deadline: int) -> None:
-        await _drive(self._task("wait_ready", None, deadline))
+    async def wait_until_ready(self, *, deadline: int, control: Control | None = None) -> None:
+        await _drive(self._task("wait_ready", control, deadline))
 
     async def wait_for(self, predicate: Callable[[], Awaitable[T]], *, deadline: int,
                        reads: dict, condition: str) -> T:
@@ -309,8 +309,8 @@ class BlockingCamera:
     def readiness(self) -> Readiness:
         return self._call("readiness")
 
-    def wait_until_ready(self, *, deadline: int) -> None:
-        self._call("wait_ready", deadline=deadline)
+    def wait_until_ready(self, *, deadline: int, control: Control | None = None) -> None:
+        self._call("wait_ready", control, deadline)
 
     def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
         return self._call("navigate", reference, deadline)

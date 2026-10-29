@@ -110,6 +110,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
       ],
     },
     { action: 'profile', limit: 5 },
+    { action: 'device_states', kind: 'dmp-smaph-h' },
     { action: 'rollback', seconds: 10 },
     {
       action: 'replay',
@@ -131,6 +132,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
   ]);
   assert.deepEqual(restart.bytes, [9, 8, 7]);
   assert.equal(f.calls.find((c) => c.action === 'card_read')!.options.revision, 1);
+  assert.equal(f.calls.find((c) => c.action === 'device_states')!.options.kind, 'dmp-smaph-h');
   assert(
     f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.ticksPerSecond === 12000000),
   );
@@ -521,4 +523,78 @@ test('RAF uploads are parsed once and not retained for cold boot or power cycles
   );
   assert.equal((await f.send({ action: 'power_cycle', inputs: [] })).type, 'reply');
   assert.equal(f.calls.filter((call) => call.action === 'scene_raf').length, 2);
+});
+
+test('boot reports guest ticks against the fixed boot run', async () => {
+  const f = setup();
+  f.manifest.bootTicks = 3000000;
+  const result = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(result.type, 'reply');
+  const boot = f.events.flatMap((event) =>
+    event.type === 'progress'
+      ? (event.assets ?? []).filter((asset) => asset.url === 'step:boot')
+      : [],
+  );
+  assert.deepEqual(
+    boot.filter((asset) => asset.status === 'loading').map((asset) => asset.loaded),
+    [0, 3000000],
+  );
+  assert(
+    boot
+      .filter((asset) => asset.status === 'loading')
+      .every((asset) => asset.unit === 'ticks' && asset.total === 3000000),
+  );
+  assert.equal(boot.at(-1)?.status, 'complete');
+  const metrics = f.events.filter((event) => event.type === 'metrics').at(-1);
+  assert(metrics?.type === 'metrics');
+  assert.equal(metrics.metrics.guestTicks, 3000000);
+});
+
+test('a boot without a fixed tick run keeps boot progress indeterminate', async () => {
+  const f = setup();
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  const boot = f.events.flatMap((event) =>
+    event.type === 'progress'
+      ? (event.assets ?? []).filter(
+          (asset) => asset.url === 'step:boot' && asset.status === 'loading',
+        )
+      : [],
+  );
+  assert(boot.length > 0);
+  assert(boot.every((asset) => asset.total === undefined));
+});
+
+test('boot holds release through native contacts when the ordinary scanner is unavailable', async () => {
+  const f = setup();
+  const release = vi.spyOn(f.module.Camera.prototype, 'release').mockImplementation(() => {
+    throw Error('physical contact scanner is not ready: menu');
+  });
+  try {
+    const boot = await f.send({
+      action: 'boot',
+      config: { ...f.config, bootInputs: [{ id: 'menu' }] },
+      dat: new ArrayBuffer(1),
+      files: [],
+      seedIdentity: [],
+    });
+    assert.equal(boot.type, 'reply');
+    assert.deepEqual(f.calls.find((c) => c.action === 'release_boot_inputs')?.options.inputs, [
+      { id: 'menu' },
+    ]);
+    assert.equal(release.mock.calls.length, 0);
+  } finally {
+    release.mockRestore();
+  }
 });

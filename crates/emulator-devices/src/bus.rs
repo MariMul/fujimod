@@ -5,9 +5,9 @@
 //! modeled refusals.
 
 use crate::record::Record;
-use std::sync::{Arc, atomic::AtomicU32};
+use std::sync::{Arc, atomic::{AtomicU16, AtomicU32}};
 
-/// One device-owned, side-effect-free 32-bit register read. `offset` is
+/// One device-owned register read. `offset` is
 /// relative to one declared device window. Clocked readers may decline a
 /// read when their published state is no longer valid at the supplied tick.
 #[derive(Clone)]
@@ -15,16 +15,51 @@ pub struct FastReadWord {
     pub offset: u64,
     pub value: FastReadValue,
 }
+
+/// Opaque device work that must be completed by a host runtime before guest
+/// execution resumes. Device-specific request bytes stay outside checkpoints.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostRequest {
+    pub id: u64,
+    pub kind: String,
+    pub payload: Vec<u8>,
+}
 #[derive(Clone)]
 pub enum FastReadValue {
+    AtomicU16(Arc<AtomicU16>),
     AtomicU32(Arc<AtomicU32>),
     ClockedU32(Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>),
+    /// Consume only prepublished data; decline before IRQ, DMA, deadline or
+    /// other framework-visible effects. The device owns the shared cursor and
+    /// includes it in checkpoints. Returning None must leave it unchanged.
+    ConsumingU32(Arc<dyn Fn() -> Option<u32> + Send + Sync>),
+}
+impl FastReadValue {
+    pub fn width(&self) -> u64 {
+        match self {
+            Self::AtomicU16(_) => 2,
+            _ => 4,
+        }
+    }
 }
 impl FastReadWord {
+    pub fn atomic_u16(offset: u64, value: Arc<AtomicU16>) -> Self {
+        Self {
+            offset,
+            value: FastReadValue::AtomicU16(value),
+        }
+    }
     pub fn atomic_u32(offset: u64, value: Arc<AtomicU32>) -> Self {
         Self {
             offset,
             value: FastReadValue::AtomicU32(value),
+        }
+    }
+
+    pub fn consuming_u32(offset: u64, read: Arc<dyn Fn() -> Option<u32> + Send + Sync>) -> Self {
+        Self {
+            offset,
+            value: FastReadValue::ConsumingU32(read),
         }
     }
 
@@ -50,7 +85,8 @@ pub trait CoreInterrupts {
 
 /// A physical level output connected by the checked board graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "typescript", derive(tsify::Tsify), tsify(hashmap_as_object, missing_as_null))]
+#[derive(tsify::Tsify)]
+#[tsify(hashmap_as_object, missing_as_null)]
 pub enum InterruptLine {
     Shared(u32),
     Core { core: usize, line: u32 },
@@ -72,6 +108,11 @@ pub trait Host {
     /// Guest virtual time in the board's unit (X70: virtual timer ticks, so the
     /// exact runtime and the HVF port agree).
     fn now(&self) -> u64;
+    /// Stop the current guest run after its active instruction retires.
+    /// Runtimes without an instruction boundary refuse asynchronous work.
+    fn request_pause(&mut self) -> Result<(), String> {
+        Err("host cannot pause guest execution for asynchronous work".into())
+    }
     /// Worker count for pure host computation. Zero selects the exact serial
     /// path; workers never receive guest state or publish device effects.
     fn compute_workers(&self) -> usize {
@@ -143,6 +184,9 @@ impl<'a> Cx<'a> {
     }
     pub fn now(&self) -> u64 {
         self.tick_override.unwrap_or_else(|| self.host.now())
+    }
+    pub fn request_pause(&mut self) -> Result<(), String> {
+        self.host.request_pause()
     }
     /// Bounded strategy for pure, deterministic raster work. The owner still
     /// applies every resulting device effect on this context's thread.
@@ -288,12 +332,20 @@ pub trait Device: Send + std::any::Any {
     fn scanout_source_mut(&mut self) -> Option<&mut (dyn crate::capability::ScanoutSource + 'static)> {
         None
     }
-    /// Optional side-effect-free 32-bit reads for one register window. This
+    fn frame_source(&self) -> Option<&(dyn crate::capability::FrameSource + 'static)> {
+        None
+    }
+    fn frame_source_mut(&mut self) -> Option<&mut (dyn crate::capability::FrameSource + 'static)> {
+        None
+    }
+    /// Optional device-published reads for one register window. This
     /// query is observational: it must not settle time or change modeled
     /// state. Interactive runtimes may bypass `read` only while the declaration
     /// remains valid; ordinary exact execution keeps using the read callback.
     /// Atomic values may also serve as exact loop-proof inputs when they stay
-    /// stable through the proof window. Clocked values never do.
+    /// stable through the proof window. Clocked and consuming values never do.
+    /// Consuming readers may advance only their device-owned FIFO cursor;
+    /// completion and other framework effects must use the ordinary callback.
     fn fast_reads(&self, _window_base: u64, _window_size: u64) -> Vec<FastReadWord> {
         Vec::new()
     }
@@ -355,6 +407,15 @@ pub trait Device: Send + std::any::Any {
     fn save(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
+    /// Stopped-board diagnostics, separate from complete checkpoint payloads.
+    fn diagnostic_state(&self) -> serde_json::Value {
+        self.save()
+    }
+    /// Read an owned buffer without encoding binary data as JSON integers.
+    /// This observation must not advance time or change device behavior.
+    fn diagnostic_buffer(&self, name: &str) -> Result<&[u8], String> {
+        Err(format!("{} has no diagnostic buffer {name}", self.name()))
+    }
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
         if state.is_null() {
             Ok(())
@@ -373,6 +434,26 @@ pub trait Device: Send + std::any::Any {
     }
     /// A deadline set with `cx.schedule(at, token)` arrived.
     fn event(&mut self, _cx: &mut Cx<'_>, _token: u64) {}
+    /// Take one opaque host request after the board has stopped its processors.
+    fn take_host_request(&mut self) -> Option<HostRequest> {
+        None
+    }
+    /// Whether this device is waiting for a host result before the guest can
+    /// execute again.
+    fn has_host_request(&self) -> bool {
+        false
+    }
+    /// Apply a host result while the board is stopped. Implementations should
+    /// validate the request ID and make the modeled completion visible only
+    /// after the result has been accepted.
+    fn complete_host_request(
+        &mut self,
+        _cx: &mut Cx<'_>,
+        _id: u64,
+        _result: &[u8],
+    ) -> Result<(), String> {
+        Err(format!("{} has no pending host request", self.name()))
+    }
     /// Bring time bookkeeping up to `cx.now()` on guest-driven access or a
     /// due event. A quantum boundary alone must not advance a device.
     fn advance(&mut self, _cx: &mut Cx<'_>) {}

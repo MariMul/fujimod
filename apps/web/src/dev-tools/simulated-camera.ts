@@ -1,10 +1,10 @@
-import { usb, type Device } from 'fujimod';
+import { catalog as reference, usb, type Device } from 'fujimod';
 import { CameraStore } from '../cameras/store';
 import { validateCatalog, type Catalog } from '../catalog';
 import { digest } from '../engine/identity';
 import { WasmEngine } from '../engine/wasm-engine';
 import { Exr2UsbBus } from '../engine/exr2-usb-bus';
-import type { EmulatorManifest } from 'fujimod/emulator';
+import type { BootInput, EmulatorManifest } from 'fujimod/emulator';
 import type { SimulatedCamera } from './usb-camera-model';
 
 declare const __FUJIMOD_CATALOG__: string;
@@ -20,6 +20,13 @@ export async function startSimulatedCamera(id: string): Promise<SimulatedCamera>
     (entry) => entry.id === camera.firmwareId && entry.sha256 === camera.firmwareHash,
   );
   if (!firmware?.emulate?.usb) throw Error('This saved camera has no runnable USB simulation.');
+  const service = reference.selections().find((selection) => selection.firmware.id === firmware.id)
+    ?.physical_controls?.boot?.service;
+  if (!service) throw Error('This saved camera has no service-mode boot inputs.');
+  const bootInputs: BootInput[] = service.hold.map(({ id, stage }) =>
+    stage == null ? { id } : { id, stage },
+  );
+  if (service.usb != null) bootInputs.unshift({ id: 'usb', position: service.usb ? 'on' : 'off' });
   const bundle = new URL(firmware.emulate.usb.bundle, document.baseURI).href;
   const manifestResponse = await fetch(new URL('wasm.json', bundle));
   if (!manifestResponse.ok) throw Error('USB simulation manifest is unavailable.');
@@ -48,7 +55,7 @@ export async function startSimulatedCamera(id: string): Promise<SimulatedCamera>
           ...firmware.device?.initialPositions,
           ...manifest.usb.initialPositions,
         },
-        bootInputs: manifest.usb.bootInputs,
+        bootInputs,
       },
       () => {},
     );

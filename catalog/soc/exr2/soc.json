@@ -545,16 +545,23 @@
       "clock_id": null
     },
     {
-      "id": "video-encoder-input",
+      "id": "image-transfer",
+      "base": 4294328320,
+      "size": 32,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "avc-codec-input",
       "base": 4294312960,
       "size": 256,
       "kind": "imaging-controller",
       "clock_id": null
     },
     {
-      "id": "video-encoder-control",
+      "id": "avc-codec-control",
       "base": 4294314752,
-      "size": 1024,
+      "size": 1280,
       "kind": "imaging-controller",
       "clock_id": null
     },
@@ -947,6 +954,12 @@
   "interrupts": [
     {
       "core": "core0",
+      "line": 73,
+      "source_block": "image-transfer",
+      "output_id": "complete"
+    },
+    {
+      "core": "core0",
       "line": 101,
       "source_block": "control-bus0",
       "output_id": "controller"
@@ -1188,7 +1201,7 @@
     {
       "core": "core0",
       "line": 75,
-      "source_block": "video-encoder-control",
+      "source_block": "avc-codec-control",
       "output_id": "complete"
     }
   ],
@@ -1989,6 +2002,18 @@
       "core": "core1",
       "block_id": "peripheral-window-fff63000",
       "address": 4294324224,
+      "offset": null
+    },
+    {
+      "core": "core0",
+      "block_id": "image-transfer",
+      "address": 4294328320,
+      "offset": null
+    },
+    {
+      "core": "core1",
+      "block_id": "image-transfer",
+      "address": 4294328320,
       "offset": null
     },
     {

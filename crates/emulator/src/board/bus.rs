@@ -1,6 +1,6 @@
 //! Common device dispatch, discovery ledger and causal wakeups.
+use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord, HostRequest};
 use fujimod_emulator_devices::graph::{Mapping, validate_mappings};
-use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
 use fujimod_emulator_devices::{Cx, Device, Host};
 use serde_json::{Value, json};
 use std::borrow::Cow;
@@ -271,7 +271,7 @@ impl Bus {
         if let Some(before) = before {
             if before != self.windows[id].device.save() {
                 if let Some(stops) = &self.continuation {
-                    stops.borrow_mut().fired = true;
+                    stops.borrow_mut().device(id);
                 }
             }
         }
@@ -280,8 +280,25 @@ impl Bus {
         self.windows
             .iter()
             .filter(|node| node.device.name() == kind)
-            .map(|node| node.device.save())
+            .map(|node| node.device.diagnostic_state())
             .collect()
+    }
+
+    pub fn device_fingerprints(&self, kind: &str) -> Result<Vec<Value>, String> {
+        self.windows
+            .iter()
+            .filter(|node| node.device.name() == kind)
+            .map(|node| node.device.fingerprint())
+            .collect()
+    }
+
+    pub fn device_buffer(&self, kind: &str, name: &str) -> Result<Vec<u8>, String> {
+        let mut devices = self.windows.iter().filter(|node| node.device.name() == kind);
+        let device = devices.next().ok_or("no matching device")?;
+        if devices.next().is_some() {
+            return Err("buffer observation requires one matching device".into());
+        }
+        Ok(device.device.diagnostic_buffer(name)?.to_vec())
     }
 
     /// Typed stopped-board access. This is never used by register dispatch.
@@ -480,7 +497,7 @@ impl Bus {
                 .as_ref()
                 .is_none_or(|stops| stops.borrow().devices.is_empty())
     }
-    /// Pure read snapshots that fall inside this CPU's physical MMIO mapping.
+    /// Published reads that fall inside this CPU's physical MMIO mapping.
     /// Device declarations are relative to their registered windows; return
     /// offsets relative to the requested mapping for the CPU backend.
     pub(super) fn fast_reads(
@@ -503,10 +520,11 @@ impl Bus {
                     let Some(address) = mapping.base.checked_add(offset) else {
                         continue;
                     };
-                    let Some(end) = address.checked_add(4) else {
+                    let width = value.width();
+                    let Some(end) = address.checked_add(width) else {
                         continue;
                     };
-                    if offset & 3 != 0
+                    if !offset.is_multiple_of(width)
                         || end > mapping_end
                         || address < physical_base
                         || end > physical_end
@@ -850,8 +868,11 @@ impl Bus {
                 index.map(|id| self.windows[id].device.name()),
             );
             if self.mode == Mode::Strict {
+                let written_value = value
+                    .map(|value| format!(" value={:#x}", value & mask))
+                    .unwrap_or_default();
                 return Err(format!(
-                    "unmodeled MMIO {}{size} at {address:#x}, CPU{cpu} PC={pc:#x}: {message}",
+                    "unmodeled MMIO {}{size} at {address:#x}, CPU{cpu} PC={pc:#x}{written_value}: {message}",
                     if value.is_some() { "write" } else { "read" }
                 ));
             }
@@ -908,6 +929,50 @@ impl Bus {
                     .unwrap_or_else(|| "device event is unmodeled".into()),
             )?;
             return Ok(());
+        }
+        self.wake_dependents(host, device)
+    }
+    pub fn take_host_requests(&mut self) -> Vec<(usize, HostRequest)> {
+        self.windows
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(device, window)| {
+                window
+                    .device
+                    .take_host_request()
+                    .map(|request| (device, request))
+            })
+            .collect()
+    }
+    pub fn has_host_requests(&self) -> bool {
+        self.windows
+            .iter()
+            .any(|window| window.device.has_host_request())
+    }
+    pub fn complete_host_request(
+        &mut self,
+        host: &mut dyn Host,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        if device >= self.len() {
+            return Err("host request targets absent device".into());
+        }
+        let publication = self.publication_before(device);
+        self.touch(device);
+        let mut cx = Cx::new(host, usize::MAX, 0, device);
+        let result = self.windows[device]
+            .device
+            .complete_host_request(&mut cx, id, result);
+        let outcome = Self::outcome(&mut cx);
+        drop(cx);
+        self.publication_after(device, publication);
+        result?;
+        match outcome {
+            Ok(true) => {}
+            Ok(false) => return Err("host request completion is unmodeled".into()),
+            Err(error) => return Err(error),
         }
         self.wake_dependents(host, device)
     }
@@ -1109,6 +1174,8 @@ mod tests {
         let mut bus = Bus::new(Mode::Strict);
         let mut expected = bus.state();
         bus.register(0x1000, 4, Box::new(Complete)).unwrap();
+        assert_eq!(bus.device_fingerprints("complete").unwrap(), vec![json!({"payload":[1,2,3],"pending":7})]);
+        assert!(bus.device_fingerprints("absent").unwrap().is_empty());
         expected["devices"] = json!([{"kind":"complete","windows":bus.windows[0].mappings,
             "native_dependencies":[],"state":{"payload":[1,2,3],"pending":7}}]);
         expected["skipped_deadlines"] = json!({});
@@ -1308,6 +1375,33 @@ mod tests {
         }
         assert!(bus.access(&mut host, 0, 0, 0x2000, 8, None).is_err());
         assert!(bus.register(0x2003, 1, Box::new(Register(0))).is_err());
+    }
+
+    #[test]
+    fn halfword_publications_fit_narrow_windows_and_rebase_at_two_byte_offsets() {
+        use std::sync::{Arc, atomic::AtomicU16};
+        struct Halfword;
+        impl Device for Halfword {
+            fn name(&self) -> &'static str {
+                "halfword-snapshot"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                7
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+            fn fast_reads(&self, _: u64, _: u64) -> Vec<FastReadWord> {
+                vec![FastReadWord::atomic_u16(0, Arc::new(AtomicU16::new(7)))]
+            }
+        }
+        let mut bus = Bus::new(Mode::Strict);
+        bus.register(0x1002, 2, Box::new(Halfword)).unwrap();
+        let words = bus.fast_reads(0x1000, 4);
+        assert_eq!(words.len(), 1);
+        assert_eq!(words[0].0, 2);
+        assert_eq!(words[0].1.width(), 2);
+        assert_eq!(bus.fast_reads(0x1002, 2).len(), 1);
+        assert!(bus.fast_reads(0x1000, 3).is_empty());
+        assert!(bus.fast_reads(0x1003, 2).is_empty());
     }
 
     #[test]

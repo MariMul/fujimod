@@ -128,9 +128,48 @@ fn coalesced_moves_slow_release_and_long_hold_do_not_invent_a_flick_or_tap() {
     );
     assert_eq!(
         reports.iter().map(|(t, f)| (*t, f[1])).collect::<Vec<_>>(),
-        [(0, 2), (10, 3), (500, 0), (600, 2), (900, 0)]
+        [(0, 2), (10, 3), (500, 0), (600, 2), (730, 9), (900, 0)]
     );
     assert_eq!(reports[1].1[3], 125);
+}
+
+#[test]
+fn a_held_contact_reports_long_press_and_press_within_the_slop_as_on_the_camera() {
+    let reports = run(
+        &[
+            e(0, 0, Phase::Down, 300, 200),
+            e(200, 0, Phase::Move, 302, 201),
+            e(400, 0, Phase::Move, 299, 200),
+            e(600, 0, Phase::Up, 299, 200),
+            e(700, 0, Phase::Down, 300, 200),
+            e(760, 0, Phase::Move, 320, 200),
+            e(900, 0, Phase::Up, 320, 200),
+            e(1000, 0, Phase::Down, 300, 200),
+            e(1110, 0, Phase::Up, 300, 200),
+            e(1200, 0, Phase::Down, 300, 200),
+            e(1311, 0, Phase::Up, 300, 200),
+        ],
+        false,
+    );
+    assert_eq!(
+        reports.iter().map(|(t, f)| (*t, f[1])).collect::<Vec<_>>(),
+        [
+            (0, 2),
+            (130, 9),
+            (200, 2),
+            (400, 2),
+            (600, 0),
+            (700, 2),
+            (760, 3),
+            (900, 0),
+            (1000, 2),
+            (1110, 1),
+            (1120, 0),
+            (1200, 2),
+            (1311, 0)
+        ]
+    );
+    assert_eq!(&reports[1].1[..7], &[1, 9, 1, 44, 200, 1, 128]);
 }
 
 #[test]

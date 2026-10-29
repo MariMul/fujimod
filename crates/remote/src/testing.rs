@@ -23,7 +23,7 @@ pub fn facts() -> Facts {
     ];
     let button = |name: &str, key: &str| json!({"name":name,"location":"rear","manual_page":null,"face":null,"icon":null,"connection_ids":[],"assignable":false,"pushable":true,"positions":[],"default_function":null,"role":null,"mechanical":false,"behavior":{"kind":"button","press":{"kind":"debug_key","name":key}}});
     let physical_controls = json!({
-        "$schema":fujimod_catalog::controls::PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"synthetic-controls","body_id":"synthetic",
+        "$schema":fujimod_catalog_controls::PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"synthetic-controls","body_id":"synthetic",
         "manual":{"url":"https://example.test/manual","title":"Synthetic controls","pages":[]},"analog_levels":1,
         "controls":{
             "menu_ok_button":button("MENU/OK button","MENU"),
@@ -38,7 +38,7 @@ pub fn facts() -> Facts {
         }
     });
     let control_ids = json!({
-        "$schema":fujimod_catalog::controls::CONTROL_IDS_SCHEMA_URI,"schema":1,"id":"synthetic-1-control-ids","firmware_id":"synthetic-1",
+        "$schema":fujimod_catalog_controls::CONTROL_IDS_SCHEMA_URI,"schema":1,"id":"synthetic-1-control-ids","firmware_id":"synthetic-1",
         "scanner":{"base":16,"count":1,"stride":4,"lookup":16,"sha256":hash},
         "input_readers":{"calibration":16,"scanner":{"stable_offset":0,"stable_width":1,"pressed_value":1,"released_value":0,"routine":{"address":16,"size":4,"sha256":hash}}},
         "native_key_names":{"rows":[],"reader":16,"size":4,"sha256":hash},
@@ -50,7 +50,7 @@ pub fn facts() -> Facts {
         "physical_controls":physical_controls,
         "control_ids":control_ids,
         "firmware":{
-            "$schema":fujimod_catalog::remote::FIRMWARE_FACTS_SCHEMA_URI,"schema":1,"firmware_id":"synthetic-1","firmware_sha256":hash,"body_id":"synthetic",
+            "$schema":fujimod_catalog_remote::FIRMWARE_FACTS_SCHEMA_URI,"schema":1,"firmware_id":"synthetic-1","firmware_sha256":hash,"body_id":"synthetic",
             "uncached_alias":0,
             "identity_checks":[{"address":16,"size":4,"sha256":hash}],"configuration":{"kind":"direct","address":1024},
             "state":{"ui_mode":768,"system_mode":772,"menu_active":776,"pending_mode":780,"menu_node":784,"rec_mode":3,"setup_mode":5,"readiness":{"category_one":800,"category_two":808,"input_pending":816,"excluded_mask":0,"operation_alert_timer":820,"override_address":824}},
@@ -93,6 +93,11 @@ pub struct Synthetic {
     stuck: bool,
     reorder_on_down: bool,
     remembered_submenu: bool,
+    /// The command dial's motion is two contacts; the scanner accepts each
+    /// contact edge after one continuation.
+    contact_dial: bool,
+    contacts: Vec<(String, bool)>,
+    contact_seen: Option<(String, bool)>,
 }
 impl Synthetic {
     pub fn new() -> Self {
@@ -106,6 +111,9 @@ impl Synthetic {
             stuck: false,
             reorder_on_down: false,
             remembered_submenu: false,
+            contact_dial: false,
+            contacts: vec![],
+            contact_seen: None,
         };
         for (address, value) in [(256, 4096), (260, 4352), (768, 3), (824, 1), (832, 32768)] {
             s.word(address, value);
@@ -242,6 +250,7 @@ impl Backend for Synthetic {
     fn wait<'a>(&'a mut self, reads: &'a ReadSet, deadline: u64) -> LocalFuture<'a, ()> {
         Box::pin(async move {
             self.waits.push(reads.clone());
+            self.contact_seen = self.contacts.last().cloned();
             self.now = (self.now + 1).min(deadline);
             if !self.stuck {
                 self.sequence += 1;
@@ -253,6 +262,69 @@ impl Backend for Synthetic {
     fn control_position(&mut self, _: &str) -> Result<Option<String>> {
         Ok(None)
     }
+    fn turn_contact(&mut self, input: &Input) -> Result<Option<String>> {
+        let InputState::Turn(steps) = input.state else {
+            return Ok(None);
+        };
+        Ok(self.contact_dial.then(|| {
+            let direction = if steps < 0 { "decrease" } else { "increase" };
+            format!("{}.{direction}", input.control.id())
+        }))
+    }
+    fn contact(&mut self, actuator: &str, pressed: bool) -> Result<()> {
+        self.contacts.push((actuator.into(), pressed));
+        Ok(())
+    }
+    fn contact_accepted(
+        &mut self,
+        actuator: &str,
+        pressed: bool,
+        reads: &mut ReadSet,
+    ) -> Result<bool> {
+        reads.stores.push((900, 904));
+        Ok(self.contact_seen == Some((actuator.into(), pressed)))
+    }
+}
+#[test]
+fn a_two_contact_dial_turns_one_scanner_accepted_pulse_per_step() {
+    futures_lite::future::block_on(async {
+        let mut remote = Connection::connect(Synthetic::new(), facts()).unwrap();
+        remote.backend.contact_dial = true;
+        let dial = control("command_control");
+        remote.turn(&dial, 2, 100).await.unwrap();
+        let increase = "command_control.increase".to_string();
+        assert_eq!(
+            remote.backend.contacts,
+            [
+                (increase.clone(), true),
+                (increase.clone(), false),
+                (increase.clone(), true),
+                (increase, false)
+            ]
+        );
+        assert!(
+            remote.backend.edges.is_empty(),
+            "the turn is never applied as one input"
+        );
+        remote.backend.contacts.clear();
+        remote.turn(&dial, -1, 200).await.unwrap();
+        let decrease = "command_control.decrease".to_string();
+        assert_eq!(
+            remote.backend.contacts,
+            [(decrease.clone(), true), (decrease, false)]
+        );
+        // A later step's press waits for input readiness like a button's.
+        remote.backend.contacts.clear();
+        remote.backend.word(800, 1 << 9);
+        assert!(
+            remote
+                .turn(&dial, 2, 300)
+                .await
+                .unwrap_err()
+                .contains("input readiness")
+        );
+        assert!(remote.backend.contacts.len() <= 2);
+    });
 }
 #[test]
 fn navigate_select_reopen_and_capture() {
@@ -408,7 +480,7 @@ fn rec_readiness_gates_parameter_changes_without_blocking_other_category_one_wor
         for bit in 0..64 {
             let category = 1u64 << bit;
             remote.backend.bytes[800..808].copy_from_slice(&category.to_le_bytes());
-            let result = remote.readiness().await.unwrap();
+            let result = remote.readiness(None).await.unwrap();
             assert_eq!(result.ready, bit != 9, "category-one bit {bit}");
             assert!(
                 result
@@ -567,7 +639,7 @@ fn predicate_timeout_reports_last_read_result() {
 
 #[test]
 fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
-    use fujimod_catalog::remote::{InputTasks, ModeBusy};
+    use fujimod_catalog_remote::{InputTasks, ModeBusy};
     futures_lite::future::block_on(async {
         let mut facts = facts();
         facts.input_tasks = Some(InputTasks {
@@ -606,7 +678,7 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
             backend.word(address, value);
         }
         let mut r = Connection::connect(backend, facts).unwrap();
-        let ready = r.readiness().await.unwrap();
+        let ready = r.readiness(None).await.unwrap();
         assert!(ready.ready);
         assert!(
             ready
@@ -625,18 +697,18 @@ fn input_task_boundary_is_live_and_tracks_tables_and_receive_states() {
                 .any(|&(lo, hi)| lo < 36110 && hi > 800)
         );
         r.backend.word(35068, 0);
-        assert!(!r.readiness().await.unwrap().ready);
+        assert!(!r.readiness(None).await.unwrap().ready);
         r.backend.word(35068, 0x12);
         r.backend.word(920, 1);
-        assert!(!r.readiness().await.unwrap().ready);
+        assert!(!r.readiness(None).await.unwrap().ready);
         r.backend.word(920, 0);
         r.backend.word(36108, 0x10);
-        assert!(r.readiness().await.unwrap_err().contains("ambiguous"));
+        assert!(r.readiness(None).await.unwrap_err().contains("ambiguous"));
         r.backend.word(36108, 0x30);
         r.backend.word(36048, 0x40);
-        assert!(r.readiness().await.unwrap_err().contains("missing"));
+        assert!(r.readiness(None).await.unwrap_err().contains("missing"));
         r.backend.word(904, 129);
-        assert!(r.readiness().await.unwrap_err().contains("unavailable"));
+        assert!(r.readiness(None).await.unwrap_err().contains("unavailable"));
     });
 }
 
@@ -767,5 +839,109 @@ fn touch_is_accepted_when_the_decoded_report_shows_it() {
         assert!(memory::touch_decoded(layout, &report, &start).unwrap());
         assert!(!memory::touch_decoded(layout, &report, &InputState::TouchEnd).unwrap());
         assert!(memory::touch_decoded(layout, &report[..12], &start).is_err());
+    });
+}
+
+#[test]
+fn parameter_independent_control_requires_every_declared_state_and_keeps_other_gates() {
+    futures_lite::future::block_on(async {
+        let mut f = facts();
+        f.parameter_independent_inputs = serde_json::from_value(json!([{
+            "control":"wifi_button", "conditions":[
+                {"address":768,"width":4,"values":[3]},
+                {"address":776,"width":4,"values":[0]},
+                {"address":840,"width":2,"values":[184,185,186]}]
+        }]))
+        .unwrap();
+        let mut r = Connection::connect(Synthetic::new(), f.clone()).unwrap();
+        r.backend.word(768, 3);
+        r.backend.word(776, 0);
+        r.backend.word(840, 184);
+        r.backend.word(800, 512);
+        r.backend.word(808, 16);
+        r.backend.word(816, 1);
+        assert!(!r.readiness(None).await.unwrap().ready);
+        assert!(
+            !r.readiness(Some(&control("menu_ok_button")))
+                .await
+                .unwrap()
+                .ready
+        );
+        let ready = r.readiness(Some(&control("wifi_button"))).await.unwrap();
+        assert!(ready.ready);
+        assert!(
+            ready
+                .reads
+                .stores
+                .iter()
+                .any(|&(a, b)| a <= 840 && b >= 842)
+        );
+        for (address, wrong) in [(768, 5), (776, 1), (840, 182)] {
+            let old = r.backend.bytes[address..address + 4].to_vec();
+            r.backend.word(address, wrong);
+            assert!(
+                !r.readiness(Some(&control("wifi_button")))
+                    .await
+                    .unwrap()
+                    .ready
+            );
+            r.backend.bytes[address..address + 4].copy_from_slice(&old);
+        }
+        for address in [780, 820] {
+            r.backend.word(address, 1);
+            assert!(
+                !r.readiness(Some(&control("wifi_button")))
+                    .await
+                    .unwrap()
+                    .ready
+            );
+            r.backend.word(address, 0);
+        }
+        for (button, page) in [("menu_ok_button", 184), ("wifi_button", 182)] {
+            r.backend.word(840, page);
+            let count = r.backend.edges.len();
+            let deadline = r.backend.now;
+            assert!(
+                r.set_input(
+                    &Input {
+                        control: control(button),
+                        state: InputState::Pressed
+                    },
+                    deadline
+                )
+                .await
+                .unwrap_err()
+                .contains("input readiness")
+            );
+            assert_eq!(r.backend.edges.len(), count);
+        }
+        r.backend.word(840, 184);
+        // The set_input path uses the same qualified readiness, rather than
+        // reapplying the generic REC gate after an explicit wait.
+        r.set_input(
+            &Input {
+                control: control("wifi_button"),
+                state: InputState::Pressed,
+            },
+            100,
+        )
+        .await
+        .unwrap();
+        r.set_input(
+            &Input {
+                control: control("wifi_button"),
+                state: InputState::Released,
+            },
+            100,
+        )
+        .await
+        .unwrap();
+        f.parameter_independent_inputs[0].conditions.clear();
+        assert!(
+            Connection::connect(Synthetic::new(), f)
+                .err()
+                .unwrap()
+                .contains("conditions")
+        );
     });
 }

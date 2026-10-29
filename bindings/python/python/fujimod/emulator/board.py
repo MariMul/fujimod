@@ -32,6 +32,7 @@ class BootReport(TypedDict):
     menu_node: int
     pending: bool
     setup_presses: int
+    translation_cache_size_bytes: int
     failure: str | None
 
 
@@ -75,6 +76,9 @@ def _boot_report(value: object) -> BootReport:
         "menu_node": _report_integer(report, "menu_node"),
         "pending": _report_boolean(report, "pending"),
         "setup_presses": _report_integer(report, "setup_presses"),
+        "translation_cache_size_bytes": _report_integer(
+            report, "translation_cache_size_bytes"
+        ),
         "failure": failure,
     }
     return result
@@ -131,11 +135,6 @@ class Board:
                 raise ValueError("engine must be 'unicorn' or 'hypervisor'")
             if definition.mode not in ("strict", "discovery"):
                 raise ValueError("mode must be 'strict' or 'discovery'")
-            if (
-                type(definition.translation_cache_bytes) is not int
-                or definition.translation_cache_bytes < 1
-            ):
-                raise ValueError("translation cache size must be a positive integer")
         if isinstance(definition, Xp4Definition):
             if any(image.core is not None for image, _ in images):
                 raise ValueError("XP4 input images require physical addresses")
@@ -159,7 +158,6 @@ class Board:
                 execution_mode=definition.mode,
                 continue_refusals=definition.continue_refusals,
                 engine=definition.engine,
-                translation_cache_bytes=definition.translation_cache_bytes,
             )
         try:
             for image, data in images:
@@ -359,8 +357,12 @@ class Board:
     @property
     def failure(self) -> dict[str, object] | None:
         self._ensure_open()
-        failure = _json_object(json.loads(self._native.observation()))["failure"]
-        return None if failure is None else _json_object(failure)
+        failure = json.loads(self._native.failure())
+        if failure is None:
+            return None
+        if isinstance(failure, str):
+            return {"message": failure}
+        return _json_object(failure)
 
     def run(
         self,
@@ -489,7 +491,7 @@ class Board:
         return self._native.checkpoint(previous)
 
     def restore_checkpoint(self, saved: _native.Checkpoint) -> None:
-        """Restore a checkpoint created by this board's native session."""
+        """Restore an in-memory or portable checkpoint for this board."""
         self._ensure_open()
         self._native.restore_checkpoint(saved)
 
@@ -556,6 +558,26 @@ class Session:
     def adc_samples(self, node: str) -> tuple[int, ...]:
         """Return the current externally supplied ADC sample channels."""
         return tuple(self._native_board().adc_samples(self._node(node)))
+
+    def xp5_gpio_input(self, port: int, pin: int, high: bool) -> None:
+        """Drive a physical input pad on an XP5 board."""
+        if type(port) is not int or type(pin) is not int or type(high) is not bool:
+            raise TypeError("XP5 GPIO input needs an integer port/pin and boolean level")
+        self._native_board().xp5_gpio_input(port, pin, high)
+
+    def xp5_gpio_level(self, port: int, pin: int) -> bool:
+        """Observe a physical input pad on an XP5 board."""
+        if type(port) is not int or type(pin) is not int:
+            raise TypeError("XP5 GPIO input needs an integer port and pin")
+        return self._native_board().xp5_gpio_level(port, pin)
+
+    def xp5_key(self, at_ns: int, key: str, pressed: bool) -> None:
+        """Queue a resistor-key edge at an absolute guest nanosecond."""
+        if type(at_ns) is not int or not 0 <= at_ns < 1 << 64 or type(pressed) is not bool:
+            raise TypeError("XP5 key edge needs an unsigned time and boolean pressed state")
+        if not isinstance(key, str) or not key:
+            raise TypeError("XP5 key must have a name")
+        self._native_board().xp5_key(at_ns, key, pressed)
 
     def set_adc_samples(self, node: str, samples: Sequence[int]) -> None:
         """Replace the ADC channels with unsigned 16-bit sample values."""

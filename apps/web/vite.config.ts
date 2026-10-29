@@ -6,6 +6,9 @@ import { defineConfig } from 'vite-plus';
 import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
+import { localReleases } from './scripts/local-releases.ts';
+import { localMedia, previewMedia } from './scripts/local-media.ts';
+import { localReviewFiles } from './scripts/local-review-files.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { bugReportRoute } from './src/bug/route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
@@ -56,8 +59,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       throw Error('FUJIMOD_LOCAL_FIRMWARES must map firmware IDs to local DAT paths');
     const mounts = [
       ['/runtime/', env.FUJIMOD_RUNTIME],
-      ['/artifacts/docs/', env.FUJIMOD_MEDIA],
-      ['/artifacts/', env.FUJIMOD_PATCHES],
+      ['/artifacts/docs/', env.FUJIMOD_MEDIA_ROOT ? undefined : env.FUJIMOD_MEDIA],
       ['/local/firmware.dat', env.FUJIMOD_DAT],
       ...firmwares.map(([id, path]) => [`/local/firmware/${id}.dat`, path as string]),
     ].filter((pair): pair is [string, string] => Boolean(pair[1]));
@@ -76,7 +78,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       }
       if (
         prefix === '/runtime/' &&
-        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|camera\.json|document\.json|boot-rom\.bin|nand-[a-z0-9-]+\.bin\.zst|browser-nand\.bin\.gz|mcu-settings\.bin|(?:bundle\/)?camera\.mjs|(?:bundle\/)?camera\.wasm|runtime-NOTICES\.txt)|wasm-(proof(?:-fault)?|session-proof)\/program\.dat)$/.test(
+        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|service-workflow\.generated\.json|flash-reader\.(?:json|bin)|document\.json|boot-rom\.bin|nand-[a-z0-9-]+\.bin\.zst|browser-nand\.bin\.gz|mcu-settings\.bin|(?:bundle\/)?camera\.mjs|(?:bundle\/)?camera\.wasm|dmp_webgpu\.js|dmp_webgpu_bg\.wasm|runtime-NOTICES\.txt)|wasm-(proof(?:-fault)?|session-proof)\/program\.dat)$/.test(
           relative,
         )
       ) {
@@ -162,11 +164,12 @@ function localArtifacts(env: Record<string, string>): Plugin {
     configurePreviewServer: (server) => configure(server.middlewares),
   };
 }
-// Feature media rendered for the catalog: an opt-in local directory, else the staged site assets.
-function featureMedia(env: Record<string, string>) {
-  const path = env.FUJIMOD_MEDIA
-    ? resolve(env.FUJIMOD_MEDIA, 'media.json')
-    : 'public/artifacts/docs/media.json';
+// Feature media by card: an opt-in local directory, else the staged site assets.
+function featureMedia(env: Record<string, string>, development: boolean) {
+  const media = development
+    ? previewMedia(env.FUJIMOD_MEDIA_ROOT, env.FUJIMOD_MEDIA)
+    : env.FUJIMOD_MEDIA;
+  const path = media ? resolve(media, 'media.json') : 'public/artifacts/docs/media.json';
   return existsSync(path) ? readFileSync(path, 'utf8') : 'null';
 }
 
@@ -213,22 +216,24 @@ export default defineConfig(({ mode, command }) => ({
   // Solid's server build consumes the manifest produced by its client build.
   builder: { sharedPlugins: true },
   define: {
+    __FUJIMOD_BUILD_SHA__: JSON.stringify(
+      execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().slice(0, 8),
+    ),
     __FUJIMOD_SIMULATED_USB__: simulatedUsbAvailable(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
-    __FUJIMOD_BUILD_DAY__: JSON.stringify(new Date().toISOString().slice(0, 10)),
     __FUJIMOD_INITIAL_CATALOG__: readFileSync(
       catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
       'utf8',
     ),
-    __FUJIMOD_INITIAL_RELEASE__: existsSync('public/artifacts/patches.json')
-      ? readFileSync('public/artifacts/patches.json', 'utf8')
-      : 'null',
     __FUJIMOD_SIMULATOR_BUILD__: JSON.stringify(
       `${execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim()} / ${new Date().toISOString()}`,
     ),
     __FUJIMOD_SIGNAL_URL__: JSON.stringify(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
     ),
-    __FUJIMOD_FEATURE_MEDIA__: featureMedia(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
+    __FUJIMOD_FEATURE_MEDIA__: featureMedia(
+      loadEnv(mode, process.cwd(), 'FUJIMOD_'),
+      command === 'serve',
+    ),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
@@ -241,8 +246,28 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     isolationHeaders(),
+    localMedia(
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,
+    ),
+    localReviewFiles(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_REVIEW_DIR),
+    localReleases({
+      artifacts: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_PATCHES,
+      notes: loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_RELEASE_NOTES,
+    }),
     watchWorkspacePackages(),
-    solid({ start: { middleware: './src/middleware.ts' }, ssr: true }),
+    solid({
+      start: {
+        middleware: './src/middleware.ts',
+        ...(command === 'serve'
+          ? {
+              entryServer: './src/development/entry-server.tsx',
+              entryClient: './src/development/entry-client.tsx',
+            }
+          : {}),
+      },
+      ssr: true,
+    }),
     bugReportRoute(),
     wasmProofRoute(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     simulatorReports(),
@@ -296,6 +321,7 @@ export default defineConfig(({ mode, command }) => ({
     ],
   },
   server: {
+    headers: { 'Cache-Control': 'no-store' },
     allowedHosts: ['.ts.net'],
     watch: {
       ignored: [

@@ -1,4 +1,8 @@
 //! Python packaging and language conversion only; all USB framing lives in Rust.
+use fujimod_python_usb_base::{
+    ClosedSessionError, CompletionUnknownError, DeviceCommandError, ProtocolError,
+    SessionBusyError, TransferError, UsbError, convert_error, nz,
+};
 use fujimod_usb::{
     self as usb,
     connection::{Connection, TransferOptions},
@@ -22,90 +26,6 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-
-pyo3::create_exception!(fujimod.usb, UsbError, PyRuntimeError);
-pyo3::create_exception!(fujimod.usb, TransferError, UsbError);
-pyo3::create_exception!(fujimod.usb, ProtocolError, UsbError);
-pyo3::create_exception!(fujimod.usb, CompletionUnknownError, UsbError);
-pyo3::create_exception!(fujimod.usb, DeviceCommandError, UsbError);
-pyo3::create_exception!(fujimod.usb, ClosedSessionError, UsbError);
-pyo3::create_exception!(fujimod.usb, SessionBusyError, UsbError);
-
-fn nz(n: u32) -> PyResult<NonZeroU32> {
-    NonZeroU32::new(n).ok_or_else(|| PyValueError::new_err("length/limit must be nonzero"))
-}
-fn convert_error(py: Python<'_>, error: usb::Error) -> PyErr {
-    #[cfg(feature = "testing")]
-    let error = match error {
-        usb::Error::TestPeer(source) => match source.downcast::<PyErr>() {
-            Ok(error) => return *error,
-            Err(source) => usb::Error::TestPeer(source),
-        },
-        other => other,
-    };
-    let message = error.to_string();
-    let exception = match &error {
-        usb::Error::CompletionUnknown => CompletionUnknownError::new_err(message),
-        usb::Error::DeviceStatus { .. } => DeviceCommandError::new_err(message),
-        usb::Error::Protocol(_) => ProtocolError::new_err(message),
-        usb::Error::Proxy(_)
-        | usb::Error::Transfer { .. }
-        | usb::Error::Timeout(_)
-        | usb::Error::ShortTransfer { .. }
-        | usb::Error::PartialRead { .. } => TransferError::new_err(message),
-        usb::Error::LengthLimit { .. }
-        | usb::Error::AddressOverflow
-        | usb::Error::OutsideDataWindow
-        | usb::Error::InvalidLength
-        | usb::Error::InvalidToken
-        | usb::Error::InvalidTimeout => PyValueError::new_err(message),
-        _ => UsbError::new_err(message),
-    };
-    let object = exception.value(py);
-    // Transfers that fail before a data completion still expose the same fields.
-    if matches!(
-        &error,
-        usb::Error::Proxy(_)
-            | usb::Error::Transfer { .. }
-            | usb::Error::Timeout(_)
-            | usb::Error::ShortTransfer { .. }
-            | usb::Error::PartialRead { .. }
-    ) {
-        let _ = object.setattr("partial", PyBytes::new(py, &[]));
-        let _ = object.setattr("transferred", py.None());
-    }
-    match error {
-        usb::Error::DeviceStatus {
-            command,
-            primary,
-            secondary,
-        } => {
-            let _ = object.setattr("command", command);
-            let _ = object.setattr("primary", primary);
-            let _ = object.setattr("secondary", secondary);
-        }
-        usb::Error::Transfer {
-            transferred,
-            partial,
-            ..
-        } => {
-            let _ = object.setattr("transferred", transferred);
-            let _ = object.setattr("partial", PyBytes::new(py, &partial));
-        }
-        usb::Error::ShortTransfer {
-            expected, actual, ..
-        } => {
-            let _ = object.setattr("expected", expected);
-            let _ = object.setattr("transferred", actual);
-        }
-        usb::Error::PartialRead { data, source, .. } => {
-            let _ = object.setattr("partial", PyBytes::new(py, &data));
-            let _ = object.setattr("transfer_error", convert_error(py, *source));
-        }
-        _ => (),
-    }
-    exception
-}
 
 macro_rules! enum_binding {
     ($name:ident,$python:literal,$target:ty,{$($variant:ident),+ $(,)?}) => {
@@ -476,7 +396,9 @@ impl BindingError {
 }
 /// Add `fujimod.firmware` and `fujimod.usb` with its submodules to `m`.
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    asynchronous::install();
     firmware::register(py, m, "fujimod.firmware")?;
+    recovery::register(py, m)?;
     let usb = PyModule::new(py, "fujimod.usb")?;
     usb.add("__path__", PyList::empty(py))?;
     usb.add_class::<InfoSelector>()?;
@@ -514,9 +436,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     usb.add_submodule(&research)?;
     let tracing = tracing::module(py)?;
     usb.add_submodule(&tracing)?;
-    let app80 = app80::types_module(py)?;
-    asynchronous::register(py, &usb, &app80)?;
-    usb.add_submodule(&app80)?;
+    asynchronous::register(py, &usb)?;
     usb.add_class::<OffsetMode>()?;
     usb.add_class::<data::DataWindow>()?;
     m.add_submodule(&usb)?;
@@ -527,8 +447,6 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     modules.set_item("fujimod.usb", &usb)?;
     modules.set_item("fujimod.usb.research", &research)?;
     modules.set_item("fujimod.usb.tracing", &tracing)?;
-    modules.set_item("fujimod.usb.app80", &app80)?;
-    #[cfg(feature = "testing")]
     {
         let testing = testing::module(py)?;
         usb.add_submodule(&testing)?;
@@ -537,12 +455,11 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-mod app80;
-pub mod asynchronous;
+mod asynchronous;
 mod data;
 mod firmware;
+mod recovery;
 mod research;
 mod tracing;
 
-#[cfg(feature = "testing")]
 mod testing;

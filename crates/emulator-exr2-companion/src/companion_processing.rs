@@ -2,7 +2,7 @@
 //! Uploads remain opaque in ProgramUpload. This separately selected datapath
 //! consumes only channel descriptors, image bytes, frame edges, and IRQ wiring.
 use super::companion;
-use fujimod_emulator_imaging::exr2_isp::{self as isp, dma};
+use fujimod_emulator_imaging::exr2_isp::dma;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::scene::ImageFrames;
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ pub struct Options {
 }
 pub struct Wiring {
     pub frames: ImageFrames,
-    pub routes: dma::IrqRoutes,
+    pub routes: fujimod_emulator_devices::exr2::irq_routes::IrqRoutes,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Job {
@@ -25,7 +25,7 @@ struct Job {
     started: u64,
     due: Option<u64>,
     output: Vec<u8>,
-    route: isp::Irq,
+    route: fujimod_emulator_devices::exr2::irq_routes::Irq,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -453,7 +453,7 @@ mod tests {
             stride: 16,
         })
         .unwrap();
-        let routes = dma::IrqRoutes::default();
+        let routes = fujimod_emulator_devices::exr2::irq_routes::IrqRoutes::default();
         routes.set(88, Some(0)).unwrap();
         let d = Processing::new(
             companion::Options::default(),

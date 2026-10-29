@@ -9,25 +9,28 @@ use std::collections::BTreeMap;
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SocHardware {
     /// Named hardware profiles, selected explicitly by a run preset.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    #[cfg_attr(feature = "typescript", tsify(type = "Record<string, SocProfile>"))]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "Record<string, SocProfile>")
+    )]
     pub profiles: BTreeMap<String, crate::profiles::SocProfile>,
     /// Application-processor identification and cache topology, when declared.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub application: Option<ApplicationHardware>,
     /// Hardware interrupt-controller interfaces.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub interrupt_controller: Option<InterruptControllerHardware>,
     /// Inputs to a programmable interrupt controller; core routing is selected by its registers.
     pub interrupt_inputs: Vec<ControllerInterruptInput>,
     /// Companion-processor clock and mailbox connections, when present.
-    #[cfg_attr(feature = "typescript", serde(default))]
+    #[serde(default)]
     pub companion: Option<CompanionHardware>,
     /// Additional block parameters, keyed by the block's identity.
     pub blocks: BTreeMap<String, BlockHardware>,
@@ -153,7 +156,7 @@ impl SocHardware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -172,7 +175,7 @@ pub struct ControllerInterruptInput {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -207,7 +210,7 @@ pub enum ApplicationHardware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -226,7 +229,7 @@ pub struct CacheGeometry {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -259,7 +262,7 @@ pub enum InterruptControllerHardware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -282,7 +285,7 @@ pub struct CompanionHardware {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -305,7 +308,7 @@ pub struct CompanionMailbox {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -332,10 +335,10 @@ pub enum BlockHardware {
     /// Display-channel pixel packing declared by the controller contract.
     Display {
         /// Picture-plane packing, when specified.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         picture_layout: Option<PictureLayout>,
         /// Video-plane packing, when specified.
-        #[cfg_attr(feature = "typescript", serde(default))]
+        #[serde(default)]
         video_layout: Option<VideoLayout>,
     },
     /// Serial-controller DMA request lines.
@@ -357,7 +360,7 @@ pub enum BlockHardware {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "kebab-case")]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
@@ -371,7 +374,7 @@ pub enum PictureLayout {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(
-    feature = "typescript",
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]

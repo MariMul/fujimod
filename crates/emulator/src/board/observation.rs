@@ -360,33 +360,65 @@ impl Board {
 
 /// Repeated entry observations stop before the selected instruction. Resume
 /// executes that instruction once, even when it is itself a loop target.
-pub struct InstructionPoints {
-    cpu: Weak<dyn Cpu>,
+pub(super) struct EntryPoints {
+    addresses: Vec<u64>,
     pause: Rc<Cell<bool>>,
     event: RefCell<Option<u64>>,
     skip: Cell<Option<u64>>,
+}
+impl EntryPoints {
+    fn hit(&self, pc: u64) -> bool {
+        if self.addresses.binary_search(&pc).is_err() {
+            return false;
+        }
+        if self.skip.get() == Some(pc) {
+            self.skip.set(None);
+            return false;
+        }
+        self.event.replace(Some(pc));
+        self.skip.set(Some(pc));
+        self.pause.set(true);
+        true
+    }
+}
+pub struct InstructionPoints {
+    cpu: Weak<dyn Cpu>,
+    entry: Rc<EntryPoints>,
     hooks: Vec<HookId>,
 }
 unsafe fn instruction(pc: u64, _: u32, data: *mut c_void) {
     let points = unsafe { &*data.cast::<InstructionPoints>() };
-    if points.skip.get() == Some(pc) {
-        points.skip.set(None);
-        return;
-    }
-    if let Some(cpu) = points.cpu.upgrade() {
-        points.event.replace(Some(pc));
-        points.skip.set(Some(pc));
-        points.pause.set(true);
+    if points.entry.hit(pc)
+        && let Some(cpu) = points.cpu.upgrade()
+    {
         let _ = cpu.stop_before_instruction();
     }
 }
 impl InstructionPoints {
     pub fn event(&self) -> Option<u64> {
-        self.event.borrow_mut().take()
+        self.entry.event.borrow_mut().take()
     }
     pub fn resume(&self, current_pc: u64, observed_pc: u64) {
-        self.skip
+        self.entry
+            .skip
             .set((current_pc == observed_pc).then_some(observed_pc));
+    }
+}
+impl super::State {
+    pub(super) fn observe_entry(
+        &mut self,
+        core: usize,
+        pc: u64,
+        cpu: &dyn Cpu,
+    ) -> Result<bool, String> {
+        self.entry_points[core].retain(|entry| entry.strong_count() != 0);
+        for entry in self.entry_points[core].iter().filter_map(Weak::upgrade) {
+            if entry.hit(pc) {
+                cpu.stop()?;
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 impl Board {
@@ -403,11 +435,20 @@ impl Board {
         addresses.dedup();
         let mut points = Box::new(InstructionPoints {
             cpu: Rc::downgrade(&self.cpus[core]),
-            pause: self.host_pause.clone(),
-            event: RefCell::new(None),
-            skip: Cell::new(None),
+            entry: Rc::new(EntryPoints {
+                addresses: addresses.clone(),
+                pause: self.host_pause.clone(),
+                event: RefCell::new(None),
+                skip: Cell::new(None),
+            }),
             hooks: vec![],
         });
+        if !cpu.features().instruction_progress {
+            // These processors use the shared all-instruction callback. Check
+            // there before architectural emulation and instruction accounting.
+            self.state.borrow_mut().entry_points[core].push(Rc::downgrade(&points.entry));
+            return Ok(points);
+        }
         let data = (&*points as *const InstructionPoints).cast_mut().cast();
         for pc in addresses {
             match unsafe {
@@ -431,6 +472,12 @@ impl Board {
         core: usize,
         points: &mut InstructionPoints,
     ) -> Result<(), String> {
+        self.cpu(core)?;
+        self.state.borrow_mut().entry_points[core].retain(|entry| {
+            entry
+                .upgrade()
+                .is_some_and(|entry| !Rc::ptr_eq(&entry, &points.entry))
+        });
         for hook in points.hooks.drain(..) {
             self.cpu(core)?.remove_hook(hook)?;
         }

@@ -209,7 +209,8 @@ impl super::factory::Graph {
                 {
                     return Err("initial processor decode must own a unique mapped window".into());
                 }
-                if self.processors[map.core].model != fujimod_emulator_cpu::Model::CortexR5F {
+                if !matches!(self.processors[map.core].model,
+                    fujimod_emulator_cpu::Model::CortexR5F | fujimod_emulator_cpu::Model::CortexA7) {
                     return Err("processor backend cannot replace memory decoding".into());
                 }
             }

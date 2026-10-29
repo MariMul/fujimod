@@ -112,7 +112,7 @@ fn choice(item: &syn::ItemEnum) -> Option<Choice> {
 impl Api {
     pub fn read(root: &Path) -> Result<Self, String> {
         let mut sources = Vec::new();
-        let file = root.join("crates/usb/src/app80/catalog.rs");
+        let file = root.join("crates/usb-app80-types/src/catalog.rs");
         sources.push((
             file.clone(),
             fs::read_to_string(&file).map_err(|e| e.to_string())?,
@@ -135,7 +135,7 @@ impl Api {
             }
         }
         let mut api = Self::from_sources(sources.iter().map(|(_, text)| text.as_str()))?;
-        let catalog = fs::read_to_string(root.join("crates/catalog/src/service.rs"))
+        let catalog = fs::read_to_string(root.join("crates/catalog-service/src/lib.rs"))
             .map_err(|e| e.to_string())?;
         api.codec = syn::parse_file(&catalog)
             .map_err(|e| e.to_string())?
@@ -354,11 +354,11 @@ impl Api {
     pub fn build(root: &Path, out: &Path) {
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/usb/src/app80").display()
+            root.join("crates/usb-app80/src").display()
         );
         println!(
             "cargo:rerun-if-changed={}",
-            root.join("crates/catalog/src/service.rs").display()
+            root.join("crates/catalog-service/src/lib.rs").display()
         );
         Self::read(root)
             .and_then(|api| api.write(out))
@@ -627,7 +627,7 @@ fn python_quantity(q: &Quantity) -> String {
         parameters.push(format!("{name}:{py_type}"));
         calls.push(match ty {
             "bytes" => format!("&{name}"),
-            "Address" => format!("usb::ff80::commands::memory::Address({name})"),
+            "Address" => format!("fujimod_usb_app80_types::Address({name})"),
             _ => name.to_owned(),
         });
     }
@@ -685,7 +685,7 @@ fn javascript_quantity(q: &Quantity) -> String {
         let checked = match ty {
             "bytes" => format!("&error::buffer({name})?"),
             "Address" => format!(
-                "usb::ff80::commands::memory::Address({})",
+                "fujimod_usb_app80_types::Address({})",
                 checked_integer(&name, "u32")
             ),
             _ => checked_integer(&name, ty),

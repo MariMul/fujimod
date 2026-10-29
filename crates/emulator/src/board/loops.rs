@@ -1,4 +1,4 @@
-//! Exact loop windows inherit the scheduler's existing event and peer caps.
+//! Proven loop windows inherit the scheduler's existing event and peer caps.
 use super::*;
 use fujimod_emulator_cpu::loops::LoopMode;
 
@@ -31,7 +31,15 @@ impl Board {
 }
 impl State {
     pub(super) fn loop_window(&self) -> bool {
-        self.execution_policy == ExecutionPolicy::Exact && self.bus.loop_window()
+        self.bus.loop_window()
+            && (self.execution_policy == ExecutionPolicy::Exact
+                || self
+                    .released
+                    .iter()
+                    .zip(&self.waiting)
+                    .filter(|(released, waiting)| **released && !**waiting)
+                    .count()
+                    == 1)
     }
 }
 

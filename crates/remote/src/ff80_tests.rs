@@ -226,7 +226,7 @@ fn scanner_names_never_supply_missing_debug_bindings() {
 }
 
 fn rename_menu_key(facts: &mut Facts, name: &str) {
-    use fujimod_catalog::controls::{ControlBehavior, InputBinding};
+    use fujimod_catalog_controls::{ControlBehavior, InputBinding};
     for key in &mut facts.control_ids.debug_keys {
         if key.name == "MENU" {
             key.name = name.into();

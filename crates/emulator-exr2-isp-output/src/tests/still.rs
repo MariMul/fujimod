@@ -1,4 +1,4 @@
-use fujimod_emulator_imaging::exr2_isp::*;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use crate::*;
 use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
@@ -32,9 +32,13 @@ fn still_isp_reconstructs_addressed_pixels_and_refuses_unequal_black() {
     assert_eq!(&h.ram[0x9000..0x9004], &[0, 0, 128, 128]);
     assert_eq!(h.irqs, [(0, 61)]);
     let first = d.checkpoint().unwrap();
+    assert_eq!(d.diagnostic_buffer("raw-input").unwrap(), &[0; 72]);
+    assert!(d.diagnostic_buffer("dma-output").is_err());
     h.ram[0x8000..0x8048].fill(32);
     write(&mut d, &mut h, 0xfff40004, 1);
     let second = d.checkpoint().unwrap();
+    assert_eq!(d.diagnostic_buffer("raw-input").unwrap(), &[32; 72]);
+    assert_eq!(first.blobs()[0].as_ref(), &[0; 72]);
     assert!(!std::sync::Arc::ptr_eq(
         &first.blobs()[0],
         &second.blobs()[0]

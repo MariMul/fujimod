@@ -26,7 +26,7 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(scene::virtual_scene_histogram, module)?)?;
     module.add_function(wrap_pyfunction!(scene::virtual_scene_statistics, module)?)?;
     module.add_function(wrap_pyfunction!(scene::virtual_scene_yycbcr, module)?)?;
-    module.add("VIRTUAL_SCENE_PROFILE", scene::PROFILE)?;
+    module.add("VIRTUAL_SCENE_PROFILE", fujimod_virtual_scene::PROFILE)?;
     module.add("STATISTICS_PROFILE", scene::STATISTICS_PROFILE)?;
     Ok(())
 }

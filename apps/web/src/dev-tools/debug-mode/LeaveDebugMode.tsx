@@ -1,4 +1,6 @@
+import { BatteryCycleIcon } from '../../ui/battery-cycle';
 import { For, Show, createSignal } from 'solid-js';
+import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import './wizard.css';
 
 /** Persist debug access disabled through the connected USB session. */
@@ -23,7 +25,7 @@ export function LeaveDebugMode(props: {
       await props.operation.leave((line) => setLines((previous) => [...previous, line]));
       setDone(true);
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : String(error));
+      setFailure(shownError(error));
     } finally {
       setRunning(false);
     }
@@ -46,7 +48,10 @@ export function LeaveDebugMode(props: {
         <Show
           when={!done()}
           fallback={
-            <p class="dm-lead dm-ok">Debug mode is off. Switch the camera off and on again.</p>
+            <p class="dm-lead dm-ok">
+              Debug mode is off. <BatteryCycleIcon />
+              Remove and reinsert the battery, then switch the camera on.
+            </p>
           }
         >
           <button

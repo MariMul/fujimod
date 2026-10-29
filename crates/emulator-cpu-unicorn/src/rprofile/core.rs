@@ -1,7 +1,7 @@
 //! Counted R-profile execution over the pinned Unicorn accelerator.
 //! The owner supplies physical backing and interrupt pins; devices never see
 //! translation metadata or the processor's architectural state.
-use super::{
+use crate::{
     accounting::{Accounting, Span},
     memory::{Memory, OwnerBarrierLease},
 };
@@ -17,16 +17,19 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{ffi::c_void, ptr::NonNull};
 
 mod backend;
+mod clock_poll;
 mod exclusive;
 mod loops;
 mod mapping;
-mod observers;
+use crate::observers;
 mod pmu;
 mod run;
 mod snapshot;
 mod tcm;
 use mapping::Mapping;
 
+#[cfg(test)]
+mod access_exit_tests;
 #[cfg(test)]
 mod tcm_tests;
 #[cfg(test)]
@@ -40,6 +43,52 @@ pub struct Options {
 }
 pub struct Wiring {
     pub memory: Memory,
+}
+
+#[derive(Clone, Copy)]
+struct PendingGuestBlock {
+    address: u64,
+    phase: GuestProfilePhase,
+    instruction_count: u64,
+}
+
+#[derive(Default)]
+struct GuestProfile {
+    blocks: BTreeMap<u64, GuestBlockCount>,
+    pending: Option<PendingGuestBlock>,
+}
+
+impl GuestProfile {
+    fn block_entry(&mut self, address: u64, phase: GuestProfilePhase, instruction_count: u64) {
+        self.finish_pending(instruction_count);
+        self.pending = Some(PendingGuestBlock {
+            address,
+            phase,
+            instruction_count,
+        });
+    }
+
+    fn finish_run(&mut self, instruction_count: u64) {
+        self.finish_pending(instruction_count);
+    }
+
+    fn finish_pending(&mut self, instruction_count: u64) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let count = self.blocks.entry(pending.address).or_default();
+        count.address = pending.address;
+        count.entries = count.entries.saturating_add(1);
+        let executed = instruction_count.saturating_sub(pending.instruction_count);
+        match pending.phase {
+            GuestProfilePhase::Idle => {
+                count.idle_instructions = count.idle_instructions.saturating_add(executed);
+            }
+            GuestProfilePhase::Key => {
+                count.key_instructions = count.key_instructions.saturating_add(executed);
+            }
+        }
+    }
 }
 
 struct Observer {
@@ -82,6 +131,7 @@ pub(super) struct Execution {
     pause_requested: Arc<AtomicU32>,
     settled_head: Cell<u64>,
     thumb: Cell<bool>,
+    thumb_entry_ready: Cell<bool>,
     restarted: Cell<Option<u64>>,
     active: Cell<bool>,
     owner_barrier_complete: Cell<bool>,
@@ -89,6 +139,17 @@ pub(super) struct Execution {
     synchronization_requested: Cell<u64>,
     synchronization_elided: Cell<u64>,
     synchronization_barriers: Cell<u64>,
+    code_watch_block_hooks_elided: Cell<u64>,
+    block_hook_executions: Cell<u64>,
+    block_hook_block_observer: Cell<u64>,
+    block_hook_thumb: Cell<u64>,
+    block_hook_budget_fallback_remaining_budget: Cell<u64>,
+    block_hook_budget_fallback_accounting_ring: Cell<u64>,
+    block_hook_budget_fallback_guest_clock: Cell<u64>,
+    block_hook_budget_fallback_other: Cell<u64>,
+    block_hook_other: Cell<u64>,
+    #[cfg(test)]
+    block_hook_thumb_common_path: Cell<u64>,
     user_stop: Cell<bool>,
     irq: Cell<bool>,
     hint: Cell<Option<Hint>>,
@@ -96,6 +157,8 @@ pub(super) struct Execution {
     failure: RefCell<Option<String>>,
     observers: RefCell<BTreeMap<usize, Observer>>,
     pending_stores: RefCell<Vec<StorePublication>>,
+    guest_profile: RefCell<Option<GuestProfile>>,
+    guest_profile_phase: Cell<GuestProfilePhase>,
     next_observer: Cell<usize>,
     observer_index: RefCell<observers::Index>,
     at_block: Cell<bool>,
@@ -145,6 +208,7 @@ impl Core {
         if !cpu.memory_regions()?.is_empty() {
             return Err("R-profile backing must be mapped through its execution owner".into());
         }
+        cpu.set_instruction_counter(true)?;
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;
@@ -184,6 +248,7 @@ impl Core {
             pause_requested: Arc::new(AtomicU32::new(0)),
             settled_head: Cell::new(0),
             thumb: Cell::new(false),
+            thumb_entry_ready: Cell::new(false),
             restarted: Cell::new(None),
             active: Cell::new(false),
             owner_barrier_complete: Cell::new(false),
@@ -191,6 +256,17 @@ impl Core {
             synchronization_requested: Cell::new(0),
             synchronization_elided: Cell::new(0),
             synchronization_barriers: Cell::new(0),
+            code_watch_block_hooks_elided: Cell::new(0),
+            block_hook_executions: Cell::new(0),
+            block_hook_block_observer: Cell::new(0),
+            block_hook_thumb: Cell::new(0),
+            block_hook_budget_fallback_remaining_budget: Cell::new(0),
+            block_hook_budget_fallback_accounting_ring: Cell::new(0),
+            block_hook_budget_fallback_guest_clock: Cell::new(0),
+            block_hook_budget_fallback_other: Cell::new(0),
+            block_hook_other: Cell::new(0),
+            #[cfg(test)]
+            block_hook_thumb_common_path: Cell::new(0),
             user_stop: Cell::new(false),
             irq: Cell::new(false),
             hint: Cell::new(None),
@@ -198,12 +274,15 @@ impl Core {
             failure: RefCell::new(None),
             observers: RefCell::new(BTreeMap::new()),
             pending_stores: RefCell::new(Vec::new()),
+            guest_profile: RefCell::new(None),
+            guest_profile_phase: Cell::new(GuestProfilePhase::Idle),
             next_observer: Cell::new(0),
             observer_index: RefCell::new(observers::Index::default()),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
         });
-        e.id.set(e.memory.register(Rc::downgrade(&e)));
+        let owner: Rc<dyn crate::memory::CodeOwner> = e.clone();
+        e.id.set(e.memory.register(Rc::downgrade(&owner)));
         unsafe {
             let r = &mut *record.as_ptr();
             r.ring = (*e.ring.get()).as_mut_ptr();
@@ -460,8 +539,18 @@ impl Execution {
     }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let watch = self.memory.note_code(self.id.get(), address, 4)?;
+        // Coherence is provided by watched stores. Install the watch while the
+        // new translation is being prepared, before any instruction can run;
+        // a per-entry block callback is unnecessary after that point.
+        if watch {
+            self.memory.apply_watches()?;
+            self.code_watch_block_hooks_elided
+                .set(self.code_watch_block_hooks_elided.get().saturating_add(1));
+        }
         Ok(Translation {
-            instruction: if !self
+            instruction: if replaced(word) {
+                InstructionDisposition::Replace
+            } else if !self
                 .observer_index
                 .borrow()
                 .instructions
@@ -474,8 +563,27 @@ impl Execution {
             } else {
                 InstructionDisposition::Execute
             },
-            observe_block: watch || !self.observer_index.borrow().blocks.at(address).is_empty(),
+            observe_block: self.guest_profile.borrow().is_some()
+                || !self.observer_index.borrow().blocks.at(address).is_empty(),
         })
+    }
+    fn guest_profile_block(&self, address: u64) {
+        if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
+            let instructions = self
+                .cpu
+                .instruction_counter()
+                .unwrap_or_else(|_| self.count.get());
+            profile.block_entry(address, self.guest_profile_phase.get(), instructions);
+        }
+    }
+    pub(super) fn finish_guest_profile_run(&self) {
+        if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
+            let instructions = self
+                .cpu
+                .instruction_counter()
+                .unwrap_or_else(|_| self.count.get());
+            profile.finish_run(instructions);
+        }
     }
     fn block(&self, block: Block) -> Result<(), String> {
         self.settle(0, true)?;
@@ -485,10 +593,97 @@ impl Execution {
             .map(|clock| clock.after(self.count.get()).map(|current| current.now))
             .transpose()?;
         crate::rprofile::publish_guest_tick(tick);
+        self.guest_profile_block(block.address);
+        if self.thumb_common_block_path(block) {
+            #[cfg(test)]
+            self.block_hook_thumb_common_path
+                .set(self.block_hook_thumb_common_path.get().saturating_add(1));
+            return Ok(());
+        }
+
+        #[cfg(debug_assertions)]
+        self.loops.record_unsupported_model_block(block);
+        self.block_hook_executions
+            .set(self.block_hook_executions.get().saturating_add(1));
+        let block_observed = !self
+            .observer_index
+            .borrow()
+            .blocks
+            .at(block.address)
+            .is_empty();
+        if block_observed {
+            self.block_hook_block_observer
+                .set(self.block_hook_block_observer.get().saturating_add(1));
+        } else if block.thumb == Some(true) {
+            self.block_hook_thumb
+                .set(self.block_hook_thumb.get().saturating_add(1));
+        } else if self.policy.get() == ExecutionPolicy::Exact {
+            // Attribute the inline accounting fallback to facts available at
+            // this boundary. The ring contains 64 outstanding span records.
+            let room = self.cap.get().saturating_sub(self.count.get());
+            if block.bytes != 0 && u64::from(block.bytes / 4) > room {
+                self.block_hook_budget_fallback_remaining_budget.set(
+                    self.block_hook_budget_fallback_remaining_budget
+                        .get()
+                        .saturating_add(1),
+                );
+            } else if self
+                .accounting()
+                .counters()
+                .1
+                .saturating_sub(self.settled_head.get())
+                >= 64
+            {
+                self.block_hook_budget_fallback_accounting_ring.set(
+                    self.block_hook_budget_fallback_accounting_ring
+                        .get()
+                        .saturating_add(1),
+                );
+            } else if self.clock.get().is_some() {
+                self.block_hook_budget_fallback_guest_clock.set(
+                    self.block_hook_budget_fallback_guest_clock
+                        .get()
+                        .saturating_add(1),
+                );
+            } else {
+                self.block_hook_budget_fallback_other.set(
+                    self.block_hook_budget_fallback_other
+                        .get()
+                        .saturating_add(1),
+                );
+            }
+        } else {
+            self.block_hook_other
+                .set(self.block_hook_other.get().saturating_add(1));
+        }
         self.at_block.set(true);
         let result = self.publish_stores().and_then(|_| self.enter_block(block));
         self.at_block.set(false);
         result
+    }
+    // Thumb entry counts each instruction, and classify installs code watches
+    // while translating it. After entry setup, block changes need only count
+    // and tick updates until store, invalidation, pause, or cap work is due.
+    fn thumb_common_block_path(&self, block: Block) -> bool {
+        if block.thumb != Some(true)
+            || !self.thumb.get()
+            || !self.thumb_entry_ready.get()
+            || self.restarted.get().is_some()
+            || self.user_stop.get()
+            || self.pause_requested.load(Ordering::Acquire) != 0
+            || self.count.get() >= self.cap.get()
+        {
+            return false;
+        }
+        if !self.pending_stores.borrow().is_empty() || self.memory.flush_pending() {
+            self.thumb_entry_ready.set(false);
+            return false;
+        }
+        self.observer_index
+            .borrow()
+            .blocks
+            .at(block.address)
+            .is_empty()
     }
     fn publish_stores(&self) -> Result<(), String> {
         let stores = std::mem::take(&mut *self.pending_stores.borrow_mut());
@@ -566,6 +761,7 @@ impl Execution {
             self.restarted.set(None);
         }
         self.memory.apply_watches()?;
+        self.thumb_entry_ready.set(thumb);
         Ok(())
     }
     fn instruction(&self, address: u64, size: u32) -> Result<(), String> {
@@ -635,6 +831,9 @@ impl Execution {
         {
             self.tighten(self.count.get())?;
         }
+        if !thumb && self.clock_poll(address, word, cpsr)? {
+            return Ok(());
+        }
         let hint = if thumb && size == 2 {
             match word {
                 0xbf20 => Some(Hint::WaitForEvent),
@@ -667,19 +866,31 @@ impl Execution {
         }
         if thumb {
             if size == 4 {
-                if self.exclusive_instruction(word, address, size, cpsr)? {
+                if self.exclusive_instruction(word, address, size, cpsr, false)? {
                     return Ok(());
                 }
                 // T32 coprocessor transfers number fields in halfword order.
-                self.coprocessor_instruction(word.rotate_left(16), address, size, cpsr)?;
+                self.coprocessor_instruction(word.rotate_left(16), address, size, cpsr, false)?;
             }
         } else {
-            if self.exclusive_instruction(word, address, size, cpsr)? {
+            let replaced = replaced(word);
+            if self.exclusive_instruction(word, address, size, cpsr, replaced)? {
                 return Ok(());
             }
-            self.coprocessor_instruction(word, address, size, cpsr)?;
+            self.coprocessor_instruction(word, address, size, cpsr, replaced)?;
         }
         Ok(())
+    }
+    /// Finish an instruction this observer performed. A replaced ARM
+    /// instruction continues in translated code at the following instruction.
+    /// A stop requested while it ran leaves through the exit check after the
+    /// observer, which then needs the PC past it. Other instructions leave
+    /// translated code through the PC write.
+    fn complete(&self, replaced: bool, address: u64, size: u32, cpsr: u32) -> Result<(), String> {
+        if replaced && !self.user_stop.get() {
+            return Ok(());
+        }
+        self.advance(address, size, cpsr)
     }
     fn advance(&self, address: u64, size: u32, cpsr: u32) -> Result<(), String> {
         if self.thumb.get() {
@@ -696,6 +907,7 @@ impl Execution {
         address: u64,
         size: u32,
         cpsr: u32,
+        replaced: bool,
     ) -> Result<(), String> {
         if word & 0x0fe0_0f00 == 0x0c40_0f00 && word & 15 == 9 {
             return Err("R-profile 64-bit PMU execution is not implemented".into());
@@ -746,7 +958,7 @@ impl Execution {
             if read {
                 self.set(arm::CORE[target], result)?;
             }
-            return self.advance(address, size, cpsr);
+            return self.complete(replaced, address, size, cpsr);
         }
         if cp == 14 {
             let target = ((word >> 12) & 15) as usize;
@@ -754,10 +966,31 @@ impl Execution {
                 return Err("unmodeled R-profile CP14 access".into());
             }
             self.set(arm::CORE[target], self.identity_input.get())?;
-            self.advance(address, size, cpsr)?;
+            self.complete(replaced, address, size, cpsr)?;
         }
         Ok(())
     }
+}
+/// ARM instructions the instruction observer performs in place of a
+/// translated body, without leaving translated code: word exclusives, CLREX,
+/// the CP14 identity read and PMU transfers. Thumb has no translation filter.
+fn replaced(word: u32) -> bool {
+    if exclusive::replaced(word) {
+        return true;
+    }
+    if word >> 28 == 15 || word & 0x0f00_0010 != 0x0e00_0010 || (word >> 12) & 15 == 15 {
+        return false;
+    }
+    word & 0x0fff_0fff == 0x0e12_0e10
+        || pmu::selected(arm::Coprocessor {
+            cp: (word >> 8) & 15,
+            opc1: (word >> 21) & 7,
+            crn: (word >> 16) & 15,
+            crm: word & 15,
+            opc2: (word >> 5) & 7,
+            secure: 0,
+            wide: false,
+        })
 }
 fn atomic(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f
@@ -889,3 +1122,15 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
     });
 }
 unsafe fn device_boundary(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
+
+impl crate::memory::CodeOwner for Execution {
+    fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
+        self.cpu.watch_stores(address, bytes)
+    }
+    fn invalidate_code_page(&self, address: u64) -> Result<(), String> {
+        self.cpu.invalidate_code(Some((address, address + 4096)))
+    }
+    fn prepare_code_write(&self) -> Result<(), String> {
+        self.prepare_flush()
+    }
+}

@@ -63,6 +63,17 @@ try {
         isMobile: mobile,
         hasTouch: mobile,
       });
+      await context.addInitScript(() => {
+        Object.defineProperty(navigator, 'usb', {
+          configurable: true,
+          value: Object.assign(new EventTarget(), {
+            getDevices: async () => [],
+            requestDevice() {
+              throw Error('USB fixture has not been installed');
+            },
+          }),
+        });
+      });
       await context.grantPermissions(
         ['local-network-access', 'clipboard-read', 'clipboard-write'],
         { origin: new URL(url).origin },
@@ -92,7 +103,14 @@ try {
       await page.evaluate(async () => {
         window.consoleFixture = (
           (await import('/__test__/' + 'console.mjs')) as typeof import('./usb-fixture.ts')
-        ).installConsoleFixture();
+        ).installConsoleFixture({
+          1: 'FUJIFILM',
+          2: 'FUJIFILM',
+          4: 'X-T1',
+          8: '2.30',
+          16: 'CAMERA',
+          64: '1.00',
+        });
         // Debug mode off: on the ff80 link that can only mean service mode, like the
         // owner's X100V.
         window.consoleFixture.state.configuration.set('0:247', 0);
@@ -110,6 +128,12 @@ try {
         1,
       );
       await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
+      const update = page.locator('.wb-firmware-update');
+      assert.match(await update.innerText(), /Unknown firmware version appears to be outdated/);
+      assert.equal(
+        await update.getByRole('link').getAttribute('href'),
+        'https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t1/',
+      );
       await page.locator('.wb-service', { hasText: 'restores factory settings' }).waitFor();
       assert.equal(await page.locator('.wb-debug-state').innerText(), 'Debug mode: Off');
       assert.equal(await page.getByRole('button', { name: 'Disable debug mode' }).count(), 0);
@@ -125,25 +149,19 @@ try {
       await page.getByRole('button', { name: 'Dump configuration', exact: true }).waitFor();
       await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
 
-      await page.getByLabel('Address', { exact: true }).fill('0x00001000');
-      await page.getByLabel('Bytes', { exact: true }).fill('32');
-      await page.getByRole('button', { name: 'Read', exact: true }).click();
-      await page.locator('.wb-state', { hasText: 'Idle' }).waitFor();
-      assert.equal(await page.locator('.wb-status').count(), 0, 'reads report no error');
-
-      await page.getByLabel('Command', { exact: true }).fill('help');
+      await page.getByLabel('Console command', { exact: true }).fill('help');
       await page.getByRole('button', { name: 'Send', exact: true }).click();
       await log.getByText('Fuji console ready', { exact: false }).first().waitFor();
 
-      // The bundle is a zip of a JSON manifest plus binary files.
+      // Download all is a zip: a manifest plus a folder per camera of binary files.
+      await page.locator('.files .tree', { hasText: 'configuration.bin' }).waitFor();
       const downloaded = page.waitForEvent('download');
-      await page.getByRole('button', { name: 'Download diagnostic bundle', exact: true }).click();
+      await page.getByRole('button', { name: 'Download all', exact: true }).click();
       const bundle = await readFile((await (await downloaded).path())!);
-      assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'bundle is a zip');
+      assert.equal(bundle.readUInt32LE(0), 0x04034b50, 'Download all is a zip');
       const text = bundle.toString('latin1');
-      for (const name of ['manifest.json', 'configuration.bin', 'memory-1-0x00001000.bin'])
-        assert.ok(text.includes(name), `bundle contains ${name}`);
-      assert.ok(text.includes('"capacity": 4096'), 'manifest records the geometry');
+      for (const name of ['manifest.json', '/configuration.bin', '/log.jsonl'])
+        assert.ok(text.includes(name), `archive contains ${name}`);
 
       // The Connection layer filters like every other layer.
       const connection = page.getByRole('group', { name: 'Log layers' }).getByRole('button', {
@@ -159,7 +177,7 @@ try {
         tools: document.querySelector('.wb-tools')!.getBoundingClientRect().width,
       }));
       assert.equal(geometry.overflow, false);
-      if (!mobile) assert.equal(Math.round(geometry.tools), 320);
+      if (!mobile) assert.equal(Math.round(geometry.tools), 420);
       await page.screenshot({
         path: new URL(mobile ? 'workbench-mobile.png' : 'workbench-desktop.png', directory)
           .pathname,
@@ -167,7 +185,7 @@ try {
       });
       assert.deepEqual(errors, []);
       console.log(
-        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, service-mode banner, configuration dump, memory read, console command, binary bundle, log filters`,
+        `PASS ${mobile ? 'mobile' : 'desktop'}: connect, automatic identity, service-mode banner, configuration dump, console command, binary bundle, log filters`,
       );
     } finally {
       await browser.close();

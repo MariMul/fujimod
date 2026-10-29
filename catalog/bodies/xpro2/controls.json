@@ -50,7 +50,7 @@
       "location": "top",
       "manual_page": 50,
       "face": null,
-      "icon": null,
+      "icon": "record",
       "connection_ids": [],
       "assignable": true,
       "pushable": true,
@@ -82,7 +82,8 @@
           "full_press": null
         }
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
@@ -187,7 +188,8 @@
           "label": "C",
           "description": null
         }
-      ]
+      ],
+      "short_name": "EV"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -382,7 +384,8 @@
           "label": "8000",
           "description": null
         }
-      ]
+      ],
+      "short_name": "SPEED"
     },
     "sensitivity_dial": {
       "name": "Sensitivity dial",
@@ -627,7 +630,8 @@
           "label": "L",
           "description": null
         }
-      ]
+      ],
+      "short_name": "ISO"
     },
     "dial_lock_release": {
       "name": "Dial lock release",
@@ -645,7 +649,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LOCK"
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
@@ -695,7 +700,8 @@
           "label": "M",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "lens_release_button": {
       "name": "Lens release button",
@@ -713,7 +719,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "LENS"
     },
     "viewfinder_selector": {
       "name": "Viewfinder selector",
@@ -764,7 +771,8 @@
           "label": "ERF",
           "description": null
         }
-      ]
+      ],
+      "short_name": "VIEW"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -788,7 +796,8 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "DIOPTER"
     },
     "bright_frame_simulation_button": {
       "name": "Bright frame simulation display button",
@@ -806,7 +815,8 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FRAME"
     },
     "front_command_dial": {
       "name": "Front command dial",
@@ -830,13 +840,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FRONT DIAL"
     },
     "power_switch": {
       "name": "ON/OFF switch",
       "location": "top",
       "manual_page": 25,
-      "face": null,
+      "face": "ON/OFF",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -876,7 +887,7 @@
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 28,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -906,13 +917,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "METER"
     },
     "ae_lock_button": {
       "name": "AE-L (exposure lock) button",
       "location": "rear",
       "manual_page": 77,
-      "face": null,
+      "face": "AE-L",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -948,7 +960,8 @@
         },
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "rear_command_dial": {
       "name": "Rear command dial",
@@ -972,13 +985,14 @@
         "press": null,
         "endless": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "REAR DIAL"
     },
     "af_lock_button": {
       "name": "AF-L (focus lock) button",
       "location": "rear",
       "manual_page": 77,
-      "face": null,
+      "face": "AF-L",
       "icon": null,
       "connection_ids": [],
       "assignable": true,
@@ -996,7 +1010,7 @@
       "name": "Q (quick menu) button",
       "location": "rear",
       "manual_page": 47,
-      "face": null,
+      "face": "Q",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -1026,13 +1040,14 @@
         "kind": "button",
         "press": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "SELECTOR"
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 3,
-      "face": null,
+      "face": "MENU/OK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -1050,7 +1065,7 @@
       "name": "DISP (display)/BACK button",
       "location": "rear",
       "manual_page": 32,
-      "face": null,
+      "face": "DISP/BACK",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -1065,11 +1080,11 @@
       "positions": []
     },
     "delete_button": {
-      "name": "b (delete) button",
+      "name": "Delete button",
       "location": "rear",
       "manual_page": 43,
       "face": null,
-      "icon": null,
+      "icon": "delete",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -1083,11 +1098,11 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 39,
       "face": null,
-      "icon": null,
+      "icon": "playback",
       "connection_ids": [],
       "assignable": false,
       "pushable": true,
@@ -1117,7 +1132,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "COVER"
     },
     "battery_latch": {
       "name": "Battery latch",
@@ -1136,7 +1152,8 @@
         "positions": [],
         "momentary": null
       },
-      "positions": []
+      "positions": [],
+      "short_name": "BATTERY"
     }
   }
 }

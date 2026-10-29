@@ -73,9 +73,9 @@ mise run javascript-format-check
 The emulator crate builds and statically links its pinned Unicorn source.
 The default Python emulator feature also needs libjpeg development headers.
 
-`mise run python-test` builds the native binding with its `testing` feature,
-then runs pytest discovery throughout the repository. This includes Python
-bindings, Wasm transport tests, simulation asset preparation and CI tooling.
+`mise run python-test` builds the native binding, then runs pytest discovery
+throughout the repository. This includes Python bindings, Wasm transport tests,
+simulation asset preparation and CI tooling.
 Install ffmpeg to exercise walkthrough media tests. Tests use scripted USB
 transcripts and peers, not physical cameras.
 

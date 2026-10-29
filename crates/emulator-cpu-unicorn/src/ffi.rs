@@ -8,6 +8,9 @@ pub type Context = *mut c_void;
 pub type Error = c_int;
 pub const FEATURE_PAUSE_ACCOUNTING_LAYOUT: u32 = 1 << 3;
 pub const FEATURE_PARALLEL_TCG: u32 = 1 << 4;
+pub const FEATURE_REPLACED_INSTRUCTIONS: u32 = 1 << 5;
+pub const FEATURE_AARCH64_ACCOUNTING: u32 = 1 << 6;
+pub const FEATURE_INLINE_INSTRUCTION_COUNTER: u32 = 1 << 7;
 pub const fn ctl(kind: u32, count: u32, direction: u32) -> u32 {
     kind | (count << 26) | (direction << 30)
 }
@@ -33,6 +36,7 @@ pub struct MemRegion {
 /// Acceleration exports added by the pinned Unicorn source build.
 /// Missing exports require the explicit slow-Unicorn opt-in before loading.
 pub struct Extensions {
+    pub replace_backing: Option<unsafe extern "C" fn(Engine, u64, u64, u32, *mut c_void) -> Error>,
     pub write_hook_pc_sync: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub page_hooks: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub observe_backings:
@@ -45,11 +49,16 @@ pub struct Extensions {
     pub retry_block: Option<unsafe extern "C" fn(Engine, u32) -> Error>,
     pub request_restart: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub set_parallel_cpus: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
-    /// Test exit requests only at block entry; hook exits stay immediate.
+    /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
+    pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
     // is the Thumb state while a translation filter is installed.
     // Bit 4: stoppable Thumb instruction entries with synchronized ITSTATE.
+    // Bit 32: filter decision 3 replaces an ARM instruction with its code hook.
+    // Bit 128: translated instruction entries are counted in CPU state.
     pub features: u32,
     // uc_embedder_accounting (features bit 2): the engine's accounting record.
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
@@ -93,8 +102,19 @@ impl Extensions {
                 "uc_embedder_set_block_exits",
             ),
             (
+                self.set_instruction_counter.is_some()
+                    && self.reset_instruction_counter.is_some()
+                    && self.instruction_counter.is_some()
+                    && self.features & FEATURE_INLINE_INSTRUCTION_COUNTER != 0,
+                "uc_embedder_instruction_counter",
+            ),
+            (
                 self.features & 3 == 3,
                 "uc_embedder_features (Thumb block state and budgeted accounting)",
+            ),
+            (
+                self.features & FEATURE_REPLACED_INSTRUCTIONS != 0,
+                "uc_embedder_features (replaced ARM instructions)",
             ),
         ]
         .into_iter()
@@ -175,6 +195,13 @@ api! {
 mod linked {
     use super::*;
     unsafe extern "C" {
+        fn uc_embedder_replace_backing(
+            engine: Engine,
+            address: u64,
+            size: u64,
+            permissions: u32,
+            backing: *mut c_void,
+        ) -> Error;
         fn uc_embedder_set_write_hook_pc_sync(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_page_hooks(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_observe_backings(
@@ -194,12 +221,16 @@ mod linked {
         fn uc_embedder_request_restart(engine: Engine) -> Error;
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
+        fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
         fn uc_embedder_features() -> u32;
     }
     pub fn extensions() -> Extensions {
         Extensions {
+            replace_backing: Some(uc_embedder_replace_backing),
             write_hook_pc_sync: Some(uc_embedder_set_write_hook_pc_sync),
             page_hooks: Some(uc_embedder_set_page_hooks),
             observe_backings: Some(uc_embedder_observe_backings),
@@ -210,6 +241,9 @@ mod linked {
             request_restart: Some(uc_embedder_request_restart),
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
+            set_instruction_counter: Some(uc_embedder_set_instruction_counter),
+            reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
+            instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
             exit_counters: Some(uc_embedder_exit_counters),
             features: unsafe { uc_embedder_features() },

@@ -99,7 +99,8 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "APERTURE"
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
@@ -147,26 +148,23 @@
       "role": "command_control",
       "mechanical": false,
       "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": {
-            "kind": "debug_key",
-            "name": "CMD_LEFT"
-          },
-          "increase": {
-            "kind": "debug_key",
-            "name": "CMD_RIGHT"
-          }
+        "kind": "rocker",
+        "decrease": {
+          "kind": "debug_key",
+          "name": "CMD_LEFT"
+        },
+        "increase": {
+          "kind": "debug_key",
+          "name": "CMD_RIGHT"
         },
         "press": {
           "kind": "debug_key",
           "name": "CMD_PUSH"
-        },
-        "endless": true
+        }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "COMMAND"
     },
     "command_dial": {
       "name": "Command dial",
@@ -198,7 +196,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "COMMAND"
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
@@ -266,13 +265,14 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "EV"
     },
     "fn_button": {
       "name": "Fn (Function) button",
       "location": "top",
       "manual_page": 69,
-      "face": null,
+      "face": "Fn",
       "icon": null,
       "connection_ids": [
         "controls-gpio-4-4"
@@ -351,7 +351,8 @@
           "label": "MF",
           "description": null
         }
-      ]
+      ],
+      "short_name": "FOCUS"
     },
     "focus_ring": {
       "name": "Focus ring",
@@ -381,7 +382,8 @@
         "endless": true
       },
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "FOCUS"
     },
     "front_ring": {
       "name": "Front ring",
@@ -422,7 +424,7 @@
       "positions": []
     },
     "playback_button": {
-      "name": "a (playback) button",
+      "name": "Playback button",
       "location": "rear",
       "manual_page": 25,
       "face": null,
@@ -541,7 +543,8 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "SHUTTER"
     },
     "shutter_speed_dial": {
       "name": "Shutter speed dial",
@@ -556,13 +559,14 @@
       "mechanical": false,
       "behavior": null,
       "pushable": false,
-      "positions": []
+      "positions": [],
+      "short_name": "SPEED"
     },
     "view_mode_button": {
       "name": "VIEW MODE button",
       "location": "rear",
       "manual_page": 18,
-      "face": null,
+      "face": "VIEW/MODE",
       "icon": null,
       "connection_ids": [],
       "assignable": false,
@@ -600,7 +604,47 @@
         }
       },
       "pushable": true,
-      "positions": []
+      "positions": [],
+      "short_name": "VIEW"
+    },
+    "selector": {
+      "name": "Command dial directions",
+      "location": "rear",
+      "manual_page": 4,
+      "face": null,
+      "icon": null,
+      "connection_ids": [
+        "controls-adc-8"
+      ],
+      "assignable": false,
+      "default_function": null,
+      "role": null,
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": {
+            "kind": "debug_key",
+            "name": "UP"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "DOWN"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "LEFT"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "RIGHT"
+          }
+        },
+        "press": null
+      },
+      "pushable": false,
+      "positions": [],
+      "short_name": "SELECTOR"
     }
   }
 }

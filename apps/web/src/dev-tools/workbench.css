@@ -140,17 +140,26 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 420px 1fr;
 }
+/* The tools scroll above the Files pane, which stays pinned at the bottom. */
 .wb-tools {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--wb-line);
+  background: #0c0c0d;
+}
+.wb-tools-scroll {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-height: 0;
   overflow: auto;
   padding: 10px;
-  border-right: 1px solid var(--wb-line);
-  background: #0c0c0d;
 }
 .wb-tools-body {
   display: flex;
@@ -265,6 +274,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.wb-firmware-update {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--wb-amber);
+  border-radius: 5px;
+  color: var(--wb-amber);
+}
+.wb-firmware-update p {
+  margin: 0 0 8px;
+}
+.wb-firmware-update a {
+  height: auto;
+  min-height: 28px;
+  padding: 6px 8px;
+  color: var(--wb-text);
+  text-align: center;
+  text-decoration: none;
 }
 .wb-progress {
   height: 3px;
@@ -385,11 +412,24 @@
   gap: 6px;
   padding: 8px 10px;
 }
-.wb-memory {
-  grid-template-columns: 1fr 64px auto;
-}
 .wb-command {
+  display: grid;
   grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+.wb-command-input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--wb-line-2);
+  border-radius: 5px;
+  background: #0a0a0b;
+  color: var(--wb-text);
+  font: 12px var(--wb-mono);
+}
+.wb-command-input:focus {
+  outline: none;
+  border-color: rgba(var(--wb-accent-rgb), 0.6);
 }
 .wb-in {
   display: flex;
@@ -628,6 +668,8 @@
   .wb-tools {
     border-right: 0;
     border-bottom: 1px solid var(--wb-line);
+  }
+  .wb-tools-scroll {
     overflow: visible;
   }
   .cl-row,

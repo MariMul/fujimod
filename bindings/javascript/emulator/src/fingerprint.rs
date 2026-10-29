@@ -13,7 +13,7 @@ impl Write for HashWriter {
     }
 }
 pub(super) fn session(
-    session: &fujimod_emulator::session::Session,
+    session: &fujimod_emulator_session::Session,
     powered_on: bool,
 ) -> Result<super::results::Fingerprint, String> {
     // Move the complete tree: json! would serialize and clone its byte arrays.

@@ -4,8 +4,10 @@
 use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_imaging::exr2_isp::options::output::{GeometryPolicy, Options};
 use fujimod_emulator_imaging::exr2_isp::output_channels::{FrameTransfer, OutputChannels, Source};
-use fujimod_emulator_imaging::exr2_isp::{dma::{self, IrqRoutes, Raster, Transfer}, due};
-use fujimod_emulator_imaging::analysis::{ImageLayout, nearest_pairs};
+use fujimod_emulator_imaging::exr2_isp::{dma::{self, Raster, Transfer}, due};
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
+use fujimod_emulator_image_processing::analysis::nearest_pairs;
+use fujimod_emulator_imaging::analysis::ImageLayout;
 use fujimod_emulator_imaging::scene::ImageFrames;
 use fujimod_emulator_devices::{Cx, Device};
 
@@ -227,14 +229,9 @@ impl OutputChannel {
             return Ok(());
         }
         self.seen_frame = edge.index;
-        if self
-            .wiring
-            .memory_outputs
-            .as_ref()
-            .is_some_and(|wire| wire.lock().unwrap().raw_input)
-        {
-            return Ok(());
-        }
+        // RAW sensor capture and preview output are concurrent. Only an
+        // active memory-readback transfer owns these banks exclusively; run()
+        // handles that ownership before consuming a sensor frame here.
         if self.registers[0] != 0x10001 {
             return Ok(());
         }
@@ -282,7 +279,8 @@ impl OutputChannel {
         )?;
         let result = match &frames.pixels {
             fujimod_emulator_imaging::scene::frames::Pixels::Sensor(image) => (|| {
-                let frozen = image.freeze(layout)?;
+                let frozen =
+                    fujimod_emulator_image_formation::radiometric::Image::of(image)?.freeze(layout)?;
                 transfer.pixels.defer_fallible(move |mut staging| {
                     staging.resize(layout.stride * layout.height, 0);
                     let result = frozen
@@ -337,9 +335,6 @@ impl OutputChannel {
             channels.armed[self.wiring.channel] = false;
             channels.transfers[self.wiring.channel] = None;
         }
-        if self.readback(cx)? {
-            return Ok(());
-        }
         {
             let mut channels = self.wiring.channels.0.lock().unwrap();
             if channels.dma.iter().any(|t| t.ready(cx.now()))
@@ -381,6 +376,12 @@ impl OutputChannel {
                     }
                 }
             }
+        }
+        // A memory readback can have no participating output banks while a
+        // previously latched sensor frame is still draining. Complete that
+        // DMA before the memory input suppresses new sensor-frame latching.
+        if self.readback(cx)? {
+            return Ok(());
         }
         self.latch(cx.now())
     }

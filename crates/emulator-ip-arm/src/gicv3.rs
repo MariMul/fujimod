@@ -30,6 +30,7 @@ struct Active {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Interface {
+    system_register_enable: bool,
     enabled: [bool; 2],
     pmr: u8,
     bpr: [u8; 2],
@@ -40,6 +41,7 @@ struct Interface {
 impl Default for Interface {
     fn default() -> Self {
         Self {
+            system_register_enable: false,
             enabled: [false; 2],
             pmr: 0,
             bpr: [0; 2],
@@ -272,6 +274,17 @@ impl Gic {
         value: Option<u64>,
     ) -> Result<u64, String> {
         match register {
+            0xf665 => {
+                if let Some(v) = value {
+                    if v & !15 != 0 {
+                        return Err("unsupported GICv3 ICC_SRE_EL3 bits".into());
+                    }
+                    self.state.interfaces[core].system_register_enable = v & 8 != 0;
+                }
+                // This implementation has no legacy interface: SRE/DIB/DFB
+                // are RAO/WI; Enable is retained per core.
+                Ok(7 | u64::from(self.state.interfaces[core].system_register_enable) * 8)
+            }
             0xc230 => {
                 if let Some(v) = value {
                     self.state.interfaces[core].pmr = v as u8;
@@ -607,6 +620,18 @@ impl Gic {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn el3_system_interface_enable_is_per_core_and_survives_checkpoint() {
+        let mut g = super::Gic::new(vec![0, 1], 128).unwrap();
+        assert_eq!(g.system(0, 0xf665, None).unwrap(), 7);
+        assert_eq!(g.system(0, 0xf665, Some(9)).unwrap(), 15);
+        assert_eq!(g.system(1, 0xf665, None).unwrap(), 7);
+        let saved = g.save();
+        g.system(0, 0xf665, Some(0)).unwrap();
+        g.restore(&saved).unwrap();
+        assert_eq!(g.system(0, 0xf665, None).unwrap(), 15);
+        assert!(g.system(0, 0xf665, Some(16)).is_err());
+    }
     use super::*;
     fn enabled(affinities: Vec<u32>) -> Gic {
         let mut g = Gic::new(affinities, 512).unwrap();
@@ -771,7 +796,13 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
     fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String> {
         Gic::system(self, core, register, value)
     }
-    fn distributor(&mut self, offset: u64, size: u8, value: Option<u64>) -> Result<u64, String> {
+    fn distributor(
+        &mut self,
+        _core: usize,
+        offset: u64,
+        size: u8,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
         Gic::distributor(self, offset, size, value)
     }
     fn redistributor(

@@ -2,7 +2,7 @@
   "$schema": "https://fujimod.com/schemas/body.schema.json",
   "schema": 1,
   "id": "gfx50r",
-  "soc_id": "xppro",
+  "soc_id": "xpp",
   "dram_bytes": 536870912,
   "nand": null,
   "sensor": null,

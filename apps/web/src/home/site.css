@@ -1,6 +1,8 @@
 @import '@fujimod/emulator-ui/style.css';
 
 .shell {
+  /* Width of a single column of content, such as the camera launcher. */
+  --content-width: 820px;
   max-width: 1240px;
   margin: auto;
   padding: 0 28px 48px;
@@ -39,7 +41,7 @@ header .meta a:first-child {
 .personal-note p {
   margin: 0 0 1em;
 }
-.personal-note .signature {
+.personal-note p:last-child {
   margin-bottom: 0;
 }
 .personal-note .signature-name {
@@ -72,6 +74,7 @@ header .meta a:first-child {
   width: 1.65em;
 }
 .section-heading {
+  scroll-margin-top: 24px;
   font-size: 13px;
   font-weight: 600;
   color: var(--dim);
@@ -92,6 +95,11 @@ footer {
   }
   .shell {
     padding: 0 14px 36px;
+  }
+}
+@media (max-width: 520px) {
+  header .meta {
+    display: none;
   }
 }
 #idle-cameras {

@@ -38,7 +38,6 @@ fn zero_payload_records_are_still_bounded() {
     assert_eq!(batch.dropped_events, 3);
 }
 
-#[cfg(feature = "testing")]
 mod replay {
     use super::*;
     use crate::{

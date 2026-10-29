@@ -55,7 +55,7 @@ impl Device for Flag {
 fn board(mmio: bool, declared: bool, peer: bool, irq: bool, mode: LoopMode) -> Board {
     let library = Library::linked().unwrap();
     let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
-    let memory = rprofile::memory::Memory::default();
+    let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
     let cpus = (0..if peer { 2 } else { 1 })
         .map(|core| {
             let cpu = rprofile::core::Core::new(
@@ -259,4 +259,174 @@ fn device_continuations_keep_every_poll_observable() {
         board.loop_statistics().unwrap()[0]["loop_accelerated_instructions"],
         0
     );
+}
+
+#[test]
+fn interactive_clock_poll_windows_require_one_runnable_processor() {
+    let mut single = board(false, true, false, false, LoopMode::Accelerate);
+    single
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(single.state.borrow().loop_window());
+    let mut peers = board(false, true, true, false, LoopMode::Accelerate);
+    peers
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    assert!(!peers.state.borrow().loop_window());
+}
+
+#[test]
+fn clock_poll_acceleration_preserves_device_deadlines_and_complete_board_state() {
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut off = board(false, true, false, false, LoopMode::Disabled);
+        let mut on = board(false, true, false, false, LoopMode::Accelerate);
+        for board in [&mut off, &mut on] {
+            board.set_execution_policy(policy).unwrap();
+            board
+                .write_memory(
+                    0,
+                    0x1000,
+                    &[0xee190f1du32, 0xe3500064, 0x3afffffc, 0xe320f003]
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes)
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
+            let cpu = board.cpu(0).unwrap();
+            cpu.set_guest_clock(fujimod_emulator_cpu::Clock {
+                now: 0,
+                phase: 0,
+                ratio: board.state.borrow().timeline.ratio(),
+            })
+            .unwrap();
+            for (crm, opc2, value) in [(12, 0, 1), (12, 1, 0x80000000)] {
+                cpu.coprocessor(
+                    fujimod_emulator_cpu::arm::Coprocessor {
+                        cp: 15,
+                        opc1: 0,
+                        crn: 9,
+                        crm,
+                        opc2,
+                        secure: 0,
+                        wide: false,
+                    },
+                    Some(value),
+                )
+                .unwrap();
+            }
+            board.run_until(200, 1000).unwrap();
+        }
+        assert_eq!(on.fingerprint().unwrap(), off.fingerprint().unwrap());
+        assert!(
+            on.loop_statistics().unwrap()[0]["loop_clock_poll_instructions"]
+                .as_u64()
+                .unwrap()
+                > 0
+        );
+    }
+}
+
+#[test]
+fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
+    use fujimod_emulator_devices::parts::read_fifo::ReadFifo;
+    struct Fifo {
+        words: ReadFifo,
+        calls: Arc<AtomicU32>,
+    }
+    impl Device for Fifo {
+        fn name(&self) -> &'static str {
+            "test-read-fifo"
+        }
+        fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            u64::from(self.words.read().unwrap())
+        }
+        fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+            cx.unmodeled();
+        }
+        fn fast_reads(&self, _: u64, _: u64) -> Vec<FastReadWord> {
+            let words = self.words.clone();
+            vec![FastReadWord::consuming_u32(
+                0,
+                Arc::new(move || words.read_fast()),
+            )]
+        }
+        fn save(&self) -> Value {
+            json!({})
+        }
+    }
+    let library = Library::linked().unwrap();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let shared = fujimod_emulator_cpu_unicorn::memory::Memory::default();
+    let cpu = rprofile::core::Core::new(
+        library.open(Model::CortexR5F, 1024 * 1024).unwrap(),
+        Default::default(),
+        rprofile::core::Wiring { memory: shared },
+    )
+    .unwrap();
+    unsafe {
+        cpu.map_physical(
+            0,
+            0,
+            0x4000,
+            7,
+            std::ptr::NonNull::new(backing.as_ptr()).unwrap(),
+        )
+        .unwrap();
+    }
+    set(&cpu, Register::Pc, 0x1000).unwrap();
+    set(&cpu, Register::Pstate, 0xd3).unwrap();
+    set(&cpu, arm::CORE[2], 0x8000000).unwrap();
+    let words = ReadFifo::new(12).unwrap();
+    words
+        .restore(
+            &[1u32, 2, 3]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+            0,
+        )
+        .unwrap();
+    words.publish(true);
+    let calls = Arc::new(AtomicU32::new(0));
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(
+        0x8000000,
+        4,
+        Box::new(Fifo {
+            words: words.clone(),
+            calls: calls.clone(),
+        }),
+    )
+    .unwrap();
+    let mut board = Board::new(
+        vec![Box::new(cpu)],
+        bus,
+        Ratio::new(1, 1).unwrap(),
+        None,
+        vec![true],
+        memory::Memory::new(vec![(0, backing)], vec![memory::BusMapping::ram(0, 0x4000)]).unwrap(),
+    )
+    .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    board
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    let code = [0xe5920000u32, 0xe5921000, 0xe5923000, 0xe320f003];
+    board
+        .write_memory(
+            0,
+            0x1000,
+            &code
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.run_until(30, 1000).unwrap();
+    assert_eq!(board.read_register(0, arm::CORE[0]).unwrap(), 1);
+    assert_eq!(board.read_register(0, arm::CORE[1]).unwrap(), 2);
+    assert_eq!(board.read_register(0, arm::CORE[3]).unwrap(), 3);
+    assert_eq!(words.position(), 12);
+    assert_eq!(calls.load(Ordering::Acquire), 1);
 }

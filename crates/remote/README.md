@@ -30,8 +30,11 @@ option identities come from the installed build's menu manifest.
 already be connected. Continuations use exact store/device watches and yield
 between bounded instruction windows. Checkpoints, restoring, scene input and
 explicit clock advancement are board-only methods. A press of a dial or ring
-whose motion has its own contacts drives its `{id}.press` actuator. Frame observations use the
-selected scanout and a completed-frame counter from the board's device graph.
+whose motion has its own contacts drives its `{id}.press` actuator. A turn of
+an encoder rotates it; a turn of a control whose motion is two contacts presses
+and releases its `{id}.increase` or `{id}.decrease` contact once per step, each
+edge accepted by the scanner as a button's, and each later press waiting for
+input readiness. Frame observations use the selected scanout and a completed-frame counter from the board's device graph.
 
 `Ff80Remote::new(session, facts, options)` borrows or owns an existing USB
 session. Options supply firmware transport limits and polling cadence. It uses
@@ -60,7 +63,7 @@ capture = await camera.screenshot(deadline=deadline)
 capture.frame.save("quality.png")
 ```
 
-The `testing` feature supplies a synthetic transport for binding tests. Unit and
+The `testing` module supplies a synthetic transport for binding tests. Unit and
 USB replay tests use synthetic facts and memory only.
 
 `Camera.set_input(control(...), "stage", stage="half_press", deadline=...)`

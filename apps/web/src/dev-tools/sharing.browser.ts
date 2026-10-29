@@ -38,27 +38,7 @@ async function ready(page: Page) {
     .locator('.wb-camera .wb-state')
     .filter({ hasText: /^Idle$/ })
     .waitFor();
-}
-async function read(page: Page) {
-  const form = page.getByRole('form', { name: 'Read memory', exact: true });
-  await form.getByLabel('Address', { exact: true }).fill('0x00001000');
-  await form.getByLabel('Bytes', { exact: true }).fill('4');
-  const rows = page
-    .getByRole('region', { name: 'Connection log' })
-    .locator('.cl-row')
-    .filter({ hasText: 'Read memory' });
-  const before = await rows.count();
-  await form.getByRole('button', { name: 'Read', exact: true }).click();
-  await page.waitForFunction(
-    (before) =>
-      Array.from(document.querySelectorAll('[aria-label="Connection log"] .cl-row')).filter((row) =>
-        row.textContent?.includes('Read memory'),
-      ).length > before,
-    before,
-  );
-  await ready(page);
-  assert.equal(await rows.count(), before + 1, 'A read is one merged FF80 entry');
-  assert.equal(await form.getByRole('button', { name: 'Read', exact: true }).isEnabled(), true);
+  await page.getByRole('form', { name: 'Read memory', exact: true }).waitFor({ state: 'hidden' });
 }
 try {
   const context = await browser.newContext({ viewport: { width: 1300, height: 900 } });
@@ -141,9 +121,8 @@ try {
       .getAttribute('aria-pressed'),
     'true',
   );
-  await read(owner);
   await owner.screenshot({
-    path: new URL('shared-local-read.png', output).pathname,
+    path: new URL('shared-local-camera.png', output).pathname,
     fullPage: true,
   });
 
@@ -179,9 +158,8 @@ try {
     .filter({ hasText: 'Device info · Product → SYNTHETIC' })
     .first()
     .waitFor();
-  await read(remote);
   await remote.screenshot({
-    path: new URL('remote-identity-read.png', output).pathname,
+    path: new URL('remote-camera.png', output).pathname,
     fullPage: true,
   });
 
@@ -252,13 +230,7 @@ try {
   const progress = owner.getByRole('progressbar', { name: 'Inspection', exact: true });
   await progress.waitFor();
   assert.equal(await progress.getAttribute('aria-valuenow'), '3');
-  assert.equal(
-    await owner
-      .getByRole('form', { name: 'Read memory', exact: true })
-      .getByRole('button', { name: 'Read', exact: true })
-      .isDisabled(),
-    true,
-  );
+  await owner.getByRole('form', { name: 'Read memory', exact: true }).waitFor({ state: 'hidden' });
   let finished = false;
   const started = Date.now();
   const countdown = remote
@@ -317,7 +289,6 @@ try {
     .getByRole('button', { name: 'Off', exact: true })
     .click();
   await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
-  await read(owner);
   const usb = await owner.evaluate(() => ({
     open: window.sharingFixture.log.filter((e) => e[0] === 'open').length,
     claim: window.sharingFixture.log.filter((e) => e[0] === 'claim').length,
@@ -327,7 +298,7 @@ try {
   assert.deepEqual(usb, { open: 1, claim: 1, closing: 0 });
   assert.deepEqual(errors, []);
   await owner.screenshot({
-    path: new URL('stopped-local-read.png', output).pathname,
+    path: new URL('stopped-local-camera.png', output).pathname,
     fullPage: true,
   });
   await writeFile(

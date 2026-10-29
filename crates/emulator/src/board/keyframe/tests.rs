@@ -153,10 +153,7 @@ pub(super) fn board_mode(mode: bus::Mode) -> Board {
         .unwrap();
     let mut board = graph
         .build(
-            Options {
-                engine: Engine::Unicorn,
-                translation_cache_bytes: 1 << 20,
-            },
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
             bus,
             None,
         )

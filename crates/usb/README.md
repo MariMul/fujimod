@@ -6,8 +6,7 @@ selection, C0/C2/C4 session lifecycle, D0/D1 command exchanges, information
 selectors, configuration commands, debug events and console polling, log reads,
 diagnostic queries, capabilities metadata, E0/E1/E8 data transfers and composed memory and diagnostic-data range operations.
 
-`ff80/commands/` encodes one firmware request at a time. `operations/` composes
-commands. nusb handles platform USB access; its adapter has a private test seam.
+`ff80/commands/` encodes one firmware request at a time. `operations/` composes commands. nusb handles platform USB access; `emulator` accepts caller-supplied endpoints below the same protocol implementation.
 Body/firmware definitions supply memory limits explicitly. The session's
 advertised packet size, USB endpoint packet size and the host reply budget
 are separate quantities. The library does not enable debug access or change
@@ -73,6 +72,8 @@ separate caller policy. No setup command, retry or E8 is sent implicitly.
 well as earlier fragments in that command. `bytes_completed()` counts only
 chunks already returned successfully.
 
+Where the firmware's E1 DMA drops low source-address bits and rounds transfer lengths up, attach a `DataAlignment` with `DataWindow::with_alignment`. Ranges must then start on the address alignment and span whole granules (`Error::MisalignedDataRange`), and each command's length is rounded down to whole granules within capacity and host reply budget. A budget below one granule fails with `LengthLimit` before any request.
+
 `operations::data::upload` owns the complete setup/E0/E8 sequence. Supply the
 setup mode and E0 piece size explicitly. It checks the final receive budget
 before setup, stops on a framed setup error, and sends each piece and E8 once.
@@ -98,19 +99,53 @@ The upstream MIT notice is retained in [LICENSE.fffw](LICENSE.fffw).
 
 Run `cargo test --workspace --all-features` from the repository root.
 
-The opt-in `testing` feature supplies strict exchange scripts through
-the same session implementation. `testing::Peer` supplies synchronous virtual
-endpoint completions for firmware emulators using this same Rust core; it exists
-only in testing builds. These paths do not enumerate or open USB devices.
-Python's test build uses it to verify streaming and ownership across the language
-boundary; regular builds contain only the nusb backend.
+The `testing` module supplies strict exchange scripts and synchronous `testing::Peer` completions through the same session implementation. Python's tests use them to verify streaming and ownership across the language boundary. Production emulator integrations use the endpoint API below.
 
-App80 has a separate [`app80`](src/app80.rs) wire codec: `CommandCode`, bounded
-`Request` and exact `Reply`. Identifiers and argument meanings come from the
-selected firmware's service table; the codec does not equate command bytes,
-ff80 status words or firmware callback dispositions.
+## Emulated endpoints
 
-`operations::app80::Mailbox` composes the ff80 carrier. Supply the selected
+Implement `emulator::EndpointProvider` to advertise `InterfaceDescriptor` values and claim a caller-selected configuration/interface/alternate setting. Each descriptor lists typed endpoint addresses, transfer kinds and nonzero packet sizes. `Connection::open_emulated` rejects missing or duplicate selections and requires exactly one bulk endpoint in each direction before claiming. It never enumerates devices or falls back to physical USB or a proxy.
+
+```rust,no_run
+use std::{num::NonZeroU32, time::Duration};
+use fujimod_usb::{
+    Error, Result,
+    connection::{Connection, TransferOptions},
+    emulator::EndpointProvider,
+    ff80::commands::info::InfoSelector,
+};
+
+async fn identify_emulated(provider: &mut impl EndpointProvider) -> Result<String> {
+    let selection = provider.interfaces().first().ok_or(Error::InvalidInterface)?.selection;
+    let connection = Connection::open_emulated(provider, selection, TransferOptions {
+        timeout: Duration::from_secs(1),
+        max_reply_bytes: NonZeroU32::new(1024).unwrap(),
+    }).await?;
+    let mut session = connection.begin_session(None).await?;
+    let product = session.device_info(InfoSelector::Product).await?;
+    session.close().await?;
+    Ok(product.text)
+}
+```
+
+`claim` returns an owned `Box<dyn Endpoints>`. The connection, then the session, exclusively owns that claim. `Endpoints` receives raw vendor control OUT requests and bulk IN/OUT buffers, not decoded service commands. The existing ff80 layer still supplies framing, codecs, reply validation, traces and `SessionState`. Bulk buffers have the exact requested length; packet sizes are descriptor metadata, not an instruction to round emulated buffers. IN buffers are bounded by the session's host reply budget; OUT buffers borrow the existing encoded request.
+
+Return `Completion { transferred, status }` for each transfer, including partial byte counts on errors and `TransferError::Cancelled` for an explicit cancellation completion. Only the reported IN prefix is returned. Error prefixes are preserved in `Error::Transfer.partial`. Short control/OUT transfers fail; short IN replies go through the existing ff80 decoder. Counts exceeding the supplied buffer capacity fail as `Error::EmulatorCompletion`.
+
+The host applies `TransferOptions.timeout` separately to claim, each transfer and release. Transfer deadlines return `Error::Timeout`; resource failures and deadlines return `Error::EmulatorResource` and `Error::EmulatorResourceTimeout` with a `ResourceOperation`. Pending futures must yield to the executor. A synchronous callback that does not return cannot be interrupted by a future deadline. Native `EndpointFuture` values must be `Send`; Wasm futures need not be `Send`. The owned endpoint object remains `Send + Sync`.
+
+Dropping an in-flight command future, a transfer failure or malformed reply fences the session as `CompletionUnknown`. No later command or protocol close is sent. Dropping a connection/session must release its claim through the endpoint object's `Drop` without protocol traffic. After a successful ff80 close, the host also awaits `Endpoints::release`; `Drop` must still release resources if that future fails, times out or is cancelled. Claim-future cancellation must release resources acquired before completion. Cancellation stops host waiting and does not certify that emulated device work stopped.
+
+## Additional APIs
+
+App80 transport is the separate [`fujimod-usb-app80`](../usb-app80/src/lib.rs)
+crate; command codecs and value types live in
+[`fujimod-usb-app80-types`](../usb-app80-types/src/lib.rs), below USB.
+Its wire codec has `CommandCode`, bounded `Request` and exact `Reply`.
+Identifiers and argument meanings come from the selected firmware's service
+table; the codec does not equate command bytes, ff80 status words or firmware
+callback dispositions.
+
+Its `operations::Mailbox` composes the ff80 carrier. Supply the selected
 firmware's page, command-byte offset and configuration limit. `exchange()`
 stages 32 argument bytes, publishes the 33-byte request, awaits that write's
 ff80 reply, then reads the mailbox once. The complete operation's host budget
@@ -162,8 +197,8 @@ Install the Wasm standard library and a wasm-bindgen test runner matching the
 ```sh
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.129 --locked --root target/tooling
-PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb \
-  --target wasm32-unknown-unknown --features testing --lib --test wasm_core
+PATH="$PWD/target/tooling/bin:$PATH" cargo test -p fujimod-usb -p fujimod-usb-app80 -p fujimod-usb-app80-types \
+  --target wasm32-unknown-unknown --lib --test wasm_core
 ```
 
 Run from the workspace root with Node on `PATH`, or use `mise run rust-wasm-test`
@@ -185,13 +220,18 @@ and `apps/web`. See their README for the static-host build and mock-WebUSB tests
 
 ## Firmware-qualified App80 controls
 
-`fujimod::catalog::service::Definition` loads the selected firmware's service data.
-`app80::catalog::Catalog` resolves its ordered mode rules and typed codecs;
-`operations::app80::Service` binds those codecs to that definition's ff80
-mailbox. The resulting `Invocation` keeps its request and carrier together.
+`fujimod::catalog_service::Definition` loads the selected firmware's service
+data against a `fujimod::catalog_firmware_identity::FirmwareIdentity`.
+`fujimod_usb_app80_types::catalog::Catalog` resolves its ordered mode rules and
+typed codecs; `fujimod_usb_app80::operations::Service` binds those codecs to
+that definition's ff80 mailbox. The resulting `Invocation` keeps its request
+and carrier together.
 Preparation does no I/O and never changes the camera's service mode.
 
 ```rust,ignore
+use fujimod_usb_app80::operations::Service;
+use fujimod_usb_app80_types::catalog::{Command, PinBank};
+
 let identity = FirmwareIdentity::new(firmware_id, firmware_sha256)?;
 let definition = Definition::from_json(&definition_json, &identity)?;
 let service = Service::new(definition)?;
@@ -504,3 +544,40 @@ Native callers may instead set `FUJIMOD_USB_PROXY_URL` and
 `FUJIMOD_USB_PROXY_TOKEN` for existing discovery calls. Remote failure never
 falls back to a local device. ff80 commands, trace records and completion
 fencing execute in this core for either transport.
+
+## Session reclaim and callback invocation
+
+`Connection::reclaim_session()` explicitly sends the service reclaim control
+packet and returns `true` for the optional `29 00` status, or `false` when
+its bulk IN wait times out within 500 ms. It never runs as part of
+`begin_session()`. Other failures and cancellation fence the connection.
+Native USB cancels and drains a timed-out read before allowing session open.
+WebUSB cannot cancel a pending transfer; a timeout there or across a proxy
+leaves completion unknown and prevents reuse of that connection.
+
+`operations::callback::invoke(session, &Invocation)` accepts caller-selected
+preconditions, guarded writes, synchronization commands, a callback slot, a
+trigger request and an expected outcome. No body or firmware addresses are
+built in. All initial guards run before writes; each write is checked again,
+applied in order and read back. Synchronization runs before the final slot
+check and publication. Accepted replies are exact raw packets. A returning
+callback restores and verifies the original slot, on success or mismatch.
+Guarded writes remain installed.
+
+`ExpectedOutcome::NoReply` succeeds only on a reply-side transport failure
+after the trigger's command transfer. Any received reply fails and restores
+the slot. A failed transfer fences the session; if a reply was required,
+restoration is attempted and the error retains its failure. Cancellation
+sends no cleanup commands and preserves the normal session fence.
+
+Native Python exposes `Connection.open`, `reclaim_session`, `begin_session`,
+`CallbackInvocation` and `Session.invoke_callback`. Set `replies=[raw_reply,
+...]` for accepted replies or `replies=None` for no reply. Add guards with
+`require(address, length, accepted)`, ordered writes with
+`write(address, accepted, data)` and synchronization with
+`synchronize(CommandSequence)`. The invocation uses the supplied
+`FirmwareLimits`. The returned value is reply bytes or `None`.
+
+These mechanisms are adapted with permission from Tal Shiri's
+[X-Turbo](https://github.com/tals/X-Turbo), `src/fuji/usb.py` and
+`src/fuji/reset.py` at `c0bbde42be9f6396ac60d24e837f37c028cb0f67`.

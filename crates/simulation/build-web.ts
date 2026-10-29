@@ -26,8 +26,8 @@ for (const backend of backends) {
   run('cargo', [
     'build',
     '--locked',
-    '-p',
-    'fujimod-simulation',
+    '--manifest-path',
+    'crates/simulation/Cargo.toml',
     '--no-default-features',
     '--features',
     backend,
@@ -36,7 +36,10 @@ for (const backend of backends) {
     '--target',
     'wasm32-unknown-unknown',
   ]);
-  const source = join(root, 'target/wasm32-unknown-unknown/simulation-web/fujimod_simulation.wasm');
+  const source = join(
+    root,
+    'crates/simulation/target/wasm32-unknown-unknown/simulation-web/fujimod_simulation.wasm',
+  );
   const out = join(root, 'bindings/javascript/pkg/simulation', backend);
   const digest = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
   const stamp = JSON.stringify({

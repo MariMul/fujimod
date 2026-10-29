@@ -38,7 +38,7 @@ export async function instantiateEmulatorModule(
   )
     throw new Error('Generated module has no camera bindings.');
   const module = loaded as unknown as EmulatorModule;
-  module.configure(options);
+  await module.configure(options);
   return module;
 }
 
@@ -155,6 +155,7 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
         typeof manifest.prepared.bootRom !== 'string')) ||
     (manifest.executionPolicy !== undefined &&
       !['interactive', 'exact'].includes(manifest.executionPolicy)) ||
+    (manifest.dmpCpuRenderer !== undefined && typeof manifest.dmpCpuRenderer !== 'boolean') ||
     !record(manifest.session) ||
     !Number.isSafeInteger(manifest.ticksPerSecond) ||
     manifest.ticksPerSecond <= 0 ||
@@ -203,6 +204,8 @@ export interface EmulatorManifest {
   prepared?: { document: string; bootRom: string };
   /** Override the default policy for native-parity qualification bundles. */
   executionPolicy?: ExecutionPolicyName;
+  /** Select the CPU rasterizer for DMP command lists. */
+  dmpCpuRenderer?: boolean;
   session: Record<string, unknown>;
   ticksPerSecond: number;
   bootTicks: number;

@@ -2,7 +2,7 @@
 //! latched exposure. Only the sensor's physical frame edge advances frame identity.
 use super::FrameEdge;
 use super::mosaic::{Cfa, MosaicSites, Radiance};
-use super::raf::RafScene;
+use super::noise::SensorNoise;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, OnceLock};
 #[derive(Serialize, Deserialize)]
@@ -31,6 +31,8 @@ pub struct Frame {
     /// Scene radiance of an sRGB white pixel, in cd/m².
     #[serde(default = "daylight_white")]
     pub white_luminance: f64,
+    #[serde(default)]
+    pub noise: Option<SensorNoise>,
     /// Mosaic cell means, derived once from the immutable pixels.
     #[serde(skip)]
     sites: OnceLock<MosaicSites>,
@@ -43,6 +45,8 @@ struct FrameState {
     pixels: FramePixels,
     #[serde(default = "daylight_white")]
     white_luminance: f64,
+    #[serde(default)]
+    noise: Option<SensorNoise>,
 }
 impl TryFrom<FrameState> for Frame {
     type Error = String;
@@ -52,6 +56,7 @@ impl TryFrom<FrameState> for Frame {
         }
         let mut frame = Self::new(state.width, state.height, state.pixels)?;
         frame.white_luminance = state.white_luminance;
+        frame.noise = state.noise.map(SensorNoise::validate).transpose()?;
         Ok(frame)
     }
 }
@@ -86,7 +91,7 @@ impl Frame {
             }
     }
     /// Per-site mosaic radiance for mosaic frames; `None` for RGB and RAW.
-    pub(crate) fn mosaic(&self) -> Option<&MosaicSites> {
+    pub fn mosaic(&self) -> Option<&MosaicSites> {
         match &self.pixels {
             FramePixels::Mosaic { cfa, radiance } => {
                 Some(self.sites.get_or_init(|| {
@@ -108,7 +113,11 @@ impl Frame {
                 serde_json::json!({"kind":"mosaic","cfa":cfa,"contents":fujimod_emulator_devices::fingerprint::float32s(radiance.values())})
             }
         };
-        serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels})
+        let mut result = serde_json::json!({"width":self.width,"height":self.height,"white_luminance":self.white_luminance,"pixels":pixels});
+        if let Some(noise) = self.noise {
+            result["noise"] = serde_json::json!(noise);
+        }
+        result
     }
     pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let (kind, pixels): (PixelKind, Arc<[u8]>) = match &self.pixels {
@@ -131,13 +140,26 @@ impl Frame {
         };
         Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "sensor-frame",
-            &(self.width, self.height, self.white_luminance, kind),
+            &(
+                self.width,
+                self.height,
+                self.white_luminance,
+                kind,
+                self.noise,
+            ),
         )?
         .with_blobs(vec![pixels]))
     }
-    pub fn from_checkpoint(saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Self, String> {
-        let (width, height, white, kind): (usize, usize, f64, PixelKind) =
-            saved.decode("sensor-frame")?;
+    pub fn from_checkpoint(
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<Self, String> {
+        let (width, height, white, kind, noise): (
+            usize,
+            usize,
+            f64,
+            PixelKind,
+            Option<SensorNoise>,
+        ) = saved.decode("sensor-frame")?;
         let bytes_per_site = match kind {
             PixelKind::Rgb24 => 3,
             PixelKind::Raw16 => 2,
@@ -171,6 +193,7 @@ impl Frame {
         };
         let mut frame = Self::new(width, height, pixels)?;
         frame.white_luminance = white;
+        frame.noise = noise.map(SensorNoise::validate).transpose()?;
         Ok(frame)
     }
     pub fn new(width: usize, height: usize, pixels: FramePixels) -> Result<Self, String> {
@@ -205,42 +228,9 @@ impl Frame {
             height,
             pixels,
             white_luminance: daylight_white(),
+            noise: None,
             sites: OnceLock::new(),
         })
-    }
-    pub fn from_raf_bytes(bytes: &[u8]) -> Result<Self, String> {
-        if bytes.len() > 64 << 20 {
-            return Err("sensor RAF input exceeds 64 MiB".into());
-        }
-        let scene = super::raf::read_raf(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
-        Self::from_raf(&scene)
-    }
-    /// The RAF's visible crop as a mosaic frame. The CFA pattern is re-phased
-    /// to the crop origin, so sites keep their physical colors.
-    pub fn from_raf(scene: &RafScene) -> Result<Self, String> {
-        let (full_width, full_height) = (scene.width as usize, scene.height as usize);
-        let (left, top) = (scene.crop_left as usize, scene.crop_top as usize);
-        let (width, height) = (scene.crop_width as usize, scene.crop_height as usize);
-        if scene.counts.len() != full_width * full_height
-            || width == 0
-            || height == 0
-            || left + width > full_width
-            || top + height > full_height
-        {
-            return Err("RAF crop lies outside its radiance raster".into());
-        }
-        let cfa = std::array::from_fn(|y| {
-            std::array::from_fn(|x| scene.cfa[(y + top) % 6][(x + left) % 6])
-        });
-        let mut bytes = Vec::with_capacity(width * height * 2);
-        for y in top..top + height {
-            let row = y * full_width + left;
-            for value in &scene.counts[row..row + width] {
-                bytes.extend_from_slice(&value.to_le_bytes());
-            }
-        }
-        let radiance = Radiance::from_bytes(bytes.into(), scene.norm)?;
-        Self::new(width, height, FramePixels::Mosaic { cfa, radiance })
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -248,11 +238,12 @@ pub struct SensorFrames {
     pub current: Arc<Frame>,
     pub latched: Arc<Frame>,
     pub edge: Option<FrameEdge>,
+    pub view: Option<super::view::View>,
 }
 pub type SensorFramesHandle = Arc<Mutex<SensorFrames>>;
 impl SensorFrames {
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"current":self.current.fingerprint(),"latched":self.latched.fingerprint(),"edge":self.edge})
+        serde_json::json!({"current":self.current.fingerprint(),"latched":self.latched.fingerprint(),"edge":self.edge,"view":self.view})
     }
     pub fn new(frame: Frame) -> Self {
         let frame = Arc::new(frame);
@@ -260,6 +251,7 @@ impl SensorFrames {
             current: frame.clone(),
             latched: frame,
             edge: None,
+            view: None,
         }
     }
     pub fn set_frame(&mut self, frame: Frame) {
@@ -349,44 +341,6 @@ mod tests {
         .unwrap()
         .with_blobs(vec![counts.bytes().clone()]);
         assert!(Frame::from_checkpoint(&corrupt).is_err());
-    }
-
-    #[test]
-    fn raf_crop_preserves_count_values_normalization_and_cfa_phase() {
-        let scene = RafScene {
-            width: 11,
-            height: 8,
-            cfa: std::array::from_fn(|y| std::array::from_fn(|x| ((x + y) % 3) as u8)),
-            black: [1024; 3],
-            white: 16383,
-            counts: (0..88).map(|i| i * 719).collect(),
-            norm: 1. / 64800.,
-            exposure: super::super::raf::RecordedExposure {
-                seconds: 1. / 800.,
-                f_number: 9.,
-                iso: 200,
-                dynamic_range: 100,
-            },
-            crop_top: 2,
-            crop_left: 3,
-            crop_height: 5,
-            crop_width: 7,
-        };
-        let frame = Frame::from_raf(&scene).unwrap();
-        let FramePixels::Mosaic { cfa, radiance } = &frame.pixels else {
-            panic!("mosaic");
-        };
-        assert_eq!(radiance.bytes().len(), 7 * 5 * 2);
-        assert_eq!(radiance.norm.to_bits(), scene.norm.to_bits());
-        for y in 0..5 {
-            for x in 0..7 {
-                assert_eq!(cfa[y % 6][x % 6], scene.cfa[(y + 2) % 6][(x + 3) % 6]);
-                assert_eq!(
-                    radiance.get(y * 7 + x).to_bits(),
-                    scene.radiance((y + 2) * 11 + x + 3).to_bits()
-                );
-            }
-        }
     }
 
     #[test]

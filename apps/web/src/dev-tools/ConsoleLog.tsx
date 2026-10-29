@@ -128,13 +128,13 @@ export function ConsoleLog(props: {
     const blob = new Blob(
       [exportLog(visible().map((entry) => ({ ...entry, correlation: entry.camera })))],
       {
-        type: 'application/json',
+        type: 'application/jsonl',
       },
     );
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `fujimod-log-${new Date().toISOString().replaceAll(':', '-')}.json`;
+    anchor.download = `fujimod-log-${new Date().toISOString().replaceAll(':', '-')}.jsonl`;
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

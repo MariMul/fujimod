@@ -5,7 +5,7 @@
 //! override is restored before the read returns. Nothing here writes settings,
 //! retries a command or reads outside the table's window.
 use crate::{Limits, access::range};
-use fujimod_catalog::bulk::{BulkRange, BulkSource, FirmwareBulk};
+use fujimod_catalog_bulk::{BulkRange, BulkSource, FirmwareBulk};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
@@ -17,7 +17,7 @@ use fujimod_usb::{
     },
     operations::{
         checks,
-        data::{DataReader, DataWindow, OffsetMode},
+        data::{DataAlignment, DataReader, DataWindow, OffsetMode},
         memory,
     },
 };
@@ -41,7 +41,7 @@ fn address(value: u64) -> Result<u32> {
     u32::try_from(value)
         .map_err(|_| BulkError::Check(format!("{value:#x} is beyond 32-bit E1 addressing")))
 }
-fn memory_range(target: BulkRange) -> Result<MemoryRange> {
+pub(crate) fn memory_range(target: BulkRange) -> Result<MemoryRange> {
     let size =
         u32::try_from(target.size).map_err(|_| BulkError::Check("Range too large".into()))?;
     Ok(range(address(target.address)?, size)?)
@@ -74,26 +74,65 @@ pub async fn read(
         bulk.window.contains(target),
         "Range is outside the bulk window",
     )?;
+    require(
+        bulk.dma.is_none_or(|dma| dma.admits(target)),
+        "Range is not aligned to the bulk DMA",
+    )?;
     memory_range(target)?;
-    check_identity(session, bulk).await?;
-    let mut access = Access { session, limits };
-    for check in &bulk.code_checks {
-        let bytes = access
-            .raw(check.address | bulk.code_alias, check.size)
-            .await?;
-        require(
-            hex(&checks::sha256_bytes(&bytes)) == check.sha256,
-            &format!("Stock code differs: {}", check.name),
-        )?;
+    let mut qualified = Qualified::prepare(session, bulk, limits).await?;
+    let outcome = qualified.read(target).await;
+    let overwritten = qualified.source.overwritten;
+    let restored = qualified.restore().await;
+    finish(outcome.map(|data| BulkRead { data, overwritten }), restored)
+}
+
+/// A qualified bulk mapping kept across calls without borrowing the session.
+/// Pass the same session to every call, and `restore` it when finished.
+pub struct BulkMapping {
+    source: Source,
+    window: BulkRange,
+    limits: Limits,
+}
+impl BulkMapping {
+    pub async fn prepare(
+        session: &mut Session,
+        bulk: &FirmwareBulk,
+        limits: Limits,
+    ) -> Result<Self> {
+        let Qualified { source, .. } = Qualified::prepare(session, bulk, limits).await?;
+        Ok(Self {
+            source,
+            window: bulk.window,
+            limits,
+        })
     }
-    let source = Source::prepare(&mut access, bulk).await?;
-    let outcome = source.read(&mut access, bulk, target).await;
-    let restored = source.restore(&mut access).await;
+    /// Diagnostic scratch the stock setup overwrote (`address`, `size`).
+    pub fn overwritten(&self) -> Option<(u64, u32)> {
+        self.source.overwritten
+    }
+    pub async fn read(&self, session: &mut Session, target: BulkRange) -> Result<Vec<u8>> {
+        require(
+            self.window.contains(target),
+            "Range is outside the bulk window",
+        )?;
+        let limits = self.limits;
+        self.source
+            .bulk(&mut Access { session, limits }, target)
+            .await
+    }
+    pub async fn restore(self, session: &mut Session) -> Result<()> {
+        let limits = self.limits;
+        let result = self.source.restore(&mut Access { session, limits }).await;
+        if result.is_err() {
+            session.invalidate_completion();
+        }
+        result
+    }
+}
+
+pub(crate) fn finish<T>(outcome: Result<T>, restored: Result<()>) -> Result<T> {
     match (outcome, restored) {
-        (Ok(data), Ok(())) => Ok(BulkRead {
-            data,
-            overwritten: source.overwritten,
-        }),
+        (Ok(data), Ok(())) => Ok(data),
         (Err(error), Ok(())) => Err(error),
         (Ok(_), Err(cleanup)) => Err(cleanup),
         (Err(error), Err(cleanup)) => Err(BulkError::Cleanup {
@@ -103,21 +142,82 @@ pub async fn read(
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+/// One qualified mapping, kept for a multi-command workflow. Call `restore`
+/// before releasing it; unknown completion withholds all cleanup traffic.
+pub(crate) struct Qualified<'a> {
+    pub(crate) access: Access<'a>,
+    source: Source,
+}
+impl<'a> Qualified<'a> {
+    pub(crate) async fn prepare(
+        session: &'a mut Session,
+        bulk: &FirmwareBulk,
+        limits: Limits,
+    ) -> Result<Self> {
+        let alignment = bulk
+            .dma
+            .map(|dma| DataAlignment::new(dma.address_alignment, dma.length_granule))
+            .transpose()?;
+        check_identity(session, bulk).await?;
+        let mut access = Access { session, limits };
+        for check in &bulk.code_checks {
+            let bytes = access
+                .raw(check.address | bulk.code_alias, check.size)
+                .await?;
+            require(
+                hex(&checks::sha256_bytes(&bytes)) == check.sha256,
+                &format!("Stock code differs: {}", check.name),
+            )?;
+        }
+        let mut source = Source::prepare(&mut access, bulk).await?;
+        if let Some(alignment) = alignment {
+            source.window = source.window.with_alignment(alignment);
+        }
+        if let Err(error) = source.qualify(&mut access, bulk).await {
+            let restored = source.restore(&mut access).await;
+            if restored.is_err() {
+                access.session.invalidate_completion();
+            }
+            return finish(Err(error), restored);
+        }
+        Ok(Self { access, source })
+    }
+    pub(crate) async fn read(&mut self, target: BulkRange) -> Result<Vec<u8>> {
+        self.source.bulk(&mut self.access, target).await
+    }
+    pub(crate) async fn read_progress(
+        &mut self,
+        target: BulkRange,
+        progress: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+    ) -> Result<Vec<u8>> {
+        self.source
+            .bulk_progress(&mut self.access, target, progress)
+            .await
+    }
+    pub(crate) async fn restore(&mut self) -> Result<()> {
+        let result = self.source.restore(&mut self.access).await;
+        if result.is_err() {
+            self.access.session.invalidate_completion();
+        }
+        result
+    }
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Slow memory reads within one qualified session.
-struct Access<'a> {
-    session: &'a mut Session,
-    limits: Limits,
+pub(crate) struct Access<'a> {
+    pub(crate) session: &'a mut Session,
+    pub(crate) limits: Limits,
 }
 impl Access<'_> {
-    async fn raw(&mut self, at: u64, size: u64) -> Result<Vec<u8>> {
+    pub(crate) async fn raw(&mut self, at: u64, size: u64) -> Result<Vec<u8>> {
         let target = memory_range(BulkRange { address: at, size })?;
         Ok(memory::read_range(self.session, target, self.limits.memory).await?)
     }
-    async fn write(&mut self, at: u64, bytes: &[u8]) -> Result<()> {
+    pub(crate) async fn write(&mut self, at: u64, bytes: &[u8]) -> Result<()> {
         memory::write_range(
             self.session,
             Address(address(at)?),
@@ -129,7 +229,7 @@ impl Access<'_> {
     }
 }
 
-async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -> Result<()> {
+pub(crate) async fn check_identity(session: &mut Session, bulk: &FirmwareBulk) -> Result<()> {
     let product = session.device_info(InfoSelector::Product).await?.text;
     require(
         product.trim() == bulk.product,
@@ -311,6 +411,9 @@ impl Source {
                 .await;
                 if let Err(error) = setup {
                     let cleanup = source.restore(access).await;
+                    if cleanup.is_err() {
+                        access.session.invalidate_completion();
+                    }
                     source.saved = None;
                     return Err(match cleanup {
                         Ok(()) => error,
@@ -325,12 +428,7 @@ impl Source {
         }
     }
 
-    async fn read(
-        &self,
-        access: &mut Access<'_>,
-        bulk: &FirmwareBulk,
-        target: BulkRange,
-    ) -> Result<Vec<u8>> {
+    async fn qualify(&self, access: &mut Access<'_>, bulk: &FirmwareBulk) -> Result<()> {
         for probe in &bulk.probes {
             let slow = access.raw(probe.address, probe.size).await?;
             require(
@@ -349,13 +447,22 @@ impl Source {
                 "Bulk read differs from the firmware's bytes",
             )?;
         }
-        self.bulk(access, target).await
+        Ok(())
     }
 
     async fn bulk(&self, access: &mut Access<'_>, target: BulkRange) -> Result<Vec<u8>> {
+        self.bulk_progress(access, target, &mut |_| Ok(())).await
+    }
+    async fn bulk_progress(
+        &self,
+        access: &mut Access<'_>,
+        target: BulkRange,
+        progress: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+    ) -> Result<Vec<u8>> {
         let mut reader = DataReader::new(&mut *access.session, self.window, memory_range(target)?)?;
         let mut bytes = Vec::with_capacity(target.size as usize);
         while let Some(chunk) = reader.next_chunk().await? {
+            progress(chunk.len() as u64).map_err(BulkError::Check)?;
             bytes.extend(chunk);
         }
         Ok(bytes)
@@ -430,4 +537,4 @@ async fn verify_pattern(access: &mut Access<'_>, capacity: u32) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

@@ -1,5 +1,6 @@
 use super::*;
-use fujimod_emulator_imaging::{exposure::Calibration, radiometric::Renderer};
+use fujimod_emulator_image_formation::radiometric::Renderer;
+use fujimod_emulator_imaging::exposure::Calibration;
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
 use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use std::sync::{Arc, Mutex};
@@ -91,7 +92,7 @@ fn frozen_scene_jobs_keep_latched_bytes_pair_order_and_pending_restore() {
     let image = renderer.capture().unwrap().unwrap();
     // Derive the oracle from an independent restored image, leaving the queued
     // image's raster cache empty when it leaves the owner.
-    let expected = fujimod_emulator_imaging::radiometric::Image::from_checkpoint(
+    let expected = fujimod_emulator_image_formation::radiometric::Image::from_checkpoint(
         &image.checkpoint().unwrap(),
     )
     .unwrap()
@@ -209,7 +210,6 @@ fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_desti
         arm(&mut outputs, &mut host);
         {
             let mut memory = wire.lock().unwrap();
-            memory.raw_input = true;
             memory.active_destinations = memory.destinations;
             memory.active = true;
             for i in 0..2 {
@@ -254,4 +254,31 @@ fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_desti
         assert_eq!(read(&mut outputs[0], &mut host, 0xfff12000), 1);
         assert_eq!(host.effects, ["dma", "dma", "irq", "irq"]);
     }
+}
+
+#[test]
+fn empty_memory_readback_does_not_starve_inflight_sensor_dma() {
+    let (mut outputs, frames, _) = pair();
+    let wire: MemoryOutputHandle = Default::default();
+    for output in &mut outputs {
+        output.wiring.memory_outputs = Some(wire.clone());
+    }
+    let mut host = TestHost::new();
+    arm(&mut outputs, &mut host);
+    frames.publish(FrameEdge { index: 1, tick: 0 }, &[7; 32]).unwrap();
+    for output in &mut outputs { advance(output, &mut host, 0); }
+    // Both banks have withdrawn their next destinations while this frame
+    // drains. A memory input without output targets still has its own EOF.
+    assert_eq!(wire.lock().unwrap().destinations, [None; 2]);
+    wire.lock().unwrap().active = true;
+    assert!(wire.lock().unwrap().completed());
+    for output in &mut outputs { advance(output, &mut host, 5); }
+    assert_eq!(host.irqs, [(0,44),(0,45)]);
+    assert_eq!(&host.ram[0x4000..0x4020], &[7; 32]);
+    assert_eq!(&host.ram[0x8000..0x8020], &[7; 32]);
+    assert!(outputs.iter().all(|output| output.next_deadline(5).is_none()));
+    frames.publish(FrameEdge { index: 2, tick: 6 }, &[8; 32]).unwrap();
+    for output in &mut outputs { advance(output, &mut host, 6); }
+    assert!(outputs.iter().all(|output| output.next_deadline(6).is_none()));
+    assert_eq!(host.irqs.len(), 2);
 }

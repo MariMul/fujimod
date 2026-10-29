@@ -6,7 +6,8 @@
 mod tests;
 use fujimod_emulator_devices::graph::{DeviceGraph, Node as GraphNode, validate_mappings};
 use fujimod_emulator_exr2_plan::construction::{Builder, Built, Constructors, constructors};
-use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan, Resources, Wire};
+use fujimod_emulator_exr2_plan::{AdapterFactory, BuiltBoard, Model, Plan};
+use fujimod_emulator_exr2_resources::{Resources, Wire};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Make `Plan::build` construct boards with this crate. Final crates call
@@ -118,28 +119,42 @@ fn build(
     {
         return Err("EXR II resources must be fresh and explicitly named".into());
     }
+    if !fujimod_emulator_exr2_images::images_mut(&mut resources)?
+        .wires
+        .is_empty()
+    {
+        return Err("EXR II resources must be fresh and explicitly named".into());
+    }
     for (name, kind) in plan.wires {
+        use fujimod_emulator_exr2_images::ImageWire;
         use fujimod_emulator_exr2_plan::WireKind;
-        resources.wires.insert(
-            name,
-            match kind {
-                WireKind::LogicLevel(high) => Wire::logic_level(high),
-                WireKind::SoftwarePulse => Wire::software_pulse(),
-                WireKind::Parameters => Wire::parameters(),
-                WireKind::MemoryOutputs => Wire::memory_outputs(),
-                WireKind::Stream => Wire::stream(),
-                WireKind::OutputChannels => Wire::output_channels(),
-                WireKind::IrqRoutes => Wire::irq_routes(),
-                WireKind::PhaseEdges => Wire::phase_edges(),
-                WireKind::BridgeRegisters => Wire::bridge_registers(),
-                WireKind::OpticalPosition => Wire::optical_position(),
-                WireKind::Exposure => Wire::exposure(),
-                WireKind::Focus => Wire::focus(),
-                WireKind::FramePeriod => Wire::frame_period(),
-                WireKind::ImageGrid => Wire::image_grid(),
-                WireKind::Aperture => Wire::aperture(),
-            },
-        );
+        let image = match kind {
+            WireKind::LogicLevel(high) => Err(Wire::logic_level(high)),
+            WireKind::SoftwarePulse => Err(Wire::software_pulse()),
+            WireKind::Parameters => Ok(ImageWire::parameters()),
+            WireKind::MemoryOutputs => Ok(ImageWire::memory_outputs()),
+            WireKind::Stream => Ok(ImageWire::stream()),
+            WireKind::OutputChannels => Ok(ImageWire::output_channels()),
+            WireKind::IrqRoutes => Err(Wire::irq_routes()),
+            WireKind::PhaseEdges => Ok(ImageWire::phase_edges()),
+            WireKind::BridgeRegisters => Err(Wire::bridge_registers()),
+            WireKind::OpticalPosition => Err(Wire::optical_position()),
+            WireKind::Exposure => Ok(ImageWire::exposure()),
+            WireKind::Focus => Err(Wire::focus()),
+            WireKind::FramePeriod => Ok(ImageWire::frame_period()),
+            WireKind::ImageGrid => Ok(ImageWire::image_grid()),
+            WireKind::Aperture => Err(Wire::aperture()),
+        };
+        match image {
+            Ok(wire) => {
+                fujimod_emulator_exr2_images::images_mut(&mut resources)?
+                    .wires
+                    .insert(name, wire);
+            }
+            Err(wire) => {
+                resources.wires.insert(name, wire);
+            }
+        }
     }
     let mut built = BuiltBoard {
         graph: DeviceGraph::new(),
@@ -185,7 +200,7 @@ fn build(
         }
         let made = if let Model::Adapter { adapter: spec } = &node.model {
             for name in &spec.wires {
-                resources.wire(name, id)?;
+                resources.connect(name, id)?;
             }
             Built::Device(adapter.construct(
                 &node.name,

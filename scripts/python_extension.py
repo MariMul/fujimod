@@ -45,8 +45,6 @@ def build() -> Path:
             "--manifest-path",
             "bindings/python/module/Cargo.toml",
             "--lib",
-            "--features",
-            "testing",
             "--message-format=json-render-diagnostics",
         ],
         cwd=ROOT,

@@ -73,6 +73,7 @@ fn tick(m: &mut NandController, h: &mut TestHost, t: u64) {
 fn read_dma_commits_bytes_before_status_irq_and_never_on_early_ticks_or_host_save() {
     let mut m = model(false);
     let mut h = TestHost::new();
+    assert_eq!(m.save()["jobs_started"], 0);
     for (o, v) in [
         (0, 1),
         (0x54, 8),
@@ -85,6 +86,7 @@ fn read_dma_commits_bytes_before_status_irq_and_never_on_early_ticks_or_host_sav
     ] {
         write(&mut m, &mut h, o, v);
     }
+    assert_eq!(m.save()["jobs_started"], 1);
     assert_eq!(m.next_deadline(0), Some(4));
     assert_eq!(read(&mut m, &mut h, 4) & 4, 4);
     let before = m.save();
@@ -98,6 +100,11 @@ fn read_dma_commits_bytes_before_status_irq_and_never_on_early_ticks_or_host_sav
     assert_eq!(read(&mut m, &mut h, 0x890), 0);
     assert_eq!(read(&mut m, &mut h, 0x54), 9);
     assert_eq!(h.irqs, [(0, 80)]);
+    assert_eq!(m.save()["jobs_started"], 1);
+    let checkpoint = m.checkpoint().unwrap();
+    let mut restored = model(false);
+    restored.restore_checkpoint(&checkpoint).unwrap();
+    assert_eq!(restored.save()["jobs_started"], 1);
     tick(&mut m, &mut h, 20);
     assert_eq!(h.irqs.len(), 1);
 }

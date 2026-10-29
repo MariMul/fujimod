@@ -19,11 +19,16 @@ From this directory:
 
 ```sh
 npm ci
-npx wrangler login
+cf auth login
 npm test
 npm run check
 npm run deploy
 ```
+
+`npm run deploy` uses the Cloudflare CLI's sign-in (see
+[`scripts/cloudflare/wrangler.ts`](../../scripts/cloudflare/wrangler.ts)). It fails
+until R2 is enabled for the account, because `wrangler.jsonc` binds the private
+[issue-report](ISSUE_REPORTS.md) bucket.
 
 The production endpoint is `wss://share.fujimod.com/usb-proxy/signal`.
 The Cloudflare release workflow passes this public URL to the static build.
@@ -37,6 +42,33 @@ comma-separated. Production allows `https://fujimod.com` and
 Origin and are accepted. Origin filtering is browser policy, not authentication.
 Room IDs and the URL fragment's separate encryption key remain the share
 capability; the Worker never receives that encryption key.
+
+## Website error logs
+
+`POST /error-logs` receives errors from visitors' browsers on the website:
+uncaught errors, unhandled rejections, `console.error` calls and emulator faults
+([client](../web/src/error-log.ts)). The Worker validates each record (allowed
+origin, at most 16 KiB, 30 per minute per IP) and writes it to Workers Logs with
+`console.log`; nothing is stored elsewhere. Observability is enabled in
+`wrangler.jsonc`.
+
+In the dashboard, open Workers & Pages › `fujimod-usb-sharing` › Logs and filter
+on `source = website-client`. Each entry describes one browser, not the Worker:
+
+- `message`: `[browser 3f2a9c10 · Safari 27.0.1 · iOS 390×844] error on
+  /dev-tools/: TypeError: …`. The bracketed ID is the first eight characters of
+  the page-load session.
+- `client`: `session` (one per page load), `page` (origin and path only),
+  `build`, `userAgent`, `country`, `reportedAt`, `secondsSinceLoad` and
+  `device`: browser, OS, mobile, screen size, pixel ratio and orientation,
+  viewport, touch points, CPU cores, memory (Chromium), language, time zone,
+  color scheme, home-screen install, network type, cross-origin isolation, and
+  WebUSB and WebGPU availability.
+- `error`: `kind` (`error`, `rejection`, `console` or `fault`), the full
+  `message`, `stack` and, for emulator faults, the `fault` record.
+
+A page sends at most 20 distinct errors. Workers Logs keeps entries for the
+plan's retention period only.
 
 ## Enable Cloudflare TURN
 

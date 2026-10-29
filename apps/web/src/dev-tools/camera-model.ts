@@ -84,25 +84,71 @@ export interface CameraLogEntry {
   detail?: string;
 }
 
+/** Reads through one qualified bulk path, and writes. Close it to restore the camera's bulk source. */
+export interface ToolMemory {
+  read(address: number, length: number): Promise<Uint8Array>;
+  write(address: number, data: Uint8Array<ArrayBuffer>): Promise<void>;
+  /** Diagnostic scratch the stock setup overwrote, which may lie inside read bytes. */
+  readonly overwritten: { address: number; size: number } | null;
+  close(): Promise<void>;
+}
+
 /** An open ff80 session. Close it when the tool's operation is done. */
 export interface ToolSession {
   deviceInfo(selector: string): Promise<{ text?: string; data: Uint8Array }>;
   configurationGeometry(): Promise<{ capacity: number; pageBytes: number }>;
   readConfiguration(offset: number, length: number): Promise<Uint8Array>;
-  readMemory(address: number, length: number): Promise<Uint8Array>;
-  /**
-   * Qualify the firmware's stock bulk path and read a range through it. The
-   * result names diagnostic scratch the stock setup overwrote.
-   */
-  readBulk(
-    firmwareId: string,
-    address: number,
-    length: number,
-  ): Promise<{ data: Uint8Array; overwritten: { address: number; size: number } | null }>;
+  /** Qualify the firmware's stock bulk path once for any number of reads. */
+  memory(firmwareId: string): Promise<ToolMemory>;
   submitConsole(data: Uint8Array): Promise<void>;
   pollConsole(): Promise<{ complete: boolean; status: number; output: Uint8Array }>;
   /** The debug-mode workflows, run by the Enter and Leave debug mode tools. */
   debug: Pick<Session, 'armResetGuard' | 'enterDebugMode' | 'leaveDebugMode'>;
+  /**
+   * Confirm service mode, arm the RAM reset guard and enable debug access in
+   * RAM until the camera restarts. Nothing is stored.
+   */
+  prepareServiceSession(firmwareId: string): Promise<ServicePreparation>;
+  /**
+   * Copy the whole internal flash through the firmware's own reader, calling
+   * `chunk` with each piece in read order. Restores everything it borrowed.
+   * Progress counts delivered flash bytes, excluding the control read.
+   */
+  backupFlash(
+    firmwareId: string,
+    chunk: (piece: { offset: number; data: Uint8Array }) => void,
+    progress?: (done: number, total: number) => void,
+  ): Promise<FlashBackup>;
+  /**
+   * Read every region of the firmware's camera state (DRAM, boot ROM, other
+   * readable device state), calling `region` as each completes.
+   * Progress counts read bytes, including both reads of constant regions.
+   */
+  dumpState(
+    firmwareId: string,
+    region: (piece: StateRegion & { data: Uint8Array }) => void,
+    progress?: (done: number, total: number) => void,
+  ): Promise<void>;
+}
+
+export interface ServicePreparation {
+  guardBefore: number;
+  debugBefore: number;
+  progress: string[];
+}
+export interface FlashBackup {
+  /** Device kind and part, from the firmware's flash fact. */
+  device: { kind: string; part?: string };
+  size: number;
+  sha256: string;
+}
+export interface StateRegion {
+  name: string;
+  address: number;
+  size: number;
+  /** Constant regions (boot ROM) are read twice and must match. */
+  constant: boolean;
+  sha256: string;
 }
 
 export interface CameraModel {
