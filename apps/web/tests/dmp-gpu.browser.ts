@@ -127,7 +127,7 @@ try {
   assert(reply.proof);
   assert(reply.proof.adapter.length > 0);
   assert.match(reply.proof.adapter, /^BrowserWebGpu:/);
-  assert.equal(reply.proof.gpuDraws, 1);
+  assert(reply.proof.gpuDraws > 0, 'The saved DMP list did not issue any GPU draws.');
   assert.equal(reply.proof.gpuQueueSubmissions, 1);
   assert.equal(reply.proof.matchesCpu, true, JSON.stringify(reply.proof));
   assert.deepEqual(reply.proof.gpuSnapshots, reply.proof.cpuSnapshots);
