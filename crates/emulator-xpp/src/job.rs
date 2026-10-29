@@ -1,10 +1,12 @@
 //! X-Processor Pro job engine at 0xfff88000, from GFX 50R ISR 0xe852a0.
 //!
-//! Every aligned word is retained. A +0x1c write with bit 0 set starts a job.
-//! After `ticks` the job sets +0x34 bit 26, the job-done bit the ISR handles.
+//! Every aligned word is retained. Each start completes after `ticks` and
+//! sets a +0x34 bit; a zero write to the register the ISR clears resets it:
+//! +0x1c bit 0 sets bit 26 (cleared by +0x1c), +0xc18 sets bit 30 (cleared
+//! by +0xc18), and +0x10d0 or +0x10e0 bit 0 sets bit 31 (cleared by +0x1800
+//! or +0x1020). The pairing of starts with bits 30 and 31 is inferred.
 //! The IRQ is level: high while +0x34 bits 16-31 are set.
-//! Writing 0 to +0x1c clears bit 26, as the ISR does.
-//! The job moves no data; its transfer law is unrecovered.
+//! Jobs move no data; their transfer law is unrecovered.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,11 +14,16 @@ use std::collections::BTreeMap;
 
 const SIZE: u64 = 0x2000;
 const DONE: u32 = 1 << 26;
+/// (start offset, start bit mask, status bit).
+const STARTS: [(u64, u32, u32); 4] = [(0x1c, 1, 26), (0xc18, !0, 30), (0x10d0, 1, 31), (0x10e0, 1, 31)];
+/// (clear offset, status bit).
+const CLEARS: [(u64, u32); 4] = [(0x1c, 26), (0xc18, 30), (0x1800, 31), (0x1020, 31)];
 
 #[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
 struct State {
     words: BTreeMap<u64, u32>,
-    due: Option<u64>,
+    /// Status bit to completion tick.
+    due: BTreeMap<u32, u64>,
 }
 
 pub struct JobEngine {
@@ -64,30 +71,37 @@ impl Device for JobEngine {
         }
         let value = value as u32;
         self.state.words.insert(offset, value);
-        if offset == 0x1c {
-            if value & 1 != 0 {
+        for &(start, mask, bit) in &STARTS {
+            if offset == start && value & mask != 0 {
                 let Some(due) = cx.now().checked_add(self.ticks) else {
                     cx.fail("X-Processor Pro job deadline overflow");
                     return;
                 };
-                self.state.due = Some(due);
-            } else if value == 0 {
-                let status = self.word(0x34) & !DONE;
+                self.state.due.insert(bit, due);
+            }
+        }
+        for &(clear, bit) in &CLEARS {
+            if offset == clear && value == 0 {
+                let status = self.word(0x34) & !(1 << bit);
                 self.state.words.insert(0x34, status);
                 self.update_irq(cx);
             }
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        if self.state.due.is_some_and(|due| due <= cx.now()) {
-            self.state.due = None;
-            let status = self.word(0x34) | DONE;
-            self.state.words.insert(0x34, status);
+        let now = cx.now();
+        let done: Vec<u32> = self.state.due.iter().filter(|(_, due)| **due <= now).map(|(bit, _)| *bit).collect();
+        if !done.is_empty() {
+            for bit in done {
+                self.state.due.remove(&bit);
+                let status = self.word(0x34) | 1 << bit;
+                self.state.words.insert(0x34, status);
+            }
             self.update_irq(cx);
         }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.state.due
+        self.state.due.values().min().copied()
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
@@ -120,5 +134,11 @@ mod tests {
         write(&mut d, &mut h, 0xfff8801c, 0);
         assert_eq!(read(&mut d, &mut h, 0xfff88034), 0);
         assert_eq!(d.next_deadline(10), None);
+        write(&mut d, &mut h, 0xfff88c18, 1);
+        write(&mut d, &mut h, 0xfff8801c, 0x0f100201);
+        advance(&mut d, &mut h, 20);
+        assert_eq!(read(&mut d, &mut h, 0xfff88034), (DONE | 1 << 30) as u64);
+        write(&mut d, &mut h, 0xfff88c18, 0);
+        assert_eq!(read(&mut d, &mut h, 0xfff88034), DONE as u64);
     }
 }
