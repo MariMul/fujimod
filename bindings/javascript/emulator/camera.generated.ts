@@ -31,6 +31,7 @@ declare class Camera {
      * Finish device work and release the session.
      */
     close(): void;
+    completeHostRequest(device: number, id: bigint, result: Uint8Array): void;
     deviceStates(kind: string): DeviceStates;
     /**
      * Set the stopped host worker preference (0 or 2) and report it.
@@ -111,6 +112,7 @@ declare class Camera {
     setScene(width: number, height: number, rgb: Uint8Array): void;
     state(): SessionState;
     status(): Status;
+    takeHostRequests(): HostRequest[];
     touch(id: string, phase: TouchPhase, x: number, y: number): SessionState;
     undo(): Point;
     usbInToken(node: string, endpoint: number): void;
@@ -138,6 +140,16 @@ declare class Frame {
      */
     readonly sequence: bigint;
     readonly width: number;
+}
+
+declare class HostRequest {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    readonly device: number;
+    readonly id: bigint;
+    readonly kind: string;
+    readonly payload: Uint8Array;
 }
 
 declare class Status {
@@ -533,6 +545,7 @@ interface BindgenModule {
     memoryBytes(): number;
     Camera: typeof Camera;
     Frame: typeof Frame;
+    HostRequest: typeof HostRequest;
     Status: typeof Status;
 }
 
