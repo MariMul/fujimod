@@ -476,7 +476,14 @@
     {
       "id": "peripheral-window-ff000000",
       "base": 4278190080,
-      "size": 16777216,
+      "size": 8388608,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "peripheral-window-ff840000",
+      "base": 4286840832,
+      "size": 8126464,
       "kind": "address-window",
       "clock_id": null
     },
@@ -654,6 +661,11 @@
     },
     {
       "core": "core0",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
+    },
+    {
+      "core": "core0",
       "block_id": "peripheral-window-fa000000",
       "address": 4194304000
     },
@@ -731,6 +743,11 @@
       "core": "core1",
       "block_id": "peripheral-window-ff000000",
       "address": 4278190080
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
     },
     {
       "core": "core1",
@@ -811,6 +828,11 @@
       "core": "core2",
       "block_id": "peripheral-window-ff000000",
       "address": 4278190080
+    },
+    {
+      "core": "core2",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
     },
     {
       "core": "core2",
@@ -891,6 +913,11 @@
       "core": "core3",
       "block_id": "peripheral-window-ff000000",
       "address": 4278190080
+    },
+    {
+      "core": "core3",
+      "block_id": "peripheral-window-ff840000",
+      "address": 4286840832
     },
     {
       "core": "core3",
@@ -971,6 +998,11 @@
       "core": "core4",
       "block_id": "peripheral-window-ff000000",
       "address": 1593835520
+    },
+    {
+      "core": "core4",
+      "block_id": "peripheral-window-ff840000",
+      "address": 1602486272
     }
   ],
   "reset": {
