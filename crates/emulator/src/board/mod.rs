@@ -982,7 +982,29 @@ impl Board {
             if let Some(error) = s.error.take() {
                 return Err(error);
             }
-            let exit = result.map_err(|e| e.to_string())?;
+            let exit = result.map_err(|error| {
+                if cpu.model() == fujimod_emulator_cpu::Model::ArmV8A {
+                    let stop_pc = scalar(&**cpu, Register::Pc).unwrap_or(pc);
+                    let mut bytes = [0; 4];
+                    let word = cpu
+                        .read_virtual(
+                            stop_pc,
+                            fujimod_emulator_cpu::Access::Fetch,
+                            &mut bytes,
+                        )
+                        .map(|()| format!("{:#010x}", u32::from_le_bytes(bytes)))
+                        .unwrap_or_else(|_| "unavailable".into());
+                    let x0 = scalar(&**cpu, Register::X(0))
+                        .map(|value| format!("{value:#x}"))
+                        .unwrap_or_else(|_| "unavailable".into());
+                    format!(
+                        "CPU{core} {} at PC {stop_pc:#x}, instruction {word}, X0 {x0}: {error}",
+                        error.kind()
+                    )
+                } else {
+                    format!("CPU{core}: {error}")
+                }
+            })?;
             s.apply_memory(&self.cpus)?;
             s.finish_exit(&**cpu, core, pc, exit)?;
             let entered = s.instructions[core]
