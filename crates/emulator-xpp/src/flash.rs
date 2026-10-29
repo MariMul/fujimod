@@ -33,6 +33,9 @@ struct Transaction {
     opcode: u8,
     transmit: Vec<u8>,
     receive: usize,
+    /// Aperture block erased when the command completes.
+    #[serde(default)]
+    erase: Option<(u64, u64)>,
 }
 
 /// Passive union of every byte read through the aperture, including DMA reads.
@@ -113,6 +116,15 @@ impl Aperture {
             *old &= *new;
         }
         Ok(())
+    }
+    /// Sets an aperture block to the erased value.
+    fn erase(&self, address: u64, len: usize) {
+        let start = (address - self.base) as usize;
+        let mut image = self.image.lock().unwrap();
+        if start < image.len() {
+            let end = image.len().min(start + len);
+            image[start..end].fill(0xff);
+        }
     }
     pub fn program_complete(&self, cx: &mut Cx<'_>) {
         let mut program = self.program.lock().unwrap();
@@ -234,7 +246,7 @@ impl FlashController {
             self.registers[0x10 / 4] & !0xff00403f,
             self.registers[0x20 / 4] & 0x7f,
         ) {
-            (0x18040 | 0x18080, 1) => (vec![], 0),
+            (0x18040 | 0x18080, 1 | 3) => (vec![], 0),
             (0x38040 | 0x38080 | 0x39040 | 0x39080, 0x21) => (vec![], 1),
             (0x19040 | 0x19080, 0x41) => {
                 let value = u8::try_from(self.registers[0x14 / 4])
@@ -249,6 +261,23 @@ impl FlashController {
             }
         };
         let opcode = u8::try_from(self.registers[0]).map_err(|_| "Serial-flash opcode overflow")?;
+        // +0x20 field 3 carries the aperture address in +4 as an address phase.
+        let erase = match (self.registers[0x20 / 4] & 0x7f, opcode) {
+            (3, 0x21 | 0xdc) => {
+                let size = if opcode == 0x21 { 0x1000 } else { 0x10000 };
+                let address = u64::from(self.registers[4 / 4]) & !(size - 1);
+                if !self.aperture.contains(address, size as usize) {
+                    return Err(format!("Serial-flash erase address {address:#x} is outside the aperture"));
+                }
+                Some((address, size))
+            }
+            (3, _) => {
+                return Err(format!(
+                    "Unsupported serial-flash address-phase opcode {opcode:#x}"
+                ));
+            }
+            _ => None,
+        };
         let due = cx
             .now()
             .checked_add(self.options.transfer_ticks)
@@ -259,6 +288,7 @@ impl FlashController {
             opcode,
             transmit,
             receive,
+            erase,
         });
         self.registers[0x1c / 4] = 1;
         cx.schedule(due, 0);
@@ -341,6 +371,9 @@ impl Device for FlashController {
                 pending.receive,
             ) {
                 Ok(bytes) => {
+                    if let Some((address, size)) = pending.erase {
+                        self.aperture.erase(address, size as usize);
+                    }
                     self.received = bytes.first().copied();
                     self.registers[0x24 / 4] |= 1 | if bytes.is_empty() { 0 } else { 8 };
                     self.registers[0x1c / 4] = 0;

@@ -1,6 +1,7 @@
 //! Micron-compatible serial NOR control registers, independent of array data.
-//! Only status, write-enable and enhanced volatile configuration commands are
-//! supported; array commands and other register protocols refuse explicitly.
+//! Status, write-enable, enhanced volatile configuration and the 4-byte-address
+//! erases 0x21/0xdc are supported; the array itself belongs to the caller.
+//! Other array commands and register protocols refuse explicitly.
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,15 +73,17 @@ impl Registers {
                 Ok(vec![])
             }
             (0x65, [], 1) => Ok(vec![self.enhanced_volatile]),
-            (0x61, [value], 0) => {
+            (0x61, [_], 0) | (0x21 | 0xdc, [], 0) => {
                 if !self.write_enable {
-                    return Err("Serial NOR register write requires write-enable".into());
+                    return Err("Serial NOR write requires write-enable".into());
                 }
                 let due = now
                     .checked_add(self.options.write_ticks)
-                    .ok_or("Serial NOR register write deadline overflow")?;
+                    .ok_or("Serial NOR write deadline overflow")?;
                 self.write_enable = false;
-                self.pending = Some((due, *value));
+                // An erase leaves the configuration register unchanged.
+                let value = transmit.first().copied().unwrap_or(self.enhanced_volatile);
+                self.pending = Some((due, value));
                 Ok(vec![])
             }
             _ => Err(format!(
@@ -116,5 +119,11 @@ mod tests {
         assert_eq!(device.next_deadline(), Some(10));
         assert_eq!(device.command(10, 0x65, &[], 1).unwrap(), [0xf5]);
         assert!(device.command(10, 0x03, &[], 1).is_err());
+        assert!(device.command(10, 0xdc, &[], 0).is_err());
+        device.command(10, 0x06, &[], 0).unwrap();
+        device.command(11, 0xdc, &[], 0).unwrap();
+        assert_eq!(device.command(17, 0x05, &[], 1).unwrap(), [1]);
+        assert_eq!(device.command(18, 0x05, &[], 1).unwrap(), [0]);
+        assert_eq!(device.command(18, 0x65, &[], 1).unwrap(), [0xf5]);
     }
 }
