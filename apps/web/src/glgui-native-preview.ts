@@ -1,3 +1,4 @@
+import { lcdTouchPosition } from './lcd-touch';
 import { RemoteEngine, type NativeDisplayState } from '@fujimod/emulator-ui/engine/remote';
 import type { EngineConfig, Frame } from '@fujimod/emulator-ui/engine/api';
 
@@ -145,11 +146,13 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-dial]')
 let pointer: number | undefined;
 let touchPosition = { x: 0, y: 0 };
 function locate(event: PointerEvent) {
-  const bounds = canvas.getBoundingClientRect();
-  touchPosition = {
-    x: Math.max(0, Math.min(720, Math.round(((event.clientX - bounds.left) * 720) / bounds.width))),
-    y: Math.max(0, Math.min(480, Math.round(((event.clientY - bounds.top) * 480) / bounds.height))),
-  };
+  touchPosition = lcdTouchPosition(
+    event.clientX,
+    event.clientY,
+    canvas.getBoundingClientRect(),
+    720,
+    480,
+  );
 }
 function sendTouch(phase: 'press' | 'drag' | 'release') {
   void engine
