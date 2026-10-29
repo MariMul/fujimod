@@ -55,7 +55,7 @@ fn mapped_board(mappings: Vec<MemoryMap>, decoders: Vec<decoder::Decoder>) -> Bo
     .unwrap()
 }
 
-fn two_core_board() -> Board {
+pub(super) fn two_core_board() -> Board {
     Graph {
         processors: vec![
             Processor {

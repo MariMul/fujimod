@@ -422,10 +422,15 @@ impl PreservationRecords {
 pub struct Preservation {
     memory: Weak<super::memory::Memory>,
     records: Rc<RefCell<PreservationRecords>>,
-    contexts: Vec<Box<PreservationContext>>,
-    hooks: Vec<(Weak<dyn Cpu>, HookId)>,
-    broken: bool,
+    contexts: Vec<PreservationHooks>,
     ended: bool,
+}
+
+// Each core's callbacks share one stable allocation. Keep it only while at
+// least one of that core's hooks may still reference it.
+struct PreservationHooks {
+    context: Box<PreservationContext>,
+    hooks: Vec<HookId>,
 }
 
 impl Preservation {
@@ -437,30 +442,29 @@ impl Preservation {
         }
     }
     pub fn end(&mut self) -> Result<(), String> {
-        if self.broken {
-            return Err("preservation cleanup previously failed".into());
-        }
         if self.ended {
             return Ok(());
         }
         let mut failure = None;
-        for (cpu, hook) in std::mem::take(&mut self.hooks) {
-            if let Some(cpu) = cpu.upgrade() {
-                if let Err(error) = cpu.remove_hook(hook) {
+        self.contexts.retain_mut(|entry| {
+            let Some(cpu) = entry.context.cpu.upgrade() else {
+                return false;
+            };
+            entry.hooks.retain(|hook| match cpu.remove_hook(*hook) {
+                Ok(()) => false,
+                Err(error) => {
                     failure.get_or_insert(error);
+                    true
                 }
-            }
-        }
-        if failure.is_some() {
-            self.broken = true;
+            });
+            !entry.hooks.is_empty()
+        });
+        if let Some(error) = failure {
             self.records
                 .borrow_mut()
                 .fault(PreservationFault::UnsupportedAccess);
-            let contexts = std::mem::take(&mut self.contexts);
-            std::mem::forget(contexts);
-            return Err(failure.unwrap());
+            return Err(error);
         }
-        self.contexts.clear();
         if let Some(memory) = self.memory.upgrade() {
             memory.clear_preservation(&self.records);
         }
@@ -471,7 +475,13 @@ impl Preservation {
 
 impl Drop for Preservation {
     fn drop(&mut self) {
-        let _ = self.end();
+        if self.end().is_err() {
+            // Failed removals may leave callbacks installed. Only their data
+            // must outlive this guard; successfully detached contexts are gone.
+            for entry in std::mem::take(&mut self.contexts) {
+                std::mem::forget(entry.context);
+            }
+        }
     }
 }
 
@@ -833,8 +843,6 @@ impl Board {
             memory: Rc::downgrade(&self.physical_memory),
             records: records.clone(),
             contexts: Vec::new(),
-            hooks: Vec::new(),
-            broken: false,
             ended: false,
         });
         self.physical_memory
@@ -848,21 +856,25 @@ impl Board {
                     .collect(),
             );
             let context_merged = records.borrow().merged.clone();
-            preservation.contexts.push(Box::new(PreservationContext {
-                state: Rc::downgrade(&self.state),
-                cpu: Rc::downgrade(&self.cpus[core]),
-                records: records.clone(),
-                maps: self
-                    .mappings
-                    .iter()
-                    .filter(|map| map.core == core)
-                    .cloned()
-                    .collect(),
-                merged: context_merged,
-                spans: core_spans,
-                core: CoreId::new(core)?,
-            }));
-            let data = (&**preservation.contexts.last().unwrap() as *const PreservationContext)
+            preservation.contexts.push(PreservationHooks {
+                context: Box::new(PreservationContext {
+                    state: Rc::downgrade(&self.state),
+                    cpu: Rc::downgrade(&self.cpus[core]),
+                    records: records.clone(),
+                    maps: self
+                        .mappings
+                        .iter()
+                        .filter(|map| map.core == core)
+                        .cloned()
+                        .collect(),
+                    merged: context_merged,
+                    spans: core_spans,
+                    core: CoreId::new(core)?,
+                }),
+                hooks: Vec::new(),
+            });
+            let entry = preservation.contexts.last_mut().unwrap();
+            let data = (&*entry.context as *const PreservationContext)
                 .cast_mut()
                 .cast();
             match unsafe {
@@ -872,9 +884,7 @@ impl Board {
                     range: HookRange::All,
                 })
             } {
-                Ok(id) => preservation
-                    .hooks
-                    .push((Rc::downgrade(&self.cpus[core]), id)),
+                Ok(id) => entry.hooks.push(id),
                 Err(error) => {
                     self.preservation_end(&mut preservation)?;
                     return Err(error);
@@ -893,9 +903,7 @@ impl Board {
                         },
                     })
                 } {
-                    Ok(id) => preservation
-                        .hooks
-                        .push((Rc::downgrade(&self.cpus[core]), id)),
+                    Ok(id) => entry.hooks.push(id),
                     Err(error) => {
                         self.preservation_end(&mut preservation)?;
                         return Err(error);
@@ -907,5 +915,73 @@ impl Board {
     }
     pub fn preservation_end(&self, preservation: &mut Preservation) -> Result<(), String> {
         preservation.end()
+    }
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+
+    unsafe fn end_during_host_write(_: u64, _: usize, data: *mut c_void) {
+        let preservation = unsafe { &mut *data.cast::<Preservation>() };
+        // The CPU refuses to remove its hooks while dispatch holds the index.
+        assert!(preservation.end().is_err());
+    }
+
+    fn fail_during_host_write(board: &Board, preservation: &mut Preservation) -> HookId {
+        let hook = unsafe {
+            board.cpus[0].install_hook(Hook::HostWrite {
+                callback: end_during_host_write,
+                data: (preservation as *mut Preservation).cast(),
+                range: HookRange::All,
+            })
+        }
+        .unwrap();
+        board.cpu(0).unwrap().write_memory(0x10080, &[1]).unwrap();
+        hook
+    }
+
+    #[test]
+    fn failed_removal_releases_other_core_contexts_and_can_be_retried() {
+        let board = super::super::preservation_tests::two_core_board();
+        let ranges =
+            ProtectedRanges::new(vec![PhysicalRange::new(0x10000, 0x12000).unwrap()]).unwrap();
+        let mut preservation = board.preservation_begin(ranges.clone()).unwrap();
+        let records = Rc::downgrade(&preservation.records);
+        assert_eq!(records.strong_count(), 3);
+        let hook = fail_during_host_write(&board, &mut preservation);
+        assert_eq!(
+            records.strong_count(),
+            2,
+            "the successfully detached core must release its context"
+        );
+        assert!(matches!(
+            preservation.state().violation(),
+            Some(PreservationViolation::IntegrityFault {
+                reason: PreservationFault::UnsupportedAccess
+            })
+        ));
+        assert!(board.preservation_begin(ranges.clone()).is_err());
+        board.cpus[0].remove_hook(hook).unwrap();
+        preservation.end().unwrap();
+        assert!(!preservation.state().enabled());
+        drop(preservation);
+        assert_eq!(records.strong_count(), 0);
+        board.preservation_begin(ranges).unwrap().end().unwrap();
+    }
+
+    #[test]
+    fn failed_cleanup_releases_context_when_its_cpu_is_gone() {
+        let board = super::super::preservation_tests::two_core_board();
+        let ranges =
+            ProtectedRanges::new(vec![PhysicalRange::new(0x10000, 0x12000).unwrap()]).unwrap();
+        let mut preservation = board.preservation_begin(ranges).unwrap();
+        let records = Rc::downgrade(&preservation.records);
+        fail_during_host_write(&board, &mut preservation);
+        drop(board);
+        preservation.end().unwrap();
+        assert_eq!(records.strong_count(), 1);
+        drop(preservation);
+        assert_eq!(records.strong_count(), 0);
     }
 }
