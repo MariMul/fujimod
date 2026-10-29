@@ -800,9 +800,6 @@ impl Board {
             s.apply_memory(&self.cpus)?;
             s.refresh_processors()?;
             s.due(&self.cpus)?;
-            if self.host_pause.get() {
-                s.memory.rearm(&self.cpus)?;
-            }
             s.push_pins(&self.cpus)?;
             // Clock inputs advance with execution/idle time, including for
             // parked peers. Host counter inspection never drives an update.
@@ -816,10 +813,8 @@ impl Board {
             if let Some(error) = s.error.take() {
                 return Err(error);
             }
-            if self.host_pause.get() {
-                return Ok(());
-            }
             if s.continuation.borrow().fired
+                || self.host_pause.get()
                 || self.isolated_core.get().is_some_and(|core| s.waiting[core])
             {
                 return Ok(());
@@ -1755,40 +1750,6 @@ impl Host for Services<'_> {
         *self.code_run = None;
         self.memory
             .write_dma(self.cpus, self.exclusive, address, bytes)
-    }
-    fn ram_page_versions(&mut self, address: u64, bytes: usize) -> Result<Option<Vec<u64>>, String> {
-        if self.decoders.pending() {
-            return Err("DMA requires committed memory decoding".into());
-        }
-        if !self
-            .cpus
-            .iter()
-            .all(|cpu| cpu.precise_backing_write_observation())
-        {
-            return Ok(None);
-        }
-        if self.active_core.is_some_and(|core| {
-            !self.cpus[core].features().tighten_instruction_limit
-        }) {
-            return Ok(None);
-        }
-        let (versions, needs_rearm) = self.memory.page_versions(address, bytes)?;
-        if needs_rearm {
-            if self.active_core.is_some() {
-                self.request_pause()?;
-            } else {
-                self.memory.rearm(self.cpus)?;
-            }
-        }
-        Ok(Some(versions))
-    }
-    fn ram_write_coherent(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        if self.decoders.pending() {
-            return Err("DMA requires committed memory decoding".into());
-        }
-        *self.code_run = None;
-        self.memory
-            .write_dma_coherent(self.cpus, self.exclusive, address, bytes)
     }
     fn scanout(
         &mut self,

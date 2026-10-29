@@ -247,9 +247,6 @@ pub trait Inputs {
     fn routed(&self) -> bool;
     fn read(&mut self, cpu: i64, address: u64, length: u64)
     -> std::result::Result<Vec<u8>, String>;
-    fn page_versions(&mut self, _cpu: i64, _address: u64, _bytes: usize) -> Result<Option<Vec<u64>>> {
-        Ok(None)
-    }
     fn submit_webgpu_request(&mut self, _kind: &str, _payload: Vec<u8>) -> Result<Option<u64>> {
         Ok(None)
     }
@@ -691,12 +688,6 @@ impl CommandProcessor {
             .get(&token)
             .ok_or_else(|| Unsupported("Unknown graphics completion token".into()))?;
         Ok((c.cpu, c.output.clone()))
-    }
-    pub fn output_is_ui(&self, token: u64) -> Result<bool> {
-        self.completions
-            .get(&token)
-            .map(|completion| completion.ui)
-            .ok_or_else(|| Unsupported("Unknown graphics completion token".into()))
     }
     pub fn complete_webgpu_request(
         &mut self,

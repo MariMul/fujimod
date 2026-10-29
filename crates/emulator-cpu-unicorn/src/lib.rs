@@ -499,9 +499,6 @@ impl Cpu for Core {
             store_pc_control: e.write_hook_pc_sync.is_some(),
         }
     }
-    fn precise_backing_write_observation(&self) -> bool {
-        self.api.extensions.observe_backings.is_some()
-    }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
         let mut size = out.len();
         if self.model == Model::ArmV8A {

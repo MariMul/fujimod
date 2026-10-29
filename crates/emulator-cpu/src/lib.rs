@@ -591,9 +591,6 @@ pub struct BackingObserver {
     pub backing: NonNull<u8>,
     pub bytes: usize,
     pub bitmap: NonNull<AtomicU64>,
-    pub versions: NonNull<AtomicU64>,
-    pub watched: NonNull<AtomicU64>,
-    pub pending_rearm: NonNull<AtomicU64>,
     pub page_shift: u32,
 }
 
@@ -870,13 +867,9 @@ pub trait Cpu {
     fn request_restart(&self) -> Result<(), String>;
     fn accounting(&self) -> Option<NonNull<BlockAccounting>>;
     /// # Safety
-    /// All observer arrays are writable, cover the backing pages and outlive
-    /// observation; accesses follow the owner's CPU rules.
+    /// The bitmap is writable and covers every backing page; both buffers
+    /// outlive observation and are accessed only under the owner's CPU rules.
     unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String>;
-    /// Whether watched pages receive precise generations for guest stores.
-    fn precise_backing_write_observation(&self) -> bool {
-        false
-    }
     fn watch_stores(&self, address: u64, bytes: u64) -> Result<(), String>;
     fn hook_watched(&self, hook: HookId, watched: bool) -> Result<(), String>;
     fn precise_store_pc(&self, on: bool) -> Result<(), String>;

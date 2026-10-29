@@ -7,8 +7,6 @@ struct SurfaceParams {
     bytes_per_pixel: u32,
     write_count: u32,
     reserved: u32,
-    readback_x: u32,
-    readback_y: u32,
 };
 
 struct GuestBytes {
@@ -133,11 +131,10 @@ fn accumulate_draw_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
 
 @compute @workgroup_size(8, 8)
 fn resolve_write_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
-    let local = invocation.xy;
-    if (local.x >= params.storage_width || local.y >= params.storage_height) {
+    let position = invocation.xy;
+    if (position.x >= params.storage_width || position.y >= params.storage_height) {
         return;
     }
-    let position = local + vec2<u32>(params.readback_x, params.readback_y);
     let linear_offset = position.y * params.width + position.x;
     let byte_mask = atomicLoad(&resolved_masks.values[linear_offset]);
     textureStore(
@@ -153,15 +150,12 @@ fn resolve_write_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
 
 @compute @workgroup_size(8, 8)
 fn readback_morton(@builtin(global_invocation_id) invocation: vec3<u32>) {
-    let local = invocation.xy;
-    if (local.x >= params.storage_width || local.y >= params.storage_height) {
+    let position = invocation.xy;
+    if (position.x >= params.storage_width || position.y >= params.storage_height) {
         return;
     }
-    let position = local + vec2<u32>(params.readback_x, params.readback_y);
     let guest_offset = guest_pixel_offset(position.x, position.y);
-    let compact_offset = local.y * params.storage_width + local.x;
     let pixel = textureLoad(surface_in, vec2<i32>(position), 0).x;
     let byte_mask = textureLoad(mask_in, vec2<i32>(position), 0).x;
-    let destination = select(guest_offset, compact_offset, params.write_count != 0u);
-    readback.values[destination] = ReadbackPixel(pixel, byte_mask);
+    readback.values[guest_offset] = ReadbackPixel(pixel, byte_mask);
 }

@@ -536,9 +536,6 @@ struct BackingRange {
     backing: usize,
     bytes: usize,
     bitmap: usize,
-    versions: usize,
-    watched: usize,
-    pending_rearm: usize,
     page_shift: u32,
 }
 
@@ -1157,14 +1154,6 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
                     bytes: range.bytes,
                     bitmap: NonNull::new(range.bitmap as *mut std::sync::atomic::AtomicU64)
                         .expect("checked bitmap"),
-                    versions: NonNull::new(range.versions as *mut std::sync::atomic::AtomicU64)
-                        .expect("checked versions"),
-                    watched: NonNull::new(range.watched as *mut std::sync::atomic::AtomicU64)
-                        .expect("checked watched pages"),
-                    pending_rearm: NonNull::new(
-                        range.pending_rearm as *mut std::sync::atomic::AtomicU64,
-                    )
-                    .expect("checked pending rearm pages"),
                     page_shift: range.page_shift,
                 })
                 .collect::<Vec<_>>();
@@ -1455,9 +1444,6 @@ impl Cpu for CpuWorker {
     }
     fn features(&self) -> Features {
         self.features
-    }
-    fn precise_backing_write_observation(&self) -> bool {
-        self.features.backing_observation
     }
     fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
         self.unit(Operation::SetGuestClock(clock))
@@ -1966,9 +1952,6 @@ impl Cpu for CpuWorker {
                 backing: range.backing.as_ptr() as usize,
                 bytes: range.bytes,
                 bitmap: range.bitmap.as_ptr() as usize,
-                versions: range.versions.as_ptr() as usize,
-                watched: range.watched.as_ptr() as usize,
-                pending_rearm: range.pending_rearm.as_ptr() as usize,
                 page_shift: range.page_shift,
             })
             .collect();

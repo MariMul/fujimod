@@ -115,9 +115,6 @@ impl Cpu for Core {
             ..Features::default()
         }
     }
-    fn precise_backing_write_observation(&self) -> bool {
-        self.execution.cpu.precise_backing_write_observation()
-    }
     fn read_register(&self, r: Register, bytes: &mut [u8]) -> Result<usize, String> {
         self.execution.cpu.read_register(r, bytes)
     }
