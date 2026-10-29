@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-gpu"
-description = "Shared host GPU context and resident surfaces"
+description = "Shared GPU context, resident surfaces, and coverage rasterization"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

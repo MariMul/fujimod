@@ -7,8 +7,12 @@ struct CoverageJob {
 }
 
 @group(0) @binding(0) var<storage, read> jobs: array<CoverageJob>;
-@group(0) @binding(1) var<storage, read> edges: array<vec4<i32>>;
+@group(0) @binding(1) var<storage, read> edges: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> coverage: array<u32>;
+
+fn edge_in_grid(index: u32) -> vec4<i32> {
+    return vec4<i32>(round(edges[index] * 8.0));
+}
 
 fn multiply_u32(a: u32, b: u32) -> vec2<u32> {
     let a_high = a >> 16u;
@@ -99,7 +103,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
             if stroke_enabled {
                 for (var edge_index = 0u; edge_index < edge_count; edge_index += 1u) {
-                    if stroke_covers(point, edges[edge_offset + edge_index], radius) {
+                    if stroke_covers(point, edge_in_grid(edge_offset + edge_index), radius) {
                         covered = true;
                         break;
                     }
@@ -107,14 +111,12 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             } else {
                 var winding = 0i;
                 for (var edge_index = 0u; edge_index < edge_count; edge_index += 1u) {
-                    let edge = edges[edge_offset + edge_index];
+                    let edge = edge_in_grid(edge_offset + edge_index);
                     let a = edge.xy;
                     let b = edge.zw;
                     let upward = b.y > a.y;
                     let crosses_row = (a.y <= py && b.y > py) || (b.y <= py && a.y > py);
                     if crosses_row {
-                        // The sign of this cross product determines whether
-                        // the ray-right intersection lies past the sample.
                         let relative = (b.x - a.x) * (py - a.y)
                             - (b.y - a.y) * (px - a.x);
                         if (upward && relative > 0) || (!upward && relative < 0) {
