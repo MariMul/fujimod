@@ -2788,6 +2788,37 @@
       ],
       "type": "object"
     },
+    "ResetStatisticsBuffer": {
+      "additionalProperties": false,
+      "description": "Declared contents of one statistics engine output buffer.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "output": {
+          "description": "Engine register holding the buffer's address (+0x1b8..+0x1e4).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "words": {
+          "description": "Words written each frame.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "output",
+        "words"
+      ],
+      "type": "object"
+    },
     "ResetStatisticsScene": {
       "additionalProperties": false,
       "description": "Declared statistics scene facts.",
@@ -3090,6 +3121,13 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "buffers": {
+          "description": "Measured buffers of the same scene.",
+          "items": {
+            "$ref": "#/$defs/ResetStatisticsBuffer"
+          },
+          "type": "array"
         },
         "zone_sums": {
           "description": "Red, green and blue sum of every zone.",

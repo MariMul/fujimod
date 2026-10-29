@@ -98,6 +98,10 @@ pub struct Definition {
     /// of every zone.
     #[serde(default)]
     pub xpp_statistics_scene: Option<[u32; 3]>,
+    /// Statistics engine buffers written each frame: output register offset
+    /// and words.
+    #[serde(default)]
+    pub xpp_statistics_buffers: Vec<(u64, Vec<u32>)>,
     /// X-Processor Pro face detection engine: base, interrupt line and run
     /// time in ticks.
     #[serde(default)]

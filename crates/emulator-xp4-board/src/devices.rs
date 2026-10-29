@@ -999,6 +999,7 @@ impl Devices {
         irq: u32,
         period: u64,
         scene: Option<[u32; 3]>,
+        buffers: &[(u64, Vec<u32>)],
     ) -> Result<(), String> {
         use fujimod_emulator_xpp::statistics::{Engine, WINDOW};
         if self
@@ -1011,6 +1012,9 @@ impl Devices {
         let mut model = Engine::new(base, irq, period)?;
         if let Some(scene) = scene {
             model = model.with_scene(scene);
+        }
+        for (output, words) in buffers {
+            model = model.with_buffer(*output, words)?;
         }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));

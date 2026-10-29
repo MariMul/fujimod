@@ -24,8 +24,10 @@
 //! (+0x1cc) of the half it completes: three planes of 16x16 u32 zone sums
 //! (red, green, blue; green is about 2.6 times red, probably both green
 //! sites) and a fourth plane of zeros, as in the camera's captures. The
-//! scene is uniform, so every zone of a plane holds the declared value. The
-//! other buffers are not written.
+//! scene is uniform, so every zone of a plane holds the declared value.
+//! Declared buffers name one of the twelve output words and the u32 words
+//! the engine writes there each frame, in the half it completes (measured
+//! buffers of the same scene). The other buffers are not written.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -44,6 +46,7 @@ const IDLE: u32 = 1 << 16;
 const HALF: u64 = 0x10;
 const ZONE_SUMS: u64 = 0x1cc;
 const ZONES: usize = 256;
+const OUTPUTS: std::ops::RangeInclusive<u64> = 0x1b8..=0x1e4;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -62,6 +65,7 @@ pub struct Engine {
     irq: u32,
     period: u64,
     scene: Option<[u32; 3]>,
+    buffers: Vec<(u64, Vec<u8>)>,
     state: State,
 }
 impl Engine {
@@ -74,6 +78,7 @@ impl Engine {
             irq,
             period,
             scene: None,
+            buffers: Vec::new(),
             state: State::default(),
         })
     }
@@ -82,24 +87,43 @@ impl Engine {
         self.scene = Some(zone_sums);
         self
     }
-    fn write_zone_sums(&self, cx: &mut Cx<'_>) {
-        let Some(scene) = self.scene else {
-            return;
-        };
+    /// A declared buffer: the output word (+0x1b8..+0x1e4) and its contents.
+    pub fn with_buffer(mut self, output: u64, words: &[u32]) -> Result<Self, String> {
+        if !OUTPUTS.contains(&output)
+            || output & 3 != 0
+            || words.is_empty()
+            || (output == ZONE_SUMS && self.scene.is_some())
+            || self.buffers.iter().any(|(o, _)| *o == output)
+        {
+            return Err("Invalid X-Processor Pro statistics buffer".into());
+        }
+        let bytes = words.iter().flat_map(|w| w.to_le_bytes()).collect();
+        self.buffers.push((output, bytes));
+        Ok(self)
+    }
+    fn write_output(&self, cx: &mut Cx<'_>, output: u64, data: &[u8]) {
         let half = if self.state.second {
             self.word(HALF)
         } else {
             0
         };
-        let address = u64::from(self.word(ZONE_SUMS)) + u64::from(half);
-        let mut planes = Vec::with_capacity(4 * ZONES * 4);
-        for value in scene.into_iter().chain([0]) {
-            for _ in 0..ZONES {
-                planes.extend_from_slice(&value.to_le_bytes());
-            }
+        let address = u64::from(self.word(output)) + u64::from(half);
+        if cx.ram_write(address, data).is_err() {
+            cx.fail("Statistics buffer outside RAM");
         }
-        if cx.ram_write(address, &planes).is_err() {
-            cx.fail("Statistics zone sums outside RAM");
+    }
+    fn write_buffers(&self, cx: &mut Cx<'_>) {
+        if let Some(scene) = self.scene {
+            let mut planes = Vec::with_capacity(4 * ZONES * 4);
+            for value in scene.into_iter().chain([0]) {
+                for _ in 0..ZONES {
+                    planes.extend_from_slice(&value.to_le_bytes());
+                }
+            }
+            self.write_output(cx, ZONE_SUMS, &planes);
+        }
+        for (output, data) in &self.buffers {
+            self.write_output(cx, *output, data);
         }
     }
     fn word(&self, offset: u64) -> u32 {
@@ -165,7 +189,7 @@ impl Device for Engine {
         };
         self.state.status |= self.word(ENABLE) & SOURCES;
         self.state.frames += 1;
-        self.write_zone_sums(cx);
+        self.write_buffers(cx);
         self.state.second = !self.state.second;
         let frames = (cx.now() - due) / self.period + 1;
         self.state.due = frames
@@ -269,5 +293,37 @@ mod tests {
         write(&mut stats, &mut h, BASE + CONTROL, START);
         advance(&mut stats, &mut h, 4000);
         assert_eq!(word(&h, 0x4690), 145_000);
+    }
+
+    #[test]
+    fn declared_buffers_are_written_to_their_output_each_frame() {
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_buffer(0x1b4, &[1])
+                .is_err()
+        );
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_scene([1, 2, 3])
+                .with_buffer(ZONE_SUMS, &[1])
+                .is_err()
+        );
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_buffer(0x1d0, &[7, 0, 9])
+            .unwrap();
+        let mut h = TestHost::new();
+        let word = |h: &TestHost, address: usize| {
+            u32::from_le_bytes(h.ram[address..address + 4].try_into().unwrap())
+        };
+        write(&mut stats, &mut h, BASE + HALF, 0x3690);
+        write(&mut stats, &mut h, BASE + 0x1d0, 0x2000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        assert_eq!([0, 4, 8].map(|o| word(&h, 0x2000 + o)), [7, 0, 9]);
+        advance(&mut stats, &mut h, 2000);
+        assert_eq!(word(&h, 0x5690), 7);
     }
 }

@@ -1202,6 +1202,23 @@ pub struct ZoneStatistics {
     pub basis: String,
     /// Red, green and blue sum of every zone.
     pub zone_sums: [u32; 3],
+    /// Measured buffers of the same scene.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buffers: Vec<StatisticsBuffer>,
+}
+
+/// Declared contents of one statistics engine output buffer.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetStatisticsBuffer"))]
+pub struct StatisticsBuffer {
+    /// Declared basis.
+    pub basis: String,
+    /// Engine register holding the buffer's address (+0x1b8..+0x1e4).
+    pub output: u64,
+    /// Words written each frame.
+    pub words: Vec<u32>,
 }
 
 /// Declared hardware reset facts.

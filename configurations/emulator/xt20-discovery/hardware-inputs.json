@@ -419,6 +419,13 @@
     ],
     "zone_statistics": {
       "zone_sums": [144736, 383321, 33695],
+      "buffers": [
+        {
+          "output": 464,
+          "words": [641739, 0, 1700693, 0, 150556, 0, 0, 0, 590, 0, 1676, 0, 158, 0, 0, 0, 480, 0, 1461, 0, 137, 0, 0, 0, 508, 0, 1312, 0, 115, 0, 0, 0, 521, 0, 1360, 0, 125, 0, 0, 0, 502, 0, 1369, 0, 120, 0, 0, 0, 632, 0, 1582, 0, 143, 0, 0, 0, 562, 0, 1466, 0, 124, 0, 0, 0, 527, 0, 1405, 0, 113, 0, 0, 0, 0, 0, 365, 0, 0, 0, 0, 0],
+          "basis": "Measured: the second statistics window buffer (+0x1d0, 0x3f481360 in the first half, 80 u32) of the same s2 REC capture, first half, copied unchanged. Words 0/2/4 are red/green/blue sums of a window of about 4.4 zones (641739 / 1700693 / 150556); nine smaller windows follow at stride 8 (red, green, blue at +0/+2/+4), and word 74 reads 365..368 in every scene. On the XP4 board (previous lens inputs) this buffer alone moves AE record field +0x10e (setter 0xd289dc, struct 0x1d09168) from -595 to 196 at the 170M write (camera s2: 53, offset as the zone-sum fields); the coarse 8x8 planes (+0x2670), the 256-bin histogram (+0x3290) and the other buffers left the record unchanged."
+        }
+      ],
       "basis": "Measured mean zone sums, uniform scene: X-T20 2.11 REC live view of an evenly lit wall (s2, 2026-10-29). The statistics engine 0xfff54000 writes twelve buffers per frame into one of two halves 0x3690 apart (+0x10); the zone sums buffer (+0x1cc, 0x3f480360 in the first half) holds four 16x16 planes of u32: red, green (about 2.6 times red, probably both green sites), blue, and a plane of zeros. Both halves of the capture agree within 1%: mean 144736 / 383321 / 33695 / 0 (green zones 228289..478805: vignetting). Section 6 0x1698dd0 takes each completion as the half just written and alternates its pointer 0x1bc6310 without reprogramming the engine's buffer words; the engine keeps alternating across the firmware's per-frame restarts (with a restart from the first half, only the first half was ever written in the emulator, while the camera fills both). Declared uniform: every zone holds the mean."
     },
     "usb_cable": {
