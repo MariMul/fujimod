@@ -977,6 +977,7 @@ impl Session {
             xpp_sd,
             dram_alias,
             pmu_cycles_per_tick,
+            gpio_base,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -1145,7 +1146,7 @@ impl Session {
         if let Some(inputs) = gpio {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .gpio(inputs)?;
+                .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
         }
         if let Some((value, ticks)) = temperature {
             devices

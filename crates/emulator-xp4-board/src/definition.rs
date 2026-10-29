@@ -97,6 +97,9 @@ pub struct Definition {
     pub dram_alias: Option<u64>,
     #[serde(default)]
     pub pmu_cycles_per_tick: Option<u64>,
+    /// GPIO bank base; XP4 places it at 0xfff41000.
+    #[serde(default)]
+    pub gpio_base: Option<u64>,
 }
 
 /// Register layout of the interval timer at `timer_base`.

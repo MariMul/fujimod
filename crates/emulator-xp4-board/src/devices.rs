@@ -173,8 +173,7 @@ impl Devices {
             .set_input(port, pin, high);
         Ok(())
     }
-    pub fn gpio(&mut self, inputs: [u16; 16]) -> Result<(), String> {
-        let base = 0xfff41000;
+    pub fn gpio(&mut self, base: u64, inputs: [u16; 16]) -> Result<(), String> {
         if self.pins.is_some()
             || self
                 .windows
