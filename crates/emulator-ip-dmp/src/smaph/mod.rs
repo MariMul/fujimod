@@ -1097,17 +1097,6 @@ fn gpu_mode() -> (bool, bool) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn dmp_gpu_mode() -> (bool, bool) {
-    let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
-    let verify = enabled("FUJIMOD_DMP_VERIFY_GPU");
-    dmp_gpu_mode_for(enabled("FUJIMOD_DMP_CPU"), verify)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn dmp_gpu_mode_for(cpu_only: bool, verify: bool) -> (bool, bool) {
-    (verify || !cpu_only, verify)
-}
-
 fn paint_cpu_draws(
     prepared: &[PreparedPaint<'_>],
     coverage_inputs: &[scanline::CoverageInput],
@@ -1171,14 +1160,6 @@ mod tests {
     use super::*;
     use fujimod_emulator_devices::Host;
     use fujimod_emulator_devices::test_host::{bus::TestBus, recording::RecordingHost};
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    fn dmp_gles_uses_gpu_by_default_and_cpu_when_requested() {
-        assert_eq!(dmp_gpu_mode_for(false, false), (true, false));
-        assert_eq!(dmp_gpu_mode_for(true, false), (false, false));
-        assert_eq!(dmp_gpu_mode_for(true, true), (true, true));
-    }
 
     /// The pixmap high-address register beside the renderer reads zero and
     /// refuses nonzero writes, like the XP5 register at the same address.
@@ -1776,24 +1757,6 @@ impl Device for Renderer {
                 0x20f0 if v == 1 => {
                     s.idle()?;
                     let data = words(cx, s.r(0x20e8) as u64 * 8, s.r(0x20e0) as usize * 2)?;
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let writes = {
-                        let (gpu_requested, verify_gpu) = dmp_gpu_mode();
-                        if gpu_requested {
-                            if verify_gpu {
-                                s.gles.execute_host_gpu_verified(
-                                    &data,
-                                    &mut |a, n| cx.ram_bytes(a, n),
-                                )?
-                            } else {
-                                s.gles
-                                    .execute_host_gpu(&data, &mut |a, n| cx.ram_bytes(a, n))?
-                            }
-                        } else {
-                            s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?
-                        }
-                    };
-                    #[cfg(target_arch = "wasm32")]
                     let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
                     s.command_ack = 0;
                     s.regs.insert(o, v);
