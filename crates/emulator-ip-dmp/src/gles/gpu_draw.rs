@@ -10,7 +10,10 @@ use fujimod_emulator_gpu::{
 };
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use wgpu::util::DeviceExt;
 
@@ -20,7 +23,23 @@ const FOG_WORDS: usize = 128;
 const INPUT_OFFSET: usize = FOG_OFFSET + FOG_WORDS;
 const CASE_WORDS: usize = INPUT_OFFSET + 16;
 
-static DRAW_PIPELINES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::RenderPipeline>>>> = OnceLock::new();
+static DRAW_PIPELINES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::RenderPipeline>>>> =
+    OnceLock::new();
+static VERTEX_SHADER_MODULES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::ShaderModule>>>> =
+    OnceLock::new();
+static FRAGMENT_SHADER_MODULES: OnceLock<Mutex<HashMap<bool, Arc<wgpu::ShaderModule>>>> =
+    OnceLock::new();
+static VERTEX_MODULE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
+static FRAGMENT_MODULE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
+static PIPELINE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
+
+pub(super) fn shader_cache_creation_counts() -> (usize, usize, usize) {
+    (
+        VERTEX_MODULE_CREATIONS.load(Ordering::Relaxed),
+        FRAGMENT_MODULE_CREATIONS.load(Ordering::Relaxed),
+        PIPELINE_CREATIONS.load(Ordering::Relaxed),
+    )
+}
 
 fn color_surface_format(format: ColorTargetFormat) -> Result<SurfaceFormat, String> {
     match format {
@@ -435,7 +454,7 @@ fn pipeline_for(
     state: &DrawState,
     vertex: &gpu_vertex::PreparedDraw,
 ) -> Result<Arc<wgpu::RenderPipeline>, String> {
-    let key = vertex.shader_key;
+    let key = vertex.pipeline_key;
     match state.raster.primitive_mode {
         super::draw_state::PrimitiveMode::Triangles
         | super::draw_state::PrimitiveMode::TriangleStrip
@@ -450,27 +469,8 @@ fn pipeline_for(
         return Ok(Arc::clone(pipeline));
     }
 
-    let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("DMP translated vertex program"),
-        source: wgpu::ShaderSource::Wgsl(vertex.shader_source.clone().into()),
-    });
-    let fragment_source = format!(
-        "{}\n{}",
-        include_str!("gpu_fragment.wgsl"),
-        include_str!("gpu_draw.wgsl")
-    );
-    let fragment_source = if state.raster.flat_shading {
-        fragment_source.replace(
-            "@location(0) primary: vec4<f32>",
-            "@location(0) @interpolate(flat) primary: vec4<f32>",
-        )
-    } else {
-        fragment_source
-    };
-    let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("DMP fragment program"),
-        source: wgpu::ShaderSource::Wgsl(fragment_source.into()),
-    });
+    let vertex_shader = vertex_shader_module(device, vertex)?;
+    let fragment_shader = fragment_shader_module(device, state.raster.flat_shading)?;
     let pipeline = Arc::new(create_pipeline(
         device,
         &vertex_shader,
@@ -478,8 +478,62 @@ fn pipeline_for(
         state,
         vertex.topology,
     ));
+    PIPELINE_CREATIONS.fetch_add(1, Ordering::Relaxed);
     pipelines.insert(key, Arc::clone(&pipeline));
     Ok(pipeline)
+}
+
+fn vertex_shader_module(
+    device: &wgpu::Device,
+    vertex: &gpu_vertex::PreparedDraw,
+) -> Result<Arc<wgpu::ShaderModule>, String> {
+    let modules = VERTEX_SHADER_MODULES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut modules = modules
+        .lock()
+        .map_err(|_| "DMP host GPU vertex shader module cache lock poisoned")?;
+    if let Some(module) = modules.get(&vertex.vertex_module_key) {
+        return Ok(Arc::clone(module));
+    }
+    let module = Arc::new(device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("DMP translated vertex program"),
+        source: wgpu::ShaderSource::Wgsl(vertex.shader_source.to_string().into()),
+    }));
+    modules.insert(vertex.vertex_module_key, Arc::clone(&module));
+    VERTEX_MODULE_CREATIONS.fetch_add(1, Ordering::Relaxed);
+    Ok(module)
+}
+
+fn fragment_shader_module(
+    device: &wgpu::Device,
+    flat_shading: bool,
+) -> Result<Arc<wgpu::ShaderModule>, String> {
+    let modules = FRAGMENT_SHADER_MODULES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut modules = modules
+        .lock()
+        .map_err(|_| "DMP host GPU fragment shader module cache lock poisoned")?;
+    if let Some(module) = modules.get(&flat_shading) {
+        return Ok(Arc::clone(module));
+    }
+    let fragment_source = format!(
+        "{}\n{}",
+        include_str!("gpu_fragment.wgsl"),
+        include_str!("gpu_draw.wgsl")
+    );
+    let fragment_source = if flat_shading {
+        fragment_source.replace(
+            "@location(0) primary: vec4<f32>",
+            "@location(0) @interpolate(flat) primary: vec4<f32>",
+        )
+    } else {
+        fragment_source
+    };
+    let module = Arc::new(device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("DMP fragment program"),
+        source: wgpu::ShaderSource::Wgsl(fragment_source.into()),
+    }));
+    modules.insert(flat_shading, Arc::clone(&module));
+    FRAGMENT_MODULE_CREATIONS.fetch_add(1, Ordering::Relaxed);
+    Ok(module)
 }
 
 fn create_pipeline(

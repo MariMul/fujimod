@@ -3,7 +3,13 @@
 use super::{Engine, Reader, draw_state::DrawState, shader::Vector};
 use crate::pica::{VERTEX_OUTPUT_SEMANTICS, translate_vertex_to_wgsl_for_draw};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 const MAX_VERTEX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_REMAP_ENTRIES: usize = 1 << 24;
@@ -30,12 +36,20 @@ struct GroupPlan {
 
 #[derive(Clone, Debug)]
 pub(super) struct PreparedDraw {
-    pub(super) shader_source: String,
-    pub(super) shader_key: [u8; 32],
+    pub(super) shader_source: Arc<str>,
+    pub(super) vertex_module_key: [u8; 32],
+    pub(super) pipeline_key: [u8; 32],
     pub(super) shading_bytes: Vec<u8>,
     pub(super) input_bytes: Vec<u8>,
     pub(super) indices: Vec<u32>,
     pub(super) topology: wgpu::PrimitiveTopology,
+}
+
+static TRANSLATED_VERTEX_SHADERS: OnceLock<Mutex<HashMap<[u8; 32], Arc<str>>>> = OnceLock::new();
+static VERTEX_TRANSLATIONS: AtomicUsize = AtomicUsize::new(0);
+
+pub(super) fn translation_count() -> usize {
+    VERTEX_TRANSLATIONS.load(Ordering::Relaxed)
 }
 
 pub(super) fn prepare_draw(
@@ -47,8 +61,9 @@ pub(super) fn prepare_draw(
 ) -> Result<PreparedDraw, String> {
     if vertex_count == 0 {
         return Ok(PreparedDraw {
-            shader_source: String::new(),
-            shader_key: [0; 32],
+            shader_source: Arc::from(""),
+            vertex_module_key: [0; 32],
+            pipeline_key: [0; 32],
             shading_bytes: Vec::new(),
             input_bytes: vec![0; 4],
             indices: Vec::new(),
@@ -139,28 +154,8 @@ fn prepare_packed_draw(
     packed: PackedVertices,
 ) -> Result<PreparedDraw, String> {
     let semantics = draw_vertex_semantics(state);
-    let shader_source = translate_vertex_to_wgsl_for_draw(
-        &engine.code,
-        &engine.operands,
-        engine.reg(0x48a) & 0xffff,
-        &semantics,
-        state.raster.flat_shading,
-    )?;
-    let mut shader_hash = Sha256::new();
-    shader_hash.update(shader_source.as_bytes());
-    shader_hash.update([state.raster.flat_shading as u8]);
-    shader_hash.update([match state.raster.cull_mode {
-        super::draw_state::CullMode::Disabled => 0,
-        super::draw_state::CullMode::Front => 1,
-        super::draw_state::CullMode::Back => 2,
-        super::draw_state::CullMode::Other(code) => code.saturating_add(3),
-    }]);
-    shader_hash.update([match state.raster.primitive_mode {
-        super::draw_state::PrimitiveMode::Triangles => 0,
-        super::draw_state::PrimitiveMode::TriangleStrip => 1,
-        super::draw_state::PrimitiveMode::TriangleFan => 2,
-        other => return Err(format!("DMP unsupported host GPU primitive mode {other:?}")),
-    }]);
+    let (vertex_module_key, shader_source) = translated_shader(engine, state, &semantics)?;
+    let pipeline_key = pipeline_key(vertex_module_key, state)?;
 
     let draw_indices = packed
         .draw_indices
@@ -177,8 +172,7 @@ fn prepare_packed_draw(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let mode = state.raster.primitive_mode;
-    let expand = state.raster.flat_shading
-        || mode == super::draw_state::PrimitiveMode::TriangleFan;
+    let expand = state.raster.flat_shading || mode == super::draw_state::PrimitiveMode::TriangleFan;
     let (topology, mut indices) = if expand {
         let mut triangles = Vec::with_capacity(draw_indices.len().saturating_sub(2) * 3);
         match mode {
@@ -225,7 +219,8 @@ fn prepare_packed_draw(
 
     Ok(PreparedDraw {
         shader_source,
-        shader_key: shader_hash.finalize().into(),
+        vertex_module_key,
+        pipeline_key,
         shading_bytes: shading_bytes(engine, state, packed.attributes, packed.defaults),
         input_bytes: packed.bytes,
         indices,
@@ -233,14 +228,99 @@ fn prepare_packed_draw(
     })
 }
 
-fn primitive_topology(mode: super::draw_state::PrimitiveMode) -> Result<wgpu::PrimitiveTopology, String> {
+fn translated_shader(
+    engine: &Engine,
+    state: &DrawState,
+    semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
+) -> Result<([u8; 32], Arc<str>), String> {
+    let entry_point = engine.reg(0x48a) & 0xffff;
+    let key = vertex_module_key(
+        &engine.code,
+        &engine.operands,
+        entry_point,
+        semantics,
+        state.raster.flat_shading,
+    );
+    let cache = TRANSLATED_VERTEX_SHADERS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut cache = cache
+        .lock()
+        .map_err(|_| "DMP translated vertex shader cache lock poisoned")?;
+    if let Some(source) = cache.get(&key) {
+        return Ok((key, Arc::clone(source)));
+    }
+
+    let source: Arc<str> = translate_vertex_to_wgsl_for_draw(
+        &engine.code,
+        &engine.operands,
+        entry_point,
+        semantics,
+        state.raster.flat_shading,
+    )?
+    .into();
+    cache.insert(key, Arc::clone(&source));
+    VERTEX_TRANSLATIONS.fetch_add(1, Ordering::Relaxed);
+    Ok((key, source))
+}
+
+fn vertex_module_key(
+    code: &[u32],
+    operands: &[u32],
+    entry_point: u32,
+    semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
+    flat_shading: bool,
+) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"fujimod-dmp-vertex-module-v1");
+    hash.update((code.len() as u64).to_le_bytes());
+    for word in code {
+        hash.update(word.to_le_bytes());
+    }
+    hash.update((operands.len() as u64).to_le_bytes());
+    for word in operands {
+        hash.update(word.to_le_bytes());
+    }
+    hash.update(entry_point.to_le_bytes());
+    for semantic in semantics {
+        hash.update(semantic.to_le_bytes());
+    }
+    hash.update([flat_shading as u8]);
+    hash.finalize().into()
+}
+
+fn pipeline_key(vertex_module_key: [u8; 32], state: &DrawState) -> Result<[u8; 32], String> {
+    let mut hash = Sha256::new();
+    hash.update(b"fujimod-dmp-render-pipeline-v1");
+    hash.update(vertex_module_key);
+    match state.raster.cull_mode {
+        super::draw_state::CullMode::Disabled => hash.update([0]),
+        super::draw_state::CullMode::Front => hash.update([1]),
+        super::draw_state::CullMode::Back => hash.update([2]),
+        super::draw_state::CullMode::Other(code) => {
+            hash.update([3]);
+            hash.update(code.to_le_bytes());
+        }
+    }
+    hash.update([match state.raster.primitive_mode {
+        super::draw_state::PrimitiveMode::Triangles => 0,
+        super::draw_state::PrimitiveMode::TriangleStrip => 1,
+        super::draw_state::PrimitiveMode::TriangleFan => 2,
+        other => return Err(format!("DMP unsupported host GPU primitive mode {other:?}")),
+    }]);
+    Ok(hash.finalize().into())
+}
+
+fn primitive_topology(
+    mode: super::draw_state::PrimitiveMode,
+) -> Result<wgpu::PrimitiveTopology, String> {
     match mode {
         super::draw_state::PrimitiveMode::Triangles => Ok(wgpu::PrimitiveTopology::TriangleList),
         super::draw_state::PrimitiveMode::TriangleStrip => {
             Ok(wgpu::PrimitiveTopology::TriangleStrip)
         }
         super::draw_state::PrimitiveMode::TriangleFan => Ok(wgpu::PrimitiveTopology::TriangleList),
-        other => Err(format!("DMP host GPU draw does not support primitive mode {other:?}")),
+        other => Err(format!(
+            "DMP host GPU draw does not support primitive mode {other:?}"
+        )),
     }
 }
 
@@ -559,5 +639,10 @@ mod tests {
         assert_eq!(prepared.input_bytes.len(), 3 * 12);
         assert_eq!(prepared.shading_bytes.len(), 2256);
         assert!(prepared.shader_source.contains("@vertex"));
+        let repeated = prepare_draw(&engine, &state, 3, true, &mut read).unwrap();
+        assert!(Arc::ptr_eq(
+            &prepared.shader_source,
+            &repeated.shader_source
+        ));
     }
 }

@@ -9,8 +9,6 @@ mod draw_state;
 mod gpu_draw;
 #[cfg(all(test, not(target_os = "emscripten")))]
 mod gpu_fragment;
-#[cfg(all(test, not(target_arch = "wasm32"), not(target_os = "emscripten")))]
-mod gpu_surfaces;
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu_vertex;
 mod raster;
@@ -214,8 +212,7 @@ impl Engine {
                 return Err("DMP checkpoint lost pending immediate vertex inputs".into());
             }
             let mut inputs = next.pending_inputs.clone();
-            if next.draw_state().raster.primitive_mode
-                == draw_state::PrimitiveMode::TriangleStrip
+            if next.draw_state().raster.primitive_mode == draw_state::PrimitiveMode::TriangleStrip
                 && next.primitive_index & 1 != 0
                 && inputs.len() >= 2
             {
@@ -450,13 +447,8 @@ impl Engine {
                 let state = self.draw_state();
                 #[cfg(not(target_arch = "wasm32"))]
                 if self.gpu_primitives.is_some() {
-                    let vertex = gpu_vertex::prepare_draw(
-                        self,
-                        &state,
-                        count,
-                        index == 0x42f,
-                        read,
-                    )?;
+                    let vertex =
+                        gpu_vertex::prepare_draw(self, &state, count, index == 0x42f, read)?;
                     self.vertices_executed += count as u64;
                     self.last_output = None;
                     self.record_gpu_draw(state, vertex);
@@ -712,7 +704,22 @@ impl Engine {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn replay_captures(directory: &std::path::Path) -> Result<usize, String> {
-    capture::replay_directory(directory)
+    let translations_before = gpu_vertex::translation_count();
+    let (vertex_modules_before, fragment_modules_before, pipelines_before) =
+        gpu_draw::shader_cache_creation_counts();
+    let count = capture::replay_directory(directory)?;
+    if std::env::var("FUJIMOD_DMP_SHADER_CACHE_STATS").is_ok_and(|value| value == "1") {
+        let translations = gpu_vertex::translation_count() - translations_before;
+        let (vertex_modules, fragment_modules, pipelines) =
+            gpu_draw::shader_cache_creation_counts();
+        eprintln!(
+            "DMP shader cache for replay: {translations} Naga vertex translations, {} vertex modules, {} fragment modules, {} pipelines",
+            vertex_modules - vertex_modules_before,
+            fragment_modules - fragment_modules_before,
+            pipelines - pipelines_before,
+        );
+    }
+    Ok(count)
 }
 
 #[cfg(test)]
