@@ -868,8 +868,11 @@ impl Bus {
                 index.map(|id| self.windows[id].device.name()),
             );
             if self.mode == Mode::Strict {
+                let written_value = value
+                    .map(|value| format!(" value={:#x}", value & mask))
+                    .unwrap_or_default();
                 return Err(format!(
-                    "unmodeled MMIO {}{size} at {address:#x}, CPU{cpu} PC={pc:#x}: {message}",
+                    "unmodeled MMIO {}{size} at {address:#x}, CPU{cpu} PC={pc:#x}{written_value}: {message}",
                     if value.is_some() { "write" } else { "read" }
                 ));
             }
