@@ -9,6 +9,7 @@ pub mod input_capture;
 pub mod mailbox;
 pub mod memory_configuration;
 pub mod output_link;
+pub mod reset_handshake;
 pub mod sd_interface;
 pub mod spi;
 pub mod temperature;

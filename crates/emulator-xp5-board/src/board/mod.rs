@@ -2,7 +2,7 @@
 //! output publication are supplied by the application, outside these models.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
-use fujimod_emulator_xp5_io::{adc, gates, gpio, i2c, mailbox, timer};
+use fujimod_emulator_xp5_io::{adc, gates, gpio, i2c, mailbox, reset_handshake, timer};
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
 use fujimod_emulator_xp5_imaging::serial_sink;
@@ -116,6 +116,32 @@ fn register_with_resources(
                 window.base,
                 window.size,
                 Box::new(fujimod_emulator_xp5_io::output_link::Link::default()),
+            )?;
+        }
+        "reset-handshake" => {
+            if window.options.keys().any(|key| key != "trigger_offset") {
+                return Err("unknown reset-handshake option".into());
+            }
+            let trigger_offset = window
+                .options
+                .get("trigger_offset")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u64::try_from(value).ok())
+                .ok_or("reset-handshake requires an unsigned trigger_offset")?;
+            if trigger_offset & 3 != 0
+                || trigger_offset
+                    .checked_add(4)
+                    .is_none_or(|end| end > window.size)
+            {
+                return Err("invalid reset-handshake trigger offset".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(reset_handshake::ResetHandshake::new(
+                    window.base,
+                    trigger_offset,
+                )?),
             )?;
         }
         "audio-spi-sink" => {
