@@ -62,6 +62,15 @@
         "bytes": 1048576
       },
       "kind": "sram"
+    },
+    {
+      "id": "boot-sram",
+      "base": 4286578688,
+      "size": {
+        "kind": "bytes",
+        "bytes": 262144
+      },
+      "kind": "sram"
     }
   ],
   "blocks": [
