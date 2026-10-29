@@ -4,6 +4,7 @@
 pub mod board;
 pub mod boot;
 pub mod clocks;
+pub mod display;
 pub mod flash;
 pub mod job;
 pub mod sd;

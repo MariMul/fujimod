@@ -982,6 +982,7 @@ impl Session {
             adc_base,
             xpp_display_timing,
             xpp_job,
+            xpp_display_control,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -1163,6 +1164,11 @@ impl Session {
                 layout.as_deref(),
                 video.as_deref(),
             )?;
+        }
+        if let Some((bases, ticks)) = xpp_display_control {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_control(bases, ticks)?;
         }
         if let Some((base, irq, ticks)) = xpp_job {
             devices
