@@ -3,8 +3,13 @@
 //! On the discovery endpoint, +0x28 holds flags; +0x2c clears written bits.
 //! A send word written to +0x60 completes at once and sets done bit 2. Bit 3
 //! reads set because the send queue never fills. The receive word +0x48
-//! reads zero. Other words retain writes. No peer, timing or IRQ is modeled;
-//! this is a provisional law for discovery.
+//! reads zero. Other words retain writes. No timing or IRQ is modeled; this
+//! is a provisional law for discovery.
+//!
+//! A port may carry a declared register-file peer: each 16-bit send word names
+//! register bits 14..8, bit 15 writes the low byte into it, and the word read
+//! back from +0x60 is that register's value. Without a peer, +0x60 reads the
+//! last send word.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -18,6 +23,9 @@ const RECEIVE: u64 = 0x48;
 const SEND: u64 = 0x60;
 const DONE: u32 = 1 << 2;
 const ROOM: u32 = 1 << 3;
+/// Registers addressed by a peer send word (bits 14..8).
+pub const PEER_REGISTERS: usize = 128;
+const PEER_WRITE: u32 = 1 << 15;
 
 /// Controller configuration only. Status and data transfers require a modeled
 /// controller/endpoint protocol and refuse on this port.
@@ -126,6 +134,7 @@ impl Device for ConfigurationPort {
 pub struct DiscoveryPort {
     base: u64,
     registers: Vec<u32>,
+    peer: Option<Vec<u8>>,
 }
 impl DiscoveryPort {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -135,7 +144,17 @@ impl DiscoveryPort {
         Ok(Self {
             base,
             registers: vec![0; (REGISTERS / 4) as usize],
+            peer: None,
         })
+    }
+    /// A port whose peer is a register file with these values after reset.
+    pub fn with_peer(base: u64, registers: Vec<u8>) -> Result<Self, String> {
+        if registers.len() != PEER_REGISTERS {
+            return Err("X-Processor Pro serial peer needs 128 registers".into());
+        }
+        let mut port = Self::new(base)?;
+        port.peer = Some(registers);
+        Ok(port)
     }
 }
 impl Device for DiscoveryPort {
@@ -163,7 +182,17 @@ impl Device for DiscoveryPort {
         match o {
             CLEAR => self.registers[STATUS] &= !(value as u32),
             SEND => {
-                self.registers[(SEND / 4) as usize] = value as u32;
+                let word = value as u32;
+                self.registers[(SEND / 4) as usize] = match &mut self.peer {
+                    Some(peer) => {
+                        let register = ((word >> 8) & 0x7f) as usize;
+                        if word & PEER_WRITE != 0 {
+                            peer[register] = word as u8;
+                        }
+                        peer[register].into()
+                    }
+                    None => word,
+                };
                 self.registers[STATUS] |= DONE;
             }
             _ => self.registers[(o / 4) as usize] = value as u32,
@@ -173,15 +202,20 @@ impl Device for DiscoveryPort {
         address - self.base == 0x28
     }
     fn save(&self) -> Value {
-        json!({ "registers": self.registers })
+        json!({ "registers": self.registers, "peer": self.peer })
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let registers: Vec<u32> =
             serde_json::from_value(value["registers"].clone()).map_err(|e| e.to_string())?;
-        if registers.len() != self.registers.len() {
+        let peer: Option<Vec<u8>> =
+            serde_json::from_value(value["peer"].clone()).map_err(|e| e.to_string())?;
+        if registers.len() != self.registers.len()
+            || peer.as_ref().map(Vec::len) != self.peer.as_ref().map(Vec::len)
+        {
             return Err("X-Processor Pro serial checkpoint size differs".into());
         }
         self.registers = registers;
+        self.peer = peer;
         Ok(())
     }
 }
@@ -244,5 +278,28 @@ mod tests {
         let mut cx = h.cx();
         port.write(&mut cx, base + 0x28, 4, 0);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn register_peer_answers_reads_and_keeps_writes() {
+        let base = 0xfff2a000;
+        let mut registers = vec![0; PEER_REGISTERS];
+        registers[0x60] = 0x10;
+        assert!(DiscoveryPort::with_peer(base, vec![0; 127]).is_err());
+        let mut port = DiscoveryPort::with_peer(base, registers).unwrap();
+        let mut h = TestHost::new();
+        write(&mut port, &mut h, base + 0x60, 0x6000);
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0x10);
+        assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM | DONE));
+        write(&mut port, &mut h, base + 0x60, 0x5c00);
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0);
+        write(&mut port, &mut h, base + 0x60, 0xdc12);
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0x12);
+        let saved = port.save();
+        write(&mut port, &mut h, base + 0x60, 0xdc1c);
+        port.restore(&saved).unwrap();
+        write(&mut port, &mut h, base + 0x60, 0x5c00);
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0x12);
+        assert!(DiscoveryPort::new(base).unwrap().restore(&saved).is_err());
     }
 }

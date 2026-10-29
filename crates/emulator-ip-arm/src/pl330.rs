@@ -18,6 +18,15 @@ pub trait Source: Send + Sync {
     fn contains(&self, address: u64, len: usize) -> bool;
     /// Bytes at `address`.
     fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String>;
+    /// Whether stores into this window reach [`Source::write`]; otherwise a
+    /// program storing into it refuses before it starts.
+    fn writable(&self) -> bool {
+        false
+    }
+    /// Stores `bytes` at `address` when the transfer completes.
+    fn write(&self, _address: u64, _bytes: &[u8]) -> Result<(), String> {
+        Err("PL330 store into a read-only source".into())
+    }
 }
 
 /// Transfer time: `setup_ticks + ceil(bytes / bytes_per_tick)`.
@@ -156,11 +165,13 @@ impl Pl330 {
                     let data: Vec<u8> = fifo.drain(..count).collect();
                     first[1].get_or_insert(t.dar);
                     let at = u64::from(t.dar);
-                    if self.sources.iter().any(|s| s.contains(at, count)) {
-                        return Err("PL330 store into a read-only source".into());
-                    }
-                    if apply {
-                        cx.ram_write(at, &data)?;
+                    match self.sources.iter().find(|s| s.contains(at, count)) {
+                        Some(source) if !source.writable() => {
+                            return Err("PL330 store into a read-only source".into());
+                        }
+                        Some(source) if apply => source.write(at, &data)?,
+                        None if apply => cx.ram_write(at, &data)?,
+                        _ => {}
                     }
                     bytes += count as u64;
                     if t.ccr >> 14 & 1 != 0 {
@@ -522,5 +533,55 @@ mod tests {
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         dma.write(&mut cx, BASE + 0xd04, 4, 0);
         assert!(cx.refusal().is_some());
+    }
+
+    struct Sink(std::sync::Mutex<Vec<(u64, Vec<u8>)>>);
+    impl Source for Sink {
+        fn contains(&self, address: u64, len: usize) -> bool {
+            address >= ROM && address + len as u64 <= ROM + 0x100
+        }
+        fn read(&self, _: u64, _: usize) -> Result<Vec<u8>, String> {
+            Err("unused".into())
+        }
+        fn writable(&self) -> bool {
+            true
+        }
+        fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+            self.0.lock().unwrap().push((address, bytes.to_vec()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn stores_into_a_writable_window_arrive_when_the_transfer_completes() {
+        let timing = Throughput {
+            setup_ticks: 1,
+            bytes_per_tick: 1,
+        };
+        let sink = Arc::new(Sink(Default::default()));
+        let mut dma = Pl330::new(BASE, vec![207], vec![sink.clone()], timing).unwrap();
+        let mut h = TestHost {
+            ram: vec![0; 0x2000],
+            ..TestHost::default()
+        };
+        h.ram[0x1000..0x1010].copy_from_slice(&[7; 16]);
+        // DMAMOV SAR RAM, DAR window, CCR 16-byte bursts; DMALD; DMAST; DMAEND.
+        let mut program = vec![0xbc, 0];
+        program.extend(0x1000u32.to_le_bytes());
+        program.extend([0xbc, 2]);
+        program.extend((ROM as u32 + 0x20).to_le_bytes());
+        program.extend([0xbc, 1]);
+        program.extend(0x5c017u32.to_le_bytes());
+        program.extend([0x04, 0x08, 0]);
+        h.ram[0x100..0x100 + program.len()].copy_from_slice(&program);
+        write(&mut dma, &mut h, 0xd08, 0xa20000);
+        write(&mut dma, &mut h, 0xd0c, 0x100);
+        write(&mut dma, &mut h, 0xd04, 0);
+        assert!(sink.0.lock().unwrap().is_empty());
+        h.now = 17;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 0);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(*sink.0.lock().unwrap(), [(ROM + 0x20, vec![7; 16])]);
     }
 }

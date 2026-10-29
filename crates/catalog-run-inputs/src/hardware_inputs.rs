@@ -16,14 +16,16 @@ pub struct Empty {}
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetAdcInput"))]
 pub struct AdcInput {
-    /// Declared ambient celsius.
-    pub ambient_celsius: u64,
+    /// Declared ambient celsius, for converters with thermal channels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ambient_celsius: Option<u64>,
     /// Declared basis.
     pub basis: String,
     /// Declared samples.
     pub samples: Vec<u64>,
     /// Declared thermal channels.
-    pub thermal_channels: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thermal_channels: Option<Vec<u64>>,
 }
 
 /// Declared adc facts.
@@ -748,6 +750,31 @@ pub struct FlashApertureContents {
     pub basis: String,
     /// Declared contents.
     pub contents: String,
+    /// NOR device that accepts erase and page-program commands, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nor: Option<FlashApertureNor>,
+}
+
+/// Declared NOR register device and array behind one flash-aperture chip select.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashApertureNor"))]
+pub struct FlashApertureNor {
+    /// Declared basis.
+    pub basis: String,
+    /// Chip select, each covering half of the aperture.
+    pub chip_select: u64,
+    /// Enhanced volatile configuration register value after reset.
+    pub enhanced_volatile_reset: u64,
+    /// Declared erase ticks.
+    pub erase_ticks: u64,
+    /// Declared page bytes.
+    pub page_bytes: u64,
+    /// Declared page ticks.
+    pub page_ticks: u64,
+    /// Ticks until a register write completes.
+    pub register_write_ticks: u64,
 }
 
 /// Declared serial flash geometry facts.
@@ -913,6 +940,38 @@ pub struct TemperatureInput {
     pub millicelsius: u64,
 }
 
+/// One register of a declared sub-CPU register file.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuRegister"))]
+pub struct SubCpuRegister {
+    /// Declared name.
+    pub name: String,
+    /// Register number, bits 14..8 of a send word.
+    pub register: u64,
+    /// Value after reset.
+    pub value: u64,
+}
+
+/// Declared register-file peer behind one serial port.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpu"))]
+pub struct SubCpuInputs {
+    /// Declared basis.
+    pub basis: String,
+    /// Serial port base address.
+    pub port: u64,
+    /// Registers that do not read zero after reset.
+    pub registers: Vec<SubCpuRegister>,
+    /// First of sixteen consecutive registers holding the stock user-profile
+    /// header, which a selected profile fills.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_header: Option<u64>,
+}
+
 /// Declared hardware reset facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -957,6 +1016,9 @@ pub struct HardwareReset {
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,
+    /// Declared register-file peer on a serial port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_cpu: Option<SubCpuInputs>,
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,

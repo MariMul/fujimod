@@ -1045,6 +1045,104 @@
       ],
       "type": "object"
     },
+    "HardwareDisplayFrames": {
+      "additionalProperties": false,
+      "description": "Display frame interrupts declared as a law without controller registers.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_routes": {
+          "description": "Lines receiving one edge per frame.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "period_ticks": {
+          "description": "Frame period in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "irq_routes",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayOutput": {
+      "additionalProperties": false,
+      "description": "Register window of one display output with status bits that read fixed.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clear_bits": {
+          "description": "Bits a completed request leaves clear.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "set_bits": {
+          "description": "Bits that report a completed request as set.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clear_bits",
+        "set_bits",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayStatusBits": {
+      "additionalProperties": false,
+      "description": "Status bits of one display output register.",
+      "properties": {
+        "mask": {
+          "description": "Bits that read with the declared level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Word offset from the output base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "mask"
+      ],
+      "type": "object"
+    },
     "HardwareDma": {
       "additionalProperties": false,
       "description": "Declared dma facts.",
@@ -1157,6 +1255,15 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the controller status, when declared.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "size": {
           "description": "Read aperture size in bytes.",
@@ -1755,6 +1862,27 @@
             }
           ],
           "description": "Declared decompressor."
+        },
+        "display_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared display frame interrupts."
+        },
+        "display_outputs": {
+          "description": "Declared display output register windows.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayOutput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "dma": {
           "anyOf": [

@@ -138,6 +138,17 @@
             "null"
           ]
         },
+        "sub_cpu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSubCpu"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared register-file peer on a serial port."
+        },
         "temperature_input": {
           "anyOf": [
             {
@@ -176,10 +187,13 @@
       "description": "Declared adc input facts.",
       "properties": {
         "ambient_celsius": {
-          "description": "Declared ambient celsius.",
+          "description": "Declared ambient celsius, for converters with thermal channels.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "basis": {
           "description": "Declared basis.",
@@ -201,14 +215,15 @@
             "minimum": 0,
             "type": "integer"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [
-        "ambient_celsius",
         "basis",
-        "samples",
-        "thermal_channels"
+        "samples"
       ],
       "type": "object"
     },
@@ -832,11 +847,78 @@
         "contents": {
           "description": "Declared contents.",
           "type": "string"
+        },
+        "nor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetFlashApertureNor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "NOR device that accepts erase and page-program commands, when declared."
         }
       },
       "required": [
         "basis",
         "contents"
+      ],
+      "type": "object"
+    },
+    "ResetFlashApertureNor": {
+      "additionalProperties": false,
+      "description": "Declared NOR register device and array behind one flash-aperture chip select.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "chip_select": {
+          "description": "Chip select, each covering half of the aperture.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "enhanced_volatile_reset": {
+          "description": "Enhanced volatile configuration register value after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "erase_ticks": {
+          "description": "Declared erase ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Declared page bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_ticks": {
+          "description": "Declared page ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_write_ticks": {
+          "description": "Ticks until a register write completes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "chip_select",
+        "enhanced_volatile_reset",
+        "erase_ticks",
+        "page_bytes",
+        "page_ticks",
+        "register_write_ticks"
       ],
       "type": "object"
     },
@@ -2113,6 +2195,72 @@
         "clear_from_ticks",
         "mask",
         "set_through_ticks"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpu": {
+      "additionalProperties": false,
+      "description": "Declared register-file peer behind one serial port.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "profile_header": {
+          "description": "First of sixteen consecutive registers holding the stock user-profile\nheader, which a selected profile fills.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "registers": {
+          "description": "Registers that do not read zero after reset.",
+          "items": {
+            "$ref": "#/$defs/ResetSubCpuRegister"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "port",
+        "registers"
+      ],
+      "type": "object"
+    },
+    "ResetSubCpuRegister": {
+      "additionalProperties": false,
+      "description": "One register of a declared sub-CPU register file.",
+      "properties": {
+        "name": {
+          "description": "Declared name.",
+          "type": "string"
+        },
+        "register": {
+          "description": "Register number, bits 14..8 of a send word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Value after reset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "register",
+        "value"
       ],
       "type": "object"
     },

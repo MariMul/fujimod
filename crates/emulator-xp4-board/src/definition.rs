@@ -43,6 +43,14 @@ pub struct Definition {
     #[serde(default)]
     pub xpp_serial: Vec<u64>,
     #[serde(default)]
+    pub xpp_sub_cpu: Option<XppSubCpu>,
+    #[serde(default)]
+    pub xpp_display_frames: Option<XppDisplayFrames>,
+    #[serde(default)]
+    pub xpp_adc: Option<XppAdc>,
+    #[serde(default)]
+    pub xpp_display_outputs: Vec<XppDisplayOutput>,
+    #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
     pub io_group_base: Option<u64>,
@@ -101,6 +109,44 @@ pub enum TimerLayout {
     Xpp,
 }
 
+/// Register-file peer on one X-Processor Pro serial port: (register, value)
+/// pairs after reset; unlisted registers read zero.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppSubCpu {
+    pub port: u64,
+    pub registers: Vec<(u8, u8)>,
+}
+
+/// X-Processor Pro display frame interrupts: one edge per line each period.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppDisplayFrames {
+    pub irqs: Vec<u32>,
+    pub period_ticks: u64,
+}
+
+/// X-Processor Pro display output registers: word offsets whose status bits
+/// read set or clear regardless of the last write.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppDisplayOutput {
+    pub base: u64,
+    pub size: u64,
+    pub set_bits: Vec<(u64, u32)>,
+    pub clear_bits: Vec<(u64, u32)>,
+}
+
+/// X-Processor Pro ADC: register base, twelve 10-bit samples and the ticks a
+/// single conversion takes.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppAdc {
+    pub base: u64,
+    pub samples: Vec<u16>,
+    pub conversion_ticks: u64,
+}
+
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -112,4 +158,19 @@ pub struct XppStorage {
     pub dma_irq_routes: Vec<u32>,
     pub dma_setup_ticks: u64,
     pub dma_bytes_per_tick: u64,
+    /// Interrupt line of the controller status.
+    #[serde(default)]
+    pub irq: Option<u32>,
+    /// NOR device attached to one chip select, with its array timing.
+    #[serde(default)]
+    pub nor: Option<XppNor>,
+}
+
+/// Declared NOR register device and array behind one X-Processor Pro chip select.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppNor {
+    pub chip_select: u8,
+    pub registers: fujimod_emulator_devices::parts::micron_nor::Options,
+    pub array: fujimod_emulator_xpp::flash::Array,
 }

@@ -1,0 +1,294 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xt20-discovery",
+  "body_id": "xt20",
+  "reset": {
+    "adc_input": {
+      "samples": [
+        382,
+        302,
+        1017,
+        1023,
+        842,
+        599,
+        59,
+        608,
+        471,
+        1021,
+        381,
+        302
+      ],
+      "basis": "Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read from a service-mode RAM capture of an X-T20 2.11 with all keys released, assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
+    },
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 9437184,
+      "size": 1472,
+      "fill": 0,
+      "words": [
+        {
+          "name": "gpio_bank0",
+          "offset": 0,
+          "value": 58612
+        },
+        {
+          "name": "gpio_bank1",
+          "offset": 4,
+          "value": 20540
+        },
+        {
+          "name": "gpio_bank2",
+          "offset": 8,
+          "value": 394
+        },
+        {
+          "name": "gpio_bank3",
+          "offset": 12,
+          "value": 559
+        },
+        {
+          "name": "gpio_bank6",
+          "offset": 24,
+          "value": 16
+        },
+        {
+          "name": "gpio_bank8",
+          "offset": 32,
+          "value": 24
+        },
+        {
+          "name": "gpio_bank10",
+          "offset": 40,
+          "value": 644
+        },
+        {
+          "name": "gpio_bank11",
+          "offset": 44,
+          "value": 3040
+        },
+        {
+          "name": "gpio_bank12",
+          "offset": 48,
+          "value": 65
+        },
+        {
+          "name": "gpio_bank13",
+          "offset": 52,
+          "value": 537
+        },
+        {
+          "name": "gpio_bank14",
+          "offset": 56,
+          "value": 12
+        },
+        {
+          "name": "gpio_bank15",
+          "offset": 60,
+          "value": 1
+        },
+        {
+          "name": "captured_0x040",
+          "offset": 64,
+          "value": 16777216
+        },
+        {
+          "name": "captured_0x044",
+          "offset": 68,
+          "value": 305
+        },
+        {
+          "name": "captured_0x048",
+          "offset": 72,
+          "value": 285212672
+        },
+        {
+          "name": "captured_0x04c",
+          "offset": 76,
+          "value": 208362
+        },
+        {
+          "name": "captured_0x050",
+          "offset": 80,
+          "value": 16777728
+        },
+        {
+          "name": "captured_0x054",
+          "offset": 84,
+          "value": 209055
+        },
+        {
+          "name": "captured_0x058",
+          "offset": 88,
+          "value": 285213184
+        },
+        {
+          "name": "captured_0x05c",
+          "offset": 92,
+          "value": 2411155
+        },
+        {
+          "name": "captured_0x060",
+          "offset": 96,
+          "value": 1398031684
+        },
+        {
+          "name": "captured_0x0c0",
+          "offset": 192,
+          "value": 16777984
+        },
+        {
+          "name": "captured_0x0c4",
+          "offset": 196,
+          "value": 178049
+        },
+        {
+          "name": "captured_0x0c8",
+          "offset": 200,
+          "value": 16778240
+        },
+        {
+          "name": "captured_0x0cc",
+          "offset": 204,
+          "value": 258592
+        },
+        {
+          "name": "captured_0x0d0",
+          "offset": 208,
+          "value": 285213696
+        },
+        {
+          "name": "captured_0x0d4",
+          "offset": 212,
+          "value": 267312
+        },
+        {
+          "name": "captured_0x0d8",
+          "offset": 216,
+          "value": 285213440
+        },
+        {
+          "name": "captured_0x0dc",
+          "offset": 220,
+          "value": 267969
+        },
+        {
+          "name": "captured_0x0e0",
+          "offset": 224,
+          "value": 1398031684
+        },
+        {
+          "name": "power_on_cause",
+          "offset": 320,
+          "value": 16
+        },
+        {
+          "name": "captured_0x144",
+          "offset": 324,
+          "value": 1
+        },
+        {
+          "name": "captured_0x14c",
+          "offset": 332,
+          "value": 4278192080
+        },
+        {
+          "name": "captured_0x150",
+          "offset": 336,
+          "value": 4190142464
+        },
+        {
+          "name": "captured_0x154",
+          "offset": 340,
+          "value": 732561436
+        },
+        {
+          "name": "captured_0x188",
+          "offset": 392,
+          "value": 394
+        },
+        {
+          "name": "captured_0x18c",
+          "offset": 396,
+          "value": 324
+        },
+        {
+          "name": "captured_0x190",
+          "offset": 400,
+          "value": 1023
+        },
+        {
+          "name": "captured_0x194",
+          "offset": 404,
+          "value": 22
+        },
+        {
+          "name": "captured_0x198",
+          "offset": 408,
+          "value": 862
+        },
+        {
+          "name": "captured_0x19c",
+          "offset": 412,
+          "value": 84
+        },
+        {
+          "name": "captured_0x1a0",
+          "offset": 416,
+          "value": 81
+        },
+        {
+          "name": "captured_0x1a4",
+          "offset": 420,
+          "value": 629
+        },
+        {
+          "name": "captured_0x1a8",
+          "offset": 424,
+          "value": 406
+        },
+        {
+          "name": "captured_0x1ac",
+          "offset": 428,
+          "value": 1023
+        },
+        {
+          "name": "captured_0x1c4",
+          "offset": 452,
+          "value": 98304
+        },
+        {
+          "name": "captured_0x5bc",
+          "offset": 1468,
+          "value": 4
+        }
+      ],
+      "basis": "Camera capture: the 0x5c0-byte stage-2 block the kernel copies to 0x7f4fc, read over ff80 in a service-mode power-on (X-T20 2.11, 2026-10-20; SHA-256 d7cca82d81be252c32012d9392b6f9143a5729d52bd04f21c2a90c1c54e54cca). +0x00 holds the 16 power-on GPIO input words and +0x140 the sub-CPU power-on cause 0x10, which section 5 decodes as a normal start. Placed in a free RAM gap; kernel entry bypasses the boot ROM and stage 2."
+    },
+    "flash_aperture": {
+      "contents": "registered-update",
+      "basis": "Declared discovery input: the update image from its flash offset; bytes past it read erased, including the configuration store at flash 0x3840000, which the firmware then rebuilds from its defaults.",
+      "nor": {
+        "chip_select": 0,
+        "enhanced_volatile_reset": 255,
+        "register_write_ticks": 16,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "Declared discovery input. The X-T20 2.11 driver addresses chip select 0 below aperture 0xf4000000 (0xc505dc) and uses 4 KiB (0x21), 64 KiB (0xdc) erase and 256-byte 4PP (0x12) page programs (command table 0xed3f9c). The chip part, its reset configuration and all latencies are not measured; the ticks are synthetic."
+      }
+    },
+    "sub_cpu": {
+      "port": 4294090752,
+      "registers": [
+        {
+          "name": "power_on_cause",
+          "register": 96,
+          "value": 16
+        }
+      ],
+      "profile_header": 80,
+      "basis": "Declared discovery input. Segment 5 reaches the sub-CPU through 16-bit words on serial port 2 (0xc6fb10, 0xc6fbb4; register table 0xed6a0c): bits 14..8 name the register, bit 15 writes the low byte, and the word read back from +0x60 (0xc4b964) carries the register value. Register 0x60 is the power-on cause; 0x10 is the normal start the camera reported (loader handoff word power_on_cause). Registers 0x50-0x5f hold the 16-byte settings header that 0xcdd670 validates; a selected user profile places its header there (profile_header); otherwise they read zero, so the firmware loads its defaults and writes the stock header back. Unlisted registers read zero; the register file is not measured beyond these reads."
+    }
+  }
+}

@@ -2241,6 +2241,39 @@
         }
       ]
     },
+    "ConfigurationWindow": {
+      "additionalProperties": false,
+      "description": "Bytes of the installed flash image that stock firmware copies into its\nconfiguration store when that store is erased.",
+      "properties": {
+        "basis": {
+          "description": "The stock copy that fills the configuration store from this window.",
+          "type": "string"
+        },
+        "bytes": {
+          "description": "Window length in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "flash_offset": {
+          "description": "Offset of the window in the installed flash image.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "Lowercase hexadecimal SHA-256 of the window.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "flash_offset",
+        "bytes",
+        "sha256",
+        "basis"
+      ],
+      "type": "object"
+    },
     "ConnectionKind": {
       "description": "Physical connection categories.",
       "oneOf": [
@@ -8840,8 +8873,26 @@
           "type": "string"
         },
         "bank": {
-          "$ref": "#/$defs/SettingsBank",
-          "description": "Where the bank lives in flash."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SettingsBank"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the bank lives in flash, when the firmware keeps one."
+        },
+        "configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfigurationWindow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The update window the firmware copies into its erased configuration\nstore, for firmware without a bank. Derived profile fields read it as\nthe `bank` store; it is never placed in flash."
         },
         "defaults": {
           "anyOf": [
@@ -8911,7 +8962,6 @@
         "id",
         "firmware_id",
         "source",
-        "bank",
         "fields",
         "settings",
         "sections"
@@ -10860,6 +10910,104 @@
       ],
       "type": "object"
     },
+    "HardwareDisplayFrames": {
+      "additionalProperties": false,
+      "description": "Display frame interrupts declared as a law without controller registers.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_routes": {
+          "description": "Lines receiving one edge per frame.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "period_ticks": {
+          "description": "Frame period in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "irq_routes",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayOutput": {
+      "additionalProperties": false,
+      "description": "Register window of one display output with status bits that read fixed.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clear_bits": {
+          "description": "Bits a completed request leaves clear.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "set_bits": {
+          "description": "Bits that report a completed request as set.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clear_bits",
+        "set_bits",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayStatusBits": {
+      "additionalProperties": false,
+      "description": "Status bits of one display output register.",
+      "properties": {
+        "mask": {
+          "description": "Bits that read with the declared level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Word offset from the output base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "mask"
+      ],
+      "type": "object"
+    },
     "HardwareDisplayTiming": {
       "additionalProperties": false,
       "description": "Declared display timing facts.",
@@ -11175,6 +11323,15 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the controller status, when declared.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "size": {
           "description": "Read aperture size in bytes.",
@@ -12397,6 +12554,27 @@
             }
           ],
           "description": "Declared decompressor."
+        },
+        "display_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared display frame interrupts."
+        },
+        "display_outputs": {
+          "description": "Declared display output register windows.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayOutput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "dma": {
           "anyOf": [
@@ -17479,7 +17657,7 @@
       "description": "One journal record: stock defaults and fixed bytes, sealed with one parity\nbit per data word and an XOR checksum of the data words in its last four bytes.",
       "properties": {
         "block": {
-          "description": "Physical flash block holding the record at its start.",
+          "description": "Physical flash block holding the record at its start: a NAND block, or\na 64 KiB region unit of a NOR array.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -17508,11 +17686,14 @@
           "type": "array"
         },
         "managed_index": {
-          "description": "Managed logical index of that block.",
+          "description": "Managed logical index of that block; NOR arrays have none.",
           "format": "uint16",
           "maximum": 65535,
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "parity_offset": {
           "description": "Record offset of the parity bitmap; the data words precede it.",
@@ -17523,7 +17704,6 @@
       },
       "required": [
         "block",
-        "managed_index",
         "bytes",
         "defaults",
         "defaults_offset",

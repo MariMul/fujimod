@@ -75,6 +75,34 @@
       "clock_id": null
     },
     {
+      "id": "decompressor",
+      "base": 4294443008,
+      "size": 108,
+      "kind": "imaging-controller",
+      "clock_id": null
+    },
+    {
+      "id": "dmp",
+      "base": 4294475776,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
+      "id": "adc",
+      "base": 4294021120,
+      "size": 64,
+      "kind": "adc",
+      "clock_id": null
+    },
+    {
+      "id": "display",
+      "base": 4294328320,
+      "size": 12288,
+      "kind": "display-controller",
+      "clock_id": null
+    },
+    {
       "id": "serial0",
       "base": 4294082560,
       "size": 256,
@@ -153,13 +181,88 @@
     "interrupt_inputs": [
       {
         "source_block_id": "interval-timer",
+        "output_id": "channel0",
+        "line": 48
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel1",
+        "line": 49
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel2",
+        "line": 50
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel3",
+        "line": 51
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel4",
+        "line": 52
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel5",
+        "line": 53
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel6",
+        "line": 54
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel7",
+        "line": 55
+      },
+      {
+        "source_block_id": "interval-timer",
         "output_id": "channel8",
         "line": 56
       },
       {
         "source_block_id": "interval-timer",
+        "output_id": "channel9",
+        "line": 57
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel10",
+        "line": 58
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel11",
+        "line": 59
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel12",
+        "line": 60
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel13",
+        "line": 61
+      },
+      {
+        "source_block_id": "interval-timer",
+        "output_id": "channel14",
+        "line": 62
+      },
+      {
+        "source_block_id": "interval-timer",
         "output_id": "channel15",
         "line": 63
+      },
+      {
+        "source_block_id": "flash-controller",
+        "output_id": "interrupt",
+        "line": 35
       },
       {
         "source_block_id": "dma",
@@ -200,6 +303,46 @@
         "source_block_id": "dma",
         "output_id": "event7",
         "line": 214
+      },
+      {
+        "source_block_id": "decompressor",
+        "output_id": "interrupt",
+        "line": 129
+      },
+      {
+        "source_block_id": "dmp",
+        "output_id": "interrupt",
+        "line": 92
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event0",
+        "line": 112
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event1",
+        "line": 113
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output0-event2",
+        "line": 114
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event0",
+        "line": 117
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event1",
+        "line": 118
+      },
+      {
+        "source_block_id": "display",
+        "output_id": "output1-event2",
+        "line": 119
       }
     ],
     "companion": null,
@@ -226,8 +369,64 @@
             "layout": "xpp",
             "routes": [
               {
+                "channel": 0,
+                "irq": 48
+              },
+              {
+                "channel": 1,
+                "irq": 49
+              },
+              {
+                "channel": 2,
+                "irq": 50
+              },
+              {
+                "channel": 3,
+                "irq": 51
+              },
+              {
+                "channel": 4,
+                "irq": 52
+              },
+              {
+                "channel": 5,
+                "irq": 53
+              },
+              {
+                "channel": 6,
+                "irq": 54
+              },
+              {
+                "channel": 7,
+                "irq": 55
+              },
+              {
                 "channel": 8,
                 "irq": 56
+              },
+              {
+                "channel": 9,
+                "irq": 57
+              },
+              {
+                "channel": 10,
+                "irq": 58
+              },
+              {
+                "channel": 11,
+                "irq": 59
+              },
+              {
+                "channel": 12,
+                "irq": 60
+              },
+              {
+                "channel": 13,
+                "irq": 61
+              },
+              {
+                "channel": 14,
+                "irq": 62
               },
               {
                 "channel": 15,
@@ -235,13 +434,14 @@
               }
             ],
             "clock": "one timer cycle per aggregate CPU instruction; synthetic ratio, not measured",
-            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raising IRQ 48+n is a declared discovery input inferred from the two enabled GIC lines, not traced."
+            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raises interrupt 48+n: the X-T20 2.11 timer library (0xc4bcd0) maps channel n through byte table 0xed3b58 to row n+2 of interrupt descriptor table 0xed4720, whose first word is 0x30+n."
           },
           "flash_controller": {
             "base": 4294000640,
             "aperture": 4026531840,
             "size": 134217728,
-            "basis": "Flash reads go through the aperture at 0xf0000000+offset by CPU copies and DMA; the controller's configuration words are written around each copy and no status bit is polled. Registers only retain writes."
+            "irq_route": 35,
+            "basis": "Flash reads go through the aperture at 0xf0000000+offset by CPU copies and DMA; the controller's configuration words are written around each copy. Commands: +0x00 opcode, +0x04 aperture address, +0x10 control (chip select in bits 6-7), +0x20 phase count, +0x1c start; +0x24 status and +0x28 mask, where a set mask bit also acknowledges its status. Page programs are aperture stores while the registers hold opcode 0x12, ended by +0x30 bit 0. X-T20 2.11 driver 0xc5182c/0xc5220c; its handler 0xc501c0 is connected through descriptor 0xed4804, interrupt 0x23."
           },
           "pl330": {
             "base": 4294017024,
@@ -271,11 +471,42 @@
               4294107136
             ],
             "basis": "Declared discovery input: a provisional status law without a peer. Sends complete at once and set done bit 2, writes to +0x2c clear status bits, bit 3 reads set and received words read zero. The attached peers are not identified."
-          }
+          },
+          "decompressor": {
+            "base": 4294443008,
+            "irq_route": 129,
+            "basis": "Method-4 streaming decompressor with the XP4 register interface: the X-T20 2.11 section-6 loader resets it through +0 (0xc5d584), waits for +0 to read nonzero and for +0x24 to read 0x10001, and connects interrupt descriptor row 0x12 of 0xed4720 (interrupt 0x81) with handler 0xc5d348 (0xc5d440)."
+          },
+          "dmp": {
+            "base": 4294475776,
+            "size": 12288,
+            "irq_route": 92,
+            "basis": "DMP SMAPH vector-graphics renderer with the XP4 register interface. The X-T20 2.11 OpenVG/EGL driver (seg5 0xdda65c onward, kernel tasks smaphk/smaphp) programs command words at +0x1c, the copy unit at +0xc00-+0xc18 and command lists at +0x10d0/+0x10e0. Its interrupt 92 handler 0xdda2fc reads status +0x34, and waiter 0xdda3cc reports bits 31, 30 and 26."
+          },
+          "adc": {
+            "base": 4294021120,
+            "size": 64,
+            "sample_ticks": 16,
+            "basis": "Twelve-channel ADC with the X-T20 2.11 kernel contract (0x5ac00..0x5adf8): control +0 with start bit 0, continuous-mode bit 1 and channel enables in bits 16-25, clock divider +4, and 10-bit results at +0x10 + 4*channel. Reader 0x5ad8c requires bit 0 and the channel enable; a single conversion clears bit 0 when done (stage 2 0x13d8 waits for it). The conversion clock is unmeasured; sample_ticks is a declared input."
+          },
+          "display_frames": {
+            "irq_routes": [112, 113, 114, 117, 118, 119],
+            "period_ticks": 800000,
+            "basis": "Frame interrupts of the display controller, as an interrupt law without its registers. Seg5 source table 0xed4720 rows 73-78 connect lines 112-114 and 117-119 (edge) to handlers that run the callbacks queued by 0xc9dc38 for output 0 or 1 and event 0-2 (0xc9d854, 0xc9d994); the handlers read no controller register. The X-T20 2.11 vglib thread clears bit 16 of 0xfff65000 or 0xfff5a000, queues such a callback and yields at priority 7 until it runs (0xcad290), which starves flashload before section 7 loads. The period is an assumed 60 Hz in 48 MHz timer ticks (the 10 ms system tick reloads 480000); the panel rate is not measured."
+          },
+          "display_outputs": [
+            {
+              "base": 4294328320,
+              "size": 12288,
+              "set_bits": [{ "offset": 0, "mask": 65536 }],
+              "clear_bits": [{ "offset": 8192, "mask": 268435456 }],
+              "basis": "Output 1 of the display controller, 0xfff64000-0xfff67000, as word registers that read back their last write. Two status laws from X-T20 2.11 seg5: 0xca37ac saves +0, writes bit 16, clears it and polls until bit 16 reads set before restoring the saved word with bit 16; 0xca9df0 sets bit 28 of +0x2000 and polls until it reads clear. Both requests complete at once; the controller's real latency (likely one frame) is not measured. Output 0 at 0xfff59000 follows the same bit-16 law in 0xca37ac but is not exercised up to REC and is not declared."
+            }
+          ]
         },
         "limits": [
           "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture and PL330 memory-to-memory programs only; no decompressor or display block is declared.",
+          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; no pixels are scanned out.",
           "No boot ROM, reset-release controller or external peripheral replies are assumed."
         ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."

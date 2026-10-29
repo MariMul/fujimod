@@ -669,15 +669,38 @@ impl Devices {
             fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
                 self.0.read(address, len)
             }
+            fn writable(&self) -> bool {
+                true
+            }
+            fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+                self.0.store(address, bytes)
+            }
         }
         let aperture = Arc::new(Aperture::new(
             storage.aperture,
             storage.aperture_size,
             image,
         )?);
+        let (array, nor) = match storage.nor {
+            Some(nor) => (
+                Some(nor.array),
+                BTreeMap::from([(
+                    nor.chip_select,
+                    fujimod_emulator_devices::parts::micron_nor::Registers::new(nor.registers)?,
+                )]),
+            ),
+            None => (None, BTreeMap::new()),
+        };
         let controller = FlashController::new(
-            flash::Options {base:storage.flash_controller,transfer_ticks:1},
-            aperture.clone(), BTreeMap::new())?;
+            flash::Options {
+                base: storage.flash_controller,
+                transfer_ticks: 1,
+                irq: storage.irq,
+                array,
+            },
+            aperture.clone(),
+            nor,
+        )?;
         let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
             storage.dma,
             storage.dma_irq_routes,
@@ -709,8 +732,8 @@ impl Devices {
         self.windows.push((ranges[2].0, ranges[2].1, id + 1));
         Ok(())
     }
-    /// One X-Processor Pro serial port without a peer.
-    pub fn xpp_serial(&mut self, base: u64) -> Result<(), String> {
+    /// One X-Processor Pro serial port, with a register-file peer when declared.
+    pub fn xpp_serial(&mut self, base: u64, peer: Option<Vec<u8>>) -> Result<(), String> {
         use fujimod_emulator_xpp::serial::{REGISTERS, DiscoveryPort};
         if self
             .windows
@@ -719,10 +742,63 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro serial port".into());
         }
-        let model = DiscoveryPort::new(base)?;
+        let model = match peer {
+            Some(registers) => DiscoveryPort::with_peer(base, registers)?,
+            None => DiscoveryPort::new(base)?,
+        };
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + REGISTERS, id));
+        Ok(())
+    }
+    /// X-Processor Pro ADC with declared samples.
+    pub fn xpp_adc(
+        &mut self,
+        base: u64,
+        samples: &[u16],
+        conversion_ticks: u64,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::adc::{Converter, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + WINDOW)
+        {
+            return Err("Overlapping X-Processor Pro ADC".into());
+        }
+        let model = Converter::new(base, samples, conversion_ticks)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
+    pub fn xpp_display_output(
+        &mut self,
+        output: &crate::definition::XppDisplayOutput,
+    ) -> Result<(), String> {
+        let (base, size) = (output.base, output.size);
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(size))
+        {
+            return Err("Overlapping X-Processor Pro display output".into());
+        }
+        let model = fujimod_emulator_xpp::display::Output::new(
+            base,
+            size,
+            &output.set_bits,
+            &output.clear_bits,
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + size, id));
+        Ok(())
+    }
+    /// X-Processor Pro display frame interrupts; the law has no register window.
+    pub fn xpp_display_frames(&mut self, irqs: Vec<u32>, period: u64) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::display::FrameClock::new(irqs, period)?;
+        self.models.push(Some(Box::new(model)));
         Ok(())
     }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {

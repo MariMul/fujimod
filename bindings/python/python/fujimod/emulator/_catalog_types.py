@@ -482,6 +482,13 @@ class ConfigurationLocationVariant1(TypedDict, total=False):
     kind: Required[Literal["direct"]]
 
 
+class ConfigurationWindow(TypedDict, total=False):
+    basis: Required[str]
+    bytes: Required[int]
+    flash_offset: Required[int]
+    sha256: Required[str]
+
+
 type ConnectionKind = Literal[
     "control",
     "usb",
@@ -1898,7 +1905,8 @@ FirmwareSettings = TypedDict(
     "FirmwareSettings",
     {
         "$schema": Required["str"],
-        "bank": Required["SettingsBank"],
+        "bank": NotRequired["SettingsBank | None"],
+        "configuration": NotRequired["ConfigurationWindow | None"],
         "defaults": NotRequired["UpdateRange | None"],
         "fields": Required["list[SettingsField]"],
         "firmware_id": Required["str"],
@@ -2287,6 +2295,25 @@ class HardwareDiscoveryWindow(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareDisplayFrames(TypedDict, total=False):
+    basis: Required[str]
+    irq_routes: Required[list[int]]
+    period_ticks: Required[int]
+
+
+class HardwareDisplayOutput(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clear_bits: Required[list[HardwareDisplayStatusBits]]
+    set_bits: Required[list[HardwareDisplayStatusBits]]
+    size: Required[int]
+
+
+class HardwareDisplayStatusBits(TypedDict, total=False):
+    mask: Required[int]
+    offset: Required[int]
+
+
 class HardwareDisplayTiming(TypedDict, total=False):
     basis: Required[str]
     frame_period_ticks: Required[int]
@@ -2350,6 +2377,7 @@ class HardwareFlashController(TypedDict, total=False):
     aperture: Required[int]
     base: Required[int]
     basis: Required[str]
+    irq_route: NotRequired[int | None]
     size: Required[int]
 
 
@@ -2573,6 +2601,8 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     control_bus1: NotRequired[HardwareSecondaryBusRegistersAddress | None]
     control_requests: NotRequired[HardwareControlRequests | None]
     decompressor: NotRequired[HardwareDecompressor | None]
+    display_frames: NotRequired[HardwareDisplayFrames | None]
+    display_outputs: NotRequired[list[HardwareDisplayOutput] | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
     flash_controller: NotRequired[HardwareFlashController | None]
@@ -3636,7 +3666,7 @@ class ProfileRecord(TypedDict, total=False):
     defaults: Required[UpdateRange]
     defaults_offset: Required[int]
     fields: Required[list[SettingsField]]
-    managed_index: Required[int]
+    managed_index: NotRequired[int | None]
     parity_offset: Required[int]
 
 

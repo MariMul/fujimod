@@ -930,6 +930,10 @@ impl Session {
             storage_irq,
             xpp_storage,
             xpp_serial,
+            xpp_sub_cpu,
+            xpp_display_frames,
+            xpp_adc,
+            xpp_display_outputs,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -1008,6 +1012,7 @@ impl Session {
             .collect::<Result<Vec<_>, _>>()?;
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
+        let has_xpp_storage = xpp_storage.is_some();
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
@@ -1043,10 +1048,45 @@ impl Session {
             }
             None
         };
-        for base in xpp_serial {
+        let mut sub_cpu = match xpp_sub_cpu {
+            Some(peer) => {
+                if !xpp_serial.contains(&peer.port) {
+                    return Err("X-Processor Pro sub-CPU needs a declared serial port".to_owned());
+                }
+                let mut registers = vec![0; fujimod_emulator_xpp::serial::PEER_REGISTERS];
+                for (register, value) in peer.registers {
+                    let slot = registers
+                        .get_mut(usize::from(register))
+                        .ok_or("X-Processor Pro sub-CPU register out of range")?;
+                    *slot = value;
+                }
+                Some((peer.port, registers))
+            }
+            None => None,
+        };
+        if let Some(adc) = xpp_adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_serial(base)?;
+                .xpp_adc(adc.base, &adc.samples, adc.conversion_ticks)?;
+        }
+        for output in &xpp_display_outputs {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_output(output)?;
+        }
+        if let Some(frames) = xpp_display_frames {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_display_frames(frames.irqs, frames.period_ticks)?;
+        }
+        for base in xpp_serial {
+            let peer = match &sub_cpu {
+                Some((port, _)) if *port == base => sub_cpu.take().map(|(_, r)| r),
+                _ => None,
+            };
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_serial(base, peer)?;
         }
         if let Some((inputs, sample_ticks)) = adc {
             devices
@@ -1178,7 +1218,10 @@ impl Session {
                 .io_groups(base);
         }
         if let Some((base, irq)) = decompressor {
-            if base != 0xfff79000 || !(32..512).contains(&irq) {
+            // The same engine sits at 0xfff79000 on XP4 and at 0xfff80000 on
+            // the X-Processor Pro, whose storage is the flash-controller map.
+            let expected = if has_xpp_storage { 0xfff80000 } else { 0xfff79000 };
+            if base != expected || !(32..512).contains(&irq) {
                 return Err("Invalid XP4 decompressor wiring".to_owned());
             }
             devices
