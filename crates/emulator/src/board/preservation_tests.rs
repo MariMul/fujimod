@@ -6,6 +6,7 @@ use super::preservation::{
     PreservationViolation, ProtectedRanges,
 };
 use super::*;
+use fujimod_emulator_cpu::Cpu as _;
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 
 fn board(alias: bool) -> Board {
@@ -590,6 +591,30 @@ fn failed_host_mapping_marks_an_integrity_fault() {
             reason: PreservationFault::UnresolvedMapping
         })
     );
+}
+
+#[test]
+fn direct_cpu_write_memory_records_one_host_write() {
+    let board = board(false);
+    data(&board, 0x10080, &[1, 2, 3, 4]);
+    let preservation = board
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
+        .unwrap();
+    board
+        .cpu(0)
+        .unwrap()
+        .write_memory(0x10080, &[1, 2, 3, 4])
+        .unwrap();
+    assert_eq!(bytes(&board, 0x10080, 4), vec![1, 2, 3, 4]);
+    let state = preservation.state();
+    assert_eq!(state.host_writes().get(), 1);
+    assert!(matches!(
+        state.violation(),
+        Some(PreservationViolation::UnverifiableWrite {
+            source: PreservationBusSource::HostWrite,
+            ..
+        })
+    ));
 }
 
 #[test]
