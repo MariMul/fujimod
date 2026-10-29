@@ -3,7 +3,7 @@
 use super::{ffi, machine::Machine};
 use fujimod_emulator_cpu::{arm64::TranslationState, *};
 use std::sync::{
-    Arc,
+    Arc, Condvar, Mutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc,
 };
@@ -17,7 +17,7 @@ pub enum Op {
     Snapshot,
     Restore(Registers),
     Interrupt(Interrupt, bool),
-    Run(Run, bool, mpsc::Sender<Event>),
+    Run(Run, ExecutionPolicy, bool, mpsc::Sender<Event>),
     Resume(bool),
     Shutdown,
 }
@@ -53,17 +53,23 @@ const SYSTEM: &[u16] = &[
 ];
 pub struct Shared {
     pub stop: AtomicBool,
+    pub deadline: AtomicBool,
     pub progress: AtomicU64,
     pub limit: AtomicU64,
     pub measured: AtomicBool,
+    pub budget_lock: Mutex<()>,
+    pub budget_changed: Condvar,
 }
 impl Default for Shared {
     fn default() -> Self {
         Self {
             stop: AtomicBool::new(false),
+            deadline: AtomicBool::new(false),
             progress: AtomicU64::new(0),
             limit: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
+            budget_lock: Mutex::new(()),
+            budget_changed: Condvar::new(),
         }
     }
 }
@@ -471,6 +477,23 @@ impl Processor {
     fn run(
         &mut self,
         request: Run,
+        policy: ExecutionPolicy,
+        observe: bool,
+        events: &mpsc::Sender<Event>,
+        commands: &mpsc::Receiver<Command>,
+    ) -> Result<Exit, ExecutionError> {
+        match policy {
+            ExecutionPolicy::Exact => {
+                let mdscr = self.sys(ffi::MDSCR)?;
+                self.set_sys(ffi::MDSCR, mdscr | 1)?;
+                self.run_exact(request, observe, events, commands)
+            }
+            ExecutionPolicy::Interactive => self.run_interactive(request, events, commands),
+        }
+    }
+    fn run_exact(
+        &mut self,
+        request: Run,
         observe: bool,
         events: &mpsc::Sender<Event>,
         commands: &mpsc::Receiver<Command>,
@@ -638,6 +661,112 @@ impl Processor {
         }
         Ok(Exit::Stopped)
     }
+    fn update_interactive_progress(&self, started: Instant) {
+        let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.shared.progress.fetch_max(elapsed, Ordering::Relaxed);
+    }
+    fn run_interactive(
+        &mut self,
+        request: Run,
+        events: &mpsc::Sender<Event>,
+        commands: &mpsc::Receiver<Command>,
+    ) -> Result<Exit, ExecutionError> {
+        self.shared.progress.store(0, Ordering::Relaxed);
+        self.shared.measured.store(true, Ordering::Relaxed);
+        if request.instructions == Some(0) {
+            return Ok(Exit::Stopped);
+        }
+        if request.begin & 3 != 0 {
+            return Err(ExecutionError::InvalidInstruction(
+                "unaligned AArch64 entry PC".into(),
+            ));
+        }
+        self.set_reg(ffi::PC, request.begin)?;
+        self.deliver_interrupt()?;
+        if request.until == Some(self.reg(ffi::PC)?) {
+            return Ok(Exit::Stopped);
+        }
+        let limit = request.instructions.map(|n| n as u64).unwrap_or(u64::MAX);
+        self.shared.limit.store(limit, Ordering::Release);
+
+        let started = Instant::now();
+        let _budget = super::Watchdog::budget(self.cpu, started, self.shared.clone());
+        let mdscr = self.sys(ffi::MDSCR)?;
+        self.set_sys(ffi::MDSCR, mdscr & !1)?;
+        let pstate = self.reg(ffi::PSTATE)?;
+        self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+        loop {
+            self.update_interactive_progress(started);
+            if self.shared.stop.load(Ordering::Acquire) {
+                return Ok(Exit::Stopped);
+            }
+            if self.shared.deadline.load(Ordering::Acquire)
+                || self.shared.progress.load(Ordering::Relaxed)
+                    >= self.shared.limit.load(Ordering::Acquire)
+            {
+                return Ok(Exit::Stopped);
+            }
+
+            let pstate = self.reg(ffi::PSTATE)?;
+            self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+            let mdscr = self.sys(ffi::MDSCR)?;
+            self.set_sys(ffi::MDSCR, mdscr & !1)?;
+            unsafe {
+                ffi::check(ffi::hv_vcpu_run(self.cpu), "run")?;
+            }
+            let exit = unsafe { *self.exit };
+            self.update_interactive_progress(started);
+            match exit.reason {
+                0 if self.shared.stop.load(Ordering::Acquire) => {
+                    self.shared.measured.store(false, Ordering::Relaxed);
+                    return Err(ExecutionError::Backend(
+                        "host canceled a native instruction; its entry count is unavailable"
+                            .into(),
+                    ));
+                }
+                0 if self.shared.deadline.load(Ordering::Acquire)
+                    || self.shared.progress.load(Ordering::Relaxed)
+                        >= self.shared.limit.load(Ordering::Acquire) =>
+                {
+                    return Ok(Exit::Stopped);
+                }
+                0 => continue,
+                1 => {
+                    let ec = exit.exception.syndrome >> 26;
+                    if ec == 0x01 {
+                        let pc = self.reg(ffi::PC)?;
+                        self.set_reg(ffi::PC, pc.wrapping_add(4))?;
+                        if exit.exception.syndrome & 1 != 0 {
+                            continue;
+                        }
+                        return Ok(Exit::Hint(Hint::WaitForInterrupt));
+                    }
+                    if ec == 0x32 {
+                        continue;
+                    }
+                    let trap = Trap {
+                        syndrome: exit.exception.syndrome,
+                        virtual_address: exit.exception.virtual_address,
+                        physical_address: exit.exception.physical_address,
+                    };
+                    events
+                        .send(Event::Trap(trap))
+                        .map_err(|_| "HVF trap owner disconnected")?;
+                    let handled = self.paused(commands)?;
+                    self.update_interactive_progress(started);
+                    if !handled {
+                        return Ok(Exit::Trap(trap));
+                    }
+                }
+                2 => return Err("masked host virtual timer unexpectedly activated".into()),
+                n => {
+                    return Err(ExecutionError::Backend(format!(
+                        "unknown HVF exit reason {n}"
+                    )));
+                }
+            }
+        }
+    }
     fn execute(&mut self, op: Op) -> Result<Value, String> {
         match op {
             Op::Read(r) => Ok(Value::Bytes(self.read(r)?)),
@@ -691,8 +820,8 @@ pub fn serve(
                 let _ = c.reply.send(Ok(Value::Empty));
                 break;
             }
-            Op::Run(request, observe, events) => {
-                let result = p.run(request, observe, &events, &commands);
+            Op::Run(request, policy, observe, events) => {
+                let result = p.run(request, policy, observe, &events, &commands);
                 let _ = events.send(Event::Done);
                 let _ = c.reply.send(Ok(Value::Exit(result)));
             }

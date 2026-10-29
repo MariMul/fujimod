@@ -1,8 +1,10 @@
-//! Hypervisor.framework execution, with counted AArch64 steps on owning workers.
+//! Hypervisor.framework execution for AArch64 exact and native interactive runs.
 //!
 //! A Vm is one physical address space. Its Core values remain thread-affine;
-//! callbacks execute on their owner, never on a native vCPU worker. Host time
-//! is used only to cancel execution. Architectural timers exit to the runtime.
+//! callbacks execute on their owner, never on a native vCPU worker. Exact mode
+//! uses host time only to cancel execution. Interactive progress is host
+//! nanoseconds, and guest CNTVCT/CNTV use the host's native virtual counter and
+//! timer.
 #![cfg(all(target_os = "macos", target_arch = "aarch64"))]
 
 mod ffi;
@@ -61,6 +63,7 @@ pub struct Core {
     mmio: RefCell<BTreeMap<u64, Window>>,
     running: Cell<bool>,
     instruction_hook: Cell<bool>,
+    execution_policy: Cell<ExecutionPolicy>,
     _owner: PhantomData<Rc<()>>,
 }
 struct State {
@@ -105,6 +108,7 @@ impl Core {
                 mmio: RefCell::new(BTreeMap::new()),
                 running: Cell::new(false),
                 instruction_hook: Cell::new(false),
+                execution_policy: Cell::new(ExecutionPolicy::Exact),
                 _owner: PhantomData,
             }),
             Err(e) => {
@@ -385,6 +389,16 @@ impl Core {
     }
 }
 impl Cpu for Core {
+    fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
+        if self.running.get() {
+            return Err("execution policy requires a stopped processor".into());
+        }
+        if policy == ExecutionPolicy::Interactive && !self.hooks.borrow().is_empty() {
+            return Err("interactive execution cannot observe instructions".into());
+        }
+        self.execution_policy.set(policy);
+        Ok(())
+    }
     fn exclusive_domain(&self) -> Option<fujimod_emulator_cpu::exclusive::Shared> {
         Some(self.machine.monitors.clone())
     }
@@ -571,13 +585,21 @@ impl Cpu for Core {
             }
         }
         let _guard = Guard(&self.running);
+        let policy = self.execution_policy.get();
+        if policy == ExecutionPolicy::Interactive && !self.hooks.borrow().is_empty() {
+            return Err(ExecutionError::Backend(
+                "interactive execution cannot observe instructions".into(),
+            ));
+        }
+        self.shared.stop.store(false, Ordering::Release);
+        self.shared.deadline.store(false, Ordering::Release);
         let _watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
         let (events, event_rx) = mpsc::channel();
         let (reply, rx) = mpsc::channel();
         let observe = !self.hooks.borrow().is_empty();
         self.commands
             .send(Command {
-                op: Op::Run(request, observe, events),
+                op: Op::Run(request, policy, observe, events),
                 reply,
             })
             .map_err(|_| ExecutionError::Backend("HVF worker disconnected".into()))?;
@@ -622,7 +644,15 @@ impl Cpu for Core {
         if total_entries < self.shared.progress.load(Ordering::Acquire) {
             return Err("instruction limit precedes an entered instruction".into());
         }
-        self.shared.limit.fetch_min(total_entries, Ordering::AcqRel);
+        let _budget = self
+            .shared
+            .budget_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let previous = self.shared.limit.fetch_min(total_entries, Ordering::AcqRel);
+        if total_entries < previous {
+            self.shared.budget_changed.notify_all();
+        }
         Ok(())
     }
     fn instruction_progress(&self) -> Option<u64> {
@@ -674,6 +704,9 @@ impl Cpu for Core {
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         if !matches!(hook, Hook::Instruction { .. }) {
             return Err("HVF currently supports instruction observations only".into());
+        }
+        if self.execution_policy.get() == ExecutionPolicy::Interactive {
+            return Err("interactive execution cannot observe instructions".into());
         }
         let key = self.next_hook.get();
         self.next_hook
@@ -741,6 +774,8 @@ impl Cpu for Core {
 struct Watchdog {
     done: Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
     thread: Option<JoinHandle<()>>,
+    budget_shared: Option<Arc<worker::Shared>>,
+    budget_done: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 impl Watchdog {
     fn new(cpu: u64, micros: u64, shared: Arc<worker::Shared>) -> Self {
@@ -766,7 +801,49 @@ impl Watchdog {
                 }
             }))
         };
-        Self { done, thread }
+        Self {
+            done,
+            thread,
+            budget_shared: None,
+            budget_done: None,
+        }
+    }
+    fn budget(cpu: u64, started: std::time::Instant, shared: Arc<worker::Shared>) -> Self {
+        let done = Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+        let budget_done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let wait = budget_done.clone();
+        let budget_shared = shared.clone();
+        let thread = Some(std::thread::spawn(move || loop {
+            let guard = budget_shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if wait.load(Ordering::Acquire) {
+                break;
+            }
+            let limit = budget_shared.limit.load(Ordering::Acquire);
+            let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed >= limit {
+                drop(guard);
+                budget_shared.deadline.store(true, Ordering::Release);
+                unsafe {
+                    let _ = ffi::hv_vcpus_exit(&cpu, 1);
+                }
+                break;
+            }
+            let remaining = limit - elapsed;
+            let wait_for = std::time::Duration::from_nanos(remaining.min(60_000_000_000));
+            let _ = budget_shared
+                .budget_changed
+                .wait_timeout(guard, wait_for)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }));
+        Self {
+            done,
+            thread,
+            budget_shared: Some(shared),
+            budget_done: Some(budget_done),
+        }
     }
 }
 impl Drop for Watchdog {
@@ -774,6 +851,18 @@ impl Drop for Watchdog {
         let (lock, cv) = &*self.done;
         *lock.lock().unwrap() = true;
         cv.notify_one();
+        if let Some(done) = &self.budget_done {
+            done.store(true, Ordering::Release);
+        }
+        if let Some(shared) = &self.budget_shared {
+            {
+                let _budget = shared
+                    .budget_lock
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                shared.budget_changed.notify_all();
+            }
+        }
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }

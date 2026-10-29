@@ -660,6 +660,91 @@ fn main() -> Result<(), String> {
         }
         other => panic!("WFI failed to exit: {other:?}"),
     }
+    unsafe fn ignore_instruction(_: u64, _: u32, _: *mut c_void) {}
+    let observer = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: ignore_instruction,
+            data: std::ptr::null_mut(),
+            range: HookRange::All,
+        })?
+    };
+    assert!(cpu
+        .set_execution_policy(ExecutionPolicy::Interactive)
+        .is_err());
+    cpu.remove_hook(observer)?;
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+
+    const INTERACTIVE_BUDGET_NS: u64 = 100_000_000;
+    code(&cpu, 0x10900, &[0x91000400, 0x17ffffff]);
+    set(&cpu, Register::X(0), 0);
+    match cpu.run(Run {
+        begin: 0x10900,
+        until: None,
+        watchdog_us: 2_000_000,
+        instructions: Some(INTERACTIVE_BUDGET_NS as usize),
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Stopped => (),
+        other => panic!("Interactive budget did not stop the native loop: {other:?}"),
+    }
+    let progress = cpu
+        .instruction_progress()
+        .expect("Interactive progress is measured");
+    assert!((INTERACTIVE_BUDGET_NS * 3 / 4..=INTERACTIVE_BUDGET_NS * 5 / 4)
+        .contains(&progress));
+    let estimated_instructions = get(&cpu, Register::X(0)) * 2;
+    let estimated_rate = estimated_instructions as f64 * 1_000_000_000.0 / progress as f64;
+    assert!(
+        estimated_rate > 50_000_000.0,
+        "estimated native rate was {estimated_rate:.0} instructions/s"
+    );
+    println!(
+        "PASS: Interactive native loop estimated {:.1}M instructions/s; {progress}ns for {INTERACTIVE_BUDGET_NS}ns budget",
+        estimated_rate / 1_000_000.0
+    );
+
+    match cpu.run(Run {
+        begin: 0x10600,
+        until: None,
+        watchdog_us: 2_000_000,
+        instructions: Some(10_000_000),
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Hint(Hint::WaitForInterrupt) => assert_eq!(get(&cpu, Register::Pc), 0x10604),
+        other => panic!("Interactive WFI did not exit as a hint: {other:?}"),
+    }
+    unsafe {
+        cpu.map_mmio(
+            0x8000000,
+            0xc000,
+            Mmio {
+                read,
+                write,
+                data: (&mut io as *mut Io<'_>).cast(),
+            },
+        )?;
+    }
+    code(&cpu, 0x10300, &[0xf9400020, 0x14000000]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    set(&cpu, Register::X(1), 0x8000000);
+    let reads = io.reads.len();
+    match cpu.run(Run {
+        begin: 0x10300,
+        until: None,
+        watchdog_us: 2_000_000,
+        instructions: Some(100_000_000),
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Stopped => (),
+        other => panic!("Interactive MMIO load did not resume natively: {other:?}"),
+    }
+    assert_eq!(&io.reads[reads..], &[(0, 8)]);
+    assert_eq!(get(&cpu, Register::X(0)), 0x1234567800000080);
+    cpu.unmap(0x8000000, 0xc000)?;
+    cpu.set_execution_policy(ExecutionPolicy::Exact)?;
     // Host cancellation changes no guest clock. A subsequent bounded run
     // must not inherit a canceled-entry latch from the earlier watchdog.
     code(&cpu, 0x10400, &[0x14000000]);
