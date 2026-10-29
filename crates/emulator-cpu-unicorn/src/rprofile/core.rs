@@ -158,7 +158,6 @@ pub(super) struct Execution {
     observers: RefCell<BTreeMap<usize, Observer>>,
     pending_stores: RefCell<Vec<StorePublication>>,
     guest_profile: RefCell<Option<GuestProfile>>,
-    guest_profile_hook: Cell<Option<HookId>>,
     guest_profile_phase: Cell<GuestProfilePhase>,
     next_observer: Cell<usize>,
     observer_index: RefCell<observers::Index>,
@@ -209,6 +208,7 @@ impl Core {
         if !cpu.memory_regions()?.is_empty() {
             return Err("R-profile backing must be mapped through its execution owner".into());
         }
+        cpu.set_instruction_counter(true)?;
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;
@@ -275,7 +275,6 @@ impl Core {
             observers: RefCell::new(BTreeMap::new()),
             pending_stores: RefCell::new(Vec::new()),
             guest_profile: RefCell::new(None),
-            guest_profile_hook: Cell::new(None),
             guest_profile_phase: Cell::new(GuestProfilePhase::Idle),
             next_observer: Cell::new(0),
             observer_index: RefCell::new(observers::Index::default()),
@@ -564,17 +563,26 @@ impl Execution {
             } else {
                 InstructionDisposition::Execute
             },
-            observe_block: !self.observer_index.borrow().blocks.at(address).is_empty(),
+            observe_block: self.guest_profile.borrow().is_some()
+                || !self.observer_index.borrow().blocks.at(address).is_empty(),
         })
     }
     fn guest_profile_block(&self, address: u64) {
         if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
-            profile.block_entry(address, self.guest_profile_phase.get(), self.count.get());
+            let instructions = self
+                .cpu
+                .instruction_counter()
+                .unwrap_or_else(|_| self.count.get());
+            profile.block_entry(address, self.guest_profile_phase.get(), instructions);
         }
     }
     pub(super) fn finish_guest_profile_run(&self) {
         if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
-            profile.finish_run(self.count.get());
+            let instructions = self
+                .cpu
+                .instruction_counter()
+                .unwrap_or_else(|_| self.count.get());
+            profile.finish_run(instructions);
         }
     }
     fn block(&self, block: Block) -> Result<(), String> {
@@ -585,6 +593,7 @@ impl Execution {
             .map(|clock| clock.after(self.count.get()).map(|current| current.now))
             .transpose()?;
         crate::rprofile::publish_guest_tick(tick);
+        self.guest_profile_block(block.address);
         if self.thumb_common_block_path(block) {
             #[cfg(test)]
             self.block_hook_thumb_common_path
@@ -1060,10 +1069,6 @@ unsafe fn restart(data: *mut c_void, pc: u64) {
 unsafe fn block(block: Block, data: *mut c_void) {
     let e = unsafe { context(data) };
     e.guarded(|| e.block(block));
-}
-unsafe fn guest_profile_block(block: Block, data: *mut c_void) {
-    let e = unsafe { context(data) };
-    e.guest_profile_block(block.address);
 }
 unsafe fn instruction(address: u64, size: u32, data: *mut c_void) {
     let e = unsafe { context(data) };

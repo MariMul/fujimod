@@ -6,7 +6,6 @@ fn guest_profile_is_disabled_until_started() {
     let native_hooks = cpu.execution.cpu.hooks.borrow().len();
 
     assert!(cpu.finish_guest_profile().unwrap().is_none());
-    assert!(cpu.execution.guest_profile_hook.get().is_none());
     assert!(cpu.execution.guest_profile.borrow().is_none());
     assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
 }
@@ -44,7 +43,37 @@ fn guest_profile_weights_each_block_by_retired_instructions_and_phase() {
         4
     );
     assert!(blocks.iter().all(|block| block.entries > 0));
-    assert!(cpu.execution.guest_profile_hook.get().is_none());
+    assert!(cpu.execution.guest_profile.borrow().is_none());
+}
+
+unsafe fn stop_before_for_counter(_: u64, _: u32, data: *mut c_void) {
+    unsafe { &*data.cast::<Core>() }.stop_before_instruction().unwrap();
+}
+
+#[test]
+fn translated_instruction_counter_tracks_blocks_and_restores_an_unentered_tail() {
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(&cpu, 0x1000, &[0xe2800001, 0xe2800001, 0xeafffffe]);
+    set(&cpu, arm::CPSR, 0xd3);
+
+    run(&cpu, 0x1000, 2).unwrap();
+    assert_eq!(cpu.execution.cpu.instruction_counter().unwrap(), 2);
+
+    let hook = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: stop_before_for_counter,
+            data: (&cpu as *const Core).cast_mut().cast(),
+            range: HookRange::Inclusive {
+                begin: 0x1000,
+                end: 0x1000,
+            },
+        })
+        .unwrap()
+    };
+    run(&cpu, 0x1000, 10).unwrap();
+    assert_eq!(cpu.execution.cpu.instruction_counter().unwrap(), 0);
+    cpu.remove_hook(hook).unwrap();
 }
 
 #[test]

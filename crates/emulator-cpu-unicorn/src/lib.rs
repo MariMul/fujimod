@@ -155,6 +155,30 @@ impl Core {
             .ok_or("CPU backend has no block-entry exit control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
     }
+    pub(crate) fn set_instruction_counter(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+    pub(crate) fn reset_instruction_counter(&self) -> Result<(), String> {
+        let reset = self
+            .api
+            .extensions
+            .reset_instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        check(&self.api, unsafe { reset(self.raw) })
+    }
+    pub(crate) fn instruction_counter(&self) -> Result<u64, String> {
+        let read = self
+            .api
+            .extensions
+            .instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        Ok(unsafe { read(self.raw) })
+    }
 }
 #[derive(Default)]
 struct Inspection {
