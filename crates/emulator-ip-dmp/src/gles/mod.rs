@@ -462,7 +462,7 @@ impl Engine {
         let vertex = shader::execute(self, inputs)?;
         self.vertices_executed += 1;
         self.last_output = Some(vertex);
-        let mode = state.raster.primitive_mode as u32;
+        let mode = state.raster.primitive_mode.code();
         if mode == 8 {
             return raster::point(state, &vertex, read, out);
         }

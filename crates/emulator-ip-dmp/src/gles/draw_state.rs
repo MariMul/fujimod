@@ -661,6 +661,18 @@ impl PrimitiveMode {
             other => Self::Other(other as u8),
         }
     }
+
+    pub(super) fn code(self) -> u32 {
+        match self {
+            Self::Triangles => 0,
+            Self::TriangleStrip => 1,
+            Self::TriangleFan => 2,
+            Self::Lines => 4,
+            Self::LineStrip => 5,
+            Self::Points => 8,
+            Self::Other(code) => code.into(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -9,8 +9,14 @@
       "address": 9437184,
       "size": 1472,
       "fill": 0,
-      "words": [],
-      "basis": "Declared discovery input: an all-zero loader handoff in a free RAM gap, not a capture. The kernel copies 0x5c0 bytes from it; the boot-reason word at +0x140 reads zero, whose meaning is untraced. Kernel entry bypasses the boot ROM."
+      "words": [
+        {
+          "offset": 320,
+          "value": 64,
+          "name": "boot reason"
+        }
+      ],
+      "basis": "Declared discovery input: a zero-filled loader handoff in a free RAM gap, not a capture. The kernel copies 0x5c0 bytes from it. The boot-reason word at +0x140 is 0x40, which selects boot reason 1 from GFX 50R table 0x104e8dc. Its physical meaning is not measured. Kernel entry bypasses the boot ROM."
     },
     "flash_aperture": {
       "contents": "registered-update",
