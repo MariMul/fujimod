@@ -22,6 +22,7 @@ struct SerialWiring {
     ticks_per_second: u64,
     receive_request: u8,
     transmit_request: u8,
+    companion_irq_line: u32,
     wire: WireInput,
 }
 #[derive(Deserialize)]
@@ -65,6 +66,7 @@ pub fn register_all(
         {
             return Err("invalid XP5 serial DMA request wiring".into());
         }
+        let core = companion.ok_or("PL022 IRQ wiring requires the companion")?;
         let wire: Box<dyn Wire> = match wiring.wire {
             WireInput::Unconnected => Box::new(Unconnected),
             WireInput::InputLevel { high } => Box::new(InputLevel(high)),
@@ -78,7 +80,10 @@ pub fn register_all(
                 source_hz: wiring.source_hz,
                 ticks_per_second: wiring.ticks_per_second,
             },
-            vec![],
+            vec![InterruptLine::Core {
+                core,
+                line: wiring.companion_irq_line,
+            }],
             wire,
         )?;
         let port = serial.port();
