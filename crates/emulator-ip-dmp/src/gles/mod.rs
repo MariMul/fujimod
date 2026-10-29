@@ -13,12 +13,14 @@ mod gpu_fragment;
 mod gpu_vertex;
 mod raster;
 mod shader;
+mod webgpu_wire;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod wasm_gpu;
 use draw_state::DrawState;
 use shader::Vector;
 pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
+pub use webgpu_wire::{WebGpuRequest, decode_webgpu_request, encode_webgpu_result};
 pub struct HostGpuExecution {
     pub snapshots: Snapshots,
     pub draws: usize,

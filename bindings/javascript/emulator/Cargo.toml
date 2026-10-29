@@ -29,6 +29,7 @@ fujimod-emulator-boot.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-cpu-unicorn.workspace = true
 fujimod-emulator-devices.workspace = true
+fujimod-emulator-ip-dmp.workspace = true
 fujimod-emulator-gpu.workspace = true
 fujimod-emulator-exr2-board.workspace = true
 fujimod-emulator-exr2-plan.workspace = true

@@ -84,13 +84,15 @@ pub async fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
     }
     if options.dmp_cpu_renderer == Some(false) {
         #[cfg(target_os = "emscripten")]
-        return Err(Failure::host(
-            "the WebGPU DMP renderer is unavailable in the Emscripten build",
-        ));
+        fujimod_emulator_ip_dmp::configure_webgpu_bridge(true);
         #[cfg(not(target_os = "emscripten"))]
         fujimod_emulator_gpu::context_async()
             .await
             .map_err(Failure::host)?;
+    }
+    #[cfg(target_os = "emscripten")]
+    if options.dmp_cpu_renderer != Some(false) {
+        fujimod_emulator_ip_dmp::configure_webgpu_bridge(false);
     }
     jit::setup(jit::selection(options.tcg_jit).map_err(Failure::host)?).map_err(Failure::host)?;
     POLICY.set(Some(
@@ -142,6 +144,32 @@ pub struct Status {
 pub struct Frame {
     frame: Arc<fujimod_emulator_devices::graphics::scanout::Frame>,
 }
+
+#[wasm_bindgen]
+pub struct HostRequest {
+    device: usize,
+    request: fujimod_emulator_devices::bus::HostRequest,
+}
+#[wasm_bindgen]
+impl HostRequest {
+    #[wasm_bindgen(getter)]
+    pub fn device(&self) -> usize {
+        self.device
+    }
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> u64 {
+        self.request.id
+    }
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        self.request.kind.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn payload(&self) -> Vec<u8> {
+        self.request.payload.clone()
+    }
+}
+
 #[wasm_bindgen]
 impl Frame {
     #[wasm_bindgen(getter)]
@@ -484,6 +512,26 @@ impl Camera {
     #[wasm_bindgen(js_name = memoryRead)]
     pub fn memory_read(&mut self, address: u64, size: usize) -> Result<Vec<u8>, Failure> {
         self.with(|s| s.memory_read(address, size))
+    }
+    #[wasm_bindgen(js_name = takeHostRequests)]
+    pub fn take_host_requests(&mut self) -> Result<Vec<HostRequest>, Failure> {
+        self.with(|session| {
+            session.take_host_requests().map(|requests| {
+                requests
+                    .into_iter()
+                    .map(|(device, request)| HostRequest { device, request })
+                    .collect()
+            })
+        })
+    }
+    #[wasm_bindgen(js_name = completeHostRequest)]
+    pub fn complete_host_request(
+        &mut self,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), Failure> {
+        self.with(|session| session.complete_host_request(device, id, result))
     }
     #[wasm_bindgen(js_name = watchPcs)]
     pub fn watch_pcs(&mut self, addresses: Vec<u32>) -> Result<(), Failure> {

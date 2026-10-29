@@ -17,10 +17,16 @@ const expected = JSON.parse(await readFile(receipt, 'utf8')) as {
 };
 assert(expected.created && !expected.error && !expected.status.failed && expected.frame);
 const url = new URL('/__wasm-camera', base).href;
+const manifestResponse = await fetch(new URL('/__wasm-camera/wasm.json', base));
+assert(manifestResponse.ok);
+const manifest = (await manifestResponse.json()) as { dmpCpuRenderer?: boolean };
 const output = new URL('../build/wasm-camera/', import.meta.url);
 await mkdir(output, { recursive: true });
-for (const type of [chromium, webkit]) {
-  const browser = await type.launch({ headless: true });
+for (const type of manifest.dmpCpuRenderer === false ? [chromium] : [chromium, webkit]) {
+  const browser = await type.launch({
+    headless: true,
+    ...(type === chromium ? { args: ['--enable-unsafe-webgpu'] } : {}),
+  });
   try {
     const context = await browser.newContext({ viewport: { width: 1200, height: 1000 } });
     await context.routeWebSocket('**/*', () => {});

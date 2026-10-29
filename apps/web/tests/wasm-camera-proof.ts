@@ -58,10 +58,7 @@ try {
     session: { firmwareId: string; clockSeconds2000: number };
     dmpCpuRenderer?: boolean;
   };
-  check(
-    manifest.dmpCpuRenderer !== false,
-    'The Emscripten browser build requires the CPU DMP renderer.',
-  );
+  const expectedRasterizer = manifest.dmpCpuRenderer === false ? 'WebGPU' : 'CPU';
   config.firmwareId = manifest.session.firmwareId;
   config.execution = { mode: 'replay', clockSeconds2000: manifest.session.clockSeconds2000 };
   const response = await fetch('/__wasm-camera/firmware.dat');
@@ -84,11 +81,12 @@ try {
   result.rec = await pixels();
   const dmp = dmpDiagnostics((await engine.deviceStates('dmp-smaph-h')).states);
   check(dmp !== undefined, 'DMP renderer state is unavailable.');
-  const expectedRasterizer = 'CPU';
   check(
     dmp.rasterizer === expectedRasterizer,
     `Expected the ${expectedRasterizer} DMP renderer, got ${dmp.rasterizer}.`,
   );
+  if (expectedRasterizer === 'WebGPU')
+    check((dmp.gpuLists ?? 0) > 0, 'WebGPU did not complete a DMP command list.');
   result.execution = {
     profile: await engine.profile(0),
     fingerprint: await engine.fingerprint(),

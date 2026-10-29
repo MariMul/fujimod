@@ -1,4 +1,6 @@
-use fujimod_emulator_ip_dmp::gles::{Engine, Snapshots};
+use fujimod_emulator_ip_dmp::gles::{
+    Engine, Snapshots, decode_webgpu_request, encode_webgpu_result,
+};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
@@ -218,4 +220,41 @@ pub async fn render_capture(capture: &[u8]) -> Result<JsValue, JsValue> {
         .await
         .map_err(|error| JsValue::from_str(&error))?;
     serde_wasm_bindgen::to_value(&proof).map_err(|error| JsValue::from_str(&error.to_string()))
+}
+
+#[wasm_bindgen]
+pub async fn render_request(
+    request: &[u8],
+    read_guest: &js_sys::Function,
+) -> Result<js_sys::Uint8Array, JsValue> {
+    let request = decode_webgpu_request(request).map_err(|error| JsValue::from_str(&error))?;
+    let mut engine = request.engine;
+    let mut read = |address, length| {
+        let guest_address = address;
+        let address = js_sys::BigInt::from(guest_address);
+        let length_value = JsValue::from_f64(length as f64);
+        let value = read_guest
+            .call2(&JsValue::NULL, &address.into(), &length_value)
+            .map_err(|error| {
+                error
+                    .as_string()
+                    .unwrap_or_else(|| "guest memory read callback failed".into())
+            })?;
+        let bytes = js_sys::Uint8Array::new(&value).to_vec();
+        if bytes.len() != length {
+            return Err(format!(
+                "guest memory read returned {} bytes for {address:#x}+{length:#x}",
+                bytes.len(),
+                address = guest_address,
+            ));
+        }
+        Ok(bytes)
+    };
+    let execution = engine
+        .execute_host_gpu_async(&request.words, &mut read)
+        .await
+        .map_err(|error| JsValue::from_str(&error))?;
+    let response = encode_webgpu_result(&engine, &execution.snapshots)
+        .map_err(|error| JsValue::from_str(&error))?;
+    Ok(js_sys::Uint8Array::from(response.as_slice()))
 }

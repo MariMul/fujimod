@@ -2,7 +2,7 @@
 //! Register windows and physical IRQs are explicit processor inputs.
 //! Software raster law covers VG fills/strokes, curves, affine transforms,
 //! scissor/alpha and nearest Morton images. DMA latency is unmeasured.
-use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device, bus::HostRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -55,6 +55,12 @@ struct State {
     status: u32,
     command_ack: u8,
     jobs: u64,
+    #[serde(skip)]
+    next_host_request: u64,
+    #[serde(skip)]
+    gpu_lists: u64,
+    #[serde(skip)]
+    host_request: Option<PendingHostRequest>,
 }
 #[derive(Serialize, Deserialize)]
 struct Job {
@@ -62,10 +68,16 @@ struct Job {
     writes: Vec<(u64, Vec<u8>)>,
     banks: Option<(Stream, Stream)>,
 }
+struct PendingHostRequest {
+    id: u64,
+    payload: Vec<u8>,
+    published: bool,
+}
 pub struct Renderer {
     state: Arc<Mutex<State>>,
     base: u64,
     irq: u32,
+    webgpu_bridge: bool,
 }
 impl Renderer {
     pub fn new(base: u64, irq: u32) -> Result<Self, String> {
@@ -76,6 +88,7 @@ impl Renderer {
             state: Arc::new(Mutex::new(State::default())),
             base,
             irq,
+            webgpu_bridge: crate::webgpu_bridge_enabled(),
         })
     }
 }
@@ -1485,7 +1498,7 @@ impl State {
         self.regs.get(&o).copied().unwrap_or(0)
     }
     fn idle(&self) -> Result<(), String> {
-        if self.pending.is_some() || self.status != 0 {
+        if self.pending.is_some() || self.host_request.is_some() || self.status != 0 {
             Err("DMP submission before idle/ISR acknowledgment".into())
         } else {
             Ok(())
@@ -1705,7 +1718,7 @@ impl Device for Renderer {
             if matches!(o, 0x58 | 0x1200) || (o == 0x34 && v != 0) {
                 return Err("DMP write to read-only status".into());
             }
-            if s.pending.is_some() {
+            if s.pending.is_some() || s.host_request.is_some() {
                 return Err("DMP register mutation during DMA".into());
             }
             match o {
@@ -1756,17 +1769,34 @@ impl Device for Renderer {
                 0x20f0 if v == 1 => {
                     s.idle()?;
                     let data = words(cx, s.r(0x20e8) as u64 * 8, s.r(0x20e0) as usize * 2)?;
-                    let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
-                    s.command_ack = 0;
-                    s.regs.insert(o, v);
-                    s.begin(
-                        cx,
-                        Job {
-                            status: COMMAND,
-                            writes,
-                            banks: None,
-                        },
-                    );
+                    if self.webgpu_bridge {
+                        let payload = s.gles.encode_webgpu_request(&data)?;
+                        let id = s.next_host_request;
+                        let next_id = id
+                            .checked_add(1)
+                            .ok_or("DMP WebGPU request ID exhausted")?;
+                        cx.request_pause()?;
+                        s.next_host_request = next_id;
+                        s.host_request = Some(PendingHostRequest {
+                            id,
+                            payload,
+                            published: false,
+                        });
+                        s.command_ack = 0;
+                        s.regs.insert(o, v);
+                    } else {
+                        let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;
+                        s.command_ack = 0;
+                        s.regs.insert(o, v);
+                        s.begin(
+                            cx,
+                            Job {
+                                status: COMMAND,
+                                writes,
+                                banks: None,
+                            },
+                        );
+                    }
                 }
                 0x10d0 | 0x10e0 | 0x20f0 => {
                     return Err(format!("DMP unsupported command trigger{o:#x}={v:#x}"));
@@ -1838,6 +1868,64 @@ impl Device for Renderer {
             ));
             cx.set_irq(self.irq, true);
         }
+    }
+    fn take_host_request(&mut self) -> Option<HostRequest> {
+        let mut state = self.state.lock().unwrap();
+        let request = state.host_request.as_mut()?;
+        if request.published {
+            return None;
+        }
+        request.published = true;
+        Some(HostRequest {
+            id: request.id,
+            kind: "dmp-webgpu".into(),
+            payload: request.payload.clone(),
+        })
+    }
+    fn has_host_request(&self) -> bool {
+        self.state.lock().unwrap().host_request.is_some()
+    }
+    fn complete_host_request(
+        &mut self,
+        cx: &mut Cx<'_>,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        let mut state = self.state.lock().unwrap();
+        if state
+            .host_request
+            .as_ref()
+            .is_none_or(|request| request.id != id || !request.published)
+        {
+            return Err("DMP WebGPU result has no matching published request".into());
+        }
+        let writes = state.gles.apply_webgpu_result(result)?;
+        state.host_request = None;
+        state.gpu_lists = state
+            .gpu_lists
+            .checked_add(1)
+            .ok_or("DMP WebGPU list count exhausted")?;
+        state.begin(
+            cx,
+            Job {
+                status: COMMAND,
+                writes,
+                banks: None,
+            },
+        );
+        Ok(())
+    }
+    fn diagnostic_state(&self) -> Value {
+        let state = self.state.lock().unwrap();
+        let mut value = serde_json::to_value(&*state).unwrap();
+        if let Some(gles) = value.get_mut("gles").and_then(Value::as_object_mut) {
+            gles.insert(
+                "host_rasterizer".into(),
+                Value::String(if self.webgpu_bridge { "WebGPU" } else { "CPU" }.into()),
+            );
+            gles.insert("gpu_lists".into(), Value::from(state.gpu_lists));
+        }
+        value
     }
     fn save(&self) -> Value {
         serde_json::to_value(&*self.state.lock().unwrap()).unwrap()

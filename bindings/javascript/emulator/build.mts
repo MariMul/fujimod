@@ -409,7 +409,15 @@ function stageRuntimeNotices(out: string): void {
 function stagePackage(out: string): void {
   const destination = join(root, 'dist/emulator');
   mkdirSync(destination, { recursive: true });
-  for (const name of ['camera.mjs', 'camera.wasm', 'camera.d.ts', 'build.json', 'NOTICE']) {
+  for (const name of [
+    'camera.mjs',
+    'camera.wasm',
+    'camera.d.ts',
+    'dmp_webgpu.js',
+    'dmp_webgpu_bg.wasm',
+    'build.json',
+    'NOTICE',
+  ]) {
     copyFileSync(join(out, name), join(destination, name));
   }
   const licenseDirectory = join(destination, 'licenses');
@@ -465,6 +473,50 @@ export function build(selected: BuildOptions) {
   const unicornSeconds = (performance.now() - start) / 1000;
   run(['cargo', `+${pinned.nightly}`, ...plan.rust.slice(1)], plan.env);
   const rustSeconds = (performance.now() - start) / 1000 - unicornSeconds;
+  const webgpuEnv: NodeJS.ProcessEnv = {
+    ...plan.env,
+    // This wasm-bindgen module shares a worker with Emscripten, but uses its
+    // own non-shared memory and does not need atomics.
+    CARGO_ENCODED_RUSTFLAGS: ['-C', 'panic=abort'].join('\x1f'),
+  };
+  const webgpuStart = performance.now();
+  run(
+    [
+      'cargo',
+      `+${pinned.nightly}`,
+      '-Zbuild-std=std,panic_abort',
+      'build',
+      '--locked',
+      '-j2',
+      '--profile',
+      'dist',
+      '--lib',
+      '--target',
+      'wasm32-unknown-unknown',
+      '--manifest-path',
+      join(root, '../../Cargo.toml'),
+      '-p',
+      'fujimod-emulator-ip-dmp-webgpu',
+    ],
+    webgpuEnv,
+  );
+  run(
+    [
+      wasmBindgen(process.env),
+      join(
+        webgpuEnv.CARGO_TARGET_DIR!,
+        'wasm32-unknown-unknown/dist/fujimod_emulator_ip_dmp_webgpu.wasm',
+      ),
+      '--target',
+      'web',
+      '--out-dir',
+      out,
+      '--out-name',
+      'dmp_webgpu',
+    ],
+    webgpuEnv,
+  );
+  const webgpuSeconds = (performance.now() - webgpuStart) / 1000;
   const archive = join(out, 'rust/wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a');
   const symbols = capture([
     'emnm',
@@ -504,7 +556,8 @@ export function build(selected: BuildOptions) {
   const receipt = {
     unicorn_seconds: unicornSeconds,
     rust_seconds: rustSeconds,
-    link_seconds: totalSeconds - unicornSeconds - rustSeconds,
+    webgpu_seconds: webgpuSeconds,
+    link_seconds: totalSeconds - unicornSeconds - rustSeconds - webgpuSeconds,
     total_seconds: totalSeconds,
     wasm_bytes: wasm.length,
     wasm_sha256: hash(wasm),

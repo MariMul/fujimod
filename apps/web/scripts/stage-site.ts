@@ -22,6 +22,11 @@ export function runtimeBundleFiles(manifest: unknown) {
   const files = ['camera.wasm', 'camera.mjs', 'wasm.json', 'runtime-NOTICES.txt'];
   if (manifest === null || typeof manifest !== 'object' || !('construction' in manifest))
     throw Error('Runtime manifest has no construction kind.');
+  const dmpCpuRenderer = Reflect.get(manifest, 'dmpCpuRenderer');
+  if (dmpCpuRenderer !== undefined && typeof dmpCpuRenderer !== 'boolean')
+    throw Error('Runtime manifest has an invalid DMP renderer selection.');
+  if (dmpCpuRenderer === false)
+    files.push('dmp_webgpu.js', 'dmp_webgpu_bg.wasm');
   if (manifest.construction !== 'prepared') return files;
   if (
     !('prepared' in manifest) ||

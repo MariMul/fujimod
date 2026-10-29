@@ -95,6 +95,7 @@ impl State {
         let Self {
             execution_policy,
             device_workers: _,
+            host_pause: _,
             clock_limit: _,
             memory: _,
             bus: _,

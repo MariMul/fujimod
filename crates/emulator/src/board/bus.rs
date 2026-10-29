@@ -1,6 +1,6 @@
 //! Common device dispatch, discovery ledger and causal wakeups.
+use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord, HostRequest};
 use fujimod_emulator_devices::graph::{Mapping, validate_mappings};
-use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
 use fujimod_emulator_devices::{Cx, Device, Host};
 use serde_json::{Value, json};
 use std::borrow::Cow;
@@ -929,6 +929,50 @@ impl Bus {
                     .unwrap_or_else(|| "device event is unmodeled".into()),
             )?;
             return Ok(());
+        }
+        self.wake_dependents(host, device)
+    }
+    pub fn take_host_requests(&mut self) -> Vec<(usize, HostRequest)> {
+        self.windows
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(device, window)| {
+                window
+                    .device
+                    .take_host_request()
+                    .map(|request| (device, request))
+            })
+            .collect()
+    }
+    pub fn has_host_requests(&self) -> bool {
+        self.windows
+            .iter()
+            .any(|window| window.device.has_host_request())
+    }
+    pub fn complete_host_request(
+        &mut self,
+        host: &mut dyn Host,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        if device >= self.len() {
+            return Err("host request targets absent device".into());
+        }
+        let publication = self.publication_before(device);
+        self.touch(device);
+        let mut cx = Cx::new(host, usize::MAX, 0, device);
+        let result = self.windows[device]
+            .device
+            .complete_host_request(&mut cx, id, result);
+        let outcome = Self::outcome(&mut cx);
+        drop(cx);
+        self.publication_after(device, publication);
+        result?;
+        match outcome {
+            Ok(true) => {}
+            Ok(false) => return Err("host request completion is unmodeled".into()),
+            Err(error) => return Err(error),
         }
         self.wake_dependents(host, device)
     }

@@ -61,6 +61,7 @@ fn prepare_device_workers(policy: ExecutionPolicy, preference: usize) -> Result<
 
 struct State {
     continuation: Rc<RefCell<continuation::Stops>>,
+    host_pause: Rc<Cell<bool>>,
     execution_policy: ExecutionPolicy,
     // Host computation preference; absent from fingerprints and keyframes.
     device_workers: usize,
@@ -153,6 +154,41 @@ impl Board {
     }
     pub fn device_worker_count(&self) -> usize {
         device_workers(self.execution_policy(), self.device_worker_preference())
+    }
+    /// Take device work that paused guest execution for an external async host
+    /// operation. Each request is paired with its owning device index.
+    pub fn take_host_requests(
+        &mut self,
+    ) -> Result<Vec<(usize, fujimod_emulator_devices::bus::HostRequest)>, String> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "host requests require a stopped board")?;
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
+            return Err("host requests require a stopped board".into());
+        }
+        Ok(state.bus.take_host_requests())
+    }
+    /// Deliver an async host result to the device that published its request.
+    pub fn complete_host_request(
+        &mut self,
+        device: usize,
+        id: u64,
+        result: &[u8],
+    ) -> Result<(), String> {
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "host result requires a stopped board")?;
+        if state.active_slice.is_some() || state.parallel.is_some() || state.memory_access {
+            return Err("host result requires a stopped board".into());
+        }
+        state.with_host(&self.cpus, |bus, host| {
+            bus.complete_host_request(host, device, id, result)
+        })?;
+        self.host_pause.set(false);
+        state.refresh_deadlines()?;
+        state.refresh_processors()
     }
     /// Drain derived work before changing a stopped owner's executor. Joining
     /// computation never publishes its DMA payload or interrupts.
@@ -275,8 +311,10 @@ impl Board {
         let count = bus.len();
         let memory = Rc::new(memory);
         let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
+        let host_pause = Rc::new(Cell::new(false));
         let state = Rc::new(RefCell::new(State {
             continuation,
+            host_pause: host_pause.clone(),
             execution_policy: ExecutionPolicy::Exact,
             device_workers: 0,
             clock_limit: None,
@@ -320,7 +358,7 @@ impl Board {
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
-            host_pause: Default::default(),
+            host_pause,
             progress_observer: None,
             guest_profile_active: Cell::new(false),
             isolated_core: Cell::new(None),
@@ -746,7 +784,9 @@ impl Board {
             return Err("processor quantum is fixed for a board run".into());
         }
         self.quantum.set(Some(quantum));
-        self.host_pause.set(false);
+        if !self.state.borrow().bus.has_host_requests() {
+            self.host_pause.set(false);
+        }
         self.state.borrow_mut().code_run = None;
         self.state.borrow_mut().clock_limit = until;
         let mut completed_slice = None;
@@ -1297,6 +1337,7 @@ impl State {
         let Self {
             execution_policy,
             device_workers,
+            host_pause,
             bus,
             memory,
             timeline,
@@ -1322,6 +1363,7 @@ impl State {
         let mut host = Services {
             execution_policy: *execution_policy,
             device_workers: *device_workers,
+            host_pause,
             memory,
             timeline,
             interrupts,
@@ -1549,6 +1591,7 @@ impl State {
 struct Services<'a> {
     execution_policy: ExecutionPolicy,
     device_workers: usize,
+    host_pause: &'a Cell<bool>,
     memory: &'a memory::Memory,
     timeline: &'a mut Timeline,
     interrupts: &'a mut Option<InterruptMap>,
@@ -1613,6 +1656,18 @@ impl Host for Services<'_> {
     }
     fn now(&self) -> u64 {
         self.timeline.now()
+    }
+    fn request_pause(&mut self) -> Result<(), String> {
+        let core = self
+            .active_core
+            .ok_or("host request pause requires an active guest instruction")?;
+        let cpu = self.cpus.get(core).ok_or("host pause targets absent CPU")?;
+        let progress = cpu
+            .instruction_progress()
+            .ok_or("CPU cannot pause at the current instruction boundary")?;
+        cpu.tighten_instruction_limit(progress)?;
+        self.host_pause.set(true);
+        Ok(())
     }
     fn schedule(&mut self, device: usize, at: u64, token: u64) {
         let r = self
