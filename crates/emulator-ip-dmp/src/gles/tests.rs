@@ -1,4 +1,13 @@
 use super::*;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn engine_renderer_selection_defaults_to_gpu_and_supports_overrides() {
+    assert_eq!(host_gpu_mode_for(false, false), (true, false));
+    assert_eq!(host_gpu_mode_for(true, false), (false, false));
+    assert_eq!(host_gpu_mode_for(true, true), (true, true));
+}
+
 const TEST_SHADER_PROGRAM: [u32; 3] = [0x4c000000, 0x4c201000, 0x88000000];
 const TEST_SHADER_DESCRIPTOR: u32 = 0x8d86c36f;
 

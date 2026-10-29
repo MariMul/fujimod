@@ -80,6 +80,17 @@ impl Default for Engine {
         }
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn host_gpu_mode_for(cpu_only: bool, verify: bool) -> (bool, bool) {
+    (verify || !cpu_only, verify)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn host_gpu_mode() -> (bool, bool) {
+    let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
+    host_gpu_mode_for(enabled("FUJIMOD_DMP_CPU"), enabled("FUJIMOD_DMP_VERIFY_GPU"))
+}
 pub fn float24(word: u32) -> f32 {
     let sign = (word & 0x800000) << 8;
     let exp = word >> 16 & 127;
@@ -144,6 +155,26 @@ impl Engine {
             return self.execute_captured(words, read, &directory);
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (gpu_requested, verify_gpu) = host_gpu_mode();
+            if gpu_requested {
+                return if verify_gpu {
+                    self.execute_host_gpu_verified(words, read)
+                } else {
+                    self.execute_host_gpu(words, read)
+                };
+            }
+        }
+
+        self.execute_cpu(words, read)
+    }
+
+    fn execute_cpu(
+        &mut self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+    ) -> Result<Snapshots, String> {
         let mut next = self.clone();
         let mut output = raster::Targets::default();
         next.packets(words, read, &mut output, 0)?;
