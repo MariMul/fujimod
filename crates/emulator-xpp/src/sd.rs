@@ -39,6 +39,7 @@ impl Controller {
             rca: options.rca,
             ram_bytes: options.ram_bytes,
             initialization_fault: host::InitializationFault::None,
+            high_speed: false,
         };
         let host = if let Some(irq) = irq {
             SdHost::new(
