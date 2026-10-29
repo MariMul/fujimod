@@ -3,7 +3,8 @@
 //! On the discovery endpoint, +0x28 holds flags; +0x2c clears written bits.
 //! A send word written to +0x60 completes at once and sets done bit 2. Bit 3
 //! reads set because the send queue never fills. The receive word +0x48
-//! reads zero. Other words retain writes. No peer, timing or IRQ is modeled;
+//! reads zero. Reading +0x60 returns the declared reply to the last send
+//! word, else that word. Other words retain writes. No peer, timing or IRQ is modeled;
 //! this is a provisional law for discovery.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -126,15 +127,17 @@ impl Device for ConfigurationPort {
 pub struct DiscoveryPort {
     base: u64,
     registers: Vec<u32>,
+    replies: BTreeMap<u32, u32>,
 }
 impl DiscoveryPort {
-    pub fn new(base: u64) -> Result<Self, String> {
+    pub fn new(base: u64, replies: BTreeMap<u32, u32>) -> Result<Self, String> {
         if base & 0xfff != 0 {
             return Err("Invalid X-Processor Pro serial port base".into());
         }
         Ok(Self {
             base,
             registers: vec![0; (REGISTERS / 4) as usize],
+            replies,
         })
     }
 }
@@ -150,6 +153,10 @@ impl Device for DiscoveryPort {
         }
         u64::from(match o {
             RECEIVE => 0,
+            SEND => {
+                let sent = self.registers[(SEND / 4) as usize];
+                self.replies.get(&sent).copied().unwrap_or(sent)
+            }
             0x28 => self.registers[STATUS] | ROOM,
             _ => self.registers[(o / 4) as usize],
         })
@@ -230,13 +237,16 @@ mod tests {
     #[test]
     fn send_sets_done_and_clear_drops_written_status_bits() {
         let base = 0xfff2a000;
-        let mut port = DiscoveryPort::new(base).unwrap();
+        let mut port = DiscoveryPort::new(base, BTreeMap::from([(0x6000, 0x40)])).unwrap();
         let mut h = TestHost::new();
         assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM));
         write(&mut port, &mut h, base + 0x2c, 0x7f);
         assert_eq!(read(&mut port, &mut h, base + 0x48), 0);
         write(&mut port, &mut h, base + 0x60, 0xe800);
         assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM | DONE));
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0xe800);
+        write(&mut port, &mut h, base + 0x60, 0x6000);
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0x40);
         write(&mut port, &mut h, base + 0x2c, DONE);
         assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM));
         write(&mut port, &mut h, base + 0x14, 0xa);

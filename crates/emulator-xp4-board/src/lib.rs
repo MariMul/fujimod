@@ -978,6 +978,7 @@ impl Session {
             dram_alias,
             pmu_cycles_per_tick,
             gpio_base,
+            xpp_serial_replies,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -1109,10 +1110,22 @@ impl Session {
         } else if !card_files.is_empty() {
             return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
         }
+        if xpp_serial_replies
+            .iter()
+            .any(|(base, _, _)| !xpp_serial.contains(base))
+        {
+            return Err("Serial reply names no X-Processor Pro serial port".to_owned());
+        }
         for base in xpp_serial {
+            let mut replies = BTreeMap::new();
+            for &(_, command, reply) in xpp_serial_replies.iter().filter(|r| r.0 == base) {
+                if replies.insert(command, reply).is_some() {
+                    return Err("Repeated serial reply command".to_owned());
+                }
+            }
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_serial(base)?;
+                .xpp_serial(base, replies)?;
         }
         if let Some((inputs, sample_ticks)) = adc {
             devices

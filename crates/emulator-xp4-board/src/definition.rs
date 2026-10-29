@@ -100,6 +100,9 @@ pub struct Definition {
     /// GPIO bank base; XP4 places it at 0xfff41000.
     #[serde(default)]
     pub gpio_base: Option<u64>,
+    /// Declared (port base, send word, receive word) replies.
+    #[serde(default)]
+    pub xpp_serial_replies: Vec<(u64, u32, u32)>,
 }
 
 /// Register layout of the interval timer at `timer_base`.

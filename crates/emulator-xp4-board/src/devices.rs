@@ -727,7 +727,7 @@ impl Devices {
         Ok(())
     }
     /// One X-Processor Pro serial port without a peer.
-    pub fn xpp_serial(&mut self, base: u64) -> Result<(), String> {
+    pub fn xpp_serial(&mut self, base: u64, replies: BTreeMap<u32, u32>) -> Result<(), String> {
         use fujimod_emulator_xpp::serial::{REGISTERS, DiscoveryPort};
         if self
             .windows
@@ -736,7 +736,7 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro serial port".into());
         }
-        let model = DiscoveryPort::new(base)?;
+        let model = DiscoveryPort::new(base, replies)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + REGISTERS, id));
