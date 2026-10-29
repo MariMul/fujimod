@@ -872,7 +872,7 @@ impl Cpu for Core {
             changed
         };
         if changed {
-            self.shared.notify_budget_change(true);
+            self.shared.notify_budget_change()?;
         }
         Ok(())
     }
