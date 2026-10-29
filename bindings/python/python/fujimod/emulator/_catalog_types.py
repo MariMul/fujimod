@@ -2137,6 +2137,7 @@ class HardwareAtcm(TypedDict, total=False):
 class HardwareBlockParameters(TypedDict, total=False):
     command_latency_us: NotRequired[int | None]
     companion_irq_base: NotRequired[int | None]
+    configuration_word: NotRequired[int | None]
     receive_request: NotRequired[int | None]
     source_hz: NotRequired[int | None]
     ticks_per_second: NotRequired[int | None]

@@ -9378,6 +9378,15 @@
             "null"
           ]
         },
+        "configuration_word": {
+          "description": "Declared read-only clock configuration input.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "receive_request": {
           "description": "Declared receive request.",
           "format": "uint64",

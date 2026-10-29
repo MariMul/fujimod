@@ -1096,7 +1096,10 @@
             "name": "clock_gates",
             "base": 4287676416,
             "size": 4096,
-            "kind": "clock-gates"
+            "kind": "clock-gates",
+            "options": {
+              "configuration_word": 0
+            }
           },
           {
             "name": "power_gates",

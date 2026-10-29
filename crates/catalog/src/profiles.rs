@@ -1588,6 +1588,9 @@ pub struct BlockParameters {
     /// Declared command latency us.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command_latency_us: Option<u64>,
+    /// Declared read-only clock configuration input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration_word: Option<u32>,
     /// Declared companion irq base.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub companion_irq_base: Option<u64>,
