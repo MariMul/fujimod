@@ -1,10 +1,11 @@
-import { RemoteEngine } from '@fujimod/emulator-ui/engine/remote';
+import { RemoteEngine, type NativeDisplayState } from '@fujimod/emulator-ui/engine/remote';
 import type { EngineConfig, Frame } from '@fujimod/emulator-ui/engine/api';
 
 declare global {
   interface Window {
     nativeFrameCount: number;
     nativeTouchCount: number;
+    nativeDisplayState?: NativeDisplayState;
     nativeEngine?: RemoteEngine;
   }
 }
@@ -14,6 +15,7 @@ function required<T>(value: T | null, name: string): T {
   return value;
 }
 
+const camera = required(document.querySelector<HTMLElement>('#camera'), 'the camera shell');
 const canvas = required(document.querySelector<HTMLCanvasElement>('#lcd'), 'the canvas');
 const status = required(document.querySelector<HTMLOutputElement>('#status'), 'the status field');
 const context = required(canvas.getContext('2d'), 'the canvas context');
@@ -44,6 +46,15 @@ function draw(frame: Frame) {
 }
 
 engine.frames(draw);
+engine.nativeState((state) => {
+  window.nativeDisplayState = state;
+  camera.dataset.displaySource = state.source;
+  camera.dataset.displayTitle = state.title ?? '';
+  if (status.dataset.state === 'LIVE') {
+    status.textContent = state.source === 'glgui' ? state.title ?? 'GLGUI' : 'LIVE';
+  }
+});
+
 const config: EngineConfig = {
   firmwareId: 'x70-110',
   bundle: '/',
@@ -63,6 +74,67 @@ void engine
     status.textContent = error instanceof Error ? error.message : String(error);
     status.dataset.state = 'ERROR';
   });
+
+async function pulse(id: string) {
+  await engine.press(id);
+  try {
+    await engine.release(id);
+  } catch (error) {
+    status.textContent = error instanceof Error ? error.message : String(error);
+    status.dataset.state = 'ERROR';
+    throw error;
+  }
+}
+
+async function waitForDisplay(
+  predicate: (state: NativeDisplayState | undefined) => boolean,
+  timeoutMs: number,
+) {
+  const started = performance.now();
+  while (!predicate(window.nativeDisplayState)) {
+    if (performance.now() - started >= timeoutMs) {
+      throw Error('Timed out waiting for the camera LCD.');
+    }
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 20));
+  }
+}
+
+async function activateMenu() {
+  status.textContent = 'Opening menu';
+  await pulse('menu');
+  await waitForDisplay((state) => state?.source === 'glgui', 15000);
+  if (window.nativeDisplayState?.title !== 'SHOOTING MENU') {
+    await pulse('right');
+    await waitForDisplay(
+      (state) => state?.source === 'glgui' && state.title === 'SHOOTING MENU',
+      15000,
+    );
+  }
+  status.textContent = window.nativeDisplayState?.title ?? 'GLGUI';
+  status.dataset.state = 'LIVE';
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]')) {
+  button.addEventListener('click', () => {
+    const id = required(button.dataset.key ?? null, 'a physical button id');
+    const operation = id === 'menu' ? activateMenu() : pulse(id);
+    void operation.catch((error: unknown) => {
+      status.textContent = error instanceof Error ? error.message : String(error);
+      status.dataset.state = 'ERROR';
+    });
+  });
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-dial]')) {
+  button.addEventListener('click', () => {
+    const id = required(button.dataset.dial ?? null, 'a dial id');
+    const steps = Number(button.dataset.steps);
+    void engine.rotate(id, steps).catch((error: unknown) => {
+      status.textContent = error instanceof Error ? error.message : String(error);
+      status.dataset.state = 'ERROR';
+    });
+  });
+}
 
 let pointer: number | undefined;
 let touchPosition = { x: 0, y: 0 };

@@ -25,8 +25,14 @@ import type {
 } from './api';
 
 type SaveEvent = { savedAt?: number; revision?: number; error?: string };
+export type NativeDisplayState = {
+  source: 'stock' | 'glgui';
+  title: string | null;
+  sequence: number;
+};
 type Reply = { type: 'reply'; serial: number; result: unknown };
 type Failure = { type: 'error'; serial?: number; error: string; fault?: EngineFault };
+type NativeState = { type: 'native-state'; display: NativeDisplayState };
 type FrameListeners = Set<(frame: Frame) => void>;
 
 class Listeners<T> {
@@ -58,6 +64,7 @@ export class RemoteEngine implements Engine {
   private cardListeners = new Listeners<CardState>();
   private saveListeners = new Listeners<SaveEvent>();
   private powerListeners = new Listeners<boolean>();
+  private nativeStateListeners = new Listeners<NativeDisplayState>();
   private progress?: LoadingProgress;
   private unavailable?: Error;
   private disposed = false;
@@ -140,7 +147,11 @@ export class RemoteEngine implements Engine {
   }
 
   private receiveJson(source: string) {
-    let message: Reply | Failure | { type: 'progress'; message: string; percent?: number };
+    let message:
+      | Reply
+      | Failure
+      | NativeState
+      | { type: 'progress'; message: string; percent?: number };
     try {
       message = JSON.parse(source) as typeof message;
     } catch {
@@ -149,6 +160,10 @@ export class RemoteEngine implements Engine {
     }
     if (message.type === 'progress') {
       this.progress?.(message.message, message.percent);
+      return;
+    }
+    if (message.type === 'native-state') {
+      this.nativeStateListeners.emit(message.display);
       return;
     }
     if (message.type === 'error') {
@@ -333,6 +348,9 @@ export class RemoteEngine implements Engine {
   }
   powerChanges(listener: (on: boolean) => void) {
     return this.powerListeners.add(listener);
+  }
+  nativeState(listener: (state: NativeDisplayState) => void) {
+    return this.nativeStateListeners.add(listener);
   }
   dispose(): Promise<void> {
     if (this.disposePromise) return this.disposePromise;
