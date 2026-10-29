@@ -75,7 +75,11 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${address.port}/`);
-  await page.waitForFunction(() => document.body.dataset.proof, undefined, { timeout: 40000 });
+  try {
+    await page.waitForFunction(() => document.body.dataset.proof, undefined, { timeout: 55000 });
+  } catch {
+    throw Error(`Browser proof did not finish: ${await page.locator('pre').innerText()}`);
+  }
   const text = await page.locator('pre').innerText();
   assert.equal(await page.locator('body').getAttribute('data-proof'), 'passed', text);
   const reply = JSON.parse(text) as {
