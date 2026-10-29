@@ -4,6 +4,7 @@ use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
     adc, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
+    write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
@@ -165,6 +166,19 @@ fn register_with_resources(
                 Box::new(memory_configuration::MemoryConfiguration::new(
                     window.base,
                     commit_ticks,
+                )?),
+            )?;
+        }
+        "write-only-registers" => {
+            if !window.options.is_empty() {
+                return Err("write-only-registers takes no options".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(write_only_registers::WriteOnlyRegisters::new(
+                    window.base,
+                    window.size,
                 )?),
             )?;
         }
