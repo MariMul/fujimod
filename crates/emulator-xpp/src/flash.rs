@@ -4,8 +4,8 @@
 //! explicitly attached NOR register device. Array commands refuse. The aperture
 //! reads attached array contents, erased (0xff) past the supplied image.
 //! With a declared program IRQ, DMA stores program the array by clearing bits.
-//! Each programming DMA thread sets status bit 5 at its end; the IRQ follows
-//! bit 5 unless mask +0x28 holds it, and mask writes acknowledge status.
+//! Each programming DMA thread sets status bit 5 at its end. The IRQ is the
+//! status bits 0-5 not held by mask +0x28; mask writes acknowledge status.
 use fujimod_emulator_devices::parts::micron_nor;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -135,15 +135,19 @@ impl Aperture {
             cx.set_irq(irq, true);
         }
     }
-    fn acknowledge(&self, cx: &mut Cx<'_>, mask: u32) {
+    fn acknowledge(&self, mask: u32) {
         let mut program = self.program.lock().unwrap();
         *program = (program.0 & !mask, mask);
-        if let Some(irq) = self.program_irq {
-            cx.set_irq(irq, program.0 & !mask != 0);
-        }
     }
     fn program_status(&self) -> u32 {
         self.program.lock().unwrap().0
+    }
+    /// Drives the IRQ from all controller status bits the mask leaves open.
+    fn update_irq(&self, cx: &mut Cx<'_>, controller_status: u32) {
+        if let Some(irq) = self.program_irq {
+            let (program, mask) = *self.program.lock().unwrap();
+            cx.set_irq(irq, (controller_status | program) & !mask & 0x3f != 0);
+        }
     }
     pub fn base(&self) -> u64 {
         self.base
@@ -346,7 +350,8 @@ impl Device for FlashController {
                         cx.fail("Unsupported serial-flash status acknowledgement");
                     } else {
                         self.registers[0x24 / 4] &= !(value as u32);
-                        self.aperture.acknowledge(cx, value as u32);
+                        self.aperture.acknowledge(value as u32);
+                        self.aperture.update_irq(cx, self.registers[0x24 / 4]);
                     }
                 }
                 0x1c => {
@@ -377,6 +382,7 @@ impl Device for FlashController {
                     self.received = bytes.first().copied();
                     self.registers[0x24 / 4] |= 1 | if bytes.is_empty() { 0 } else { 8 };
                     self.registers[0x1c / 4] = 0;
+                    self.aperture.update_irq(cx, self.registers[0x24 / 4]);
                 }
                 Err(error) => cx.fail(error),
             }
