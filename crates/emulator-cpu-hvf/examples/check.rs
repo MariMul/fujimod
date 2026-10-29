@@ -704,6 +704,43 @@ fn main() -> Result<(), String> {
         estimated_rate / 1_000_000.0
     );
 
+    set(&cpu, Register::X(0), 0);
+    let stop_barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let stopper_barrier = stop_barrier.clone();
+    let stop_cpu = &cpu as *const _ as usize;
+    let stopper = thread::spawn(move || {
+        stopper_barrier.wait();
+        thread::sleep(std::time::Duration::from_millis(100));
+        // SAFETY: the thread calls only Core::stop while the owner is running
+        // it. Core::stop uses shared atomics; all other Core access stays on
+        // the owner thread, and the CPU outlives this joined thread.
+        unsafe {
+            (&*(stop_cpu as *const fujimod_emulator_cpu_hvf::Core)).stop()
+        }
+    });
+    stop_barrier.wait();
+    match cpu.run(Run {
+        begin: 0x10900,
+        until: None,
+        watchdog_us: 1_000_000,
+        instructions: None,
+    })
+    .map_err(|e| e.to_string())?
+    {
+        Exit::Stopped => (),
+        other => panic!("Interactive Core::stop did not stop the native loop: {other:?}"),
+    }
+    stopper.join().map_err(|_| "stopper thread panicked")??;
+    let stop_progress = cpu
+        .instruction_progress()
+        .expect("Interactive stop progress is measured");
+    assert!(
+        (20_000_000..500_000_000).contains(&stop_progress),
+        "Interactive stop progress was {stop_progress}ns"
+    );
+    assert!(get(&cpu, Register::X(0)) > 0);
+    println!("PASS: Interactive Core::stop returned Stopped at {stop_progress}ns");
+
     match cpu.run(Run {
         begin: 0x10600,
         until: None,

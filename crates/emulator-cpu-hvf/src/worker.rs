@@ -53,6 +53,7 @@ const SYSTEM: &[u16] = &[
 ];
 pub struct Shared {
     pub stop: AtomicBool,
+    pub native_active: AtomicBool,
     pub deadline: AtomicBool,
     pub progress: AtomicU64,
     pub limit: AtomicU64,
@@ -64,6 +65,7 @@ impl Default for Shared {
     fn default() -> Self {
         Self {
             stop: AtomicBool::new(false),
+            native_active: AtomicBool::new(false),
             deadline: AtomicBool::new(false),
             progress: AtomicU64::new(0),
             limit: AtomicU64::new(u64::MAX),
@@ -707,23 +709,26 @@ impl Processor {
                 return Ok(Exit::Stopped);
             }
 
+            self.deliver_interrupt()?;
             let pstate = self.reg(ffi::PSTATE)?;
             self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
             let mdscr = self.sys(ffi::MDSCR)?;
             self.set_sys(ffi::MDSCR, mdscr & !1)?;
-            unsafe {
-                ffi::check(ffi::hv_vcpu_run(self.cpu), "run")?;
+            self.shared.native_active.store(true, Ordering::Release);
+            if self.shared.stop.load(Ordering::Acquire) {
+                self.shared.native_active.store(false, Ordering::Release);
+                self.update_interactive_progress(started);
+                return Ok(Exit::Stopped);
             }
+            let run_result = unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run") };
+            self.shared.native_active.store(false, Ordering::Release);
+            run_result?;
             let exit = unsafe { *self.exit };
             self.update_interactive_progress(started);
+            if self.shared.stop.load(Ordering::Acquire) {
+                return Ok(Exit::Stopped);
+            }
             match exit.reason {
-                0 if self.shared.stop.load(Ordering::Acquire) => {
-                    self.shared.measured.store(false, Ordering::Relaxed);
-                    return Err(ExecutionError::Backend(
-                        "host canceled a native instruction; its entry count is unavailable"
-                            .into(),
-                    ));
-                }
                 0 if self.shared.deadline.load(Ordering::Acquire)
                     || self.shared.progress.load(Ordering::Relaxed)
                         >= self.shared.limit.load(Ordering::Acquire) =>

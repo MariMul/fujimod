@@ -663,6 +663,11 @@ impl Cpu for Core {
     }
     fn stop(&self) -> Result<(), String> {
         self.shared.stop.store(true, Ordering::Release);
+        if self.shared.native_active.load(Ordering::Acquire) {
+            unsafe {
+                let _ = ffi::hv_vcpus_exit(&self.native_cpu, 1);
+            }
+        }
         Ok(())
     }
     fn stop_before_instruction(&self) -> Result<(), String> {
