@@ -2,6 +2,7 @@
 pub mod adc;
 pub mod boot_control;
 pub mod clocks;
+pub mod discarded_read;
 pub mod gates;
 pub mod gpio;
 pub mod i2c;

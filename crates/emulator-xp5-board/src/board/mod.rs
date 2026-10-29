@@ -3,7 +3,7 @@
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
-    adc, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
+    adc, discarded_read, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
     write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
@@ -82,15 +82,26 @@ fn register_with_resources(
             )?;
         }
         "input-capture" => {
-            if window.size != 0x1000
-                || window.options.keys().any(|key| key != "dma_transmit")
-            {
+            if window.size != 0x1000 {
                 return Err("invalid input-capture window size".into());
+            }
+            if window.options.keys().any(|key| key != "dma_transmit") {
+                return Err("invalid input-capture option".into());
             }
             bus.register(
                 window.base,
                 window.size,
                 Box::new(fujimod_emulator_xp5_io::input_capture::InputCapture::new(window.base)?),
+            )?;
+        }
+        "discarded-read" => {
+            if !window.options.is_empty() {
+                return Err("discarded-read takes no options".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(discarded_read::DiscardedRead::new(window.base, window.size)?),
             )?;
         }
         "battery-i2c" => {
