@@ -14,7 +14,9 @@ crate-type = ["cdylib"]
 [dependencies]
 ciborium.workspace = true
 fujimod-emulator-gpu.workspace = true
+fujimod-emulator-exr2-gpu.workspace = true
 fujimod-emulator-ip-dmp.workspace = true
+fujimod-emulator-devices.workspace = true
 fujimod-workspace-hack.workspace = true
 serde = { workspace = true, features = ["derive"] }
 sha2.workspace = true

@@ -1,6 +1,9 @@
 use fujimod_emulator_ip_dmp::gles::{
     Engine, Snapshots, decode_webgpu_request, encode_webgpu_result,
 };
+use fujimod_emulator_exr2_gpu::{
+    Inputs, WebGpuUiRequest, WebGpuUiResult, render_ui_host_gpu_async,
+};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
@@ -257,4 +260,70 @@ pub async fn render_request(
     let response = encode_webgpu_result(&engine, &execution.snapshots)
         .map_err(|error| JsValue::from_str(&error))?;
     Ok(js_sys::Uint8Array::from(response.as_slice()))
+}
+
+struct GuestInputs<'a> {
+    read_guest: &'a js_sys::Function,
+}
+
+impl Inputs for GuestInputs<'_> {
+    fn has_reader(&self) -> bool {
+        true
+    }
+    fn has_irq(&self) -> bool {
+        true
+    }
+    fn routed(&self) -> bool {
+        true
+    }
+    fn read(&mut self, _cpu: i64, address: u64, length: u64) -> Result<Vec<u8>, String> {
+        let length = usize::try_from(length).map_err(|_| "guest memory read exceeds usize")?;
+        let value = self
+            .read_guest
+            .call2(
+                &JsValue::NULL,
+                &js_sys::BigInt::from(address).into(),
+                &JsValue::from_f64(length as f64),
+            )
+            .map_err(|error| {
+                error
+                    .as_string()
+                    .unwrap_or_else(|| "guest memory read callback failed".into())
+            })?;
+        let bytes = js_sys::Uint8Array::new(&value).to_vec();
+        if bytes.len() != length {
+            return Err(format!(
+                "guest memory read returned {} bytes for {address:#x}+{length:#x}",
+                bytes.len(),
+            ));
+        }
+        Ok(bytes)
+    }
+    fn targets(&mut self) -> fujimod_emulator_devices::record::Result<(usize, i64)> {
+        Ok((1, 0))
+    }
+}
+
+#[wasm_bindgen]
+pub async fn render_vector_ui_request(
+    request: &[u8],
+    read_guest: &js_sys::Function,
+) -> Result<js_sys::Uint8Array, JsValue> {
+    let request: WebGpuUiRequest = ciborium::de::from_reader(Cursor::new(request))
+        .map_err(|error| JsValue::from_str(&format!("decode vector WebGPU request: {error}")))?;
+    let mut guest = GuestInputs { read_guest };
+    let (output, touched_bytes) = render_ui_host_gpu_async(&request.draws, request.cpu, &mut guest)
+        .await
+        .map_err(|error| JsValue::from_str(&error.0))?;
+    let result = WebGpuUiResult {
+        output: output
+            .into_iter()
+            .map(|(address, bytes)| (address, bytes.as_ref().clone()))
+            .collect(),
+        touched_bytes,
+    };
+    let mut bytes = Vec::new();
+    ciborium::ser::into_writer(&result, &mut bytes)
+        .map_err(|error| JsValue::from_str(&format!("encode vector WebGPU result: {error}")))?;
+    Ok(js_sys::Uint8Array::from(bytes.as_slice()))
 }

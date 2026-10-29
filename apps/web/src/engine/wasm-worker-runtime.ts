@@ -45,6 +45,10 @@ interface DmpWebGpuModule {
     request: Uint8Array,
     read_guest: (address: bigint, length: number) => Uint8Array,
   ): Promise<Uint8Array>;
+  render_vector_ui_request(
+    request: Uint8Array,
+    read_guest: (address: bigint, length: number) => Uint8Array,
+  ): Promise<Uint8Array>;
 }
 interface DmpHostRequest {
   readonly device: number;
@@ -120,7 +124,9 @@ export async function loadWasm(
       !('default' in imported) ||
       typeof imported.default !== 'function' ||
       !('render_request' in imported) ||
-      typeof imported.render_request !== 'function'
+      typeof imported.render_request !== 'function' ||
+      !('render_vector_ui_request' in imported) ||
+      typeof imported.render_vector_ui_request !== 'function'
     )
       throw Error('DMP WebGPU module has no renderer exports.');
     const webgpuBinary = await wasmResponse.arrayBuffer();
@@ -274,11 +280,15 @@ export class WasmWorkerRuntime {
     if (requests.length === 0) return false;
     try {
       for (const request of requests) {
-        if (request.kind !== 'dmp-webgpu')
+        const readGuest = (address: bigint, length: number) => camera.memoryRead(address, length);
+        let result: Uint8Array;
+        if (request.kind === 'vector-ui-webgpu') {
+          result = await renderer.render_vector_ui_request(request.payload, readGuest);
+        } else if (['dmp-webgpu', 'vector-gles-webgpu'].includes(request.kind)) {
+          result = await renderer.render_request(request.payload, readGuest);
+        } else {
           throw Error(`Unsupported asynchronous device request ${request.kind}.`);
-        const result = await renderer.render_request(request.payload, (address, length) =>
-          camera.memoryRead(address, length),
-        );
+        }
         camera.completeHostRequest(request.device, request.id, result);
       }
     } finally {

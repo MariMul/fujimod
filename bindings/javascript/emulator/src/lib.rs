@@ -85,6 +85,8 @@ pub async fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
     if options.dmp_cpu_renderer == Some(false) {
         #[cfg(target_os = "emscripten")]
         fujimod_emulator_ip_dmp::configure_webgpu_bridge(true);
+        #[cfg(target_os = "emscripten")]
+        fujimod_emulator_exr2_gpu::configure_webgpu_bridge(true);
         #[cfg(not(target_os = "emscripten"))]
         fujimod_emulator_gpu::context_async()
             .await
@@ -93,6 +95,7 @@ pub async fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
     #[cfg(target_os = "emscripten")]
     if options.dmp_cpu_renderer != Some(false) {
         fujimod_emulator_ip_dmp::configure_webgpu_bridge(false);
+        fujimod_emulator_exr2_gpu::configure_webgpu_bridge(false);
     }
     jit::setup(jit::selection(options.tcg_jit).map_err(Failure::host)?).map_err(Failure::host)?;
     POLICY.set(Some(

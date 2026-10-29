@@ -1835,6 +1835,7 @@ dependencies = [
 name = "fujimod-emulator-exr2-gpu"
 version = "0.1.0"
 dependencies = [
+ "ciborium",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-gpu",
@@ -2140,6 +2141,8 @@ name = "fujimod-emulator-ip-dmp-webgpu"
 version = "0.1.0"
 dependencies = [
  "ciborium",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-exr2-gpu",
  "fujimod-emulator-gpu",
  "fujimod-emulator-ip-dmp",
  "fujimod-workspace-hack",
@@ -2162,6 +2165,7 @@ dependencies = [
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
+ "fujimod-emulator-exr2-gpu",
  "fujimod-emulator-exr2-images",
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
