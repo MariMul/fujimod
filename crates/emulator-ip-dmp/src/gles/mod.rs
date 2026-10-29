@@ -5,13 +5,13 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 mod capture;
 mod draw_state;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu_draw;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu_vertex;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_os = "emscripten"))]
 pub(super) mod gpu_fragment;
 mod raster;
 mod shader;
@@ -126,6 +126,7 @@ fn read_guest_draw_memory(
     Ok(bytes)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn read_cached_draw_memory(
     cache: &BTreeMap<(u64, usize), Vec<u8>>,
     address: u64,
@@ -594,6 +595,7 @@ impl Engine {
                     read,
                     out,
                 )?;
+                #[cfg(not(target_arch = "wasm32"))]
                 self.record_gpu_triangle(state, triangle);
                 self.vertices.clear();
             }
@@ -612,6 +614,7 @@ impl Engine {
                     ]
                 };
                 raster::triangle(state, self.host_acceleration_enabled(), t, read, out)?;
+                #[cfg(not(target_arch = "wasm32"))]
                 self.record_gpu_triangle(state, t);
                 self.primitive_index += 1;
                 if n > 3 {
@@ -627,6 +630,7 @@ impl Engine {
                     read,
                     out,
                 )?;
+                #[cfg(not(target_arch = "wasm32"))]
                 self.record_gpu_triangle(state, triangle);
                 self.vertices.remove(1);
             }

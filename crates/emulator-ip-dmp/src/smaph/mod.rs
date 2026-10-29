@@ -15,9 +15,9 @@ const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_STREAM: usize = 1024 * 1024;
 type Bank = BTreeMap<u16, u32>;
 mod geometry;
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu_coverage;
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu_paint;
 mod scanline;
 

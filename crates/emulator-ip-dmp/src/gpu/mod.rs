@@ -4,5 +4,5 @@ mod surfaces;
 
 pub use surfaces::{
     GpuContext, GpuSurface, PixelWriteMask, SurfaceExtent, SurfaceFormat, SurfaceKey,
-    SurfaceLayout, SurfaceReadback, context,
+    SurfaceLayout, SurfaceReadback, context, context_async,
 };

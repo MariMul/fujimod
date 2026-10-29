@@ -8,8 +8,11 @@
 
 use std::{
     collections::HashMap,
-    future::Future,
     sync::{Arc, Mutex, MutexGuard, OnceLock},
+};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    future::Future,
     task::{Context, Poll, Wake},
 };
 
@@ -143,9 +146,9 @@ pub struct GpuContext {
 }
 
 impl GpuContext {
-    fn new() -> Result<Self, String> {
+    async fn new() -> Result<Self, String> {
         Ok(Self {
-            gpu: Gpu::new()?,
+            gpu: Gpu::new().await?,
             surfaces: Mutex::new(HashMap::new()),
             submission_lock: Mutex::new(()),
         })
@@ -344,10 +347,30 @@ impl GpuContext {
 static GPU_CONTEXT: OnceLock<Result<GpuContext, String>> = OnceLock::new();
 
 pub fn context() -> Result<&'static GpuContext, String> {
-    match GPU_CONTEXT.get_or_init(GpuContext::new) {
+    #[cfg(not(target_arch = "wasm32"))]
+    let context = GPU_CONTEXT.get_or_init(|| block_on(GpuContext::new()));
+    #[cfg(target_arch = "wasm32")]
+    let context = GPU_CONTEXT.get().ok_or_else(|| {
+        "DMP GPU context is not initialized; await context_async first".to_owned()
+    })?;
+    match context {
         Ok(context) => Ok(context),
         Err(error) => Err(error.clone()),
     }
+}
+
+/// Initialize the shared GPU device without blocking the browser event loop.
+pub async fn context_async() -> Result<&'static GpuContext, String> {
+    if let Some(context) = GPU_CONTEXT.get() {
+        return match context {
+            Ok(context) => Ok(context),
+            Err(error) => Err(error.clone()),
+        };
+    }
+
+    let new_context = GpuContext::new().await?;
+    let _ = GPU_CONTEXT.set(Ok(new_context));
+    context()
 }
 
 struct Gpu {
@@ -364,17 +387,21 @@ struct Gpu {
 }
 
 impl Gpu {
-    fn new() -> Result<Self, String> {
+    async fn new() -> Result<Self, String> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            force_fallback_adapter: false,
-            compatible_surface: None,
-            ..Default::default()
-        }))
-        .map_err(|error| format!("DMP host GPU adapter: {error}"))?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+                ..Default::default()
+            })
+            .await
+            .map_err(|error| format!("DMP host GPU adapter: {error}"))?;
         let info = adapter.get_info();
-        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor::default())
+            .await
             .map_err(|error| format!("DMP host GPU device: {error}"))?;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DMP resident surfaces"),
@@ -828,14 +855,17 @@ fn byte_ranges(address: u64, written: &[bool]) -> Vec<(u64, usize)> {
     ranges
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 struct ThreadWake(std::thread::Thread);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Wake for ThreadWake {
     fn wake(self: Arc<Self>) {
         self.0.unpark();
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn block_on<F: Future>(future: F) -> F::Output {
     let waker = Arc::new(ThreadWake(std::thread::current())).into();
     let mut context = Context::from_waker(&waker);

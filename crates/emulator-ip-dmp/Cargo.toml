@@ -25,3 +25,6 @@ unsafe_op_in_unsafe_fn = "deny"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ciborium = { workspace = true }
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "vulkan", "dx12", "wgsl"] }
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "webgpu", "wgsl", "fragile-send-sync-non-atomic-wasm"] }
