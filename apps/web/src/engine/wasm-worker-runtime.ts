@@ -50,17 +50,6 @@ interface DmpWebGpuModule {
     read_guest: (address: bigint, length: number) => Uint8Array,
   ): Promise<Uint8Array>;
 }
-interface DmpHostRequest {
-  readonly device: number;
-  readonly id: bigint;
-  readonly kind: string;
-  readonly payload: Uint8Array;
-  free(): void;
-}
-interface DmpHostCamera extends Camera {
-  takeHostRequests(): DmpHostRequest[];
-  completeHostRequest(device: number, id: bigint, result: Uint8Array): void;
-}
 export async function loadWasm(
   bundle: string,
   progress: LoadingProgress = () => {},
@@ -273,7 +262,7 @@ export class WasmWorkerRuntime {
   }
   private async completeDmpRequests(): Promise<boolean> {
     if (this.manifest?.dmpCpuRenderer !== false) return false;
-    const camera = this.require() as DmpHostCamera;
+    const camera = this.require();
     const renderer = this.dmpWebGpu;
     if (!renderer) throw Error('DMP WebGPU request has no initialized renderer.');
     const requests = camera.takeHostRequests();

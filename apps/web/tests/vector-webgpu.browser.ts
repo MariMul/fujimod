@@ -11,14 +11,6 @@ interface VectorDiagnostics {
 interface RuntimeManifest extends Record<string, unknown> {
   dmpCpuRenderer?: boolean;
 }
-interface EngineAccess {
-  deviceStates(kind: string): Promise<{ states: unknown[] }>;
-}
-interface ScenarioWindow extends Window {
-  cameraEngine?: EngineAccess;
-  cameraPerformance?: unknown;
-}
-
 const base = process.env.FUJIMOD_WEB_URL;
 if (!base) throw Error('Set FUJIMOD_WEB_URL.');
 const scenario = new URL('/?scenario=x70-lcd#workspace', base).href;
@@ -47,7 +39,7 @@ async function run(cpuRenderer: boolean, label: 'cpu' | 'webgpu') {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(scenario);
   await page.waitForFunction(
-    () => (window as ScenarioWindow).cameraPerformance !== undefined,
+    () => window.cameraPerformance !== undefined,
     undefined,
     { timeout: 55000 },
   );
@@ -75,8 +67,13 @@ async function run(cpuRenderer: boolean, label: 'cpu' | 'webgpu') {
   if (adapter.info?.vendor) assert.equal(adapter.info.vendor, 'apple');
   if (adapter.info?.architecture) assert.equal(adapter.info.architecture, 'metal-3');
   assert.match(adapter.renderer, /Apple M2 Pro/);
-  const canvas = page.locator<HTMLCanvasElement>('#lcd-source');
-  const rec = await canvas.evaluate((source) => source.toDataURL());
+  const canvas = page.locator('#lcd-source');
+  const frame = () =>
+    canvas.evaluate((source) => {
+      if (!(source instanceof HTMLCanvasElement)) throw Error('LCD canvas is unavailable.');
+      return source.toDataURL();
+    });
+  const rec = await frame();
   await page.screenshot({ path: new URL(`${label}-rec.png`, output).pathname, fullPage: true });
   await page.locator('button[data-id="menu_ok_button"]').click();
   await page.waitForFunction(
@@ -85,10 +82,10 @@ async function run(cpuRenderer: boolean, label: 'cpu' | 'webgpu') {
     rec,
     { timeout: 55000 },
   );
-  const menu = await canvas.evaluate((source) => source.toDataURL());
+  const menu = await frame();
   await page.screenshot({ path: new URL(`${label}-menu.png`, output).pathname, fullPage: true });
   const diagnostics = await page.evaluate(async () => {
-    const engine = (window as ScenarioWindow).cameraEngine;
+    const engine = window.cameraEngine;
     if (!engine) throw Error('Camera engine is unavailable.');
     const states = (await engine.deviceStates('vector-gpu')).states;
     const counters: Record<string, number | undefined> = {};
