@@ -11,8 +11,21 @@
 //! from tick zero with the frame sync's declared period, and sets every
 //! enabled status bit; the interrupt line is high while an enabled status bit
 //! is set. No frame is ever in flight, so +0x1ec reads only the idle bit and
-//! +0x00 bit 0 reads set. The statistics are not computed and the buffers
-//! are not written. Other words read back their last write.
+//! +0x00 bit 0 reads set. Other words read back their last write.
+//!
+//! The twelve output buffers are the words +0x1b8..+0x1e4, programmed for
+//! the first of two halves; +0x10 is the distance to the second (0x3690).
+//! The engine alternates halves frame by frame, beginning with the first,
+//! and keeps alternating when the firmware restarts it between frames (the
+//! camera fills both halves while +0x1cc keeps the first half's address).
+//! Section 6 0x1698dd0 takes each completion as the half it was writing and
+//! switches its own pointer (0x1bc6310) to the other, without reprogramming
+//! the engine. With a declared scene, each frame writes the zone sums buffer
+//! (+0x1cc) of the half it completes: three planes of 16x16 u32 zone sums
+//! (red, green, blue; green is about 2.6 times red, probably both green
+//! sites) and a fourth plane of zeros, as in the camera's captures. The
+//! scene is uniform, so every zone of a plane holds the declared value. The
+//! other buffers are not written.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,6 +41,9 @@ const STATE: u64 = 0x1ec;
 const SOURCES: u32 = 0x3ff;
 const START: u32 = 1 << 28;
 const IDLE: u32 = 1 << 16;
+const HALF: u64 = 0x10;
+const ZONE_SUMS: u64 = 0x1cc;
+const ZONES: usize = 256;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,11 +53,15 @@ struct State {
     due: Option<u64>,
     line: bool,
     frames: u64,
+    /// The engine writes the second half next.
+    #[serde(default)]
+    second: bool,
 }
 pub struct Engine {
     base: u64,
     irq: u32,
     period: u64,
+    scene: Option<[u32; 3]>,
     state: State,
 }
 impl Engine {
@@ -53,8 +73,34 @@ impl Engine {
             base,
             irq,
             period,
+            scene: None,
             state: State::default(),
         })
+    }
+    /// A uniform scene: the red, green and blue sum of every zone.
+    pub fn with_scene(mut self, zone_sums: [u32; 3]) -> Self {
+        self.scene = Some(zone_sums);
+        self
+    }
+    fn write_zone_sums(&self, cx: &mut Cx<'_>) {
+        let Some(scene) = self.scene else {
+            return;
+        };
+        let half = if self.state.second {
+            self.word(HALF)
+        } else {
+            0
+        };
+        let address = u64::from(self.word(ZONE_SUMS)) + u64::from(half);
+        let mut planes = Vec::with_capacity(4 * ZONES * 4);
+        for value in scene.into_iter().chain([0]) {
+            for _ in 0..ZONES {
+                planes.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        if cx.ram_write(address, &planes).is_err() {
+            cx.fail("Statistics zone sums outside RAM");
+        }
     }
     fn word(&self, offset: u64) -> u32 {
         self.state.words.get(&offset).copied().unwrap_or(0)
@@ -119,6 +165,8 @@ impl Device for Engine {
         };
         self.state.status |= self.word(ENABLE) & SOURCES;
         self.state.frames += 1;
+        self.write_zone_sums(cx);
+        self.state.second = !self.state.second;
         let frames = (cx.now() - due) / self.period + 1;
         self.state.due = frames
             .checked_mul(self.period)
@@ -188,5 +236,38 @@ mod tests {
         let mut cx = h.cx();
         stats.write(&mut cx, BASE + STATE, 4, 0);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn declared_scene_fills_the_zone_sums_of_alternating_halves() {
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene([145_000, 383_000, 34_000]);
+        let mut h = TestHost::new();
+        let word = |h: &TestHost, address: usize| {
+            u32::from_le_bytes(h.ram[address..address + 4].try_into().unwrap())
+        };
+        let plane =
+            |h: &TestHost, address: usize| [0, 1, 2, 3].map(|n| word(h, address + 0x400 * n));
+        write(&mut stats, &mut h, BASE + HALF, 0x3690);
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        assert_eq!(plane(&h, 0x1000), [145_000, 383_000, 34_000, 0]);
+        assert_eq!(plane(&h, 0x13fc), [145_000, 383_000, 34_000, 0]);
+        assert_eq!(word(&h, 0x4690), 0);
+        advance(&mut stats, &mut h, 2000);
+        assert_eq!(plane(&h, 0x4690), [145_000, 383_000, 34_000, 0]);
+        // A restart keeps alternating.
+        write(&mut stats, &mut h, BASE + CONTROL, 0);
+        h.ram[0x1000..0x1004].fill(0);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 3000);
+        assert_eq!(word(&h, 0x1000), 145_000);
+        h.ram[0x4690..0x4694].fill(0);
+        write(&mut stats, &mut h, BASE + CONTROL, 0);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 4000);
+        assert_eq!(word(&h, 0x4690), 145_000);
     }
 }

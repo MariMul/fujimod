@@ -949,6 +949,7 @@ impl Session {
             xpp_frame_sync,
             xpp_hdmi,
             xpp_statistics,
+            xpp_statistics_scene,
             xpp_face,
             xpp_register_blocks,
             xpp_clocks,
@@ -1194,7 +1195,9 @@ impl Session {
         if let Some((base, irq, period)) = xpp_statistics {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_statistics(base, irq, period)?;
+                .xpp_statistics(base, irq, period, xpp_statistics_scene)?;
+        } else if xpp_statistics_scene.is_some() {
+            return Err("X-Processor Pro statistics scene needs the statistics engine".into());
         }
         if let Some((base, irq, run_ticks)) = xpp_face {
             devices

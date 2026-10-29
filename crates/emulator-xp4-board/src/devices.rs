@@ -993,7 +993,13 @@ impl Devices {
         self.windows.push((block.base, end, id));
         Ok(())
     }
-    pub fn xpp_statistics(&mut self, base: u64, irq: u32, period: u64) -> Result<(), String> {
+    pub fn xpp_statistics(
+        &mut self,
+        base: u64,
+        irq: u32,
+        period: u64,
+        scene: Option<[u32; 3]>,
+    ) -> Result<(), String> {
         use fujimod_emulator_xpp::statistics::{Engine, WINDOW};
         if self
             .windows
@@ -1002,7 +1008,10 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro statistics engine".into());
         }
-        let model = Engine::new(base, irq, period)?;
+        let mut model = Engine::new(base, irq, period)?;
+        if let Some(scene) = scene {
+            model = model.with_scene(scene);
+        }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + WINDOW, id));

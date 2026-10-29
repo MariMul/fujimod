@@ -417,6 +417,10 @@
         "basis": "Measured: nothing answers on serial channel 3 (logical device 0xb of the 0xed389c table). X-T20 2.11 section 5 0xc94358 sends a command byte, then 0xaa fill bytes, reading each received byte from +0x60 (0xc4b964) into the frame buffer at 0x11ddc55. In the s1 REC capture (2026-10-29) that buffer holds 23 ff: the command byte the body heard while sending it, then the idle-high line. The link's state byte 0x11dda50 is 0xff (0xc92a04), and the record 0x11ddb49 that command 0x20 fills (dispatcher 0xc92a28) is zero, so UI_SETP_FLASH_KIND (0x3e1) stays 0. On a port that read back its send word, the 0xaa fill decoded as flash kind 2, model 5 (0xc20090, 0xcec52c), and the AE statistics gate 0x1a36b55 stayed closed. Here every received byte reads 0xff, including the command byte, which the camera hears as sent."
       }
     ],
+    "zone_statistics": {
+      "zone_sums": [144736, 383321, 33695],
+      "basis": "Measured mean zone sums, uniform scene: X-T20 2.11 REC live view of an evenly lit wall (s2, 2026-10-29). The statistics engine 0xfff54000 writes twelve buffers per frame into one of two halves 0x3690 apart (+0x10); the zone sums buffer (+0x1cc, 0x3f480360 in the first half) holds four 16x16 planes of u32: red, green (about 2.6 times red, probably both green sites), blue, and a plane of zeros. Both halves of the capture agree within 1%: mean 144736 / 383321 / 33695 / 0 (green zones 228289..478805: vignetting). Section 6 0x1698dd0 takes each completion as the half just written and alternates its pointer 0x1bc6310 without reprogramming the engine's buffer words; the engine keeps alternating across the firmware's per-frame restarts (with a restart from the first half, only the first half was ever written in the emulator, while the camera fills both). Declared uniform: every zone holds the mean."
+    },
     "usb_cable": {
       "vbus_bank": 1,
       "vbus_pin": 14,

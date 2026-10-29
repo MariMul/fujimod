@@ -1192,6 +1192,18 @@ pub struct IdleSerialPort {
     pub port: u64,
 }
 
+/// Declared uniform scene the imaging statistics engine sums.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetZoneStatistics"))]
+pub struct ZoneStatistics {
+    /// Declared basis.
+    pub basis: String,
+    /// Red, green and blue sum of every zone.
+    pub zone_sums: [u32; 3],
+}
+
 /// Declared hardware reset facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1231,6 +1243,9 @@ pub struct HardwareReset {
     /// reads 0xff.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub idle_serial_ports: Vec<IdleSerialPort>,
+    /// Declared scene for the imaging statistics engine's zone sums.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zone_statistics: Option<ZoneStatistics>,
     /// Declared register-file parts on the I2C buses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_parts: Vec<I2cPartInput>,

@@ -94,6 +94,10 @@ pub struct Definition {
     /// frame period in ticks.
     #[serde(default)]
     pub xpp_statistics: Option<(u64, u32, u64)>,
+    /// Uniform scene for the statistics engine: the red, green and blue sum
+    /// of every zone.
+    #[serde(default)]
+    pub xpp_statistics_scene: Option<[u32; 3]>,
     /// X-Processor Pro face detection engine: base, interrupt line and run
     /// time in ticks.
     #[serde(default)]

@@ -261,6 +261,17 @@
             }
           ],
           "description": "Declared USB port: the cable's VBUS pin and the link speed a host\nnegotiates."
+        },
+        "zone_statistics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetZoneStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared scene for the imaging statistics engine's zone sums."
         }
       },
       "type": "object"
@@ -3069,6 +3080,32 @@
         "name",
         "offset",
         "value"
+      ],
+      "type": "object"
+    },
+    "ResetZoneStatistics": {
+      "additionalProperties": false,
+      "description": "Declared uniform scene the imaging statistics engine sums.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "zone_sums": {
+          "description": "Red, green and blue sum of every zone.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "zone_sums"
       ],
       "type": "object"
     }
