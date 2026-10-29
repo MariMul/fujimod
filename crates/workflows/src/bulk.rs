@@ -360,6 +360,9 @@ impl Source {
             BulkSource::PatternZeroBase {
                 registered_buffer,
                 source_state,
+                configuration_pointer,
+                configuration_bytes,
+                system_mode_address,
                 capacity,
             } => {
                 let descriptor = access.raw(registered_buffer, 12).await?;
@@ -370,11 +373,33 @@ impl Source {
                         && base.checked_add(u64::from(capacity)).is_some(),
                     "Registered scratch cannot hold the stock pattern",
                 )?;
+                let configuration = u64::from_le_bytes(
+                    access
+                        .raw(configuration_pointer, 8)
+                        .await?
+                        .try_into()
+                        .expect("eight bytes"),
+                );
+                require(configuration != 0, "Invalid active configuration pointer")?;
+                memory_range(BulkRange {
+                    address: system_mode_address,
+                    size: 4,
+                })?;
+                memory_range(BulkRange {
+                    address: configuration,
+                    size: configuration_bytes,
+                })?;
                 protect(
                     bulk,
                     base,
                     capacity,
-                    &[(registered_buffer, 12), (source_state, 12)],
+                    &[
+                        (registered_buffer, 12),
+                        (source_state, 12),
+                        (configuration_pointer, 8),
+                        (configuration, configuration_bytes),
+                        (system_mode_address, 4),
+                    ],
                 )?;
                 let original = access.raw(source_state, 12).await?;
                 let mut prepared = descriptor[..8].to_vec();

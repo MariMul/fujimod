@@ -9,13 +9,8 @@
       "internal_version": "1.57",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "ValueError: not enough values to unpack (expected 1, got 0)"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -6556,13 +6551,8 @@
       "internal_version": "2.14",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "ValueError: xp5_system_mode_getter: 0 candidates, 0 verified results"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",

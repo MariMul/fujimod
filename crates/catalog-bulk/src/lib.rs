@@ -98,6 +98,12 @@ pub enum BulkSource {
         registered_buffer: u64,
         /// Address of the 64-bit source pointer and 32-bit capacity.
         source_state: u64,
+        /// Address of the pointer to active configuration RAM.
+        configuration_pointer: u64,
+        /// Bytes in active configuration RAM to protect from scratch setup.
+        configuration_bytes: u64,
+        /// Located system-mode cell to protect from scratch setup.
+        system_mode_address: u64,
         /// Bytes the stock setup writes and each E1 request may return.
         capacity: u32,
     },
@@ -239,6 +245,17 @@ impl FirmwareBulk {
             BulkSource::Pattern { capacity: 0, .. }
             | BulkSource::PatternZeroBase { capacity: 0, .. } => {
                 return fail("pattern capacity must be positive");
+            }
+            BulkSource::PatternZeroBase {
+                configuration_pointer,
+                configuration_bytes,
+                system_mode_address,
+                ..
+            } if *configuration_pointer == 0
+                || *configuration_bytes == 0
+                || *system_mode_address == 0 =>
+            {
+                return fail("configuration protection must be specified");
             }
             _ => {}
         }

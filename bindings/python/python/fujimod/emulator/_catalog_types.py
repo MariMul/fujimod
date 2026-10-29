@@ -413,9 +413,12 @@ class BulkSourceVariant1(TypedDict, total=False):
 
 class BulkSourceVariant2(TypedDict, total=False):
     capacity: Required[int]
+    configuration_bytes: Required[int]
+    configuration_pointer: Required[int]
     mechanism: Required[Literal["pattern_zero_base"]]
     registered_buffer: Required[int]
     source_state: Required[int]
+    system_mode_address: Required[int]
 
 
 class CacheGeometry(TypedDict, total=False):

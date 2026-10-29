@@ -165,6 +165,18 @@
               "minimum": 0,
               "type": "integer"
             },
+            "configuration_bytes": {
+              "description": "Bytes in active configuration RAM to protect from scratch setup.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "configuration_pointer": {
+              "description": "Address of the pointer to active configuration RAM.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "mechanism": {
               "const": "pattern_zero_base",
               "type": "string"
@@ -180,12 +192,21 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "system_mode_address": {
+              "description": "Located system-mode cell to protect from scratch setup.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
             "mechanism",
             "registered_buffer",
             "source_state",
+            "configuration_pointer",
+            "configuration_bytes",
+            "system_mode_address",
             "capacity"
           ],
           "type": "object"
