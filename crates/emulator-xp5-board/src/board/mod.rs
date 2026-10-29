@@ -82,7 +82,9 @@ fn register_with_resources(
             )?;
         }
         "input-capture" => {
-            if window.size != 0x1000 {
+            if window.size != 0x1000
+                || window.options.keys().any(|key| key != "dma_transmit")
+            {
                 return Err("invalid input-capture window size".into());
             }
             bus.register(

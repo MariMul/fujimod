@@ -8,6 +8,7 @@ use fujimod_emulator_parts_io::serial::{InputLevel, Unconnected, Wire};
 use fujimod_emulator_xp5_storage::{dma_registers, general_dma::Global};
 use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 pub fn owns(kind: &str) -> bool {
     matches!(
@@ -40,6 +41,18 @@ enum WireInput {
 #[serde(deny_unknown_fields)]
 struct DmaWiring {
     companion_irq_base: u32,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InputCaptureWiring {
+    #[serde(default)]
+    dma_transmit: Vec<InputCaptureTransmit>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InputCaptureTransmit {
+    channel: u8,
+    request: u8,
 }
 fn options<T: serde::de::DeserializeOwned>(w: &DeviceWindow) -> Result<T, String> {
     toml::Value::Table(w.options.clone())
@@ -106,6 +119,34 @@ pub fn register_all(
             }
         }
         serials.push(bus.register(w.base, w.size, Box::new(serial))?);
+    }
+    for w in windows.iter().filter(|w| w.kind == "input-capture") {
+        let channels = match (w.base, w.size) {
+            (0xff928000, 0x1000) => 5,
+            (0xff929000, 0x1000) => 3,
+            _ => return Err("invalid input-capture DMA window".into()),
+        };
+        let wiring: InputCaptureWiring = options(w)?;
+        for transmit in wiring.dma_transmit {
+            if transmit.channel >= channels || transmit.request >= 63 {
+                return Err("invalid input-capture DMA request wiring".into());
+            }
+            let port: fujimod_emulator_devices::dma::SharedPort =
+                Arc::new(Mutex::new(fujimod_emulator_xp5_io::input_capture::TransmitSink));
+            if connections
+                .insert(
+                    transmit.request,
+                    Connection {
+                        address: w.base + u64::from(transmit.channel) * 0x20 + 4,
+                        direction: Direction::Transmit,
+                        port,
+                    },
+                )
+                .is_some()
+            {
+                return Err("duplicate DMA request wire".into());
+            }
+        }
     }
     let mut pairs = vec![];
     let mut views = vec![];
