@@ -60,6 +60,8 @@ pub struct Core {
     native_cpu: u64,
     hooks: RefCell<BTreeMap<usize, Hook>>,
     next_hook: Cell<usize>,
+    next_run: Cell<u64>,
+    active_run: RefCell<Option<ActiveRun>>,
     mmio: RefCell<BTreeMap<u64, Window>>,
     running: Cell<bool>,
     instruction_hook: Cell<bool>,
@@ -69,6 +71,15 @@ pub struct Core {
 struct State {
     owner: Identity,
     registers: worker::Registers,
+}
+struct ActiveRun {
+    token: RunToken,
+    events: mpsc::Receiver<Event>,
+    reply: mpsc::Receiver<Result<Value, String>>,
+    pending_callback: Option<Event>,
+    callback_error: Option<ExecutionError>,
+    result: Option<Result<Exit, ExecutionError>>,
+    watchdog: Option<Watchdog>,
 }
 impl Snapshot for State {
     fn export(&self) -> Result<Vec<u8>, String> {
@@ -105,6 +116,8 @@ impl Core {
                 native_cpu,
                 hooks: RefCell::new(BTreeMap::new()),
                 next_hook: Cell::new(0),
+                next_run: Cell::new(1),
+                active_run: RefCell::new(None),
                 mmio: RefCell::new(BTreeMap::new()),
                 running: Cell::new(false),
                 instruction_hook: Cell::new(false),
@@ -124,6 +137,28 @@ impl Core {
             .map_err(|_| "HVF worker disconnected")?;
         rx.recv().map_err(|_| "HVF worker reply disconnected")?
     }
+    fn validate_active_run(
+        &self,
+        run: RunToken,
+    ) -> Result<std::cell::RefMut<'_, Option<ActiveRun>>, ExecutionError> {
+        let active = self.active_run.borrow_mut();
+        if run.owner() != self.identity
+            || !active.as_ref().is_some_and(|active| active.token == run)
+        {
+            return Err(ExecutionError::Backend(
+                "run token belongs to a different or inactive HVF run".into(),
+            ));
+        }
+        Ok(active)
+    }
+    fn preempt_native_run(&self) {
+        self.shared.stop.store(true, Ordering::Release);
+        if self.shared.native_active.load(Ordering::Acquire) {
+            unsafe {
+                let _ = ffi::hv_vcpus_exit(&self.native_cpu, 1);
+            }
+        }
+    }
     fn scalar(&self, r: Register) -> Result<u64, String> {
         let mut bytes = [0; 8];
         self.read_register(r, &mut bytes)?;
@@ -137,6 +172,12 @@ impl Core {
             HookRange::All => true,
             HookRange::Inclusive { begin, end } => address >= begin && address <= end,
         }
+    }
+    fn has_instruction_hooks(&self) -> bool {
+        self.hooks
+            .borrow()
+            .values()
+            .any(|hook| matches!(hook, Hook::Instruction { .. }))
     }
     fn before(&self, pc: u64) {
         let hooks: Vec<_> = self
@@ -393,7 +434,7 @@ impl Cpu for Core {
         if self.running.get() {
             return Err("execution policy requires a stopped processor".into());
         }
-        if policy == ExecutionPolicy::Interactive && !self.hooks.borrow().is_empty() {
+        if policy == ExecutionPolicy::Interactive && self.has_instruction_hooks() {
             return Err("interactive execution cannot observe instructions".into());
         }
         self.execution_policy.set(policy);
@@ -410,6 +451,7 @@ impl Cpu for Core {
     }
     fn features(&self) -> Features {
         Features {
+            asynchronous_runs: true,
             instruction_limit: true,
             shared_physical_maps: true,
             instruction_progress: true,
@@ -586,7 +628,7 @@ impl Cpu for Core {
         }
         let _guard = Guard(&self.running);
         let policy = self.execution_policy.get();
-        if policy == ExecutionPolicy::Interactive && !self.hooks.borrow().is_empty() {
+        if policy == ExecutionPolicy::Interactive && self.has_instruction_hooks() {
             return Err(ExecutionError::Backend(
                 "interactive execution cannot observe instructions".into(),
             ));
@@ -596,7 +638,7 @@ impl Cpu for Core {
         let _watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
         let (events, event_rx) = mpsc::channel();
         let (reply, rx) = mpsc::channel();
-        let observe = !self.hooks.borrow().is_empty();
+        let observe = self.has_instruction_hooks();
         self.commands
             .send(Command {
                 op: Op::Run(request, policy, observe, events),
@@ -637,6 +679,163 @@ impl Cpu for Core {
             _ => unreachable!(),
         }
     }
+    fn start_run(&self, request: Run) -> Result<RunToken, ExecutionError> {
+        if self.execution_policy.get() != ExecutionPolicy::Interactive {
+            return Err(ExecutionError::Backend(
+                "asynchronous HVF runs require interactive execution policy".into(),
+            ));
+        }
+        if self.running.replace(true) {
+            return Err(ExecutionError::Backend(
+                "cannot run a CPU recursively".into(),
+            ));
+        }
+        if self.has_instruction_hooks() {
+            self.running.set(false);
+            return Err(ExecutionError::Backend(
+                "interactive execution cannot observe instructions".into(),
+            ));
+        }
+
+        let sequence = self.next_run.get();
+        self.next_run.set(sequence.wrapping_add(1).max(1));
+        let token = RunToken::new(self.identity, sequence);
+        self.shared.stop.store(false, Ordering::Release);
+        self.shared.deadline.store(false, Ordering::Release);
+        self.shared.progress.store(0, Ordering::Relaxed);
+        self.shared.measured.store(false, Ordering::Relaxed);
+        let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
+        let (events, event_rx) = mpsc::channel();
+        let (reply, reply_rx) = mpsc::channel();
+        if self
+            .commands
+            .send(Command {
+                op: Op::Run(request, ExecutionPolicy::Interactive, false, events),
+                reply,
+            })
+            .is_err()
+        {
+            self.running.set(false);
+            drop(watchdog);
+            return Err(ExecutionError::Backend("HVF worker disconnected".into()));
+        }
+        *self.active_run.borrow_mut() = Some(ActiveRun {
+            token,
+            events: event_rx,
+            reply: reply_rx,
+            pending_callback: None,
+            callback_error: None,
+            result: None,
+            watchdog: Some(watchdog),
+        });
+        Ok(token)
+    }
+
+    fn poll_run(&self, run: RunToken) -> Result<RunStatus, ExecutionError> {
+        let mut active = self.validate_active_run(run)?;
+        let state = active.as_mut().unwrap();
+        if state.pending_callback.is_some() {
+            return Ok(RunStatus::CallbackPending);
+        }
+        if let Some(result) = &state.result {
+            return Ok(RunStatus::Complete(result.clone()));
+        }
+        match state.events.try_recv() {
+            Ok(event @ (Event::Before(_) | Event::Trap(_))) => {
+                state.pending_callback = Some(event);
+                Ok(RunStatus::CallbackPending)
+            }
+            Ok(Event::Done) => {
+                let result = match state.reply.try_recv() {
+                    Ok(Ok(Value::Exit(result))) => result,
+                    Ok(Ok(_)) => Err(ExecutionError::Backend(
+                        "HVF run returned an invalid completion value".into(),
+                    )),
+                    Ok(Err(error)) => Err(ExecutionError::Backend(error)),
+                    Err(mpsc::TryRecvError::Empty) => Err(ExecutionError::Backend(
+                        "HVF completion arrived before its run result".into(),
+                    )),
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Err(ExecutionError::Backend("HVF run reply disconnected".into()))
+                    }
+                };
+                let result = state.callback_error.take().map_or(result, Err);
+                state.result = Some(result.clone());
+                state.watchdog.take();
+                self.running.set(false);
+                Ok(RunStatus::Complete(result))
+            }
+            Err(mpsc::TryRecvError::Empty) => Ok(RunStatus::Running),
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let error = ExecutionError::Backend("HVF worker disconnected during run".into());
+                state.result = Some(Err(error.clone()));
+                state.watchdog.take();
+                self.running.set(false);
+                Ok(RunStatus::Complete(Err(error)))
+            }
+        }
+    }
+
+    fn request_pause(&self, run: RunToken) -> Result<(), ExecutionError> {
+        let active = self.validate_active_run(run)?;
+        if active.as_ref().unwrap().result.is_none() {
+            self.preempt_native_run();
+        }
+        Ok(())
+    }
+
+    fn service_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
+        let event = self
+            .validate_active_run(run)?
+            .as_mut()
+            .unwrap()
+            .pending_callback
+            .take()
+            .ok_or_else(|| {
+                ExecutionError::Backend("HVF run has no parked callback to service".into())
+            })?;
+        let handled = match event {
+            Event::Before(pc) => {
+                self.before(pc);
+                true
+            }
+            Event::Trap(trap) => match self.mmio_trap(trap) {
+                Ok(handled) => handled,
+                Err(error) => {
+                    self.validate_active_run(run)?
+                        .as_mut()
+                        .unwrap()
+                        .callback_error = Some(error);
+                    false
+                }
+            },
+            Event::Done => unreachable!("completion events cannot become callbacks"),
+        };
+        self.rpc(Op::Resume(handled))
+            .map_err(ExecutionError::Backend)?;
+        Ok(())
+    }
+
+    fn cancel_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
+        let mut active = self.validate_active_run(run)?;
+        let state = active.as_mut().unwrap();
+        if state.pending_callback.take().is_none() {
+            return Ok(());
+        }
+        self.preempt_native_run();
+        drop(active);
+        self.rpc(Op::Resume(false))
+            .map_err(ExecutionError::Backend)?;
+        Ok(())
+    }
+
+    fn set_run_wakeup(&self, wakeup: RunWakeup) -> Result<(), String> {
+        if self.running.get() {
+            return Err("cannot replace HVF run wakeup during an active run".into());
+        }
+        self.shared.set_run_wakeup(wakeup);
+        Ok(())
+    }
     fn tighten_instruction_limit(&self, total_entries: u64) -> Result<(), String> {
         if !self.running.get() {
             return Err("no active processor run".into());
@@ -662,12 +861,7 @@ impl Cpu for Core {
             .then(|| self.shared.progress.load(Ordering::Relaxed))
     }
     fn stop(&self) -> Result<(), String> {
-        self.shared.stop.store(true, Ordering::Release);
-        if self.shared.native_active.load(Ordering::Acquire) {
-            unsafe {
-                let _ = ffi::hv_vcpus_exit(&self.native_cpu, 1);
-            }
-        }
+        self.preempt_native_run();
         Ok(())
     }
     fn stop_before_instruction(&self) -> Result<(), String> {
@@ -707,10 +901,12 @@ impl Cpu for Core {
         }))
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
-        if !matches!(hook, Hook::Instruction { .. }) {
-            return Err("HVF currently supports instruction observations only".into());
+        if !matches!(hook, Hook::Instruction { .. } | Hook::Synchronization { .. }) {
+            return Err("HVF supports instruction and synchronization hooks only".into());
         }
-        if self.execution_policy.get() == ExecutionPolicy::Interactive {
+        if self.execution_policy.get() == ExecutionPolicy::Interactive
+            && matches!(hook, Hook::Instruction { .. })
+        {
             return Err("interactive execution cannot observe instructions".into());
         }
         let key = self.next_hook.get();
@@ -875,6 +1071,24 @@ impl Drop for Watchdog {
 }
 impl Drop for Core {
     fn drop(&mut self) {
+        if let Some(mut active) = self.active_run.get_mut().take() {
+            if active.result.is_none() {
+                self.preempt_native_run();
+                if active.pending_callback.take().is_some() {
+                    let _ = self.rpc(Op::Resume(false));
+                }
+                loop {
+                    match active.events.recv() {
+                        Ok(Event::Before(_) | Event::Trap(_)) => {
+                            let _ = self.rpc(Op::Resume(false));
+                        }
+                        Ok(Event::Done) | Err(_) => break,
+                    }
+                }
+                let _ = active.reply.recv();
+            }
+            active.watchdog.take();
+        }
         let _ = self.rpc(Op::Shutdown);
         if let Some(thread) = self.worker.take() {
             let _ = thread.join();

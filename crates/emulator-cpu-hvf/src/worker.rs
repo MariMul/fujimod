@@ -60,6 +60,7 @@ pub struct Shared {
     pub measured: AtomicBool,
     pub budget_lock: Mutex<()>,
     pub budget_changed: Condvar,
+    run_wakeup: Mutex<Option<RunWakeup>>,
 }
 impl Default for Shared {
     fn default() -> Self {
@@ -72,6 +73,26 @@ impl Default for Shared {
             measured: AtomicBool::new(false),
             budget_lock: Mutex::new(()),
             budget_changed: Condvar::new(),
+            run_wakeup: Mutex::new(None),
+        }
+    }
+}
+impl Shared {
+    pub fn set_run_wakeup(&self, wakeup: RunWakeup) {
+        *self
+            .run_wakeup
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(wakeup);
+    }
+
+    fn notify_run_wakeup(&self) {
+        if let Some(wakeup) = self
+            .run_wakeup
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+        {
+            wakeup.notify();
         }
     }
 }
@@ -493,6 +514,18 @@ impl Processor {
             ExecutionPolicy::Interactive => self.run_interactive(request, events, commands),
         }
     }
+    fn send_event(
+        &self,
+        events: &mpsc::Sender<Event>,
+        event: Event,
+        disconnected: &'static str,
+    ) -> Result<(), ExecutionError> {
+        events
+            .send(event)
+            .map_err(|_| ExecutionError::Backend(disconnected.into()))?;
+        self.shared.notify_run_wakeup();
+        Ok(())
+    }
     fn run_exact(
         &mut self,
         request: Run,
@@ -532,9 +565,7 @@ impl Processor {
                 return Ok(Exit::Stopped);
             }
             if observe {
-                events
-                    .send(Event::Before(pc))
-                    .map_err(|_| "HVF observer disconnected")?;
+                self.send_event(events, Event::Before(pc), "HVF observer disconnected")?;
                 self.paused(commands)?;
                 if self.shared.stop.load(Ordering::Acquire) {
                     return Ok(Exit::Stopped);
@@ -603,9 +634,7 @@ impl Processor {
                         virtual_address: 0,
                         physical_address: 0,
                     };
-                    events
-                        .send(Event::Trap(trap))
-                        .map_err(|_| "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -646,9 +675,7 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    events
-                        .send(Event::Trap(trap))
-                        .map_err(|_| "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -754,9 +781,7 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    events
-                        .send(Event::Trap(trap))
-                        .map_err(|_| "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
                     let handled = self.paused(commands)?;
                     self.update_interactive_progress(started);
                     if !handled {
@@ -827,8 +852,9 @@ pub fn serve(
             }
             Op::Run(request, policy, observe, events) => {
                 let result = p.run(request, policy, observe, &events, &commands);
-                let _ = events.send(Event::Done);
                 let _ = c.reply.send(Ok(Value::Exit(result)));
+                let _ = events.send(Event::Done);
+                p.shared.notify_run_wakeup();
             }
             op => {
                 let result = p.execute(op);

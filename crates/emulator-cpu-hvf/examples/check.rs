@@ -71,6 +71,44 @@ fn main() -> Result<(), String> {
         let options = || {
             Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024)
         };
+        let mut concurrent = graph(
+            (0..2)
+                .map(|core| Processor {
+                    model: Model::ArmV8A,
+                    released: true,
+                    rprofile: None,
+                    mprofile: None,
+                    registers: vec![
+                        (Register::Pstate, 0x3c5),
+                        (Register::Pc, 0x10000 + core * 0x1000),
+                    ],
+                })
+                .collect(),
+        )
+        .build(options(), Bus::new(Mode::Strict), None)?;
+        concurrent.set_execution_policy(ExecutionPolicy::Interactive)?;
+        for core in 0..2 {
+            if !concurrent.cpu(core)?.features().asynchronous_runs {
+                return Err(format!("HVF core {core} lacks asynchronous runs"));
+            }
+            code(
+                concurrent.cpu(core)?,
+                0x10000 + core * 0x1000,
+                &[0xd2800000, 0x91000400, 0x17ffffff],
+            );
+        }
+        concurrent.run_for_instructions(20_000_000, 128)?;
+        let concurrent_counts = concurrent.instruction_counts();
+        if concurrent_counts.len() != 2 || concurrent_counts.iter().any(|count| *count == 0) {
+            return Err(format!(
+                "two-vCPU interactive run did not advance both cores: {concurrent_counts:?}"
+            ));
+        }
+        for core in 0..2 {
+            if get(concurrent.cpu(core)?, Register::X(0)) == 0 {
+                return Err(format!("two-vCPU interactive core {core} did not execute"));
+            }
+        }
         // Both architectural compare channels must assert their declared PPI at
         // guest tick100, including when the host pauses while WFI is waiting.
         for virtual_timer in [false, true] {
@@ -1332,7 +1370,7 @@ fn main() -> Result<(), String> {
     architectural_board_checks()?;
     durable::run()?;
     println!(
-        "PASS: bounded execution, two workers, callback reentrancy, snapshots, SVC/ERET, IRQ, shared GIC/ICC, WFI, counter trap, MMIO, native MMU, exclusives/peer stores/CLREX, code replacement, cancellation, map lifetime and shared factory deadline/IRQ scheduling and M-profile firmware mailbox execution and peer-store reservation invalidation"
+        "PASS: bounded execution, two workers, concurrent vCPUs, callback reentrancy, snapshots, SVC/ERET, IRQ, shared GIC/ICC, WFI, counter trap, MMIO, native MMU, exclusives/peer stores/CLREX, code replacement, cancellation, map lifetime and shared factory deadline/IRQ scheduling and M-profile firmware mailbox execution and peer-store reservation invalidation"
     );
     Ok(())
 }
