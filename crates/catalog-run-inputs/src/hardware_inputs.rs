@@ -16,14 +16,16 @@ pub struct Empty {}
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetAdcInput"))]
 pub struct AdcInput {
-    /// Declared ambient celsius.
-    pub ambient_celsius: u64,
+    /// Declared ambient celsius, for converters with thermal channels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ambient_celsius: Option<u64>,
     /// Declared basis.
     pub basis: String,
     /// Declared samples.
     pub samples: Vec<u64>,
     /// Declared thermal channels.
-    pub thermal_channels: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thermal_channels: Option<Vec<u64>>,
 }
 
 /// Declared adc facts.

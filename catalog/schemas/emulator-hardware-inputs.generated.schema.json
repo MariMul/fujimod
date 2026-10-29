@@ -187,10 +187,13 @@
       "description": "Declared adc input facts.",
       "properties": {
         "ambient_celsius": {
-          "description": "Declared ambient celsius.",
+          "description": "Declared ambient celsius, for converters with thermal channels.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "basis": {
           "description": "Declared basis.",
@@ -212,14 +215,15 @@
             "minimum": 0,
             "type": "integer"
           },
-          "type": "array"
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [
-        "ambient_celsius",
         "basis",
-        "samples",
-        "thermal_channels"
+        "samples"
       ],
       "type": "object"
     },

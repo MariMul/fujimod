@@ -751,6 +751,27 @@ impl Devices {
         self.windows.push((base, base + REGISTERS, id));
         Ok(())
     }
+    /// X-Processor Pro ADC with declared samples.
+    pub fn xpp_adc(
+        &mut self,
+        base: u64,
+        samples: &[u16],
+        conversion_ticks: u64,
+    ) -> Result<(), String> {
+        use fujimod_emulator_xpp::adc::{Converter, WINDOW};
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base + WINDOW)
+        {
+            return Err("Overlapping X-Processor Pro ADC".into());
+        }
+        let model = Converter::new(base, samples, conversion_ticks)?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + WINDOW, id));
+        Ok(())
+    }
     /// X-Processor Pro display frame interrupts; the law has no register window.
     pub fn xpp_display_frames(&mut self, irqs: Vec<u32>, period: u64) -> Result<(), String> {
         let model = fujimod_emulator_xpp::display::FrameClock::new(irqs, period)?;

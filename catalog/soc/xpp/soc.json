@@ -89,6 +89,13 @@
       "clock_id": null
     },
     {
+      "id": "adc",
+      "base": 4294021120,
+      "size": 64,
+      "kind": "adc",
+      "clock_id": null
+    },
+    {
       "id": "display",
       "base": 4294328320,
       "size": 8192,
@@ -475,6 +482,12 @@
             "size": 12288,
             "irq_route": 92,
             "basis": "DMP SMAPH vector-graphics renderer with the XP4 register interface. The X-T20 2.11 OpenVG/EGL driver (seg5 0xdda65c onward, kernel tasks smaphk/smaphp) programs command words at +0x1c, the copy unit at +0xc00-+0xc18 and command lists at +0x10d0/+0x10e0. Its interrupt 92 handler 0xdda2fc reads status +0x34, and waiter 0xdda3cc reports bits 31, 30 and 26."
+          },
+          "adc": {
+            "base": 4294021120,
+            "size": 64,
+            "sample_ticks": 16,
+            "basis": "Twelve-channel ADC with the X-T20 2.11 kernel contract (0x5ac00..0x5adf8): control +0 with start bit 0, continuous-mode bit 1 and channel enables in bits 16-25, clock divider +4, and 10-bit results at +0x10 + 4*channel. Reader 0x5ad8c requires bit 0 and the channel enable; a single conversion clears bit 0 when done (stage 2 0x13d8 waits for it). The conversion clock is unmeasured; sample_ticks is a declared input."
           },
           "display_frames": {
             "irq_routes": [112, 113, 114, 117, 118, 119],

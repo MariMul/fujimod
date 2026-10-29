@@ -47,6 +47,8 @@ pub struct Definition {
     #[serde(default)]
     pub xpp_display_frames: Option<XppDisplayFrames>,
     #[serde(default)]
+    pub xpp_adc: Option<XppAdc>,
+    #[serde(default)]
     pub cache_sizes: Option<(u32, u32, u32)>,
     #[serde(default)]
     pub io_group_base: Option<u64>,
@@ -120,6 +122,16 @@ pub struct XppSubCpu {
 pub struct XppDisplayFrames {
     pub irqs: Vec<u32>,
     pub period_ticks: u64,
+}
+
+/// X-Processor Pro ADC: register base, twelve 10-bit samples and the ticks a
+/// single conversion takes.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppAdc {
+    pub base: u64,
+    pub samples: Vec<u16>,
+    pub conversion_ticks: u64,
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.

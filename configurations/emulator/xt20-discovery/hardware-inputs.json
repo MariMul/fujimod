@@ -4,6 +4,23 @@
   "id": "xt20-discovery",
   "body_id": "xt20",
   "reset": {
+    "adc_input": {
+      "samples": [
+        382,
+        302,
+        1017,
+        1023,
+        842,
+        599,
+        59,
+        608,
+        471,
+        1021,
+        381,
+        302
+      ],
+      "basis": "Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read from a service-mode RAM capture of an X-T20 2.11 with all keys released, assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

@@ -932,6 +932,7 @@ impl Session {
             xpp_serial,
             xpp_sub_cpu,
             xpp_display_frames,
+            xpp_adc,
             cache_sizes,
             io_group_base,
             decompressor,
@@ -1062,6 +1063,11 @@ impl Session {
             }
             None => None,
         };
+        if let Some(adc) = xpp_adc {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_adc(adc.base, &adc.samples, adc.conversion_ticks)?;
+        }
         if let Some(frames) = xpp_display_frames {
             devices
                 .get_or_insert_with(devices::Devices::empty)
