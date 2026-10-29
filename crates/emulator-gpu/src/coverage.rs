@@ -5,6 +5,7 @@ use std::mem::size_of;
 use wgpu::util::DeviceExt;
 
 const MAX_EDGE_GRID_COORDINATE: f64 = 16_383.0;
+const MAX_FLOAT_EDGE_COORDINATE: f32 = 16_777_216.0;
 // This fixed-point rasterizer keeps signed edge cross products within i32.
 const MAX_BOUNDS: u32 = 2048;
 
@@ -12,6 +13,14 @@ const MAX_BOUNDS: u32 = 2048;
 pub enum FillRule {
     EvenOdd,
     NonZero,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EdgeCoordinates {
+    /// Coordinates already represent a raster on the eighth-pixel grid.
+    EighthPixel,
+    /// Preserve fractional pixel coordinates for fill classification.
+    FloatPixel,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,11 +44,28 @@ impl SampleGrid {
 pub struct CoverageEdge {
     pub start: [f32; 2],
     pub end: [f32; 2],
+    start_exact: [f64; 2],
+    end_exact: [f64; 2],
 }
 
 impl CoverageEdge {
     pub const fn new(start: [f32; 2], end: [f32; 2]) -> Self {
-        Self { start, end }
+        Self {
+            start,
+            end,
+            start_exact: [start[0] as f64, start[1] as f64],
+            end_exact: [end[0] as f64, end[1] as f64],
+        }
+    }
+
+    /// Preserve f64 edge inputs for rebasing before GPU fill math.
+    pub fn from_f64(start: [f64; 2], end: [f64; 2]) -> Self {
+        Self {
+            start: start.map(|value| value as f32),
+            end: end.map(|value| value as f32),
+            start_exact: start,
+            end_exact: end,
+        }
     }
 }
 
@@ -47,8 +73,9 @@ impl CoverageEdge {
 pub struct CoverageRequest<'a> {
     /// Pixel bounds as `[left, right, top, bottom)`, with right and bottom exclusive.
     pub bounds: [u32; 4],
-    /// Line segments in pixel coordinates. The rasterizer classifies them on an eighth-pixel grid.
+    /// Line segments in pixel coordinates.
     pub edges: &'a [CoverageEdge],
+    pub edge_coordinates: EdgeCoordinates,
     pub fill_rule: FillRule,
     pub sample_grid: SampleGrid,
     /// Optional stroke radius in pixels, also classified on the eighth-pixel grid.
@@ -88,7 +115,7 @@ impl CoverageKernel {
         }
 
         let mut jobs = Vec::<u32>::with_capacity(requests.len() * 12);
-        let mut edges = Vec::<[f32; 4]>::new();
+        let mut edges = Vec::<[f32; 8]>::new();
         let mut output_lengths = Vec::with_capacity(requests.len());
         let mut output_count = 0usize;
         let mut max_width = 0usize;
@@ -100,9 +127,29 @@ impl CoverageKernel {
                 return Err("coverage input has invalid bounds".into());
             }
             for edge in request.edges {
-                for coordinate in edge.start.into_iter().chain(edge.end) {
-                    validate_grid_coordinate(coordinate)?;
+                match request.edge_coordinates {
+                    EdgeCoordinates::EighthPixel => {
+                        for coordinate in edge.start.into_iter().chain(edge.end) {
+                            validate_grid_coordinate(coordinate)?;
+                        }
+                    }
+                    EdgeCoordinates::FloatPixel => {
+                        let origins = [x0, y0, x0, y0];
+                        for (coordinate, origin) in edge
+                            .start_exact
+                            .into_iter()
+                            .chain(edge.end_exact)
+                            .zip(origins)
+                        {
+                            validate_float_coordinate(coordinate - f64::from(origin))?;
+                        }
+                    }
                 }
+            }
+            if request.edge_coordinates == EdgeCoordinates::FloatPixel
+                && request.stroke_radius.is_some()
+            {
+                return Err("float-pixel coverage does not support stroke radii".into());
             }
             let stroke_radius = request
                 .stroke_radius
@@ -128,6 +175,7 @@ impl CoverageKernel {
                 .map_err(|_| "coverage output offset overflow")?;
             let mut flags = u32::from(stroke_radius.is_some());
             flags |= u32::from(request.fill_rule == FillRule::NonZero) << 1;
+            flags |= u32::from(request.edge_coordinates == EdgeCoordinates::FloatPixel) << 2;
             jobs.extend([
                 x0,
                 y0,
@@ -146,7 +194,31 @@ impl CoverageKernel {
                 request
                     .edges
                     .iter()
-                    .map(|edge| [edge.start[0], edge.start[1], edge.end[0], edge.end[1]]),
+                    .map(|edge| match request.edge_coordinates {
+                        EdgeCoordinates::EighthPixel => [
+                            edge.start[0],
+                            edge.start[1],
+                            edge.end[0],
+                            edge.end[1],
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                        ],
+                        EdgeCoordinates::FloatPixel => {
+                            let [x0, _, y0, _] = request.bounds;
+                            let start_x =
+                                split_float_coordinate(edge.start_exact[0] - f64::from(x0));
+                            let start_y =
+                                split_float_coordinate(edge.start_exact[1] - f64::from(y0));
+                            let end_x = split_float_coordinate(edge.end_exact[0] - f64::from(x0));
+                            let end_y = split_float_coordinate(edge.end_exact[1] - f64::from(y0));
+                            [
+                                start_x.0, start_y.0, end_x.0, end_y.0, start_x.1, start_y.1,
+                                end_x.1, end_y.1,
+                            ]
+                        }
+                    }),
             );
             output_count = output_count
                 .checked_add(output_len)
@@ -160,12 +232,12 @@ impl CoverageKernel {
             return Ok(output_lengths.iter().map(|_| Vec::new()).collect());
         }
         if edges.is_empty() {
-            edges.push([0.0; 4]);
+            edges.push([0.0; 8]);
         }
 
         let edge_bytes = edges
             .len()
-            .checked_mul(size_of::<[f32; 4]>())
+            .checked_mul(size_of::<[f32; 8]>())
             .ok_or("coverage edge buffer size overflow")?;
         let job_bytes = jobs
             .len()
@@ -292,6 +364,22 @@ fn validate_grid_coordinate(value: f32) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_float_coordinate(value: f64) -> Result<(), String> {
+    if !value.is_finite() {
+        return Err("coverage edge coordinate is not finite".into());
+    }
+    if value.abs() > f64::from(MAX_FLOAT_EDGE_COORDINATE) {
+        return Err("coverage edge coordinate exceeds the float-pixel range".into());
+    }
+    Ok(())
+}
+
+fn split_float_coordinate(value: f64) -> (f32, f32) {
+    let high = value as f32;
+    let low = (value - f64::from(high)) as f32;
+    (high, low)
+}
+
 fn quantized_grid_coordinate(value: f32) -> Result<i32, String> {
     if !value.is_finite() {
         return Err("coverage edge coordinate is not finite".into());
@@ -301,4 +389,126 @@ fn quantized_grid_coordinate(value: f32) -> Result<i32, String> {
         return Err("coverage edge coordinate exceeds the fixed-point range".into());
     }
     Ok(coordinate as i32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CoverageEdge, CoverageKernel, CoverageRequest, EdgeCoordinates, FillRule, SampleGrid,
+    };
+
+    #[test]
+    fn float_pixel_edges_preserve_fractional_fill_positions() {
+        let context = match crate::context() {
+            Ok(context) => context,
+            Err(error) if error.starts_with("host GPU adapter:") => {
+                eprintln!(
+                    "skipping GPU coverage test because no host GPU adapter is available: {error}"
+                );
+                return;
+            }
+            Err(error) => panic!("host GPU coverage setup failed: {error}"),
+        };
+        let kernel = CoverageKernel::new(context);
+        let edges = [
+            CoverageEdge::new([0.53, 0.1], [1.49, 0.1]),
+            CoverageEdge::new([1.49, 0.1], [1.49, 0.9]),
+            CoverageEdge::new([1.49, 0.9], [0.53, 0.9]),
+            CoverageEdge::new([0.53, 0.9], [0.53, 0.1]),
+        ];
+        let request = |edge_coordinates| CoverageRequest {
+            bounds: [0, 2, 0, 1],
+            edges: &edges,
+            edge_coordinates,
+            fill_rule: FillRule::EvenOdd,
+            sample_grid: SampleGrid::OneByOne,
+            stroke_radius: None,
+        };
+
+        let fractional = kernel
+            .coverage_batch(context, &[request(EdgeCoordinates::FloatPixel)])
+            .expect("float-edge GPU coverage succeeds");
+        let eighth_pixel = kernel
+            .coverage_batch(context, &[request(EdgeCoordinates::EighthPixel)])
+            .expect("eighth-pixel GPU coverage succeeds");
+        assert_eq!(fractional, vec![vec![0, 0]]);
+        assert_eq!(eighth_pixel, vec![vec![1, 0]]);
+    }
+
+    #[test]
+    fn float_pixel_edges_preserve_f64_residuals_below_f32_precision() {
+        let context = match crate::context() {
+            Ok(context) => context,
+            Err(error) if error.starts_with("host GPU adapter:") => {
+                eprintln!(
+                    "skipping GPU coverage test because no host GPU adapter is available: {error}"
+                );
+                return;
+            }
+            Err(error) => panic!("host GPU coverage setup failed: {error}"),
+        };
+        let kernel = CoverageKernel::new(context);
+        let edges = [
+            CoverageEdge::from_f64([0.40000001, 0.0], [1.49, 0.0]),
+            CoverageEdge::from_f64([1.49, 0.0], [1.49, 1.0]),
+            CoverageEdge::from_f64([1.49, 1.0], [0.60000001, 1.0]),
+            CoverageEdge::from_f64([0.60000001, 1.0], [0.40000001, 0.0]),
+        ];
+        let request = |edge_coordinates| CoverageRequest {
+            bounds: [0, 2, 0, 1],
+            edges: &edges,
+            edge_coordinates,
+            fill_rule: FillRule::EvenOdd,
+            sample_grid: SampleGrid::OneByOne,
+            stroke_radius: None,
+        };
+
+        let fractional = kernel
+            .coverage_batch(context, &[request(EdgeCoordinates::FloatPixel)])
+            .expect("float-edge GPU coverage succeeds");
+        let eighth_pixel = kernel
+            .coverage_batch(context, &[request(EdgeCoordinates::EighthPixel)])
+            .expect("eighth-pixel GPU coverage succeeds");
+        assert_eq!(fractional, vec![vec![0, 0]]);
+        assert_eq!(eighth_pixel, vec![vec![1, 0]]);
+    }
+
+    #[test]
+    fn float_pixel_edges_keep_sloped_sample_side_near_intersections() {
+        let context = match crate::context() {
+            Ok(context) => context,
+            Err(error) if error.starts_with("host GPU adapter:") => {
+                eprintln!(
+                    "skipping GPU coverage test because no host GPU adapter is available: {error}"
+                );
+                return;
+            }
+            Err(error) => panic!("host GPU coverage setup failed: {error}"),
+        };
+        let kernel = CoverageKernel::new(context);
+        let edges = [
+            CoverageEdge::from_f64(
+                [538.6606754515077, 442.2918976665267],
+                [547.5942692015077, 465.0907257915267],
+            ),
+            CoverageEdge::from_f64(
+                [546.8959651734923, 465.3643523334733],
+                [537.9623714234923, 442.5655242084733],
+            ),
+        ];
+        let actual = kernel
+            .coverage_batch(
+                context,
+                &[CoverageRequest {
+                    bounds: [544, 545, 456, 457],
+                    edges: &edges,
+                    edge_coordinates: EdgeCoordinates::FloatPixel,
+                    fill_rule: FillRule::NonZero,
+                    sample_grid: SampleGrid::FourByFour,
+                    stroke_radius: None,
+                }],
+            )
+            .expect("GPU coverage succeeds near the sloped edge intersection");
+        assert_eq!(actual, vec![vec![3]]);
+    }
 }

@@ -6,12 +6,48 @@ struct CoverageJob {
     padding: vec2<u32>,
 }
 
+struct CoverageEdge {
+    high: vec4<f32>,
+    low: vec4<f32>,
+}
+
 @group(0) @binding(0) var<storage, read> jobs: array<CoverageJob>;
-@group(0) @binding(1) var<storage, read> edges: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> edges: array<CoverageEdge>;
 @group(0) @binding(2) var<storage, read_write> coverage: array<u32>;
 
 fn edge_in_grid(index: u32) -> vec4<i32> {
-    return vec4<i32>(round(edges[index] * 8.0));
+    return vec4<i32>(round(edges[index].high * 8.0));
+}
+
+fn two_sum(a: f32, b: f32) -> vec2<f32> {
+    let sum = a + b;
+    let other = sum - a;
+    let error = (a - (sum - other)) + (b - other);
+    return vec2<f32>(sum, error);
+}
+
+fn float_add(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+    let sum = two_sum(a.x, b.x);
+    return two_sum(sum.x, sum.y + a.y + b.y);
+}
+
+fn float_sub(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+    return float_add(a, -b);
+}
+
+fn float_mul(a: vec2<f32>, b: vec2<f32>) -> vec2<f32> {
+    let product = a.x * b.x;
+    let error = fma(a.x, b.x, -product) + a.x * b.y + a.y * b.x + a.y * b.y;
+    return two_sum(product, error);
+}
+
+fn float_greater(a: vec2<f32>, b: vec2<f32>) -> bool {
+    let difference = float_sub(a, b);
+    return difference.x > 0.0 || (difference.x == 0.0 && difference.y > 0.0);
+}
+
+fn float_less_equal(a: vec2<f32>, b: vec2<f32>) -> bool {
+    return !float_greater(a, b);
 }
 
 fn multiply_u32(a: u32, b: u32) -> vec2<u32> {
@@ -91,6 +127,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let edge_count = job.parameters.z;
     let stroke_enabled = (job.parameters.w & 1u) != 0u;
     let nonzero = (job.parameters.w & 2u) != 0u;
+    let float_pixel_edges = (job.parameters.w & 4u) != 0u;
     let radius = job.stroke_radius;
     var pixel_coverage = 0u;
 
@@ -111,16 +148,56 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             } else {
                 var winding = 0i;
                 for (var edge_index = 0u; edge_index < edge_count; edge_index += 1u) {
-                    let edge = edge_in_grid(edge_offset + edge_index);
-                    let a = edge.xy;
-                    let b = edge.zw;
-                    let upward = b.y > a.y;
-                    let crosses_row = (a.y <= py && b.y > py) || (b.y <= py && a.y > py);
-                    if crosses_row {
-                        let relative = (b.x - a.x) * (py - a.y)
-                            - (b.y - a.y) * (px - a.x);
-                        if (upward && relative > 0) || (!upward && relative < 0) {
-                            winding += select(-1, 1, upward);
+                    if float_pixel_edges {
+                        let edge = edges[edge_offset + edge_index];
+                        let a_x = vec2<f32>(edge.high.x, edge.low.x);
+                        let a_y = vec2<f32>(edge.high.y, edge.low.y);
+                        let b_x = vec2<f32>(edge.high.z, edge.low.z);
+                        let b_y = vec2<f32>(edge.high.w, edge.low.w);
+                        let local_px = id.x * 8u + ((sx * 2u + 1u) * 4u) / samples;
+                        let local_py = id.y * 8u + ((sy * 2u + 1u) * 4u) / samples;
+                        let sample_x = vec2<f32>(f32(local_px) / 8.0, 0.0);
+                        let sample_y = vec2<f32>(f32(local_py) / 8.0, 0.0);
+                        let upward = float_greater(b_y, a_y);
+                        let crosses_row = (float_less_equal(a_y, sample_y)
+                                && float_greater(b_y, sample_y))
+                            || (float_less_equal(b_y, sample_y)
+                                && float_greater(a_y, sample_y));
+                        if crosses_row {
+                            let delta_x = float_sub(b_x, a_x);
+                            if delta_x.x == 0.0 && delta_x.y == 0.0 {
+                                if float_greater(a_x, sample_x) {
+                                    winding += select(-1, 1, upward);
+                                }
+                            } else {
+                                let relative = float_sub(
+                                    float_mul(delta_x, float_sub(sample_y, a_y)),
+                                    float_mul(
+                                        float_sub(b_y, a_y),
+                                        float_sub(sample_x, a_x),
+                                    ),
+                                );
+                                let positive = relative.x > 0.0
+                                    || (relative.x == 0.0 && relative.y > 0.0);
+                                let negative = relative.x < 0.0
+                                    || (relative.x == 0.0 && relative.y < 0.0);
+                                if (upward && positive) || (!upward && negative) {
+                                    winding += select(-1, 1, upward);
+                                }
+                            }
+                        }
+                    } else {
+                        let edge = edge_in_grid(edge_offset + edge_index);
+                        let a = edge.xy;
+                        let b = edge.zw;
+                        let upward = b.y > a.y;
+                        let crosses_row = (a.y <= py && b.y > py) || (b.y <= py && a.y > py);
+                        if crosses_row {
+                            let relative = (b.x - a.x) * (py - a.y)
+                                - (b.y - a.y) * (px - a.x);
+                            if (upward && relative > 0) || (!upward && relative < 0) {
+                                winding += select(-1, 1, upward);
+                            }
                         }
                     }
                 }

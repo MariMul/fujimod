@@ -1,7 +1,9 @@
 //! SMAPH's adapter to the shared GPU coverage rasterizer.
 
 use super::scanline;
-use fujimod_emulator_gpu::{CoverageEdge, CoverageKernel, CoverageRequest, FillRule, SampleGrid};
+use fujimod_emulator_gpu::{
+    CoverageEdge, CoverageKernel, CoverageRequest, EdgeCoordinates, FillRule, SampleGrid,
+};
 use std::sync::OnceLock;
 
 #[cfg(test)]
@@ -70,6 +72,7 @@ impl Gpu {
                 CoverageRequest {
                     bounds: [x0 as u32, x1 as u32, y0 as u32, y1 as u32],
                     edges,
+                    edge_coordinates: EdgeCoordinates::EighthPixel,
                     fill_rule: if input.nonzero {
                         FillRule::NonZero
                     } else {

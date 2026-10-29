@@ -7,6 +7,10 @@
 pub mod construct;
 pub mod recording;
 pub mod replay;
+#[cfg(not(target_os = "emscripten"))]
+use fujimod_emulator_gpu::{
+    CoverageEdge, CoverageKernel, CoverageRequest, EdgeCoordinates, FillRule, SampleGrid,
+};
 use fujimod_emulator_graphics::{batch, clear, init, regs::Registers, render, stream};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -37,6 +41,8 @@ use fujimod_emulator_devices::record::Result;
 use fujimod_emulator_devices::{Action, Record, Unsupported, Value, WordMap};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+#[cfg(not(target_os = "emscripten"))]
+use std::sync::OnceLock;
 
 pub const BASE: u64 = 0xfff78000;
 pub const SIZE: u64 = 0x5000;
@@ -1633,6 +1639,85 @@ impl Capture {
     }
 }
 
+#[cfg(not(target_os = "emscripten"))]
+fn coverage_kernel() -> Result<&'static CoverageKernel> {
+    static KERNEL: OnceLock<std::result::Result<CoverageKernel, String>> = OnceLock::new();
+    match KERNEL.get_or_init(|| fujimod_emulator_gpu::context().map(CoverageKernel::new)) {
+        Ok(kernel) => Ok(kernel),
+        Err(error) => fail(format!("Graphics UI GPU coverage {error}")),
+    }
+}
+
+#[cfg(not(target_os = "emscripten"))]
+fn ui_coverages(draws: &[batch::Draw]) -> Result<Vec<std::rc::Rc<render::Coverage>>> {
+    let plans = render::coverage_plans(draws)?;
+    let counts = if plans.iter().all(render::CoveragePlan::is_empty) {
+        plans.iter().map(|_| Vec::new()).collect()
+    } else {
+        let edge_sets: Vec<Vec<CoverageEdge>> = plans
+            .iter()
+            .map(|plan| {
+                plan.edges
+                    .iter()
+                    .map(|&(start, end)| {
+                        let coordinates = [start.0, start.1, end.0, end.1];
+                        if coordinates
+                            .iter()
+                            .any(|coordinate| coordinate.abs() > 16_777_216.0)
+                        {
+                            return fail("Graphics UI fill edge exceeds the GPU coordinate range");
+                        }
+                        Ok(CoverageEdge::from_f64([start.0, start.1], [end.0, end.1]))
+                    })
+                    .collect()
+            })
+            .collect::<Result<_>>()?;
+        let requests: Vec<_> = plans
+            .iter()
+            .zip(&edge_sets)
+            .map(|(plan, edges)| {
+                let sample_grid = match plan.samples {
+                    1 => SampleGrid::OneByOne,
+                    2 => SampleGrid::TwoByTwo,
+                    4 => SampleGrid::FourByFour,
+                    _ => return fail("Graphics UI uses an unsupported coverage sample grid"),
+                };
+                Ok(CoverageRequest {
+                    bounds: plan.bounds(),
+                    edges,
+                    edge_coordinates: EdgeCoordinates::FloatPixel,
+                    fill_rule: if plan.nonzero {
+                        FillRule::NonZero
+                    } else {
+                        FillRule::EvenOdd
+                    },
+                    sample_grid,
+                    stroke_radius: None,
+                })
+            })
+            .collect::<Result<_>>()?;
+        coverage_kernel()?
+            .coverage_batch(
+                fujimod_emulator_gpu::context().map_err(Unsupported)?,
+                &requests,
+            )
+            .map_err(|error| Unsupported(format!("Graphics UI GPU coverage {error}")))?
+    };
+    plans
+        .into_iter()
+        .zip(counts)
+        .map(|(plan, counts)| render::coverage_from_counts(plan, counts).map(std::rc::Rc::new))
+        .collect()
+}
+
+#[cfg(target_os = "emscripten")]
+fn ui_coverages(draws: &[batch::Draw]) -> Result<Vec<std::rc::Rc<render::Coverage>>> {
+    draws
+        .iter()
+        .map(|draw| render::coverage(draw).map(std::rc::Rc::new))
+        .collect()
+}
+
 pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Result<RenderedBatch> {
     let mut targets = HashMap::new();
     let mut textures = HashMap::new();
@@ -1660,9 +1745,15 @@ pub fn ui_render(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Resu
             }
         }
     }
-    let (output, touched) = render::render(draws, &targets, &textures, &mut |draw| {
-        render::coverage(draw).map(std::rc::Rc::new)
+    let mut coverages = ui_coverages(draws)?.into_iter();
+    let (output, touched) = render::render(draws, &targets, &textures, &mut |_draw| {
+        coverages
+            .next()
+            .ok_or_else(|| Unsupported("Graphics UI coverage batch ended early".into()))
     })?;
+    if coverages.next().is_some() {
+        return fail("Graphics UI coverage batch has unused draws");
+    }
     let output = output
         .into_iter()
         .map(|(address, bytes)| (address, Arc::new(bytes)))
