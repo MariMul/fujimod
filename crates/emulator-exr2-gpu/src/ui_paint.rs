@@ -11,6 +11,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use wgpu::util::DeviceExt;
 
+use std::task::Poll;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::task::{Context, Wake};
+
 struct PaintKernel {
     pipeline: wgpu::ComputePipeline,
 }
@@ -179,7 +184,17 @@ fn paint_data(draw: &batch::Draw, image: Option<&[u8]>) -> Result<Vec<u32>> {
 }
 
 /// Paint a complete EXR2 vector batch, keeping coverage and pixels on the GPU.
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn render(
+    draws: &[batch::Draw],
+    cpu: i64,
+    host: &mut dyn Inputs,
+) -> Result<RenderedBatch> {
+    block_on(render_async(draws, cpu, host))
+}
+
+/// Paint a complete EXR2 vector batch without blocking WebGPU readback.
+pub(super) async fn render_async(
     draws: &[batch::Draw],
     cpu: i64,
     host: &mut dyn Inputs,
@@ -406,29 +421,12 @@ pub(super) fn render(
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
     context.submit(encoder.finish());
 
-    let (sender, receiver) = std::sync::mpsc::channel();
-    touched_readback
-        .slice(..)
-        .map_async(wgpu::MapMode::Read, move |result| {
-            let _ = sender.send(result);
-        });
     let readbacks = context
-        .finish_readbacks(pending)
+        .finish_readbacks_async(pending)
+        .await
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel poll: {error}")))?;
-    receiver
-        .recv()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel readback: {error}")))?
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel map: {error}")))?;
-    let touched_bytes = touched_readback
-        .slice(..)
-        .get_mapped_range()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel range: {error}")))?;
+    let touched_bytes = map_buffer_async(&touched_readback, device).await?;
     let touched_pixels = u32::from_le_bytes(touched_bytes[..4].try_into().unwrap()) as u64;
-    drop(touched_bytes);
-    touched_readback.unmap();
 
     let mut output_by_key = HashMap::new();
     for (key, readback) in readbacks {
@@ -444,6 +442,84 @@ pub(super) fn render(
         })
         .collect::<Result<_>>()?;
     Ok((output, touched_pixels * 4))
+}
+
+async fn map_buffer_async(buffer: &wgpu::Buffer, _device: &wgpu::Device) -> Result<Vec<u8>> {
+    struct MappingState {
+        result: Option<std::result::Result<(), String>>,
+        waker: Option<std::task::Waker>,
+    }
+
+    let state = Arc::new(std::sync::Mutex::new(MappingState {
+        result: None,
+        waker: None,
+    }));
+    let callback_state = Arc::clone(&state);
+    buffer
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, move |result| {
+            let wake = callback_state.lock().ok().and_then(|mut state| {
+                state.result = Some(result.map_err(|error| error.to_string()));
+                state.waker.take()
+            });
+            if let Some(waker) = wake {
+                waker.wake();
+            }
+        });
+
+    #[cfg(not(target_arch = "wasm32"))]
+    _device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel poll: {error}")))?;
+
+    std::future::poll_fn(|context| {
+        let Ok(mut state) = state.lock() else {
+            return Poll::Ready(Err(Unsupported(
+                "Graphics UI GPU touched-pixel mapping state lock poisoned".into(),
+            )));
+        };
+        if let Some(result) = state.result.take() {
+            Poll::Ready(result.map_err(|error| {
+                Unsupported(format!("Graphics UI GPU touched-pixel map: {error}"))
+            }))
+        } else {
+            state.waker = Some(context.waker().clone());
+            Poll::Pending
+        }
+    })
+    .await?;
+
+    let mapped = buffer
+        .slice(..)
+        .get_mapped_range()
+        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-pixel range: {error}")))?;
+    let bytes = mapped.to_vec();
+    drop(mapped);
+    buffer.unmap();
+    Ok(bytes)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+struct ThreadWake(std::thread::Thread);
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Wake for ThreadWake {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    let waker = Arc::new(ThreadWake(std::thread::current())).into();
+    let mut context = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(value) => return value,
+            Poll::Pending => std::thread::park(),
+        }
+    }
 }
 
 fn words_as_bytes(words: &[u32]) -> Vec<u8> {
