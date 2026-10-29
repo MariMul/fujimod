@@ -1964,3 +1964,32 @@ unsafe fn write(offset: u64, size: u32, value: u64, data: *mut c_void) {
         access(data, offset, size, Some(value));
     }
 }
+    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
+    mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
+    interactive_windows: Cell<u64>,
+    interactive_host_duration_ns: Cell<u128>,
+        let mmio_callback_counts = Rc::new(RefCell::new(vec![0; n]));
+            mmio_callback_counts,
+            interactive_windows: Cell::new(0),
+            interactive_host_duration_ns: Cell::new(0),
+                mmio_callback_counts: board.mmio_callback_counts.clone(),
+    /// Serviced board MMIO callbacks, indexed by processor.
+    pub fn mmio_trap_callback_counts(&self) -> Vec<u64> {
+        self.mmio_callback_counts.borrow().clone()
+    }
+    /// Interactive run windows completed by the board scheduler.
+    pub fn interactive_window_count(&self) -> u64 {
+        self.interactive_windows.get()
+    }
+    /// Mean host duration of completed interactive windows, in nanoseconds.
+    pub fn mean_interactive_window_host_duration_ns(&self) -> Option<u64> {
+        let count = self.interactive_windows.get();
+        (count != 0).then(|| {
+            u64::try_from(self.interactive_host_duration_ns.get() / u128::from(count))
+                .unwrap_or(u64::MAX)
+        })
+    }
+            mmio_callback_counts: self.mmio_callback_counts.clone(),
+        if let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core) {
+            *count = count.saturating_add(1);
+        }
