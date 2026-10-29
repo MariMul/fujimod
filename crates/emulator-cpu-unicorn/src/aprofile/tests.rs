@@ -153,17 +153,6 @@ fn x100vi_el1_mmio_read_uses_scr_rw_and_reaches_callback() {
         .unwrap();
     let cpu = Core::new(raw, Memory::default()).unwrap();
     cpu.map_zeroed(0, 0x68000000, 7).unwrap(); // X100VI DRAM extent.
-    let system = |encoding: u16, value: u64| {
-        cpu.write_register(
-            Register::Arm64System(arm::SystemRegister::from_encoding(encoding)),
-            &value.to_le_bytes(),
-        )
-        .unwrap();
-    };
-    system(0xf088, 0); // SCR_EL3 starts with RW clear.
-    system(0xe088, 0); // HCR_EL2 starts with RW clear.
-    cpu.write_register(Register::Pstate, &0x3c4u64.to_le_bytes())
-        .unwrap();
     let system_value = |encoding| {
         value(
             &cpu,
@@ -172,6 +161,15 @@ fn x100vi_el1_mmio_read_uses_scr_rw_and_reaches_callback() {
     };
     assert_eq!(system_value(0xf088) & 0x400, 0x400);
     assert_eq!(system_value(0xe088) & 0x8000_0000, 0x8000_0000);
+    cpu.write_register(Register::Pstate, &0x3c4u64.to_le_bytes())
+        .unwrap();
+    let system = |encoding: u16, value: u64| {
+        cpu.write_register(
+            Register::Arm64System(arm::SystemRegister::from_encoding(encoding)),
+            &value.to_le_bytes(),
+        )
+        .unwrap();
+    };
     cpu.write_memory(0x108000, &0x609u64.to_le_bytes()).unwrap();
     cpu.write_memory(0x108018, &0x109003u64.to_le_bytes())
         .unwrap();

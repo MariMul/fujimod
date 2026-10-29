@@ -11,7 +11,6 @@ struct Saved {
     raw: Box<dyn Snapshot>,
     irq: bool,
     fiq: bool,
-    startup_state_initialized: bool,
 }
 impl Snapshot for Saved {
     fn owner(&self) -> Identity {
@@ -26,6 +25,7 @@ impl Cpu for Core {
         fn identity(&self)->Identity;
         fn model(&self)->Model;
         fn read_register(&self,r:Register,out:&mut [u8])->Result<usize,String>;
+        fn write_register(&self,r:Register,bytes:&[u8])->Result<(),String>;
         fn coprocessor(&self,r:arm::Coprocessor,value:Option<u64>)->Result<u64,String>;
         fn read_memory(&self,address:u64,bytes:&mut [u8])->Result<(),String>;
         fn translate(&self,address:u64,access:Access)->Result<u64,String>;
@@ -44,19 +44,6 @@ impl Cpu for Core {
             store_pc_control: true,
             ..Features::default()
         }
-    }
-    fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String> {
-        if register == Register::Pstate {
-            let pstate = match bytes {
-                [a, b, c, d] => Some(u64::from(u32::from_le_bytes([*a, *b, *c, *d]))),
-                [a, b, c, d, 0, 0, 0, 0] => Some(u64::from_le_bytes([*a, *b, *c, *d, 0, 0, 0, 0])),
-                _ => None,
-            };
-            if let Some(pstate) = pstate {
-                self.execution.initialize_lower_el_state(pstate)?;
-            }
-        }
-        self.execution.cpu.write_register(register, bytes)
     }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         self.execution.cpu.set_execution_policy(policy)
@@ -204,7 +191,6 @@ impl Cpu for Core {
         if request.watchdog_us != 0 {
             return Err("counted A-profile runs require exact limits or explicit owner stops, without a host watchdog".into());
         }
-        e.initialize_lower_el_state(e.scalar(Register::Pstate)?)?;
         let _reservation = e
             .memory
             .reserve_run(e.id.get(), ExecutionPolicy::Exact, false)?;
@@ -307,7 +293,6 @@ impl Cpu for Core {
             raw: e.cpu.snapshot(previous)?,
             irq: e.irq.get(),
             fiq: e.fiq.get(),
-            startup_state_initialized: e.startup_state_initialized.get(),
         }))
     }
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
@@ -319,7 +304,6 @@ impl Cpu for Core {
         e.cpu.restore(&*s.raw)?;
         e.irq.set(s.irq);
         e.fiq.set(s.fiq);
-        e.startup_state_initialized.set(s.startup_state_initialized);
         e.count.set(0);
         e.reset();
         Ok(())
