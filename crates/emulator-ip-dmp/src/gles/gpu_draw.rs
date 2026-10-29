@@ -9,7 +9,7 @@ use super::{
 use crate::gpu::{
     GpuContext, GpuSurface, SurfaceExtent, SurfaceFormat, SurfaceKey, SurfaceLayout, context,
 };
-use std::collections::{BTreeMap, HashMap};
+use std::{collections::BTreeMap, sync::OnceLock};
 use wgpu::util::DeviceExt;
 
 const REGISTER_WORDS: usize = 0x500;
@@ -17,6 +17,8 @@ const FOG_OFFSET: usize = REGISTER_WORDS;
 const FOG_WORDS: usize = 128;
 const INPUT_OFFSET: usize = FOG_OFFSET + FOG_WORDS;
 const CASE_WORDS: usize = INPUT_OFFSET + 16;
+
+static DRAW_PIPELINE: OnceLock<wgpu::RenderPipeline> = OnceLock::new();
 
 #[derive(Clone, Debug)]
 pub(super) struct Primitive {
@@ -107,30 +109,24 @@ pub(super) fn render(
         cache.clear_write_masks(key)?;
     }
 
-    let shader_source = format!(
-        "{}\n{}",
-        include_str!("gpu_fragment.wgsl"),
-        include_str!("gpu_draw.wgsl")
-    );
-    let shader = cache
-        .device()
-        .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("DMP WGSL render stage"),
-            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-        });
-    let mut pipelines = HashMap::<DrawState, wgpu::RenderPipeline>::new();
+    let pipeline = DRAW_PIPELINE.get_or_init(|| {
+        let shader_source = format!(
+            "{}\n{}",
+            include_str!("gpu_fragment.wgsl"),
+            include_str!("gpu_draw.wgsl")
+        );
+        let shader = cache
+            .device()
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("DMP WGSL render stage"),
+                source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+            });
+        create_pipeline(cache.device(), &shader)
+    });
 
     for (primitive, triangles) in &geometry {
         for triangle in triangles {
-            render_triangle(
-                primitive,
-                triangle,
-                &shader,
-                &mut pipelines,
-                cache,
-                recorded_reads,
-                read,
-            )?;
+            render_triangle(primitive, triangle, pipeline, cache, recorded_reads, read)?;
         }
     }
 
@@ -250,8 +246,7 @@ fn recorded_range(reads: &[(u64, Vec<u8>)], address: u64, length: usize) -> Opti
 fn render_triangle(
     primitive: &Primitive,
     triangle: &[RasterVertex; 3],
-    shader: &wgpu::ShaderModule,
-    pipelines: &mut HashMap<DrawState, wgpu::RenderPipeline>,
+    pipeline: &wgpu::RenderPipeline,
     cache: &GpuContext,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
@@ -279,9 +274,6 @@ fn render_triangle(
         .ok_or("DMP depth surface is not resident")?;
 
     let device = cache.device();
-    let pipeline = pipelines
-        .entry(state.clone())
-        .or_insert_with(|| create_pipeline(device, shader));
     let (parameters, guest_bytes) = draw_parameters(primitive, recorded_reads, read)?;
     let parameter_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DMP draw parameters"),
