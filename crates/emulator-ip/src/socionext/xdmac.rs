@@ -151,7 +151,17 @@ impl Pair {
             || (c.source_shape ^ c.destination_shape) & 0x30000 != 0
             || c.link != 0
         {
-            return Err("XDMAC control, burst, shape or linked mode is unmodeled".into());
+            return Err(format!(
+                "XDMAC control, burst, shape or linked mode is unmodeled; control={:#x} source_shape={:#x} destination_shape={:#x} link={:#x} count={:#x} source={:#x} destination={:#x} exhausted={}",
+                c.control,
+                c.source_shape,
+                c.destination_shape,
+                c.link,
+                c.count,
+                c.source,
+                c.destination,
+                c.counter_exhausted,
+            ));
         }
         let width = c.width() as u64;
         if !(c.count as u64 + 1).is_multiple_of(width)
