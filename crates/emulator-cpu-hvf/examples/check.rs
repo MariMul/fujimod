@@ -93,7 +93,7 @@ fn main() -> Result<(), String> {
             }
             code(
                 concurrent.cpu(core)?,
-                0x10000 + core * 0x1000,
+                0x10000 + (core as u64) * 0x1000,
                 &[0xd2800000, 0x91000400, 0x17ffffff],
             );
         }
@@ -109,6 +109,7 @@ fn main() -> Result<(), String> {
                 return Err(format!("two-vCPU interactive core {core} did not execute"));
             }
         }
+        drop(concurrent);
         // Both architectural compare channels must assert their declared PPI at
         // guest tick100, including when the host pauses while WFI is waiting.
         for virtual_timer in [false, true] {

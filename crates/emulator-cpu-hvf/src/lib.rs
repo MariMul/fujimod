@@ -901,6 +901,8 @@ impl Cpu for Core {
         }))
     }
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
+        // HVF has no watched-store hook. Accept synchronization hooks as markers
+        // only: vCPUs share coherent RAM and execute exclusives natively.
         if !matches!(hook, Hook::Instruction { .. } | Hook::Synchronization { .. }) {
             return Err("HVF supports instruction and synchronization hooks only".into());
         }
