@@ -364,8 +364,10 @@ impl Device for Pair {
             cx.unmodeled();
             return;
         };
-        if value > u32::MAX as u64 || self.write_register(offset, value as u32).is_err() {
+        if value > u32::MAX as u64 {
             cx.unmodeled();
+        } else if let Err(e) = self.write_register(offset, value as u32) {
+            cx.unsupported(e);
         }
         for lane in 0..2 {
             self.publish(cx, lane);
@@ -377,16 +379,16 @@ impl Device for Pair {
             // another immediate deadline; serial clocks supply future ones.
             match self.ready(lane, &self.state.channels[lane]) {
                 Ok(true) => {
-                    if self.beat(cx, lane).is_err() {
+                    if let Err(e) = self.beat(cx, lane) {
                         // Retire the failed channel without a normal completion.
                         self.state.channels[lane].control &= !(ENABLE | SOFTWARE);
                         self.state.channels[lane].started = false;
                         self.routing.lock().unwrap().enabled[lane] = false;
-                        cx.unmodeled();
+                        cx.unsupported(e);
                     }
                 }
                 Ok(false) => {}
-                Err(_) => cx.unmodeled(),
+                Err(e) => cx.unsupported(e),
             }
             self.publish(cx, lane);
         }
