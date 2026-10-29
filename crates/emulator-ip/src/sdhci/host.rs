@@ -506,19 +506,26 @@ impl SdHost {
                 bytes[0] = 0x80;
                 bytes[10] = 0x70;
                 request.payload = Payload::Metadata { bytes, len: 64 };
-                argument != 0 || self.block_length != 64 || self.bus_width != 4
+                argument != 0 || self.regs.get(4) & 0xfff != 64 || self.bus_width != 4
             }
             51 if app && !rom => {
                 let mut bytes = [0; 64];
                 bytes[..2].copy_from_slice(&[2, 5]);
                 request.payload = Payload::Metadata { bytes, len: 8 };
-                argument != 0 || self.block_length != 8
+                // Like the SD status and switch status blocks, the SCR has a
+                // fixed size; SDHC ignores SET_BLOCKLEN, so the host block-size
+                // register sets the transfer.
+                argument != 0 || self.regs.get(4) & 0xfff != 8
             }
             6 if !rom => {
+                // The card supports only default speed (group 1 function 0).
+                // Checking or switching to high speed reports result 0xF for
+                // group 1, as the SD spec defines for an unsupported function.
                 let mut bytes = [0; 64];
                 bytes[13] = 1;
+                bytes[16] = 0xf;
                 request.payload = Payload::Metadata { bytes, len: 64 };
-                argument != 1 || self.block_length != 64
+                ![1, 0x80fffff1].contains(&argument) || self.regs.get(4) & 0xfff != 64
             }
             17 | 18 | 25 => {
                 let count = if command == 17 {
