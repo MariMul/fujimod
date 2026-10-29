@@ -891,6 +891,9 @@ impl Board {
                 }
             }
             for (begin, end) in ranges {
+                // Ordinary pre-store hooks isolate the instruction before any
+                // callback runs. Keep this hook unwatched: a watched callback
+                // can run before coherence restarts an uncompleted store.
                 match unsafe {
                     self.cpus[core].install_hook(Hook::Memory {
                         callback: write,

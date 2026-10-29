@@ -737,3 +737,87 @@ fn host_write_spanning_mappings_preserves_an_earlier_violation() {
         assert_eq!(state.changed_cpu_writes().get(), 1);
     }
 }
+
+#[test]
+fn coherence_store_through_an_alias_is_counted_once() {
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        for thumb in [false, true] {
+            for changed in [false, true] {
+                let mut board = board(true);
+                board.set_execution_policy(policy).unwrap();
+                let before = 0xe3a04001u32; // mov r4,#1
+                let after = if changed { 0xe3a04002u32 } else { before };
+                data(&board, 0x10080, &before.to_le_bytes());
+                let writer = if thumb {
+                    vec![0x08, 0x60, 0x01, 0x32, 0xfe, 0xe7] // str r0,[r1]; adds r2,#1; b .
+                } else {
+                    [0xe5810000u32, 0xe2822001, 0xeafffffe]
+                        .into_iter()
+                        .flat_map(u32::to_le_bytes)
+                        .collect()
+                };
+                data(&board, 0x11000, &writer);
+                // Translate the destination before overwriting it through its alias.
+                board.write_register(0, Register::Pc, 0x10080).unwrap();
+                board.run_for_instructions(1, 64).unwrap();
+                assert_eq!(scalar(&*board.cpus[0], arm::CORE[4]).unwrap(), 1);
+                board
+                    .write_register(0, arm::CORE[0], u64::from(after))
+                    .unwrap();
+                address(&board, 0x20080);
+                board.write_register(0, Register::Pc, 0x11000).unwrap();
+                board
+                    .write_register(0, Register::Pstate, if thumb { 0xf3 } else { 0xd3 })
+                    .unwrap();
+                let preservation = board
+                    .preservation_begin(protected(&[(0x10080, 0x10084)]))
+                    .unwrap();
+                let counters = board.cpu(0).unwrap().exit_counters().unwrap();
+                // A full block lets the coherence path request a store retry.
+                board.run_for_instructions(8, 64).unwrap();
+                let exits = board.cpu(0).unwrap().exit_counters().unwrap();
+                assert!(
+                    exits["restart_requests"] > counters["restart_requests"],
+                    "{policy:?}, thumb={thumb}"
+                );
+                assert_eq!(bytes(&board, 0x10080, 4), after.to_le_bytes());
+                assert_eq!(scalar(&*board.cpus[0], arm::CORE[2]).unwrap(), 1);
+                let state = preservation.state();
+                assert_eq!(
+                    (
+                        state.identity_cpu_writes().get(),
+                        state.changed_cpu_writes().get()
+                    ),
+                    if changed { (0, 1) } else { (1, 0) },
+                    "{policy:?}, thumb={thumb}"
+                );
+                assert_eq!(
+                    (state.host_writes().get(), state.model_bus_writes().get()),
+                    (0, 0)
+                );
+                if changed {
+                    let Some(PreservationViolation::CpuChange {
+                        pc,
+                        address,
+                        physical,
+                        size,
+                        before: observed_before,
+                        after: observed_after,
+                        ..
+                    }) = state.violation()
+                    else {
+                        panic!("expected the changed store");
+                    };
+                    assert_eq!(
+                        (pc.get(), address.get(), physical.get(), size.get()),
+                        (0x11000, 0x20080, 0x10080, 4)
+                    );
+                    assert_eq!(observed_before.as_slice(), before.to_le_bytes());
+                    assert_eq!(observed_after.as_slice(), after.to_le_bytes());
+                } else {
+                    assert_eq!(state.violation(), None);
+                }
+            }
+        }
+    }
+}
