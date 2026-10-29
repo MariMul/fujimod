@@ -34,6 +34,15 @@ fn run(cpu: &Core, begin: u64, budget: usize) -> Exit {
     .unwrap()
 }
 #[test]
+fn interactive_policy_is_forwarded_and_keeps_exact_instruction_limits() {
+    let cpu = cpu();
+    cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    code(&cpu, &[0x91000400, 0x17ffffff]);
+    assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(1));
+    assert_eq!(value(&cpu, Register::X(0)), 1);
+}
+#[test]
 fn every_budget_boundary_matches_instruction_entries() {
     let cpu = cpu();
     code(
