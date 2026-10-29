@@ -263,27 +263,54 @@ fn replay_record(path: &Path) -> Result<(), String> {
     let mut engine: Engine = ciborium::de::from_reader(record.state.as_slice())
         .map_err(|error| format!("restore DMP engine state from {}: {error}", path.display()))?;
     engine.set_host_acceleration(false);
-    let mut read_index = 0;
-    let actual_snapshots = engine.execute_host_gpu(&record.words, &mut |address, length| {
-        let Some((expected_address, bytes)) = record.reads.get(read_index) else {
-        return Err(format!("{} replay requested an extra reader range", path.display()));
-        };
-        if address != *expected_address || length != bytes.len() {
+    let verify_gpu = std::env::var("FUJIMOD_DMP_VERIFY_GPU").is_ok_and(|value| value == "1");
+    let mut used_reads = vec![false; record.reads.len()];
+    let mut reader = |address: u64, length: usize| {
+        let end = address
+            .checked_add(length as u64)
+            .ok_or_else(|| format!("{} replay reader range overflows", path.display()))?;
+        let Some((recorded_address, bytes)) =
+            record.reads.iter().find(|(recorded_address, bytes)| {
+                let Some(recorded_end) = recorded_address.checked_add(bytes.len() as u64) else {
+                    return false;
+                };
+                address >= *recorded_address && end <= recorded_end
+            })
+        else {
             return Err(format!(
-                "{} reader range {} differed: requested {address:#x}+{length:#x}, recorded {expected_address:#x}+{:#x}",
-                path.display(),
-                read_index,
-                bytes.len(),
+                "{} replay requested unrecorded reader range {address:#x}+{length:#x}",
+                path.display()
             ));
+        };
+        let offset = usize::try_from(address - recorded_address)
+            .map_err(|_| format!("{} replay reader offset exceeds usize", path.display()))?;
+        let result = bytes[offset..offset + length].to_vec();
+        for (index, (recorded_address, bytes)) in record.reads.iter().enumerate() {
+            let Some(recorded_end) = recorded_address.checked_add(bytes.len() as u64) else {
+                continue;
+            };
+            if address < *recorded_address || end > recorded_end {
+                continue;
+            }
+            let offset = usize::try_from(address - recorded_address)
+                .map_err(|_| format!("{} replay reader offset exceeds usize", path.display()))?;
+            if bytes[offset..offset + length] == result {
+                used_reads[index] = true;
+            }
         }
-        read_index += 1;
-        Ok(bytes.clone())
-    })?;
-    if read_index != record.reads.len() {
+        Ok(result)
+    };
+    let actual_snapshots = if verify_gpu {
+        engine.execute_host_gpu_verified(&record.words, &mut reader)?
+    } else {
+        engine.execute_host_gpu(&record.words, &mut reader)?
+    };
+    drop(reader);
+    if let Some(index) = used_reads.iter().position(|used| !used) {
         return Err(format!(
-            "{} replay used {read_index} of {} recorded surface reads",
+            "{} replay did not use recorded reader range {index} of {}",
             path.display(),
-            record.reads.len(),
+            used_reads.len(),
         ));
     }
     if snapshot_digests(&actual_snapshots) != record.snapshots {

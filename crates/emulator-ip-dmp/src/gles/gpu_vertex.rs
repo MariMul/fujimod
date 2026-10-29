@@ -131,63 +131,6 @@ pub(super) fn run_inputs(
     run_packed(engine, state, packed)
 }
 
-/// Refuses a host vertex result unless it matches the DMP interpreter exactly.
-pub(super) fn verify_input(
-    engine: &Engine,
-    state: &DrawState,
-    inputs: &[Vector; 16],
-    expected: &[Vector; 16],
-) -> Result<(), String> {
-    let actual = run_inputs(engine, state, std::slice::from_ref(inputs))?
-        .into_iter()
-        .next()
-        .ok_or("DMP host GPU returned no vertex")?;
-    compare_vertices(
-        std::slice::from_ref(&actual),
-        std::slice::from_ref(expected),
-    )
-}
-
-/// Runs an entire guest draw from its typed arrays and index buffer, then
-/// checks the results against the interpreter's per-vertex register outputs.
-pub(super) fn verify_draw(
-    engine: &Engine,
-    state: &DrawState,
-    indexed: bool,
-    expected: &[[Vector; OUTPUT_REGISTERS]],
-    read: &mut Reader<'_>,
-) -> Result<(), String> {
-    let actual = run_draw(engine, state, expected.len(), indexed, read)?;
-    compare_vertices(&actual, expected)
-}
-
-fn compare_vertices(
-    actual_vertices: &[[Vector; OUTPUT_REGISTERS]],
-    expected_vertices: &[[Vector; OUTPUT_REGISTERS]],
-) -> Result<(), String> {
-    if actual_vertices.len() != expected_vertices.len() {
-        return Err(format!(
-            "DMP host GPU returned {} vertices for {} interpreter vertices",
-            actual_vertices.len(),
-            expected_vertices.len()
-        ));
-    }
-    for (vertex, (actual, expected)) in actual_vertices.iter().zip(expected_vertices).enumerate() {
-        for (register, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-            for (component, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-                if actual.to_bits() != expected.to_bits() {
-                    return Err(format!(
-                        "DMP host GPU vertex {vertex} differs at output {register}.{component}: GPU {:#010x}, interpreter {:#010x}",
-                        actual.to_bits(),
-                        expected.to_bits()
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 fn pack_draw_vertices(
     engine: &Engine,
     state: &DrawState,

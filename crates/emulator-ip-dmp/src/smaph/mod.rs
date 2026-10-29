@@ -1096,6 +1096,13 @@ fn gpu_mode() -> (bool, bool) {
     (verify || !enabled("FUJIMOD_SMAPH_CPU"), verify)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn dmp_gpu_mode() -> (bool, bool) {
+    let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
+    let verify = enabled("FUJIMOD_DMP_VERIFY_GPU");
+    (enabled("FUJIMOD_DMP_GPU") || verify, verify)
+}
+
 fn paint_cpu_draws(
     prepared: &[PreparedPaint<'_>],
     coverage_inputs: &[scanline::CoverageInput],
@@ -1756,11 +1763,21 @@ impl Device for Renderer {
                     s.idle()?;
                     let data = words(cx, s.r(0x20e8) as u64 * 8, s.r(0x20e0) as usize * 2)?;
                     #[cfg(not(target_arch = "wasm32"))]
-                    let writes = if std::env::var_os("FUJIMOD_DMP_GPU").is_some() {
-                        s.gles
-                            .execute_host_gpu(&data, &mut |a, n| cx.ram_bytes(a, n))?
-                    } else {
-                        s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?
+                    let writes = {
+                        let (gpu_requested, verify_gpu) = dmp_gpu_mode();
+                        if gpu_requested {
+                            if verify_gpu {
+                                s.gles.execute_host_gpu_verified(
+                                    &data,
+                                    &mut |a, n| cx.ram_bytes(a, n),
+                                )?
+                            } else {
+                                s.gles
+                                    .execute_host_gpu(&data, &mut |a, n| cx.ram_bytes(a, n))?
+                            }
+                        } else {
+                            s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?
+                        }
                     };
                     #[cfg(target_arch = "wasm32")]
                     let writes = s.gles.execute(&data, &mut |a, n| cx.ram_bytes(a, n))?;

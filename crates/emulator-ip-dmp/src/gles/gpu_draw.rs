@@ -50,7 +50,7 @@ pub(super) struct RenderedList {
 pub(super) fn render(
     primitives: &[Primitive],
     recorded_reads: &[(u64, Vec<u8>)],
-    expected_snapshots: &Snapshots,
+    expected_snapshots: Option<&Snapshots>,
     read: &mut Reader<'_>,
 ) -> Result<RenderedList, String> {
     let mut geometry = Vec::new();
@@ -89,27 +89,16 @@ pub(super) fn render(
             extent,
             layout: SurfaceLayout::Morton8x8,
         };
-        upload_surface(
-            cache,
-            &mut surfaces,
-            color_key,
-            recorded_reads,
-            expected_snapshots,
-            read,
-        )?;
+        upload_surface(cache, &mut surfaces, color_key, true, recorded_reads, read)?;
 
-        let depth_key = SurfaceKey {
-            guest_address: state.targets.depth_address,
-            format: SurfaceFormat::from_depth_code(state.targets.depth_format.code())?,
-            extent,
-            layout: SurfaceLayout::Morton8x8,
-        };
+        let depth_key = depth_surface_key(state, extent)?;
+        let load_depth_from_guest = state.depth_test.enabled || state.stencil_test.enabled;
         upload_surface(
             cache,
             &mut surfaces,
             depth_key,
+            load_depth_from_guest,
             recorded_reads,
-            expected_snapshots,
             read,
         )?;
     }
@@ -150,8 +139,7 @@ pub(super) fn render(
     for (&address, &key) in &surfaces {
         let readback = cache.readback(key)?;
         if expected_snapshots
-            .iter()
-            .any(|(expected, _)| *expected == address)
+            .is_some_and(|snapshots| snapshots.iter().any(|(expected, _)| *expected == address))
             || !readback.written_ranges.is_empty()
         {
             snapshots.push((address, readback.bytes));
@@ -193,8 +181,8 @@ fn upload_surface(
     cache: &GpuContext,
     surfaces: &mut BTreeMap<u64, SurfaceKey>,
     key: SurfaceKey,
+    load_guest_bytes: bool,
     recorded_reads: &[(u64, Vec<u8>)],
-    expected_snapshots: &Snapshots,
     read: &mut Reader<'_>,
 ) -> Result<(), String> {
     if let Some(existing) = surfaces.get(&key.guest_address) {
@@ -210,17 +198,10 @@ fn upload_surface(
         .checked_mul(key.extent.height as usize)
         .and_then(|pixels| pixels.checked_mul(key.format.bytes_per_pixel() as usize))
         .ok_or("DMP host GPU surface byte length overflow")?;
-    let bytes = if let Some(bytes) = recorded_range(recorded_reads, key.guest_address, byte_len) {
-        Some(bytes)
-    } else if expected_snapshots
-        .iter()
-        .any(|(address, _)| *address == key.guest_address)
-    {
-        Some(read(key.guest_address, byte_len)?)
-    } else {
-        None
-    };
-    if let Some(bytes) = &bytes {
+    let bytes = if load_guest_bytes {
+        let bytes = recorded_range(recorded_reads, key.guest_address, byte_len)
+            .map(Ok)
+            .unwrap_or_else(|| read(key.guest_address, byte_len))?;
         if bytes.len() != byte_len {
             return Err(format!(
                 "DMP host GPU target {:#x} supplied {} bytes, expected {byte_len}",
@@ -228,10 +209,30 @@ fn upload_surface(
                 bytes.len()
             ));
         }
-    }
+        Some(bytes)
+    } else {
+        None
+    };
     cache.get_or_create_target(key, bytes.as_deref())?;
     surfaces.insert(key.guest_address, key);
     Ok(())
+}
+
+fn depth_surface_key(state: &DrawState, extent: SurfaceExtent) -> Result<SurfaceKey, String> {
+    let depth_active = state.depth_test.enabled || state.stencil_test.enabled;
+    let guest_address = if depth_active {
+        state.targets.depth_address
+    } else {
+        u64::MAX
+            - ((state.targets.extent.packed as u64) << 4)
+            - state.targets.depth_format.code() as u64
+    };
+    Ok(SurfaceKey {
+        guest_address,
+        format: SurfaceFormat::from_depth_code(state.targets.depth_format.code())?,
+        extent,
+        layout: SurfaceLayout::Morton8x8,
+    })
 }
 
 fn recorded_range(reads: &[(u64, Vec<u8>)], address: u64, length: usize) -> Option<Vec<u8>> {
@@ -266,12 +267,7 @@ fn render_triangle(
         extent,
         layout: SurfaceLayout::Morton8x8,
     };
-    let depth_key = SurfaceKey {
-        guest_address: state.targets.depth_address,
-        format: SurfaceFormat::from_depth_code(state.targets.depth_format.code())?,
-        extent,
-        layout: SurfaceLayout::Morton8x8,
-    };
+    let depth_key = depth_surface_key(state, extent)?;
     if color_key.guest_address == depth_key.guest_address {
         return Err("DMP host GPU color and depth targets alias".into());
     }
@@ -511,6 +507,7 @@ fn draw_parameters(
         registers[index as usize] = value;
     }
     let guest = texture_bytes(&primitive.state, &mut registers, recorded_reads, read)?;
+    validate_blend(&primitive.state)?;
     let mut parameters = vec![0u32; CASE_WORDS];
     parameters[..REGISTER_WORDS].copy_from_slice(&registers);
     if primitive.state.fog.table.len() != FOG_WORDS {
@@ -518,6 +515,37 @@ fn draw_parameters(
     }
     parameters[FOG_OFFSET..INPUT_OFFSET].copy_from_slice(&primitive.state.fog.table);
     Ok((parameters, guest))
+}
+
+fn validate_blend(state: &DrawState) -> Result<(), String> {
+    if state.color_mask.0.iter().all(|enabled| !enabled) {
+        return Ok(());
+    }
+    let blend = state.blend;
+    if !blend.enabled {
+        if blend.logic_operation != 3 {
+            return Err("DMP unsupported logic operation".into());
+        }
+        return Ok(());
+    }
+    if [
+        blend.source_rgb,
+        blend.destination_rgb,
+        blend.source_alpha,
+        blend.destination_alpha,
+    ]
+    .iter()
+    .any(|factor| matches!(factor, super::draw_state::BlendFactor::Other(_)))
+    {
+        return Err("DMP unsupported blend factor".into());
+    }
+    if [blend.rgb_equation, blend.alpha_equation]
+        .iter()
+        .any(|equation| matches!(equation, super::draw_state::BlendEquation::Other(_)))
+    {
+        return Err("DMP unsupported blend equation".into());
+    }
+    Ok(())
 }
 
 fn texture_bytes(
