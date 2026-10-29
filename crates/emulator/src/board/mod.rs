@@ -460,6 +460,13 @@ impl Board {
             .iter()
             .map(|cpu| cpu.exit_counters())
             .collect::<Result<_, _>>()?;
+        self.state.borrow_mut().bus.start_host_profile(baseline)
+    }
+    /// Begin block-level guest observations while all processors are stopped.
+    pub fn start_guest_profile(&self) -> Result<(), String> {
+        if self.guest_profile_active.get() {
+            return Err("guest profile is already active".into());
+        }
         let mut started = Vec::<usize>::new();
         for (index, cpu) in self.cpus.iter().enumerate() {
             if let Err(error) = cpu.start_guest_profile() {
@@ -470,47 +477,37 @@ impl Board {
             }
             started.push(index);
         }
-        if let Err(error) = self.state.borrow_mut().bus.start_host_profile(baseline) {
-            for started_index in started {
-                let _ = self.cpus[started_index].finish_guest_profile();
-            }
-            return Err(error);
-        }
         self.guest_profile_active.set(true);
         Ok(())
     }
+    /// Finish block-level guest observations after a board run.
+    pub fn guest_profile(&self) -> Value {
+        let cores: Vec<_> = self
+            .cpus
+            .iter()
+            .enumerate()
+            .filter_map(|(core, cpu)| match cpu.finish_guest_profile() {
+                Ok(Some(blocks)) => Some(serde_json::json!({"core": core, "blocks": blocks})),
+                Ok(None) => None,
+                Err(error) => Some(serde_json::json!({"core": core, "error": error})),
+            })
+            .collect();
+        self.guest_profile_active.set(false);
+        serde_json::json!({
+            "version": 1,
+            "phase_semantics": {
+                "idle": "no physical key or touch input is active",
+                "key": "a physical key or touch input is active"
+            },
+            "cores": cores
+        })
+    }
     /// Observe phase costs while all processors are stopped after a board run.
     pub fn host_profile(&self) -> Value {
-        let mut report = self
-            .state
+        self.state
             .borrow()
             .bus
-            .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect());
-        if let Some(object) = report.as_object_mut() {
-            let cores: Vec<_> = self
-                .cpus
-                .iter()
-                .enumerate()
-                .filter_map(|(core, cpu)| match cpu.finish_guest_profile() {
-                    Ok(Some(blocks)) => Some(serde_json::json!({"core": core, "blocks": blocks})),
-                    Ok(None) => None,
-                    Err(error) => Some(serde_json::json!({"core": core, "error": error})),
-                })
-                .collect();
-            object.insert(
-                "guest_profile".into(),
-                serde_json::json!({
-                    "version": 1,
-                    "phase_semantics": {
-                        "idle": "no physical key or touch input is active",
-                        "key": "a physical key or touch input is active"
-                    },
-                    "cores": cores
-                }),
-            );
-        }
-        self.guest_profile_active.set(false);
-        report
+            .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect())
     }
     /// Set the phase used for subsequent optional guest profile entries.
     pub fn set_guest_profile_phase(&self, phase: GuestProfilePhase) -> Result<(), String> {

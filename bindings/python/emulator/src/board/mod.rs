@@ -1177,6 +1177,12 @@ impl Board {
         )
         .map_err(|e| error(e.to_string()))
     }
+    fn start_guest_profile(&self) -> PyResult<()> {
+        self.board()?.start_guest_profile().map_err(error)
+    }
+    fn guest_profile(&self) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.guest_profile()).map_err(|e| error(e.to_string()))
+    }
     fn start_host_profile(&self) -> PyResult<()> {
         self.board()?.start_host_profile().map_err(error)
     }
