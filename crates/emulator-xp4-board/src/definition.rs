@@ -111,6 +111,9 @@ pub struct Definition {
     /// 0/1/2 GIC lines, then frame and stop ticks.
     #[serde(default)]
     pub xpp_display_timing: Option<([u64; 2], [[u8; 3]; 2], u64, u64)>,
+    /// X-Processor Pro job engine: base, GIC line, job ticks.
+    #[serde(default)]
+    pub xpp_job: Option<(u64, u32, u64)>,
 }
 
 /// Register layout of the interval timer at `timer_base`.

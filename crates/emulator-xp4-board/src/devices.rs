@@ -419,6 +419,17 @@ impl Devices {
         self.windows.push((base, base + 0x604, id));
         Ok(())
     }
+    pub fn xpp_job(&mut self, base: u64, irq: u32, ticks: u64) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::job::JobEngine::new(base, irq, ticks)?;
+        let (lo, hi) = model.window();
+        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+            return Err("Duplicate X-Processor Pro job engine window".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((lo, hi, id));
+        Ok(())
+    }
     pub fn xpp_display_timing(
         &mut self,
         bases: [u64; 2],
