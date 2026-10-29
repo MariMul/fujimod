@@ -979,6 +979,7 @@ impl Session {
             pmu_cycles_per_tick,
             gpio_base,
             xpp_serial_replies,
+            adc_base,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -1130,7 +1131,12 @@ impl Session {
         if let Some((inputs, sample_ticks)) = adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .adc(inputs, sample_ticks)?;
+                .adc(
+                    adc_base.unwrap_or(fujimod_emulator_xp4_io::adc::BASE),
+                    adc_base.is_some(),
+                    inputs,
+                    sample_ticks,
+                )?;
         }
         if let Some((map, timing, read_gate, ibuf)) = imaging {
             devices

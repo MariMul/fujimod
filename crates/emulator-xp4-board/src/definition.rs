@@ -103,6 +103,10 @@ pub struct Definition {
     /// Declared (port base, send word, receive word) replies.
     #[serde(default)]
     pub xpp_serial_replies: Vec<(u64, u32, u32)>,
+    /// ADC register base; XP4 places it at 0xfff40000. A declared base
+    /// selects the X-Processor Pro law, where +8 is a power-down bit.
+    #[serde(default)]
+    pub adc_base: Option<u64>,
 }
 
 /// Register layout of the interval timer at `timer_base`.

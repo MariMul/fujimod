@@ -272,8 +272,13 @@ impl Devices {
         self.spi_input(base, Box::new(part))
     }
 
-    pub fn adc(&mut self, inputs: [u16; 12], sample_ticks: u64) -> Result<(), String> {
-        let base = fujimod_emulator_xp4_io::adc::BASE;
+    pub fn adc(
+        &mut self,
+        base: u64,
+        power_down_gate: bool,
+        inputs: [u16; 12],
+        sample_ticks: u64,
+    ) -> Result<(), String> {
         if self
             .windows
             .iter()
@@ -281,7 +286,11 @@ impl Devices {
         {
             return Err("Overlapping XP4 ADC window".into());
         }
-        let model = Arc::new(Mutex::new(Adc::new(inputs, sample_ticks)?));
+        let mut adc = Adc::new(inputs, sample_ticks)?.with_base(base);
+        if power_down_gate {
+            adc = adc.with_power_down_gate();
+        }
+        let model = Arc::new(Mutex::new(adc));
         let id = self.models.len();
         self.models.push(Some(Box::new(Connected(model.clone()))));
         self.adc = Some((id, model));
