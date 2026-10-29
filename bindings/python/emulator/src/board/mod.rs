@@ -62,6 +62,7 @@ pub struct Board {
     objects: BTreeMap<String, Arc<Object>>,
     failures: Failures,
     read_limit: usize,
+    last_continuation_stop: Option<fujimod_emulator::board::continuation::ContinuationStop>,
 }
 impl Board {
     fn begin_continuation(
@@ -226,6 +227,7 @@ impl Board {
             backend: Some(Backend::Xp4(session)),
             objects: BTreeMap::new(),
             failures: Failures::default(),
+            last_continuation_stop: None,
         })
     }
     #[getter]
@@ -587,6 +589,7 @@ impl Board {
             objects: adapters.objects,
             failures: adapters.failures,
             read_limit,
+            last_continuation_stop: None,
         })
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
@@ -977,6 +980,32 @@ impl Board {
         serde_json::to_string(&serde_json::json!({"stores":reads.stores,"devices":names}))
             .map_err(|e| error(e.to_string()))
     }
+    /// Return the first stop event from the most recent watched run.
+    fn continuation_stop<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        let Some(stop) = &self.last_continuation_stop else {
+            return Ok(None);
+        };
+        let result = PyDict::new(py);
+        match stop {
+            fujimod_emulator::board::continuation::ContinuationStop::Store {
+                range_index,
+                range,
+                address,
+                change_confirmed,
+            } => {
+                result.set_item("kind", "store")?;
+                result.set_item("range_index", range_index)?;
+                result.set_item("range", vec![range.0, range.1])?;
+                result.set_item("address", address)?;
+                result.set_item("change_confirmed", change_confirmed)?;
+            }
+            fujimod_emulator::board::continuation::ContinuationStop::Device { id } => {
+                result.set_item("kind", "device")?;
+                result.set_item("id", id)?;
+            }
+        }
+        Ok(Some(result))
+    }
     #[pyo3(signature = (count, quantum, pause_after=None, pause_at_tick=None, store_watches=None, device_watches=None))]
     fn run(
         slf: &Bound<'_, Self>,
@@ -1004,8 +1033,10 @@ impl Board {
             }
         }
         let mut owner = slf.try_borrow_mut()?;
+        owner.last_continuation_stop = None;
         owner.begin_continuation(store_watches, device_watches)?;
         let result = owner.run_graph(py, count, quantum, pause_after, pause_at_tick);
+        owner.last_continuation_stop = owner.board()?.continuation_stop();
         let cleanup = owner.board_mut()?.continuation_end().map_err(error);
         result.and(cleanup)
     }
@@ -1025,6 +1056,7 @@ impl Board {
                 "Instruction windows require a whole-board run".into(),
             ));
         }
+        self.last_continuation_stop = None;
         self.begin_continuation(store_watches, device_watches)?;
         let result = run::window(
             py,
@@ -1034,6 +1066,7 @@ impl Board {
             pause_after,
             pause_at_tick,
         );
+        self.last_continuation_stop = self.board()?.continuation_stop();
         let cleanup = self.board_mut()?.continuation_end().map_err(error);
         self.outcome(result).and(cleanup)
     }

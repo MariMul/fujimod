@@ -34,6 +34,13 @@ def board(quantum):
 def test_native_store_stop_finishes_the_store_before_the_next_instruction(quantum):
     with board(quantum) as machine:
         assert machine.run(20,store_watches=[(0x12000,0x12004)])
+        assert machine.native.continuation_stop() == {
+            'kind': 'store',
+            'range_index': 0,
+            'range': [0x12000, 0x12004],
+            'address': 0x12000,
+            'change_confirmed': True,
+        }
         assert machine.instructions == 2
         assert machine.virtual_ticks == 2
         assert machine.read_physical(0x12000,4) == struct.pack('<I',1)
@@ -41,6 +48,12 @@ def test_native_store_stop_finishes_the_store_before_the_next_instruction(quantu
         wait_until(machine,lambda:int.from_bytes(machine.read_physical(0x12000,4),'little') >= 4,
                    'fourth stored counter',instruction_limit=30)
         assert machine.instructions == 11
+
+
+def test_native_continuation_stop_is_none_when_no_watch_fires():
+    with board(1) as machine:
+        assert not machine.run(1, store_watches=[(0x12000, 0x12004)])
+        assert machine.native.continuation_stop() is None
 
 
 @pytest.mark.parametrize('quantum',[1,7,64])
@@ -69,6 +82,7 @@ def test_native_device_publication_stops_and_read_sets_resolve_graph_names():
         machine.cpus[0].reg_write({'Arm32':{'R':0}},0x300)
         machine.cpus[0].reg_write({'Arm32':{'R':1}},0xfff86000)
         assert machine.run(20,device_watches=['idle'])
+        assert machine.native.continuation_stop() == {'kind': 'device', 'id': 0}
         assert machine.instructions == 1
         assert machine.cpus[0].reg_read('Pc') == 0x10004
         assert machine.cpus[0].reg_read({'Arm32':{'R':0}}) == 0x300
