@@ -1437,6 +1437,15 @@ impl Board {
         serde_json::to_string(&self.board()?.failure().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    /// ARMv7-A exception entries on `core`: (irq, undefined, data abort,
+    /// prefetch abort).
+    fn armv7a_exception_entries(&self, core: usize) -> PyResult<(u64, u64, u64, u64)> {
+        let n = self
+            .board()?
+            .armv7a_exception_entries(core)
+            .map_err(error)?;
+        Ok((n.irq, n.undefined, n.data_abort, n.prefetch_abort))
+    }
     fn device_states(&self, kind: &str) -> PyResult<String> {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))

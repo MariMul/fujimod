@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, AtomicU64, Ordering};
 
 pub mod arm;
 pub mod arm64;
+pub mod armv7a;
 pub mod exclusive;
 pub mod loops;
 pub mod memory;
@@ -608,6 +609,11 @@ pub trait Cpu {
     /// Finish an active guest profile and return its per-block totals.
     fn finish_guest_profile(&self) -> Result<Option<Vec<GuestBlockCount>>, String> {
         Ok(None)
+    }
+    /// ARMv7-A exception entries the backend performed itself, if it enters
+    /// any (a counted backend takes IRQs at block entry and engine aborts).
+    fn exception_entries(&self) -> Option<armv7a::Entries> {
+        None
     }
     /// Configure instruction-proven loops; statistics remain observational.
     fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
