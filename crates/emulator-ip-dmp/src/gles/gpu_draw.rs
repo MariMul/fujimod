@@ -70,6 +70,16 @@ impl Primitive {
 pub(super) struct RenderedList {
     pub snapshots: Snapshots,
     pub written_ranges: Vec<(u64, usize)>,
+    pub queue_submissions: u8,
+}
+
+struct PreparedTriangle {
+    extent: SurfaceExtent,
+    color_key: SurfaceKey,
+    depth_key: SurfaceKey,
+    parameters: Vec<u32>,
+    guest_bytes: Vec<u8>,
+    vertex_data: Vec<u8>,
 }
 
 pub(super) fn render(
@@ -78,7 +88,8 @@ pub(super) fn render(
     expected_snapshots: Option<&Snapshots>,
     read: &mut Reader<'_>,
 ) -> Result<RenderedList, String> {
-    let mut geometry = Vec::new();
+    let mut prepared = Vec::new();
+    let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
     for primitive in primitives {
         if !matches!(
             primitive.state.raster.primitive_mode,
@@ -87,21 +98,9 @@ pub(super) fn render(
             return Err("DMP host GPU draw received a non-triangle primitive".into());
         }
         let triangles = raster::clipped_triangles(&primitive.state, primitive.vertices)?;
-        if !triangles.is_empty() {
-            geometry.push((primitive, triangles));
+        if triangles.is_empty() {
+            continue;
         }
-    }
-    if geometry.is_empty() {
-        return Ok(RenderedList {
-            snapshots: Vec::new(),
-            written_ranges: Vec::new(),
-        });
-    }
-
-    let cache = context()?;
-    let _submission = cache.acquire()?;
-    let mut surfaces = BTreeMap::<u64, SurfaceKey>::new();
-    for (primitive, _) in &geometry {
         let state = &primitive.state;
         let (width, height) = state.targets.extent.dimensions()?;
         let extent = SurfaceExtent {
@@ -114,24 +113,43 @@ pub(super) fn render(
             extent,
             layout: SurfaceLayout::Morton8x8,
         };
-        upload_surface(cache, &mut surfaces, color_key, true, recorded_reads, read)?;
-
         let depth_key = depth_surface_key(state, extent)?;
+        if color_key.guest_address == depth_key.guest_address {
+            return Err("DMP host GPU color and depth targets alias".into());
+        }
+        prepare_surface(&mut surfaces, color_key, true, recorded_reads, read)?;
+
         let load_depth_from_guest = state.depth_test.enabled || state.stencil_test.enabled;
-        upload_surface(
-            cache,
+        prepare_surface(
             &mut surfaces,
             depth_key,
             load_depth_from_guest,
             recorded_reads,
             read,
         )?;
+
+        let (parameters, guest_bytes) = draw_parameters(primitive, recorded_reads, read)?;
+        for triangle in triangles {
+            prepared.push(PreparedTriangle {
+                extent,
+                color_key,
+                depth_key,
+                parameters: parameters.clone(),
+                guest_bytes: guest_bytes.clone(),
+                vertex_data: encode_vertices(&triangle, extent)?,
+            });
+        }
+    }
+    if prepared.is_empty() {
+        return Ok(RenderedList {
+            snapshots: Vec::new(),
+            written_ranges: Vec::new(),
+            queue_submissions: 0,
+        });
     }
 
-    for &key in surfaces.values() {
-        cache.clear_write_masks(key)?;
-    }
-
+    let cache = context()?;
+    let _submission = cache.acquire()?;
     let pipeline = DRAW_PIPELINE.get_or_init(|| {
         let shader_source = format!(
             "{}\n{}",
@@ -147,16 +165,29 @@ pub(super) fn render(
         create_pipeline(cache.device(), &shader)
     });
 
-    for (primitive, triangles) in &geometry {
-        for triangle in triangles {
-            render_triangle(primitive, triangle, pipeline, cache, recorded_reads, read)?;
-        }
+    let mut encoder = cache
+        .device()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("DMP command list"),
+        });
+    for (key, bytes) in surfaces.values() {
+        cache.get_or_create_target_encoded(&mut encoder, *key, bytes.as_deref())?;
     }
+    for (key, _) in surfaces.values() {
+        cache.encode_clear_write_masks(&mut encoder, *key)?;
+    }
+    for triangle in &prepared {
+        render_triangle(triangle, pipeline, cache, &mut encoder)?;
+    }
+    let keys = surfaces.values().map(|(key, _)| *key).collect::<Vec<_>>();
+    let pending = cache.encode_readbacks(&mut encoder, &keys)?;
+    cache.submit(encoder.finish());
+    let readbacks = cache.finish_readbacks(pending)?;
 
     let mut snapshots = Vec::new();
     let mut written_ranges = Vec::new();
-    for (&address, &key) in &surfaces {
-        let readback = cache.readback(key)?;
+    for (key, readback) in readbacks {
+        let address = key.guest_address;
         if expected_snapshots
             .is_some_and(|snapshots| snapshots.iter().any(|(expected, _)| *expected == address))
             || !readback.written_ranges.is_empty()
@@ -169,6 +200,7 @@ pub(super) fn render(
     Ok(RenderedList {
         snapshots,
         written_ranges,
+        queue_submissions: 1,
     })
 }
 
@@ -196,15 +228,14 @@ pub(super) fn snapshot_mismatch(actual: &Snapshots, expected: &Snapshots) -> Str
     )
 }
 
-fn upload_surface(
-    cache: &GpuContext,
-    surfaces: &mut BTreeMap<u64, SurfaceKey>,
+fn prepare_surface(
+    surfaces: &mut BTreeMap<u64, (SurfaceKey, Option<Vec<u8>>)>,
     key: SurfaceKey,
     load_guest_bytes: bool,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
 ) -> Result<(), String> {
-    if let Some(existing) = surfaces.get(&key.guest_address) {
+    if let Some((existing, _)) = surfaces.get(&key.guest_address) {
         if *existing != key {
             return Err(format!(
                 "DMP host GPU target {:#x} changes format or extent within one list",
@@ -232,8 +263,7 @@ fn upload_surface(
     } else {
         None
     };
-    cache.get_or_create_target(key, bytes.as_deref())?;
-    surfaces.insert(key.guest_address, key);
+    surfaces.insert(key.guest_address, (key, bytes));
     Ok(())
 }
 
@@ -267,28 +297,14 @@ fn recorded_range(reads: &[(u64, Vec<u8>)], address: u64, length: usize) -> Opti
 }
 
 fn render_triangle(
-    primitive: &Primitive,
-    triangle: &[RasterVertex; 3],
+    triangle: &PreparedTriangle,
     pipeline: &wgpu::RenderPipeline,
     cache: &GpuContext,
-    recorded_reads: &[(u64, Vec<u8>)],
-    read: &mut Reader<'_>,
+    encoder: &mut wgpu::CommandEncoder,
 ) -> Result<(), String> {
-    let state = &primitive.state;
-    let extent = SurfaceExtent {
-        width: state.targets.extent.width as u32,
-        height: state.targets.extent.height as u32,
-    };
-    let color_key = SurfaceKey {
-        guest_address: state.targets.color_address,
-        format: color_surface_format(state.targets.color_format)?,
-        extent,
-        layout: SurfaceLayout::Morton8x8,
-    };
-    let depth_key = depth_surface_key(state, extent)?;
-    if color_key.guest_address == depth_key.guest_address {
-        return Err("DMP host GPU color and depth targets alias".into());
-    }
+    let extent = triangle.extent;
+    let color_key = triangle.color_key;
+    let depth_key = triangle.depth_key;
     let color_surface = cache
         .get(color_key)?
         .ok_or("DMP color surface is not resident")?;
@@ -297,25 +313,23 @@ fn render_triangle(
         .ok_or("DMP depth surface is not resident")?;
 
     let device = cache.device();
-    let (parameters, guest_bytes) = draw_parameters(primitive, recorded_reads, read)?;
     let parameter_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DMP draw parameters"),
-        contents: &encode_words(&parameters),
+        contents: &encode_words(&triangle.parameters),
         usage: wgpu::BufferUsages::STORAGE,
     });
     let guest_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DMP draw textures"),
-        contents: &guest_bytes,
+        contents: &triangle.guest_bytes,
         usage: wgpu::BufferUsages::STORAGE,
     });
-    let vertex_data = encode_vertices(triangle, extent)?;
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DMP clipped triangle vertices"),
-        contents: &vertex_data,
+        contents: &triangle.vertex_data,
         usage: wgpu::BufferUsages::VERTEX,
     });
-    let color_input = copy_surface_texture(device, cache.queue(), &color_surface, extent);
-    let depth_input = copy_surface_texture(device, cache.queue(), &depth_surface, extent);
+    let color_input = copy_surface_texture(device, encoder, &color_surface, extent);
+    let depth_input = copy_surface_texture(device, encoder, &depth_surface, extent);
     let color_input_view = color_input.create_view(&Default::default());
     let depth_input_view = depth_input.create_view(&Default::default());
     let color_view = color_surface.texture().create_view(&Default::default());
@@ -349,9 +363,6 @@ fn render_triangle(
         ],
     });
 
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("DMP triangle render"),
-    });
     {
         let attachments = [
             Some(wgpu::RenderPassColorAttachment {
@@ -413,9 +424,8 @@ fn render_triangle(
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.draw(0..3, 0..1);
     }
-    cache.queue().submit([encoder.finish()]);
-    cache.accumulate_draw_mask(color_key)?;
-    cache.accumulate_draw_mask(depth_key)?;
+    cache.encode_accumulate_draw_mask(encoder, color_key)?;
+    cache.encode_accumulate_draw_mask(encoder, depth_key)?;
     Ok(())
 }
 
@@ -478,7 +488,7 @@ fn color_target() -> wgpu::ColorTargetState {
 
 fn copy_surface_texture(
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
+    encoder: &mut wgpu::CommandEncoder,
     surface: &GpuSurface,
     extent: SurfaceExtent,
 ) -> wgpu::Texture {
@@ -496,9 +506,6 @@ fn copy_surface_texture(
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("DMP destination snapshot copy"),
-    });
     encoder.copy_texture_to_texture(
         surface.texture().as_image_copy(),
         texture.as_image_copy(),
@@ -508,7 +515,6 @@ fn copy_surface_texture(
             depth_or_array_layers: 1,
         },
     );
-    queue.submit([encoder.finish()]);
     texture
 }
 

@@ -93,44 +93,6 @@ pub(super) fn run_draw(
     run_packed(engine, state, packed)
 }
 
-/// Runs already fetched interpreter inputs on the GPU. The host render path
-/// uses this to compare every regression and captured draw vertex bit-for-bit.
-pub(super) fn run_inputs(
-    engine: &Engine,
-    state: &DrawState,
-    inputs: &[[Vector; 16]],
-) -> Result<Vec<[Vector; OUTPUT_REGISTERS]>, String> {
-    if inputs.is_empty() {
-        return Ok(Vec::new());
-    }
-    let row_stride = 16 * 16;
-    let mut bytes = Vec::with_capacity(inputs.len() * row_stride);
-    for input in inputs {
-        for vector in input {
-            for value in vector {
-                bytes.extend_from_slice(&value.to_bits().to_le_bytes());
-            }
-        }
-    }
-    let mut attributes = [[0; 4]; 16];
-    for (register, field) in attributes.iter_mut().enumerate() {
-        *field = [
-            (register * 16) as u32,
-            row_stride as u32,
-            (4 << 16) | (3 << 8),
-            0,
-        ];
-    }
-    let packed = PackedVertices {
-        bytes,
-        draw_indices: (0..inputs.len()).map(|index| index as u32).collect(),
-        vertex_remap: (0..inputs.len()).map(|index| index as u32).collect(),
-        attributes,
-        defaults: [[0.0, 0.0, 0.0, 1.0]; 16],
-    };
-    run_packed(engine, state, packed)
-}
-
 fn pack_draw_vertices(
     engine: &Engine,
     state: &DrawState,

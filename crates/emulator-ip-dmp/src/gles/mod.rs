@@ -7,10 +7,10 @@ mod capture;
 mod draw_state;
 #[cfg(not(target_os = "emscripten"))]
 mod gpu_draw;
-#[cfg(not(target_os = "emscripten"))]
-mod gpu_vertex;
 #[cfg(all(test, not(target_os = "emscripten")))]
 mod gpu_fragment;
+#[cfg(all(test, not(target_os = "emscripten")))]
+mod gpu_vertex;
 mod raster;
 mod shader;
 use draw_state::DrawState;
@@ -208,8 +208,13 @@ impl Engine {
             next.packets(words, &mut recording_reader, &mut unused_output, 0)?;
         }
         let primitives = next.gpu_primitives.take().unwrap_or_default();
-        let rendered =
-            gpu_draw::render(&primitives, &recorded_reads, expected_snapshots, read)?;
+        let rendered = gpu_draw::render(&primitives, &recorded_reads, expected_snapshots, read)?;
+        if rendered.queue_submissions > 3 {
+            return Err(format!(
+                "DMP host GPU submitted {} command buffers for one list (limit 3)",
+                rendered.queue_submissions
+            ));
+        }
         next.gpu_primitives = None;
         next.written_ranges = rendered.written_ranges.clone();
         Ok((next, rendered))
@@ -409,22 +414,8 @@ impl Engine {
                     return Err("DMP vertex count exceeds bound".into());
                 }
                 let state = self.draw_state();
-                #[cfg(not(target_arch = "wasm32"))]
-                if self.gpu_primitives.is_some() {
-                    let vertices = gpu_vertex::run_draw(
-                        self,
-                        &state,
-                        count,
-                        index == 0x42f,
-                        read,
-                    )?;
-                    for vertex in vertices {
-                        self.vertex_output(vertex, &state, read, out)?;
-                    }
-                } else {
-                    self.draw_interpreted(index, count, &state, read, out)?;
-                }
-                #[cfg(target_arch = "wasm32")]
+                // Host rendering clips and assembles triangles on the CPU
+                // before recording the list's fragment commands.
                 self.draw_interpreted(index, count, &state, read, out)?;
             }
             0x45f | 0x431 if value == 1 => {
@@ -565,14 +556,6 @@ impl Engine {
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
-        #[cfg(not(target_arch = "wasm32"))]
-        if self.gpu_primitives.is_some() {
-            let mut vertices = gpu_vertex::run_inputs(self, state, std::slice::from_ref(inputs))?;
-            let vertex = vertices
-                .pop()
-                .ok_or("DMP host GPU vertex runner returned no output")?;
-            return self.vertex_output(vertex, state, read, out);
-        }
         let vertex = shader::execute(self, inputs)?;
         self.vertex_output(vertex, state, read, out)
     }
