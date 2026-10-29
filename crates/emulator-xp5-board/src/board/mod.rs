@@ -2,7 +2,9 @@
 //! output publication are supplied by the application, outside these models.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
-use fujimod_emulator_xp5_io::{adc, gates, gpio, i2c, mailbox, reset_handshake, timer};
+use fujimod_emulator_xp5_io::{
+    adc, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
+};
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
 use fujimod_emulator_xp5_imaging::serial_sink;
@@ -141,6 +143,28 @@ fn register_with_resources(
                 Box::new(reset_handshake::ResetHandshake::new(
                     window.base,
                     trigger_offset,
+                )?),
+            )?;
+        }
+        "memory-configuration" => {
+            if window.size != 0x1000
+                || window.options.keys().any(|key| key != "commit_ticks")
+            {
+                return Err("invalid memory-configuration window or options".into());
+            }
+            let commit_ticks = window
+                .options
+                .get("commit_ticks")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u64::try_from(value).ok())
+                .filter(|value| *value > 0)
+                .ok_or("memory-configuration requires positive commit_ticks")?;
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(memory_configuration::MemoryConfiguration::new(
+                    window.base,
+                    commit_ticks,
                 )?),
             )?;
         }
