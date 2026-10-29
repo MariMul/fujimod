@@ -110,7 +110,7 @@ pub enum TimerLayout {
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppStorage {
     pub flash_controller: u64,
@@ -120,6 +120,8 @@ pub struct XppStorage {
     pub dma_irq_routes: Vec<u32>,
     pub dma_setup_ticks: u64,
     pub dma_bytes_per_tick: u64,
+    #[serde(default)]
+    pub nor: Vec<fujimod_emulator_xpp::board::Nor>,
 }
 
 /// X-Processor Pro cold-reset controller and its boot-selection strap level.

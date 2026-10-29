@@ -186,7 +186,12 @@ impl FlashController {
                     .map_err(|_| "Serial-flash transmit byte overflow")?;
                 (vec![value], 0)
             }
-            _ => return Err("Unsupported serial-flash command phases".into()),
+            (phases, receive) => {
+                return Err(format!(
+                    "Unsupported serial-flash command phases {phases:#x}/{receive:#x} for opcode {:#x}",
+                    self.registers[0]
+                ));
+            }
         };
         let opcode = u8::try_from(self.registers[0]).map_err(|_| "Serial-flash opcode overflow")?;
         let due = cx

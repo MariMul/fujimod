@@ -685,9 +685,17 @@ impl Devices {
             storage.aperture_size,
             image,
         )?);
+        let mut nor = BTreeMap::new();
+        for attachment in storage.nor {
+            let registers =
+                fujimod_emulator_devices::parts::micron_nor::Registers::new(attachment.options)?;
+            if nor.insert(attachment.chip_select, registers).is_some() {
+                return Err("Repeated serial-flash register device chip select".into());
+            }
+        }
         let controller = FlashController::new(
             flash::Options {base:storage.flash_controller,transfer_ticks:1},
-            aperture.clone(), BTreeMap::new())?;
+            aperture.clone(), nor)?;
         let dma = fujimod_emulator_ip_arm::pl330::Pl330::new(
             storage.dma,
             storage.dma_irq_routes,
