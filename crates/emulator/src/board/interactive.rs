@@ -129,7 +129,7 @@ impl Board {
                     let epoch = state.parallel.as_ref().unwrap();
                     let room = epoch.room(core);
                     if room == 0 {
-                        continue;
+                        return Ok(());
                     }
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {

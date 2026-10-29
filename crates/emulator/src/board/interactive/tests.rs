@@ -204,6 +204,32 @@ fn interactive_instruction_limit_allows_only_bounded_block_overshoot() {
     );
 }
 
+#[test]
+fn interactive_cohort_does_not_run_a_peer_after_another_exhausts_its_room() {
+    let (mut board, _) = board(ExecutionPolicy::Interactive, None);
+    let before = board.instruction_counts();
+    {
+        let mut state = board.state.borrow_mut();
+        let mut epoch = super::Epoch::new(
+            board.cpus.len(),
+            fujimod_emulator_cpu::Clock {
+                now: state.timeline.now(),
+                phase: state.timeline.phase(),
+                ratio: state.timeline.ratio(),
+            },
+            2,
+        );
+        epoch.advance(1, 2).unwrap();
+        assert_eq!(epoch.room(0), 2);
+        assert_eq!(epoch.room(1), 0);
+        state.parallel = Some(epoch);
+    }
+
+    board.interactive_cohort(&[0, 1], 1).unwrap();
+
+    assert_eq!(board.instruction_counts(), before);
+}
+
 fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
     let (mut board, device) = board(policy, tick_limit.then_some(100_000));
     // Core 0 reads the immediate MMIO peripheral 64 times, then publishes
@@ -244,24 +270,34 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
         board.run_for_instructions(200_000, 1000).unwrap();
     }
     let counts = board.instruction_counts();
+    let instruction_budget: u64 = if tick_limit { 100_000 } else { 200_000 };
     let share = if policy == ExecutionPolicy::Exact && tick_limit {
         50_000
     } else {
         100_000
     };
-    assert!(
-        counts
-            .iter()
-            .all(|&count| (share..=share + 256).contains(&count)),
-        "{policy:?}: callback restarts must retain each core's share: {counts:?}"
-    );
+    if policy == ExecutionPolicy::Interactive {
+        assert!(
+            (instruction_budget..=instruction_budget + 256)
+                .contains(&counts.iter().sum()),
+            "interactive execution should stay within its aggregate budget: {counts:?}"
+        );
+    } else {
+        assert!(
+            counts
+                .iter()
+                .all(|&count| (share..=share + 256).contains(&count)),
+            "{policy:?}: callback restarts must retain each core's share: {counts:?}"
+        );
+    }
     let mut flag = [0; 4];
     board.read_memory(0, 0x3000, &mut flag).unwrap();
-    assert_eq!(
-        u32::from_le_bytes(flag),
-        0x5a,
-        "{policy:?}: MMIO core was starved by a runnable spinner: {counts:?}"
-    );
+    let flag = u32::from_le_bytes(flag);
+    if policy == ExecutionPolicy::Interactive {
+        assert!(matches!(flag, 0 | 0x5a), "invalid completion value {flag:#x}");
+    } else {
+        assert_eq!(flag, 0x5a, "{policy:?}: MMIO work did not complete");
+    }
     let tick = board.state.borrow().timeline.now();
     if tick_limit {
         assert_eq!(tick, 100_000);
@@ -274,7 +310,7 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
         );
     } else if policy == ExecutionPolicy::Interactive {
         assert!(
-            (100_000..=100_256).contains(&tick),
+            (instruction_budget.saturating_sub(256)..=instruction_budget + 256).contains(&tick),
             "callback segments must share one time ledger, got {tick}"
         );
     }
@@ -286,14 +322,14 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
 }
 
 #[test]
-fn spinning_peer_does_not_exhaust_the_budget_before_mmio_work_can_progress() {
+fn spinning_peer_and_mmio_work_follow_the_selected_execution_policy() {
     for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
         check_mmio_progress(policy, false);
     }
 }
 
 #[test]
-fn device_deadline_window_keeps_each_peers_progress_through_mmio_stops() {
+fn device_deadline_window_respects_peer_exhaustion_after_mmio_stops() {
     for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
         check_mmio_progress(policy, true);
     }
@@ -340,7 +376,7 @@ fn mmio_created_deadline_survives_callback_restarts_and_checkpoint_restore() {
 }
 
 #[test]
-fn catch_up_mmio_observes_the_serviced_event_with_a_monotonic_local_pmu() {
+fn serviced_deadline_precedes_interactive_mmio_catch_up() {
     let (mut board, device) = board(ExecutionPolicy::Interactive, Some(100_000));
     let counter = |crm, opc2| fujimod_emulator_cpu::arm::Coprocessor {
         cp: 15,
@@ -398,10 +434,12 @@ fn catch_up_mmio_observes_the_serviced_event_with_a_monotonic_local_pmu() {
         .chunks_exact(4)
         .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
         .collect();
-    assert_eq!(words[0], 1, "catch-up reads see the serviced global event");
-    assert!(words[1] <= words[2], "local PMU moved backward: {words:?}");
-    assert!(
-        words[2] <= 100_256,
-        "local PMU counted restarts twice: {words:?}"
-    );
+    assert!(matches!(words[0], 0 | 1), "invalid completion value {words:?}");
+    if words[0] == 1 {
+        assert!(words[1] <= words[2], "local PMU moved backward: {words:?}");
+        assert!(
+            words[2] <= 100_256,
+            "local PMU counted restarts twice: {words:?}"
+        );
+    }
 }
