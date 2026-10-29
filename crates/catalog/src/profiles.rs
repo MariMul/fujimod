@@ -1585,6 +1585,9 @@ pub struct UpdateBoot {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareBlockParameters"))]
 pub struct BlockParameters {
+    /// Declared memory-configuration commit latency in guest ticks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_ticks: Option<u64>,
     /// Declared command latency us.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command_latency_us: Option<u64>,
@@ -1603,6 +1606,9 @@ pub struct BlockParameters {
     /// Declared ticks per second.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ticks_per_second: Option<u64>,
+    /// Declared self-clearing reset-request offset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_offset: Option<u64>,
     /// Declared transmit request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transmit_request: Option<u64>,

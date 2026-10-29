@@ -9977,6 +9977,15 @@
             "null"
           ]
         },
+        "commit_ticks": {
+          "description": "Declared memory-configuration commit latency in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "companion_irq_base": {
           "description": "Declared companion irq base.",
           "format": "uint64",
@@ -10024,6 +10033,15 @@
         },
         "transmit_request": {
           "description": "Declared transmit request.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "trigger_offset": {
+          "description": "Declared self-clearing reset-request offset.",
           "format": "uint64",
           "minimum": 0,
           "type": [
