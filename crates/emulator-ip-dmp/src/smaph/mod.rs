@@ -1655,12 +1655,17 @@ fn known(o: u64) -> bool {
             | 0x1c
             | 0x34
             | 0x58
+            | 0xe0
+            | 0xe4
+            | 0xe8
+            | 0xec
             | 0xc00
             | 0xc04
             | 0xc08
             | 0xc0c
             | 0xc10
             | 0xc18
+            | 0xc1c
             | 0xc20
             | 0xc24
             | 0xc28
@@ -1736,6 +1741,9 @@ impl Device for Renderer {
                     let job = s.copy_job(cx, v)?;
                     s.regs.insert(o, v);
                     s.begin(cx, job);
+                }
+                0xc1c if v != 0x8000 => {
+                    return Err("DMP unsupported reset control".into());
                 }
                 0x10d0 if v == 1 => {
                     s.idle()?;
