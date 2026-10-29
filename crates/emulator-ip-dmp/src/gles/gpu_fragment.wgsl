@@ -703,18 +703,18 @@ fn process_fragment(case_index: u32) {
         let packed = clamp(color, vec4<f32>(0.0), vec4<f32>(1.0));
         var word = 0u;
         if format == 1u {
-            word = u32(packed.x * 31.0) << 11u
-                | u32(packed.y * 63.0) << 5u
+            word = (u32(packed.x * 31.0) << 11u)
+                | (u32(packed.y * 63.0) << 5u)
                 | u32(packed.z * 31.0);
         } else if format == 2u {
-            word = u32(packed.x * 31.0) << 11u
-                | u32(packed.y * 31.0) << 6u
-                | u32(packed.z * 31.0) << 1u
+            word = (u32(packed.x * 31.0) << 11u)
+                | (u32(packed.y * 31.0) << 6u)
+                | (u32(packed.z * 31.0) << 1u)
                 | u32(packed.w);
         } else {
-            word = u32(packed.x * 15.0) << 12u
-                | u32(packed.y * 15.0) << 8u
-                | u32(packed.z * 15.0) << 4u
+            word = (u32(packed.x * 15.0) << 12u)
+                | (u32(packed.y * 15.0) << 8u)
+                | (u32(packed.z * 15.0) << 4u)
                 | u32(packed.w * 15.0);
         }
         var bits = 0u;

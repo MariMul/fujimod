@@ -2134,6 +2134,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-ip-dmp-webgpu"
+version = "0.1.0"
+dependencies = [
+ "ciborium",
+ "fujimod-emulator-gpu",
+ "fujimod-emulator-ip-dmp",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde-wasm-bindgen",
+ "sha2 0.10.9",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "fujimod-emulator-javascript"
 version = "0.1.0"
 dependencies = [

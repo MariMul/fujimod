@@ -63,6 +63,7 @@ members = [
   "crates/emulator-preparation",
   "crates/emulator-ip",
   "crates/emulator-ip-dmp",
+  "crates/emulator-ip-dmp-webgpu",
   "crates/emulator-ip-arm",
   "crates/emulator-graphics",
   "crates/emulator-gpu",

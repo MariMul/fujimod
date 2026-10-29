@@ -92,6 +92,7 @@ pub(super) struct RenderedList {
     pub snapshots: Snapshots,
     pub written_ranges: Vec<(u64, usize)>,
     pub queue_submissions: u8,
+    pub draws: usize,
 }
 
 struct PreparedDraw {
@@ -104,6 +105,7 @@ struct PreparedDraw {
     vertex: gpu_vertex::PreparedDraw,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn render(
     draws: &[Draw],
     recorded_reads: &[(u64, Vec<u8>)],
@@ -159,8 +161,10 @@ pub(super) fn render(
             snapshots: Vec::new(),
             written_ranges: Vec::new(),
             queue_submissions: 0,
+            draws: 0,
         });
     }
+    let draw_count = prepared.len();
 
     let cache = context()?;
     let _submission = cache.acquire()?;
@@ -201,6 +205,107 @@ pub(super) fn render(
         snapshots,
         written_ranges,
         queue_submissions: 1,
+        draws: draw_count,
+    })
+}
+
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub(super) async fn render_async(
+    draws: &[Draw],
+    recorded_reads: &[(u64, Vec<u8>)],
+    read: &mut Reader<'_>,
+) -> Result<RenderedList, String> {
+    let mut prepared = Vec::new();
+    let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
+    for draw in draws {
+        if draw.vertex.indices.is_empty() {
+            continue;
+        }
+        let state = &draw.state;
+        let (width, height) = state.targets.extent.dimensions()?;
+        let extent = SurfaceExtent {
+            width: width as u32,
+            height: height as u32,
+        };
+        let color_key = SurfaceKey {
+            guest_address: state.targets.color_address,
+            format: color_surface_format(state.targets.color_format)?,
+            extent,
+            layout: SurfaceLayout::Morton8x8,
+        };
+        let depth_key = depth_surface_key(state, extent)?;
+        if color_key.guest_address == depth_key.guest_address {
+            return Err("DMP host GPU color and depth targets alias".into());
+        }
+        prepare_surface(&mut surfaces, color_key, true, recorded_reads, read)?;
+        prepare_surface(
+            &mut surfaces,
+            depth_key,
+            state.depth_test.enabled || state.stencil_test.enabled,
+            recorded_reads,
+            read,
+        )?;
+        let (parameters, guest_bytes) = draw_parameters(draw, recorded_reads, read)?;
+        prepared.push(PreparedDraw {
+            state: state.clone(),
+            extent,
+            color_key,
+            depth_key,
+            parameters,
+            guest_bytes,
+            vertex: draw.vertex.clone(),
+        });
+    }
+    if prepared.is_empty() {
+        return Ok(RenderedList {
+            snapshots: Vec::new(),
+            written_ranges: Vec::new(),
+            queue_submissions: 0,
+            draws: 0,
+        });
+    }
+    let draw_count = prepared.len();
+
+    let cache = context()?;
+    let _submission = cache.acquire()?;
+    let validation_scope = cache.device().push_error_scope(wgpu::ErrorFilter::Validation);
+    let mut encoder = cache
+        .device()
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("DMP command list"),
+        });
+    for (key, bytes) in surfaces.values() {
+        cache.get_or_create_target_encoded(&mut encoder, *key, bytes.as_deref())?;
+    }
+    for (key, _) in surfaces.values() {
+        cache.encode_clear_write_masks(&mut encoder, *key)?;
+    }
+    for prepared in &prepared {
+        let pipeline = pipeline_for(cache.device(), &prepared.state, &prepared.vertex)?;
+        render_draw(prepared, &pipeline, cache, &mut encoder)?;
+    }
+    let keys = surfaces.values().map(|(key, _)| *key).collect::<Vec<_>>();
+    let pending = cache.encode_readbacks(&mut encoder, &keys)?;
+    cache.submit(encoder.finish());
+    let readbacks = cache.finish_readbacks_async(pending).await?;
+    if let Some(error) = validation_scope.pop().await {
+        return Err(format!("DMP WebGPU validation: {error}"));
+    }
+
+    let mut snapshots = Vec::new();
+    let mut written_ranges = Vec::new();
+    for (key, readback) in readbacks {
+        if !readback.written_ranges.is_empty() {
+            snapshots.push((key.guest_address, readback.bytes));
+            written_ranges.extend(readback.written_ranges);
+        }
+    }
+    written_ranges.sort_unstable_by_key(|(address, _)| *address);
+    Ok(RenderedList {
+        snapshots,
+        written_ranges,
+        queue_submissions: 1,
+        draws: draw_count,
     })
 }
 

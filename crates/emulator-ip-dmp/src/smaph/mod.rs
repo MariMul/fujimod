@@ -1096,7 +1096,6 @@ fn gpu_mode() -> (bool, bool) {
     (verify || !enabled("FUJIMOD_SMAPH_CPU"), verify)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn paint_cpu_draws(
     prepared: &[PreparedPaint<'_>],
     coverage_inputs: &[scanline::CoverageInput],

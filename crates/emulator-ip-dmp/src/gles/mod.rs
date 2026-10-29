@@ -5,18 +5,25 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 mod capture;
 mod draw_state;
-#[cfg(all(not(target_arch = "wasm32"), not(target_os = "emscripten")))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu_draw;
 #[cfg(all(test, not(target_os = "emscripten")))]
 mod gpu_fragment;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_os = "emscripten"))]
 mod gpu_vertex;
 mod raster;
 mod shader;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod wasm_gpu;
 use draw_state::DrawState;
 use shader::Vector;
 pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
+pub struct HostGpuExecution {
+    pub snapshots: Snapshots,
+    pub draws: usize,
+    pub queue_submissions: u8,
+}
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 type Uniform = [u32; 4];
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -25,10 +32,10 @@ pub struct Engine {
     written_ranges: Vec<(u64, usize)>,
     vertices_executed: u64,
     primitive_index: u64,
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_os = "emscripten"))]
     #[serde(skip)]
     gpu_primitives: Option<Vec<gpu_draw::Draw>>,
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_os = "emscripten"))]
     #[serde(skip)]
     gpu_immediate: Option<(DrawState, Vec<[Vector; 16]>)>,
     last_output: Option<[Vector; 16]>,
@@ -56,9 +63,9 @@ impl Default for Engine {
             written_ranges: Vec::new(),
             vertices_executed: 0,
             primitive_index: 0,
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_os = "emscripten"))]
             gpu_primitives: None,
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(target_os = "emscripten"))]
             gpu_immediate: None,
             last_output: None,
             regs: BTreeMap::new(),
@@ -384,7 +391,7 @@ impl Engine {
         {
             return Err(format!("DMP unsupported 3D register {index:#x}"));
         }
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_os = "emscripten"))]
         if self.gpu_immediate.is_some() && !matches!(index, 0x432..=0x435) {
             self.flush_gpu_immediate()?;
         }
@@ -476,7 +483,7 @@ impl Engine {
                     return Err("DMP vertex count exceeds bound".into());
                 }
                 let state = self.draw_state();
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(target_os = "emscripten"))]
                 if self.gpu_primitives.is_some() {
                     let vertex =
                         gpu_vertex::prepare_draw(self, &state, count, index == 0x42f, read)?;
@@ -486,7 +493,7 @@ impl Engine {
                 } else {
                     self.draw_interpreted(index, count, &state, read, out)?;
                 }
-                #[cfg(target_arch = "wasm32")]
+                #[cfg(target_os = "emscripten")]
                 self.draw_interpreted(index, count, &state, read, out)?;
             }
             0x45f | 0x431 if value == 1 => {
@@ -627,7 +634,7 @@ impl Engine {
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_os = "emscripten"))]
         if self.gpu_primitives.is_some() {
             self.vertices_executed += 1;
             self.last_output = None;
@@ -713,7 +720,7 @@ impl Engine {
         }
         Ok(())
     }
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_os = "emscripten"))]
     fn flush_gpu_immediate(&mut self) -> Result<(), String> {
         let Some((state, vertices)) = self.gpu_immediate.take() else {
             return Ok(());
@@ -725,7 +732,7 @@ impl Engine {
         self.record_gpu_draw(state, vertex);
         Ok(())
     }
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_os = "emscripten"))]
     fn record_gpu_draw(&mut self, state: DrawState, vertex: gpu_vertex::PreparedDraw) {
         if let Some(draws) = &mut self.gpu_primitives {
             draws.push(gpu_draw::Draw::new(state, vertex, &self.regs));

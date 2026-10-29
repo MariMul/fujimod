@@ -67,25 +67,25 @@ fn store_surface(pixel: u32, color: vec4<f32>, format: u32, mask: u32) -> u32 {
     var packed = 0u;
     var bits = 0u;
     if format == 1u {
-        packed = u32(clamped.x * 31.0) << 11u
-            | u32(clamped.y * 63.0) << 5u
+        packed = (u32(clamped.x * 31.0) << 11u)
+            | (u32(clamped.y * 63.0) << 5u)
             | u32(clamped.z * 31.0);
         if (mask & 1u) != 0u { bits |= 0xf800u; }
         if (mask & 2u) != 0u { bits |= 0x07e0u; }
         if (mask & 4u) != 0u { bits |= 0x001fu; }
     } else if format == 2u {
-        packed = u32(clamped.x * 31.0) << 11u
-            | u32(clamped.y * 31.0) << 6u
-            | u32(clamped.z * 31.0) << 1u
+        packed = (u32(clamped.x * 31.0) << 11u)
+            | (u32(clamped.y * 31.0) << 6u)
+            | (u32(clamped.z * 31.0) << 1u)
             | u32(clamped.w);
         if (mask & 1u) != 0u { bits |= 0xf800u; }
         if (mask & 2u) != 0u { bits |= 0x07c0u; }
         if (mask & 4u) != 0u { bits |= 0x003eu; }
         if (mask & 8u) != 0u { bits |= 0x0001u; }
     } else {
-        packed = u32(clamped.x * 15.0) << 12u
-            | u32(clamped.y * 15.0) << 8u
-            | u32(clamped.z * 15.0) << 4u
+        packed = (u32(clamped.x * 15.0) << 12u)
+            | (u32(clamped.y * 15.0) << 8u)
+            | (u32(clamped.z * 15.0) << 4u)
             | u32(clamped.w * 15.0);
         if (mask & 1u) != 0u { bits |= 0xf000u; }
         if (mask & 2u) != 0u { bits |= 0x0f00u; }
