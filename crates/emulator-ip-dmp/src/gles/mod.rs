@@ -6,13 +6,11 @@ use std::collections::BTreeMap;
 mod capture;
 mod draw_state;
 #[cfg(not(target_os = "emscripten"))]
-mod gpu;
-#[cfg(not(target_os = "emscripten"))]
 mod gpu_draw;
 #[cfg(not(target_os = "emscripten"))]
 mod gpu_vertex;
-#[cfg(not(target_os = "emscripten"))]
-pub(super) mod gpu_fragment;
+#[cfg(all(test, not(target_os = "emscripten")))]
+mod gpu_fragment;
 mod raster;
 mod shader;
 use draw_state::DrawState;
@@ -27,8 +25,6 @@ pub struct Engine {
     written_ranges: Vec<(u64, usize)>,
     vertices_executed: u64,
     primitive_index: u64,
-    #[serde(skip)]
-    cpu_only: bool,
     #[cfg(not(target_arch = "wasm32"))]
     #[serde(skip)]
     gpu_primitives: Option<Vec<gpu_draw::Primitive>>,
@@ -55,7 +51,6 @@ impl Default for Engine {
             written_ranges: Vec::new(),
             vertices_executed: 0,
             primitive_index: 0,
-            cpu_only: std::env::var("FUJIMOD_DMP_CPU").is_ok_and(|value| value == "1"),
             #[cfg(not(target_arch = "wasm32"))]
             gpu_primitives: None,
             last_output: None,
@@ -127,23 +122,8 @@ fn read_guest_draw_memory(
 }
 
 impl Engine {
-    /// Allow host acceleration when a suitable adapter is available.
-    pub fn set_host_acceleration(&mut self, enabled: bool) {
-        self.cpu_only = !enabled;
-    }
-    pub fn host_acceleration_enabled(&self) -> bool {
-        !self.cpu_only
-    }
     pub fn diagnostics(&self) -> serde_json::Value {
-        #[cfg(not(target_arch = "wasm32"))]
-        let accelerator = if self.cpu_only {
-            None
-        } else {
-            gpu::backend_name()
-        };
-        #[cfg(target_arch = "wasm32")]
-        let accelerator: Option<String> = None;
-        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":accelerator.unwrap_or_else(||"CPU".into())})
+        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":"CPU"})
     }
     pub fn reg(&self, index: u16) -> u32 {
         self.regs.get(&index).copied().unwrap_or(0)
@@ -185,7 +165,6 @@ impl Engine {
         read: &mut Reader<'_>,
     ) -> Result<Snapshots, String> {
         let mut reference = self.clone();
-        reference.cpu_only = true;
         reference.gpu_primitives = None;
         let mut cpu_output = raster::Targets::default();
         reference.packets(words, read, &mut cpu_output, 0)?;
@@ -623,13 +602,7 @@ impl Engine {
             draw_state::PrimitiveMode::Triangles if n == 3 => {
                 let triangle = [self.vertices[0], self.vertices[1], self.vertices[2]];
                 if !gpu_rendering {
-                    raster::triangle(
-                        state,
-                        self.host_acceleration_enabled(),
-                        triangle,
-                        read,
-                        out,
-                    )?;
+                    raster::triangle(state, triangle, read, out)?;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 self.record_gpu_triangle(state, triangle);
@@ -650,7 +623,7 @@ impl Engine {
                     ]
                 };
                 if !gpu_rendering {
-                    raster::triangle(state, self.host_acceleration_enabled(), t, read, out)?;
+                    raster::triangle(state, t, read, out)?;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 self.record_gpu_triangle(state, t);
@@ -662,13 +635,7 @@ impl Engine {
             draw_state::PrimitiveMode::TriangleFan if n >= 3 => {
                 let triangle = [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]];
                 if !gpu_rendering {
-                    raster::triangle(
-                        state,
-                        self.host_acceleration_enabled(),
-                        triangle,
-                        read,
-                        out,
-                    )?;
+                    raster::triangle(state, triangle, read, out)?;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 self.record_gpu_triangle(state, triangle);

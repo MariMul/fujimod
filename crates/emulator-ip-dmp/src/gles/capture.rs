@@ -262,7 +262,6 @@ fn replay_record(path: &Path) -> Result<(), String> {
     let record = read_record(path)?;
     let mut engine: Engine = ciborium::de::from_reader(record.state.as_slice())
         .map_err(|error| format!("restore DMP engine state from {}: {error}", path.display()))?;
-    engine.set_host_acceleration(false);
     let verify_gpu = std::env::var("FUJIMOD_DMP_VERIFY_GPU").is_ok_and(|value| value == "1");
     let mut used_reads = vec![false; record.reads.len()];
     let mut reader = |address: u64, length: usize| {

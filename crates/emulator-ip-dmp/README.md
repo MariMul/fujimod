@@ -24,13 +24,10 @@ Native DMP 3D command lists use the host WGSL renderer by default and require a
 hardware adapter. Set `FUJIMOD_DMP_CPU=1` to use the CPU renderer; WebAssembly
 always uses the CPU renderer. `FUJIMOD_DMP_VERIFY_GPU=1` selects the GPU path
 even when the CPU option is set, compares its snapshots and write ranges
-against the CPU reference, then returns the GPU result. The standalone CPU
-pipeline can use wgpu for integer scan
-conversion when a hardware adapter is available and the primitive fits its
-integer bounds; `FUJIMOD_DMP_CPU=1` forces CPU scan conversion. Both paths use
-the same edge equations and top-left rule. Transcendentals use `libm`. Host GPU
-handles stay outside emulated state and checkpoints. Diagnostic state reports
-the selected adapter.
+against the CPU reference, then returns the GPU result. The CPU renderer uses
+integer scan conversion with the same edge equations and top-left rule as the
+host GPU path. Transcendentals use `libm`. Host GPU handles stay outside
+emulated state and checkpoints. Diagnostic state reports the CPU rasterizer.
 
 Instruction fields follow the vector arithmetic/flow layout described by
 [nihstro's shader bytecode definitions](https://github.com/neobrain/nihstro/blob/a969b1a6849b02679a1858847ba18bedd3a19d44/include/nihstro/shader_bytecode.h).

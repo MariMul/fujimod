@@ -1,9 +1,7 @@
-//! WGSL implementation of the DMP fixed-function fragment stage.
+//! Standalone WGSL conformance harness for the DMP fixed-function fragment stage.
 //!
-//! The stage stays separate from `raster_triangle` until the draw path can
-//! dispatch fragments in larger batches. Its compute entry point and test
-//! harness share the same packed inputs so the CPU implementation remains a
-//! byte-exact oracle while this is developed.
+//! Production host draws use the render pipeline in `gpu_draw`; this compute
+//! harness checks the shared fragment operations against the CPU reference.
 
 use super::Engine;
 #[cfg(test)]

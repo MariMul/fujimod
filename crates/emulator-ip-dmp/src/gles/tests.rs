@@ -57,7 +57,6 @@ fn assert_host_gpu_matches_cpu(
     read: impl Fn(u64, usize) -> Vec<u8>,
 ) -> Option<Snapshots> {
     let mut cpu = Engine::default();
-    cpu.set_host_acceleration(false);
     let expected = cpu
         .execute(words, &mut |address, length| Ok(read(address, length)))
         .unwrap();
@@ -256,10 +255,7 @@ fn host_gpu_and_cpu_produce_identical_pixels_and_preserve_constant_alpha() {
     if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
         return;
     }
-    let mut cpu = Engine {
-        cpu_only: true,
-        ..Default::default()
-    };
+    let mut cpu = Engine::default();
     let expected = cpu.execute(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
     let actual = Engine::default()
         .execute(&words, &mut |_, n| Ok(vec![0; n]))
@@ -273,8 +269,6 @@ fn host_gpu_and_cpu_produce_identical_pixels_and_preserve_constant_alpha() {
             .iter()
             .all(|p| p[0] == 0 || p[0] == 255)
     );
-    #[cfg(not(target_arch = "wasm32"))]
-    eprintln!("Raster backend: {:?}", super::gpu::backend_name());
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -460,30 +454,63 @@ fn host_render_path_preserves_fragment_refusals() {
     );
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn host_coverage_matches_integer_reference_at_shared_edges_and_subpixels() {
+fn cpu_scan_conversion_matches_integer_reference_at_shared_edges_and_subpixels() {
     for seed in 1..24i64 {
         let q = [
             [seed, seed * 3],
             [16 * 32 - seed, seed + 2],
             [seed * 5, 16 * 32 - seed * 2],
         ];
-        let edges = [(q[1], q[2]), (q[2], q[0]), (q[0], q[1])];
-        let inclusive = edges.map(|(a, b)| b[1] > a[1] || (b[1] == a[1] && b[0] < a[0]));
-        if let Some(mask) = super::gpu::coverage(q, [0, 0, 32, 32], inclusive).unwrap() {
-            for y in 0..32 {
-                for x in 0..32 {
-                    let p = [x as i64 * 16 + 8, y as i64 * 16 + 8];
-                    let inside = edges.iter().enumerate().all(|(i, (a, b))| {
-                        let v = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
-                        v > 0 || v == 0 && inclusive[i]
-                    });
-                    assert_eq!(mask[y * 32 + x], u32::from(inside));
-                }
+        let mut words = setup();
+        for [x, y] in q {
+            upload(
+                &mut words,
+                0x433,
+                &packed([x as f32 / 256. - 1., y as f32 / 256. - 1., -0.5, 1.]),
+                true,
+            );
+            upload(&mut words, 0x433, &packed([1.; 4]), true);
+        }
+        let mut engine = Engine::default();
+        let snapshots = engine
+            .execute(&words, &mut |_, length| Ok(vec![0; length]))
+            .unwrap();
+        let pixels = &snapshots[0].1;
+        let mut oriented = q;
+        if edge(oriented[0], oriented[1], oriented[2]) < 0 {
+            oriented.swap(1, 2);
+        }
+        let edges = [
+            (oriented[1], oriented[2]),
+            (oriented[2], oriented[0]),
+            (oriented[0], oriented[1]),
+        ];
+        let inclusive = edges.map(|(a, b)| b[1] < a[1] || (b[1] == a[1] && b[0] > a[0]));
+        for y in 0..32usize {
+            for x in 0..32usize {
+                let point = [x as i64 * 16 + 8, y as i64 * 16 + 8];
+                let covered = edges.iter().enumerate().all(|(index, (a, b))| {
+                    let value = edge(*a, *b, point);
+                    value > 0 || value == 0 && inclusive[index]
+                });
+                let morton = (y & !7) * 32
+                    + (x & !7) * 8
+                    + (x & 1)
+                    + ((y & 1) << 1)
+                    + ((x & 2) << 1)
+                    + ((y & 2) << 2)
+                    + ((x & 4) << 2)
+                    + ((y & 4) << 3);
+                let actual = pixels[morton * 4..morton * 4 + 4] != [0; 4];
+                assert_eq!(actual, covered, "seed {seed}, pixel ({x}, {y})");
             }
         }
     }
+}
+
+fn edge(a: [i64; 2], b: [i64; 2], p: [i64; 2]) -> i64 {
+    (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
 }
 
 #[test]
@@ -591,52 +618,49 @@ fn flat_shading_uses_the_provoking_vertex_color() {
 #[test]
 fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
     for mask in [15, 1] {
-        for acceleration in [false, true] {
-            let mut words = setup();
-            pair(&mut words, 0x307, mask << 8);
-            for position in [
-                [-0.75, -0.75, 0., 1.],
-                [0.75, -0.75, 0., 1.],
-                [0., 0.75, 0., 1.],
-            ] {
-                upload(&mut words, 0x433, &packed(position), true);
-                upload(&mut words, 0x433, &packed([0.; 4]), true);
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
-                return;
-            }
-            let mut engine = Engine::default();
-            engine.set_host_acceleration(acceleration);
-            let snapshots = engine.execute(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
-            assert_eq!(snapshots.len(), 1);
-            assert!(snapshots[0].1.iter().all(|&byte| byte == 0));
-            let ranges = engine.written_ranges();
-            assert_eq!(
-                ranges.iter().map(|(_, n)| n).sum::<usize>(),
-                288 * if mask == 15 { 4 } else { 1 }
-            );
-            // Another producer changes memory after submission and before the
-            // completion commits. Equal-valued GPU stores still take effect;
-            // untouched pixels and disabled channels retain the later write.
-            let mut memory = vec![0x5a; 32 * 32 * 4];
-            let mut written = vec![false; memory.len()];
-            for &(address, length) in ranges {
-                let offset = (address - 0x10000) as usize;
-                memory[offset..offset + length]
-                    .copy_from_slice(&snapshots[0].1[offset..offset + length]);
-                written[offset..offset + length].fill(true);
-                if mask == 1 {
-                    assert_eq!((length, offset % 4), (1, 3));
-                }
-            }
-            assert!(
-                memory
-                    .iter()
-                    .zip(&written)
-                    .all(|(&byte, &written)| byte == if written { 0 } else { 0x5a })
-            );
-            assert_eq!(&memory[memory.len() - 4..], &[0x5a; 4]);
+        let mut words = setup();
+        pair(&mut words, 0x307, mask << 8);
+        for position in [
+            [-0.75, -0.75, 0., 1.],
+            [0.75, -0.75, 0., 1.],
+            [0., 0.75, 0., 1.],
+        ] {
+            upload(&mut words, 0x433, &packed(position), true);
+            upload(&mut words, 0x433, &packed([0.; 4]), true);
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]).is_none() {
+            return;
+        }
+        let mut engine = Engine::default();
+        let snapshots = engine.execute(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
+        assert_eq!(snapshots.len(), 1);
+        assert!(snapshots[0].1.iter().all(|&byte| byte == 0));
+        let ranges = engine.written_ranges();
+        assert_eq!(
+            ranges.iter().map(|(_, n)| n).sum::<usize>(),
+            288 * if mask == 15 { 4 } else { 1 }
+        );
+        // Another producer changes memory after submission and before the
+        // completion commits. Equal-valued GPU stores still take effect;
+        // untouched pixels and disabled channels retain the later write.
+        let mut memory = vec![0x5a; 32 * 32 * 4];
+        let mut written = vec![false; memory.len()];
+        for &(address, length) in ranges {
+            let offset = (address - 0x10000) as usize;
+            memory[offset..offset + length]
+                .copy_from_slice(&snapshots[0].1[offset..offset + length]);
+            written[offset..offset + length].fill(true);
+            if mask == 1 {
+                assert_eq!((length, offset % 4), (1, 3));
+            }
+        }
+        assert!(
+            memory
+                .iter()
+                .zip(&written)
+                .all(|(&byte, &written)| byte == if written { 0 } else { 0x5a })
+        );
+        assert_eq!(&memory[memory.len() - 4..], &[0x5a; 4]);
     }
 }

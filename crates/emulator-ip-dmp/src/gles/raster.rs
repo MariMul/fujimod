@@ -1,6 +1,8 @@
 //! Ordered single-sample rasterization over Morton color/depth surfaces.
+#[cfg(test)]
+use super::Engine;
 use super::{
-    Engine, MAX_BYTES, Reader, Snapshots,
+    MAX_BYTES, Reader, Snapshots,
     draw_state::{ColorTargetFormat, CullMode, DrawState, TextureUnit},
     shader::Vector,
 };
@@ -125,13 +127,12 @@ fn project(state: &DrawState, v: RasterVertex, point: bool) -> RasterVertex {
 }
 pub(super) fn triangle(
     state: &DrawState,
-    host_acceleration: bool,
     vertices: [[Vector; 16]; 3],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
     for v in clipped_triangles(state, vertices)? {
-        raster_triangle(state, host_acceleration, v, read, out)?;
+        raster_triangle(state, v, read, out)?;
     }
     Ok(())
 }
@@ -216,7 +217,6 @@ fn edge(a: [i64; 2], b: [i64; 2], p: [i64; 2]) -> i64 {
 }
 fn raster_triangle(
     state: &DrawState,
-    host_acceleration: bool,
     mut v: [RasterVertex; 3],
     read: &mut Reader<'_>,
     out: &mut Targets,
@@ -250,22 +250,8 @@ fn raster_triangle(
         as usize;
     let edges = [(q[1], q[2]), (q[2], q[0]), (q[0], q[1])];
     let inclusive = edges.map(|(a, b)| b[1] < a[1] || (b[1] == a[1] && b[0] > a[0]));
-    #[cfg(not(target_arch = "wasm32"))]
-    let accelerated = if !host_acceleration {
-        None
-    } else {
-        super::gpu::coverage(q, [x0, y0, x1, y1], inclusive)?
-    };
-    #[cfg(target_arch = "wasm32")]
-    let accelerated: Option<Vec<u32>> = None;
     for y in y0..y1 {
         for x in x0..x1 {
-            if accelerated
-                .as_ref()
-                .is_some_and(|mask| mask[(y - y0) * (x1 - x0) + x - x0] == 0)
-            {
-                continue;
-            }
             let p = [x as i64 * 16 + 8, y as i64 * 16 + 8];
             let weights = edges.map(|(a, b)| edge(a, b, p));
             if weights
@@ -717,6 +703,7 @@ fn fragment(
 ) -> Result<(), String> {
     fragment_coverage_state(state, (x, y, z, 1.), primary, uv, lod, read, out)
 }
+#[cfg(test)]
 pub(super) fn fragment_coverage(
     engine: &Engine,
     position: (usize, usize, f32, f32),
