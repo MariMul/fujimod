@@ -154,4 +154,7 @@ pub struct XppBoot {
 pub struct XppSd {
     pub options: fujimod_emulator_xpp::sd::Options,
     pub format: fujimod_emulator_storage::fat::Options,
+    /// GIC line of the host's interrupt output; without it the host is polled.
+    #[serde(default)]
+    pub irq: Option<u32>,
 }

@@ -1107,7 +1107,7 @@ impl Session {
         if let Some(sd) = xpp_sd {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_sd(sd.options, sd.format, &card_files)?;
+                .xpp_sd(sd.options, sd.format, sd.irq, &card_files)?;
         } else if !card_files.is_empty() {
             return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
         }

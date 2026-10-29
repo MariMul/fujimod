@@ -801,6 +801,7 @@ impl Devices {
         &mut self,
         options: fujimod_emulator_xpp::sd::Options,
         format: fujimod_emulator_storage::fat::Options,
+        irq: Option<u32>,
         files: &[(String, Vec<u8>)],
     ) -> Result<(), String> {
         let base = options.base;
@@ -813,7 +814,12 @@ impl Devices {
         }
         let card = fujimod_emulator_storage::fat::format(&format, files)?;
         let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
-        let model = fujimod_emulator_xpp::sd::Controller::new(options, card, contacts, None)?;
+        let model = fujimod_emulator_xpp::sd::Controller::new(
+            options,
+            card,
+            contacts,
+            irq.map(fujimod_emulator_devices::bus::InterruptLine::Shared),
+        )?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x1000, id));
