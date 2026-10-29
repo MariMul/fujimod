@@ -9,6 +9,9 @@ The production input table comes from the native `state.inputs` result.
 `wasm.json` selects the module, binary, checked graph, guest tick rate, initial
 run boundary and LCD output. The DAT is supplied separately and verified by the
 module. A failed construction or unsupported native operation is an error.
+`dmpCpuRenderer: true` selects the CPU DMP renderer; `false` requests WebGPU
+device setup. When omitted, the worker selects the CPU renderer. The Emscripten
+build rejects WebGPU requests because it does not include the WebGPU backend.
 
 The worker paces bounded runs against the guest clock. It presents borrowed
 RGBA through OffscreenCanvas and transferred ImageBitmap, or leases a shared

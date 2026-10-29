@@ -470,6 +470,7 @@ export interface JitOptions {
 export interface ModuleOptions {
     executionPolicy?: ExecutionPolicyName;
     tcgJit?: JitSelection;
+    dmpCpuRenderer?: boolean;
 }
 
 export interface Preview {
@@ -522,9 +523,9 @@ interface BindgenModule {
   /* tslint:disable */
   /* eslint-disable */
   /**
-  * Select the board/CPU execution policy and browser JIT tier, once, before any camera.
+  * Select execution policy and browser renderers, initializing WebGPU before any camera.
   */
-    configure(options: ModuleOptions): void;
+    configure(options: ModuleOptions): Promise<void>;
     jitStatistics(): JitStatistics;
   /**
   * Current WebAssembly linear memory size in bytes.

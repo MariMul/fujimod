@@ -71,13 +71,26 @@ pub struct ModuleOptions {
     #[serde(default)]
     #[tsify(optional)]
     pub tcg_jit: Option<JitSelection>,
+    #[serde(default)]
+    #[tsify(optional)]
+    pub dmp_cpu_renderer: Option<bool>,
 }
-/// Select the board/CPU execution policy and browser JIT tier, once, before any camera.
+/// Select execution policy and browser renderers, initializing WebGPU before any camera.
 #[wasm_bindgen]
-pub fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
+pub async fn configure(options: Ts<ModuleOptions>) -> Result<(), Failure> {
     let options = options.to_rust().map_err(Failure::host)?;
     if POLICY.get().is_some() {
         return Err(Failure::host("the emulator module is already configured"));
+    }
+    if options.dmp_cpu_renderer == Some(false) {
+        #[cfg(target_os = "emscripten")]
+        return Err(Failure::host(
+            "the WebGPU DMP renderer is unavailable in the Emscripten build",
+        ));
+        #[cfg(not(target_os = "emscripten"))]
+        fujimod_emulator_gpu::context_async()
+            .await
+            .map_err(Failure::host)?;
     }
     jit::setup(jit::selection(options.tcg_jit).map_err(Failure::host)?).map_err(Failure::host)?;
     POLICY.set(Some(

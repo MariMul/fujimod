@@ -50,6 +50,11 @@ for (const type of [chromium, webkit]) {
     assert.equal(String(result.execution.profile.ticks), expected.status.ticks);
     assert.deepEqual(result.execution.profile.instructions.map(String), expected.status.cores);
     assert.equal(result.execution.profile.failed, false);
+    const expectedRasterizer = await page.evaluate(async () => {
+      const manifest = await (await fetch('/__wasm-camera/wasm.json')).json();
+      return manifest.dmpCpuRenderer === false ? 'WebGPU' : 'CPU';
+    });
+    assert.equal(result.execution.dmpRasterizer, expectedRasterizer);
     assert.deepEqual(result.execution.fingerprint, expected.fingerprint);
     assert.deepEqual(result.execution.frame, {
       width: expected.frame.width,

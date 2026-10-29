@@ -273,6 +273,10 @@ export function testCameraModule(shared = false) {
       record('profile', { limit });
       return { ticks: Number(ticks), instructions: [Number(ticks * 2n)], pcEntries: [], failed };
     }
+    deviceStates(kind: string) {
+      record('device_states', { kind });
+      return { states: [] };
+    }
     memoryRead(address: bigint, size: number) {
       record('memory_read', { address, size });
       return new Uint8Array(size);

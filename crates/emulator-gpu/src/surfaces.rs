@@ -355,6 +355,7 @@ impl GpuContext {
     }
 
     /// Convert resident pixels back to the keyed guest layout and exact byte ranges.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn readback(&self, key: SurfaceKey) -> Result<SurfaceReadback, String> {
         let surface = self
             .surfaces
@@ -364,6 +365,31 @@ impl GpuContext {
             .cloned()
             .ok_or("host GPU surface is not resident")?;
         let readback = self.gpu.readback(Arc::clone(&surface))?;
+        *surface
+            .guest_shadow
+            .lock()
+            .map_err(|_| "host GPU surface shadow lock poisoned")? = readback.bytes.clone();
+        Ok(readback)
+    }
+
+    /// Convert a resident surface back to guest bytes without blocking WebGPU.
+    pub async fn readback_async(&self, key: SurfaceKey) -> Result<SurfaceReadback, String> {
+        let surface = self
+            .surfaces
+            .lock()
+            .map_err(|_| "host GPU surface cache lock poisoned")?
+            .get(&key)
+            .cloned()
+            .ok_or("host GPU surface is not resident")?;
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        let pending = self.gpu.encode_readback(&mut encoder, surface)?;
+        self.gpu.queue.submit([encoder.finish()]);
+        let (surface, readback) = self
+            .gpu
+            .finish_readbacks_async(vec![pending])
+            .await?
+            .pop()
+            .ok_or("host GPU readback returned no result")?;
         *surface
             .guest_shadow
             .lock()
@@ -393,11 +419,28 @@ impl GpuContext {
     }
 
     /// Map a submitted batch of surface readbacks with a single device poll.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn finish_readbacks(
         &self,
         pending: PendingSurfaceReadbacks,
     ) -> Result<Vec<(SurfaceKey, SurfaceReadback)>, String> {
         let readbacks = self.gpu.finish_readbacks(pending.surfaces)?;
+        self.update_readback_shadows(readbacks)
+    }
+
+    /// Finish a submitted batch without blocking the browser event loop.
+    pub async fn finish_readbacks_async(
+        &self,
+        pending: PendingSurfaceReadbacks,
+    ) -> Result<Vec<(SurfaceKey, SurfaceReadback)>, String> {
+        let readbacks = self.gpu.finish_readbacks_async(pending.surfaces).await?;
+        self.update_readback_shadows(readbacks)
+    }
+
+    fn update_readback_shadows(
+        &self,
+        readbacks: Vec<(Arc<GpuSurface>, SurfaceReadback)>,
+    ) -> Result<Vec<(SurfaceKey, SurfaceReadback)>, String> {
         let mut results = Vec::with_capacity(readbacks.len());
         for (surface, readback) in readbacks {
             *surface
@@ -807,6 +850,7 @@ impl Gpu {
         })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn finish_readbacks(
         &self,
         pending: Vec<PendingSurfaceReadback>,
@@ -836,6 +880,30 @@ impl Gpu {
                 .map_err(|error| error.to_string())?;
         }
 
+        self.decode_readbacks(pending)
+    }
+
+    async fn finish_readbacks_async(
+        &self,
+        pending: Vec<PendingSurfaceReadback>,
+    ) -> Result<Vec<(Arc<GpuSurface>, SurfaceReadback)>, String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.finish_readbacks(pending)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            for readback in &pending {
+                wait_for_mapping(&readback.download).await?;
+            }
+            self.decode_readbacks(pending)
+        }
+    }
+
+    fn decode_readbacks(
+        &self,
+        pending: Vec<PendingSurfaceReadback>,
+    ) -> Result<Vec<(Arc<GpuSurface>, SurfaceReadback)>, String> {
         let mut readbacks = Vec::with_capacity(pending.len());
         for pending in pending {
             let mapped = pending
@@ -868,6 +936,7 @@ impl Gpu {
         Ok(readbacks)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn readback(&self, surface: Arc<GpuSurface>) -> Result<SurfaceReadback, String> {
         let mut encoder = self.device.create_command_encoder(&Default::default());
         let pending = self.encode_readback(&mut encoder, surface)?;
@@ -1053,6 +1122,42 @@ fn byte_ranges(address: u64, written: &[bool]) -> Vec<(u64, usize)> {
         ranges.push((address + start as u64, offset - start));
     }
     ranges
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Default)]
+struct MappingState {
+    result: Option<Result<(), String>>,
+    waker: Option<std::task::Waker>,
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn wait_for_mapping(buffer: &wgpu::Buffer) -> Result<(), String> {
+    let state = Arc::new(Mutex::new(MappingState::default()));
+    let callback_state = Arc::clone(&state);
+    buffer
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, move |result| {
+            let wake = callback_state.lock().ok().and_then(|mut state| {
+                state.result = Some(result.map_err(|error| error.to_string()));
+                state.waker.take()
+            });
+            if let Some(waker) = wake {
+                waker.wake();
+            }
+        });
+    std::future::poll_fn(move |context| {
+        let Ok(mut state) = state.lock() else {
+            return std::task::Poll::Ready(Err("host GPU mapping state lock poisoned".to_owned()));
+        };
+        if let Some(result) = state.result.take() {
+            std::task::Poll::Ready(result)
+        } else {
+            state.waker = Some(context.waker().clone());
+            std::task::Poll::Pending
+        }
+    })
+    .await
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1302,6 +1407,29 @@ mod tests {
         let resident = context.get_or_create_target(key, Some(&changed)).unwrap();
         assert!(Arc::ptr_eq(&first, &resident));
         assert_eq!(context.readback(key).unwrap().bytes, changed);
+    }
+
+    #[test]
+    fn async_surface_readback_preserves_guest_bytes() {
+        let Some(context) = context_or_skip() else {
+            return;
+        };
+        let key = SurfaceKey {
+            guest_address: 0x12a000,
+            format: SurfaceFormat::Rgba8,
+            extent: EXTENT,
+            layout: SurfaceLayout::Morton8x8,
+        };
+        let guest_bytes: Vec<u8> = (0..EXTENT.width as usize * EXTENT.height as usize * 4)
+            .map(|offset| (offset.wrapping_mul(23) + 9) as u8)
+            .collect();
+        context
+            .get_or_create_target(key, Some(&guest_bytes))
+            .unwrap();
+        assert_eq!(
+            block_on(context.readback_async(key)).unwrap().bytes,
+            guest_bytes
+        );
     }
 
     #[test]

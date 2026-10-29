@@ -73,12 +73,16 @@ export async function loadWasm(
       });
     }),
   ]);
+  const dmpCpuRenderer = manifest.dmpCpuRenderer ?? true;
   const module = await timing.measureAsync('instantiate', () =>
     instantiateEmulatorModule(
       create,
       wasmBinary,
       (path) => new URL(path, new URL(manifest.wasm, new URL('wasm.json', bundle))).href,
-      { executionPolicy: manifest.executionPolicy },
+      {
+        executionPolicy: manifest.executionPolicy,
+        dmpCpuRenderer,
+      },
     ),
   );
   const identity = await timing.measureAsync('binaryDigest', () => digest(wasmBinary));
@@ -372,6 +376,8 @@ export class WasmWorkerRuntime {
             ]),
           ),
         };
+      case 'device_states':
+        return s.deviceStates(request.kind);
       case 'save':
         return this.save();
       case 'replay': {

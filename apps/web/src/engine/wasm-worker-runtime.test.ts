@@ -110,6 +110,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
       ],
     },
     { action: 'profile', limit: 5 },
+    { action: 'device_states', kind: 'dmp-smaph-h' },
     { action: 'rollback', seconds: 10 },
     {
       action: 'replay',
@@ -131,6 +132,7 @@ test('worker routes physical inputs, scene, card operations, restart, power, pro
   ]);
   assert.deepEqual(restart.bytes, [9, 8, 7]);
   assert.equal(f.calls.find((c) => c.action === 'card_read')!.options.revision, 1);
+  assert.equal(f.calls.find((c) => c.action === 'device_states')!.options.kind, 'dmp-smaph-h');
   assert(
     f.events.some((e) => e.type === 'metrics' && e.metrics.runtime?.ticksPerSecond === 12000000),
   );
