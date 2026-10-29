@@ -67,10 +67,10 @@ fn assert_host_gpu_matches_cpu(
 ) -> Option<Snapshots> {
     let mut cpu = Engine::default();
     let expected = cpu
-        .execute(words, &mut |address, length| Ok(read(address, length)))
+        .execute_cpu(words, &mut |address, length| Ok(read(address, length)))
         .unwrap();
     let actual = match Engine::default()
-        .execute_host_gpu(words, &mut |address, length| Ok(read(address, length)))
+        .execute(words, &mut |address, length| Ok(read(address, length)))
     {
         Ok(actual) => actual,
         Err(error) if error.starts_with("host GPU adapter:") => {
@@ -155,7 +155,7 @@ fn uploaded_mov_program_draws_triangle_with_exact_top_left_coverage() {
         return;
     }
     let writes = Engine::default()
-        .execute(&words, &mut |a, n| {
+        .execute_cpu(&words, &mut |a, n| {
             assert_eq!(a, 0x10000);
             Ok(vec![0; n])
         })
@@ -203,7 +203,7 @@ fn unused_nonfinite_uniform_words_survive_upload_checkpoint_and_draw() {
 
     let mut engine = Engine::default();
     let writes = engine
-        .execute(&words, &mut |a, n| {
+        .execute_cpu(&words, &mut |a, n| {
             assert_eq!(a, 0x10000);
             Ok(vec![0; n])
         })
@@ -236,7 +236,7 @@ fn failed_list_rolls_back_program_registers_and_outputs() {
     pair(&mut words, 0xdead, 1);
     assert!(
         engine
-            .execute(&words, &mut |_, _| panic!("no draw DMA"))
+            .execute_cpu(&words, &mut |_, _| panic!("no draw DMA"))
             .is_err()
     );
     assert_eq!(serde_json::to_value(&engine).unwrap(), before);
@@ -246,9 +246,9 @@ fn packet_padding_is_opaque_and_truncation_refuses() {
     let mut engine = Engine::default();
     let mut words = vec![];
     upload(&mut words, 0x49c, &[0x84000000, 0x88000000], false);
-    assert!(engine.execute(&words, &mut |_, _| panic!()).is_ok());
+    assert!(engine.execute_cpu(&words, &mut |_, _| panic!()).is_ok());
     words.pop();
-    assert!(engine.execute(&words, &mut |_, _| panic!()).is_err());
+    assert!(engine.execute_cpu(&words, &mut |_, _| panic!()).is_err());
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn host_gpu_and_cpu_produce_identical_pixels_and_preserve_constant_alpha() {
         return;
     }
     let mut cpu = Engine::default();
-    let expected = cpu.execute(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
+    let expected = cpu.execute_cpu(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
     let actual = Engine::default()
         .execute(&words, &mut |_, n| Ok(vec![0; n]))
         .unwrap();
@@ -296,7 +296,7 @@ fn host_render_path_matches_cpu_snapshots_and_written_ranges() {
     }
     let mut cpu = Engine::default();
     let expected = cpu
-        .execute(&words, &mut |_, length| Ok(vec![0; length]))
+        .execute_cpu(&words, &mut |_, length| Ok(vec![0; length]))
         .unwrap();
     let actual = match Engine::default()
         .execute_host_gpu(&words, &mut |_, length| Ok(vec![0; length]))
@@ -485,7 +485,7 @@ fn cpu_scan_conversion_matches_integer_reference_at_shared_edges_and_subpixels()
         }
         let mut engine = Engine::default();
         let snapshots = engine
-            .execute(&words, &mut |_, length| Ok(vec![0; length]))
+            .execute_cpu(&words, &mut |_, length| Ok(vec![0; length]))
             .unwrap();
         let pixels = &snapshots[0].1;
         let mut oriented = q;
@@ -534,7 +534,7 @@ fn linked_streams_execute_and_cycles_refuse_without_dma_output() {
     let end = [0x12345678u32, 0xf0210];
     assert!(
         engine
-            .execute(&words, &mut |a, n| {
+            .execute_cpu(&words, &mut |a, n| {
                 assert_eq!((a, n), (0x2000, 8));
                 Ok(end.iter().flat_map(|w| w.to_le_bytes()).collect())
             })
@@ -544,7 +544,7 @@ fn linked_streams_execute_and_cycles_refuse_without_dma_output() {
     // A length-24 link that points to itself never acquires a framebuffer.
     words[0] = 3;
     let raw: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
-    assert!(engine.execute(&words, &mut |_, _| Ok(raw.clone())).is_err());
+    assert!(engine.execute_cpu(&words, &mut |_, _| Ok(raw.clone())).is_err());
 }
 
 #[test]
@@ -562,7 +562,7 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
     let mut engine = Engine::default();
     assert!(
         engine
-            .execute(&first, &mut |_, _| panic!(
+            .execute_cpu(&first, &mut |_, _| panic!(
                 "incomplete triangle must not fetch a target"
             ))
             .unwrap()
@@ -573,7 +573,7 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
     let mut last = vec![];
     upload(&mut last, 0x433, &packed(positions[2]), true);
     upload(&mut last, 0x433, &packed([1., 0., 0., 1.]), true);
-    let expected = engine.execute(&last, &mut |_, n| Ok(vec![0; n])).unwrap();
+    let expected = engine.execute_cpu(&last, &mut |_, n| Ok(vec![0; n])).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut gpu_restored = restored.clone();
@@ -590,7 +590,7 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
         assert_eq!(actual, expected);
     }
     assert_eq!(
-        restored.execute(&last, &mut |_, n| Ok(vec![0; n])).unwrap(),
+        restored.execute_cpu(&last, &mut |_, n| Ok(vec![0; n])).unwrap(),
         expected
     );
 }
@@ -612,7 +612,7 @@ fn flat_shading_uses_the_provoking_vertex_color() {
         return;
     }
     let writes = Engine::default()
-        .execute(&words, &mut |_, n| Ok(vec![0; n]))
+        .execute_cpu(&words, &mut |_, n| Ok(vec![0; n]))
         .unwrap();
     assert_eq!(
         writes[0]
@@ -644,7 +644,7 @@ fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
             return;
         }
         let mut engine = Engine::default();
-        let snapshots = engine.execute(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
+        let snapshots = engine.execute_cpu(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
         assert_eq!(snapshots.len(), 1);
         assert!(snapshots[0].1.iter().all(|&byte| byte == 0));
         let ranges = engine.written_ranges();
