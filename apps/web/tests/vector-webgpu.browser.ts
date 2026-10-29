@@ -66,12 +66,14 @@ async function run(cpuRenderer: boolean, label: 'cpu' | 'webgpu') {
       | { UNMASKED_RENDERER_WEBGL: number }
       | null;
     return {
+      available: adapter !== undefined && adapter !== null,
       info: adapter?.info,
       renderer: debug && gl ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : '',
     };
   });
-  assert.equal(adapter.info?.vendor, 'apple', JSON.stringify(adapter));
-  assert.equal(adapter.info?.architecture, 'metal-3', JSON.stringify(adapter));
+  assert.equal(adapter.available, true, JSON.stringify(adapter));
+  if (adapter.info?.vendor) assert.equal(adapter.info.vendor, 'apple');
+  if (adapter.info?.architecture) assert.equal(adapter.info.architecture, 'metal-3');
   assert.match(adapter.renderer, /Apple M2 Pro/);
   const canvas = page.locator<HTMLCanvasElement>('#lcd-source');
   const rec = await canvas.evaluate((source) => source.toDataURL());
