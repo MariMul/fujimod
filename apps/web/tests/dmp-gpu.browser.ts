@@ -70,11 +70,38 @@ assert.ok(address && typeof address === 'object');
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
-  browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-webgpu'] });
+  browser = await chromium.launch({
+    headless: true,
+    args: ['--enable-unsafe-webgpu', '--use-angle=metal'],
+  });
   const page = await browser.newPage();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${address.port}/`);
+  const adapterInfo = await page.evaluate(async () => {
+    const gpuNavigator = navigator as Navigator & {
+      gpu?: {
+        requestAdapter(options?: { powerPreference?: string }): Promise<{
+          info?: { vendor: string; architecture: string };
+        } | null>;
+      };
+    };
+    const adapter = await gpuNavigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2');
+    const debug = gl?.getExtension('WEBGL_debug_renderer_info') as
+      | { UNMASKED_RENDERER_WEBGL: number }
+      | null;
+    return {
+      available: adapter !== undefined && adapter !== null,
+      info: adapter?.info,
+      renderer: debug && gl ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : '',
+    };
+  });
+  assert.equal(adapterInfo.available, true, JSON.stringify(adapterInfo));
+  if (adapterInfo.info?.vendor) assert.equal(adapterInfo.info.vendor, 'apple');
+  if (adapterInfo.info?.architecture) assert.equal(adapterInfo.info.architecture, 'metal-3');
+  assert.match(adapterInfo.renderer, /Apple M2 Pro/);
   try {
     await page.waitForFunction(() => document.body.dataset.proof, undefined, { timeout: 55000 });
   } catch {
@@ -99,6 +126,7 @@ try {
   assert.equal(reply.ok, true, JSON.stringify(reply));
   assert(reply.proof);
   assert(reply.proof.adapter.length > 0);
+  assert.match(reply.proof.adapter, /^BrowserWebGpu:/);
   assert.equal(reply.proof.gpuDraws, 1);
   assert.equal(reply.proof.gpuQueueSubmissions, 1);
   assert.equal(reply.proof.matchesCpu, true, JSON.stringify(reply.proof));
@@ -107,7 +135,7 @@ try {
   assert.equal(reply.proof.cpuSnapshots.length, 1);
   assert.deepEqual(errors, []);
   console.log(
-    `${reply.proof.adapter}: WebGPU matched the CPU output (${reply.proof.cpuSnapshots[0]!.length} bytes).`,
+    `${adapterInfo.renderer} (WebGPU ${adapterInfo.info?.vendor}/${adapterInfo.info?.architecture}): ${reply.proof.adapter} matched the CPU output (${reply.proof.cpuSnapshots[0]!.length} bytes).`,
   );
 } finally {
   await browser?.close();
