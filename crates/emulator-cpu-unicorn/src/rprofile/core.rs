@@ -45,6 +45,52 @@ pub struct Wiring {
     pub memory: Memory,
 }
 
+#[derive(Clone, Copy)]
+struct PendingGuestBlock {
+    address: u64,
+    phase: GuestProfilePhase,
+    instruction_count: u64,
+}
+
+#[derive(Default)]
+struct GuestProfile {
+    blocks: BTreeMap<u64, GuestBlockCount>,
+    pending: Option<PendingGuestBlock>,
+}
+
+impl GuestProfile {
+    fn block_entry(&mut self, address: u64, phase: GuestProfilePhase, instruction_count: u64) {
+        self.finish_pending(instruction_count);
+        self.pending = Some(PendingGuestBlock {
+            address,
+            phase,
+            instruction_count,
+        });
+    }
+
+    fn finish_run(&mut self, instruction_count: u64) {
+        self.finish_pending(instruction_count);
+    }
+
+    fn finish_pending(&mut self, instruction_count: u64) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let count = self.blocks.entry(pending.address).or_default();
+        count.address = pending.address;
+        count.entries = count.entries.saturating_add(1);
+        let executed = instruction_count.saturating_sub(pending.instruction_count);
+        match pending.phase {
+            GuestProfilePhase::Idle => {
+                count.idle_instructions = count.idle_instructions.saturating_add(executed);
+            }
+            GuestProfilePhase::Key => {
+                count.key_instructions = count.key_instructions.saturating_add(executed);
+            }
+        }
+    }
+}
+
 struct Observer {
     hook: Hook,
     native: Option<HookId>,
@@ -111,6 +157,9 @@ pub(super) struct Execution {
     failure: RefCell<Option<String>>,
     observers: RefCell<BTreeMap<usize, Observer>>,
     pending_stores: RefCell<Vec<StorePublication>>,
+    guest_profile: RefCell<Option<GuestProfile>>,
+    guest_profile_hook: Cell<Option<HookId>>,
+    guest_profile_phase: Cell<GuestProfilePhase>,
     next_observer: Cell<usize>,
     observer_index: RefCell<observers::Index>,
     at_block: Cell<bool>,
@@ -225,6 +274,9 @@ impl Core {
             failure: RefCell::new(None),
             observers: RefCell::new(BTreeMap::new()),
             pending_stores: RefCell::new(Vec::new()),
+            guest_profile: RefCell::new(None),
+            guest_profile_hook: Cell::new(None),
+            guest_profile_phase: Cell::new(GuestProfilePhase::Idle),
             next_observer: Cell::new(0),
             observer_index: RefCell::new(observers::Index::default()),
             at_block: Cell::new(false),
@@ -514,6 +566,16 @@ impl Execution {
             },
             observe_block: !self.observer_index.borrow().blocks.at(address).is_empty(),
         })
+    }
+    fn guest_profile_block(&self, address: u64) {
+        if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
+            profile.block_entry(address, self.guest_profile_phase.get(), self.count.get());
+        }
+    }
+    pub(super) fn finish_guest_profile_run(&self) {
+        if let Some(profile) = self.guest_profile.borrow_mut().as_mut() {
+            profile.finish_run(self.count.get());
+        }
     }
     fn block(&self, block: Block) -> Result<(), String> {
         self.settle(0, true)?;
@@ -998,6 +1060,10 @@ unsafe fn restart(data: *mut c_void, pc: u64) {
 unsafe fn block(block: Block, data: *mut c_void) {
     let e = unsafe { context(data) };
     e.guarded(|| e.block(block));
+}
+unsafe fn guest_profile_block(block: Block, data: *mut c_void) {
+    let e = unsafe { context(data) };
+    e.guest_profile_block(block.address);
 }
 unsafe fn instruction(address: u64, size: u32, data: *mut c_void) {
     let e = unsafe { context(data) };

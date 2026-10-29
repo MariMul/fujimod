@@ -28,6 +28,7 @@ mod tests;
 #[cfg(test)]
 mod workers_tests;
 use bus::Bus;
+pub use fujimod_emulator_cpu::GuestProfilePhase;
 use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
 use fujimod_emulator_cpu::{
     Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run,
@@ -129,6 +130,7 @@ pub struct Board {
     host_pause: Rc<Cell<bool>>,
     // Passive host reporting; excluded from modeled state and checkpoints.
     progress_observer: Option<Box<dyn FnMut(u64)>>,
+    guest_profile_active: Cell<bool>,
     isolated_core: Cell<Option<usize>>,
     continuation: Option<Box<continuation::StoreWatch>>,
     /// Processor address views of RAM, from the checked graph.
@@ -320,6 +322,7 @@ impl Board {
             run_wakeup: Default::default(),
             host_pause: Default::default(),
             progress_observer: None,
+            guest_profile_active: Cell::new(false),
             isolated_core: Cell::new(None),
             continuation: None,
             mappings: vec![],
@@ -419,14 +422,67 @@ impl Board {
             .iter()
             .map(|cpu| cpu.exit_counters())
             .collect::<Result<_, _>>()?;
-        self.state.borrow_mut().bus.start_host_profile(baseline)
+        let mut started = Vec::<usize>::new();
+        for (index, cpu) in self.cpus.iter().enumerate() {
+            if let Err(error) = cpu.start_guest_profile() {
+                for started_index in started {
+                    let _ = self.cpus[started_index].finish_guest_profile();
+                }
+                return Err(format!("processor {index} guest profile: {error}"));
+            }
+            started.push(index);
+        }
+        if let Err(error) = self.state.borrow_mut().bus.start_host_profile(baseline) {
+            for started_index in started {
+                let _ = self.cpus[started_index].finish_guest_profile();
+            }
+            return Err(error);
+        }
+        self.guest_profile_active.set(true);
+        Ok(())
     }
     /// Observe phase costs while all processors are stopped after a board run.
     pub fn host_profile(&self) -> Value {
-        self.state
+        let mut report = self
+            .state
             .borrow()
             .bus
-            .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect())
+            .host_profile(|| self.cpus.iter().map(|cpu| cpu.exit_counters()).collect());
+        if let Some(object) = report.as_object_mut() {
+            let cores: Vec<_> = self
+                .cpus
+                .iter()
+                .enumerate()
+                .filter_map(|(core, cpu)| match cpu.finish_guest_profile() {
+                    Ok(Some(blocks)) => Some(serde_json::json!({"core": core, "blocks": blocks})),
+                    Ok(None) => None,
+                    Err(error) => Some(serde_json::json!({"core": core, "error": error})),
+                })
+                .collect();
+            object.insert(
+                "guest_profile".into(),
+                serde_json::json!({
+                    "version": 1,
+                    "phase_semantics": {
+                        "idle": "no physical key or touch input is active",
+                        "key": "a physical key or touch input is active"
+                    },
+                    "cores": cores
+                }),
+            );
+        }
+        self.guest_profile_active.set(false);
+        report
+    }
+    /// Set the phase used for subsequent optional guest profile entries.
+    pub fn set_guest_profile_phase(&self, phase: GuestProfilePhase) -> Result<(), String> {
+        if !self.guest_profile_active.get() {
+            return Ok(());
+        }
+        for cpu in self.cpus.iter() {
+            cpu.guest_profile_phase(phase)?;
+        }
+        Ok(())
     }
     /// Observation only: every released processor is waiting for an input.
     /// Device deadlines may still wake a processor in a later run.

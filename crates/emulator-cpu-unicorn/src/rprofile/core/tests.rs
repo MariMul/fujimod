@@ -1,6 +1,53 @@
 use super::*;
 
 #[test]
+fn guest_profile_is_disabled_until_started() {
+    let cpu = processor(&Memory::default());
+    let native_hooks = cpu.execution.cpu.hooks.borrow().len();
+
+    assert!(cpu.finish_guest_profile().unwrap().is_none());
+    assert!(cpu.execution.guest_profile_hook.get().is_none());
+    assert!(cpu.execution.guest_profile.borrow().is_none());
+    assert_eq!(cpu.execution.cpu.hooks.borrow().len(), native_hooks);
+}
+
+#[test]
+fn guest_profile_weights_each_block_by_retired_instructions_and_phase() {
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    words(
+        &cpu,
+        0x1000,
+        &[0xe3a00001, 0xe2800001, 0xeafffffe], // mov; add; b .
+    );
+    set(&cpu, arm::CPSR, 0xd3);
+    set(&cpu, arm::PC, 0x1000);
+
+    cpu.start_guest_profile().unwrap();
+    assert!(matches!(resume(&cpu, 4).unwrap(), Exit::Stopped));
+    cpu.guest_profile_phase(GuestProfilePhase::Key).unwrap();
+    assert!(matches!(resume(&cpu, 4).unwrap(), Exit::Stopped));
+    let blocks = cpu.finish_guest_profile().unwrap().unwrap();
+
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.idle_instructions)
+            .sum::<u64>(),
+        4
+    );
+    assert_eq!(
+        blocks
+            .iter()
+            .map(|block| block.key_instructions)
+            .sum::<u64>(),
+        4
+    );
+    assert!(blocks.iter().all(|block| block.entries > 0));
+    assert!(cpu.execution.guest_profile_hook.get().is_none());
+}
+
+#[test]
 fn finite_store_observers_do_not_accumulate_native_hooks_on_a_parked_core() {
     unsafe fn observed(_: Access, address: u64, _: i32, value: i64, data: *mut c_void) {
         unsafe { &*data.cast::<RefCell<Vec<(u64, i64)>>>() }

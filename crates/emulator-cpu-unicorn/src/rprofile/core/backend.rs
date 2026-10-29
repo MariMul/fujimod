@@ -22,6 +22,49 @@ impl Cpu for Core {
     fn identity(&self) -> Identity {
         self.execution.cpu.identity()
     }
+    fn start_guest_profile(&self) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest profiling requires a stopped processor".into());
+        }
+        if e.guest_profile_hook.get().is_none() {
+            let data = Rc::as_ptr(e).cast_mut().cast();
+            let hook = unsafe {
+                self.install_hook(Hook::Block {
+                    callback: super::guest_profile_block,
+                    data,
+                    range: HookRange::All,
+                })?
+            };
+            e.guest_profile_hook.set(Some(hook));
+        }
+        e.guest_profile_phase.set(GuestProfilePhase::Idle);
+        *e.guest_profile.borrow_mut() = Some(GuestProfile::default());
+        Ok(())
+    }
+    fn guest_profile_phase(&self, phase: GuestProfilePhase) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest profile phase requires a stopped processor".into());
+        }
+        if e.guest_profile.borrow().is_some() {
+            e.guest_profile_phase.set(phase);
+        }
+        Ok(())
+    }
+    fn finish_guest_profile(&self) -> Result<Option<Vec<GuestBlockCount>>, String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest profiling requires a stopped processor".into());
+        }
+        if let Some(hook) = e.guest_profile_hook.take() {
+            self.remove_hook(hook)?;
+        }
+        Ok(e.guest_profile
+            .borrow_mut()
+            .take()
+            .map(|profile| profile.blocks.into_values().collect()))
+    }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
         if e.memory.run_reserved(e.id.get()) {
@@ -357,6 +400,9 @@ impl Cpu for Core {
         let _window = loops::Window(&e.loops.window);
         e.clock_overshoot.set(0);
         e.count.set(0);
+        if let Some(profile) = e.guest_profile.borrow_mut().as_mut() {
+            profile.pending = None;
+        }
         e.last_span.set(None);
         e.thumb_entry_ready.set(false);
         if request.until.is_some() || request.instructions.is_none() {
@@ -400,6 +446,7 @@ impl Cpu for Core {
             }
         }
         let result = self.execute(request, begin);
+        e.finish_guest_profile_run();
         e.clock_overshoot
             .set(if e.policy.get() == ExecutionPolicy::Interactive {
                 e.count.get().saturating_sub(e.cap.get())
