@@ -1,18 +1,18 @@
 //! Explicit external detector results; no face classifier or software records.
 //!
 //! The result bank at 0xfff14600 exposes results. START at
-//! offset 4 admits a configured image-source selector and one IRQ47 owner.
-//! Offset 0x48 is the geometry selector written by the stock image processor,
-//! not a DMA address.
+//! offset 4 admits an aligned source image address and one IRQ47 owner.
+//! Offset 0x48 uses the same DRAM address domain as the face detector. Results
+//! are supplied explicitly; this device does not classify the source pixels.
 //! The declared 400,000-tick latency is unmeasured. Completion retains that
 //! endpoint even if the interrupt controller masks it after admission.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::options::face_results::Profile;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
-use fujimod_emulator_imaging::exr2_isp::options::face_results::Profile;
 
 pub const BASE: u64 = crate::face_detector::BASE;
 pub const LATENCY: u64 = 400_000;
@@ -21,7 +21,7 @@ const HISTORY: usize = 64;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Request {
     tick: u64,
-    source_mode: u32,
+    source_address: u32,
     endpoint: Irq,
     completed: Option<u64>,
 }
@@ -71,9 +71,11 @@ impl FaceResults {
         if cx.cpu != 0 || self.state.due.is_some() {
             return Err("declared face result requires a nonoverlapping CPU0 START".into());
         }
-        let source_mode = self.state.registers.get(&0x48).copied().unwrap_or(0);
-        if source_mode > 3 {
-            return Err("declared face result requires a supported image-source selector".into());
+        let source_address = self.state.registers.get(&0x48).copied().unwrap_or(0);
+        if !crate::valid_image_source_address(source_address) {
+            return Err(
+                "declared face result requires an aligned DRAM image-source address".into(),
+            );
         }
         let endpoint = self.routes.latch(47)?;
         let due = cx
@@ -93,7 +95,7 @@ impl FaceResults {
         }
         self.state.recent.push_back(Request {
             tick: cx.now(),
-            source_mode,
+            source_address,
             endpoint,
             completed: None,
         });
@@ -108,7 +110,7 @@ impl FaceResults {
                 .keys()
                 .all(|offset| *offset < 0x1000 && offset & 3 == 0)
             && state.recent.iter().all(|r| {
-                r.source_mode <= 3
+                crate::valid_image_source_address(r.source_address)
                     && r.endpoint.core < 2
                     && r.endpoint.line == 47
                     && r.completed
