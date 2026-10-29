@@ -18,6 +18,16 @@ pub trait Source: Send + Sync {
     fn contains(&self, address: u64, len: usize) -> bool;
     /// Bytes at `address`.
     fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String>;
+    /// Whether DMA stores into this window are accepted.
+    fn writable(&self) -> bool {
+        false
+    }
+    /// Accepts a DMA store at `address` into a writable window.
+    fn store(&self, _address: u64, _bytes: &[u8]) -> Result<(), String> {
+        Err("PL330 store into a read-only source".into())
+    }
+    /// Runs at DMAEND of a thread whose stores this window accepted.
+    fn stored(&self, _cx: &mut Cx<'_>) {}
 }
 
 /// Transfer time: `setup_ticks + ceil(bytes / bytes_per_tick)`.
@@ -115,6 +125,7 @@ impl Pl330 {
         let mut fifo = VecDeque::new();
         let mut bytes = 0;
         let mut first: [Option<u32>; 2] = [None; 2];
+        let mut stored = std::collections::BTreeSet::<usize>::new();
         let fetch = |cx: &Cx<'_>, pc: u32, len: usize| cx.ram_bytes(u64::from(pc), len);
         for _ in 0..STEP_LIMIT {
             let pc = t.pc;
@@ -127,6 +138,9 @@ impl Pl330 {
                     t.due = None;
                     if apply {
                         self.threads[n] = t;
+                        for index in stored {
+                            self.sources[index].stored(cx);
+                        }
                     }
                     return Ok(Transfer {
                         bytes,
@@ -156,11 +170,17 @@ impl Pl330 {
                     let data: Vec<u8> = fifo.drain(..count).collect();
                     first[1].get_or_insert(t.dar);
                     let at = u64::from(t.dar);
-                    if self.sources.iter().any(|s| s.contains(at, count)) {
-                        return Err("PL330 store into a read-only source".into());
-                    }
-                    if apply {
-                        cx.ram_write(at, &data)?;
+                    match self.sources.iter().position(|s| s.contains(at, count)) {
+                        Some(index) if !self.sources[index].writable() => {
+                            return Err("PL330 store into a read-only source".into());
+                        }
+                        Some(index) if apply => {
+                            self.sources[index].store(at, &data)?;
+                            stored.insert(index);
+                        }
+                        Some(_) => {}
+                        None if apply => cx.ram_write(at, &data)?,
+                        None => {}
                     }
                     bytes += count as u64;
                     if t.ccr >> 14 & 1 != 0 {

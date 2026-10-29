@@ -128,6 +128,9 @@ pub struct XppStorage {
     pub dma_bytes_per_tick: u64,
     #[serde(default)]
     pub nor: Vec<fujimod_emulator_xpp::board::Nor>,
+    /// IRQ for completed DMA programming; without it, aperture stores refuse.
+    #[serde(default)]
+    pub program_irq: Option<u32>,
 }
 
 /// X-Processor Pro cold-reset controller and its boot-selection strap level.

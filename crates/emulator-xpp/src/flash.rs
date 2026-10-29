@@ -3,6 +3,9 @@
 //! The command port supplies timed, single-byte register transactions to an
 //! explicitly attached NOR register device. Array commands refuse. The aperture
 //! reads attached array contents, erased (0xff) past the supplied image.
+//! With a declared program IRQ, DMA stores program the array by clearing bits.
+//! Each programming DMA thread sets status bit 5 at its end; the IRQ follows
+//! bit 5 unless mask +0x28 holds it, and mask writes acknowledge status.
 use fujimod_emulator_devices::parts::micron_nor;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -65,8 +68,11 @@ impl ReadAudit {
 pub struct Aperture {
     base: u64,
     size: u64,
-    image: Vec<u8>,
+    image: Mutex<Vec<u8>>,
     reads: Mutex<ReadAudit>,
+    program_irq: Option<u32>,
+    // Program-complete status and the guest mask.
+    program: Mutex<(u32, u32)>,
 }
 impl Aperture {
     pub fn new(base: u64, size: u64, image: Vec<u8>) -> Result<Self, String> {
@@ -80,9 +86,52 @@ impl Aperture {
         Ok(Self {
             base,
             size,
-            image,
+            image: Mutex::new(image),
             reads: Mutex::new(ReadAudit::default()),
+            program_irq: None,
+            program: Mutex::new((0, 0)),
         })
+    }
+    /// Accept DMA programming, completing on `irq`.
+    pub fn with_program_irq(mut self, irq: u32) -> Self {
+        self.program_irq = Some(irq);
+        self
+    }
+    pub fn writable(&self) -> bool {
+        self.program_irq.is_some()
+    }
+    pub fn program(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        if !self.contains(address, bytes.len()) {
+            return Err("Flash program outside the aperture".into());
+        }
+        let start = (address - self.base) as usize;
+        let mut image = self.image.lock().unwrap();
+        if image.len() < start + bytes.len() {
+            image.resize(start + bytes.len(), 0xff);
+        }
+        for (old, new) in image[start..].iter_mut().zip(bytes) {
+            *old &= *new;
+        }
+        Ok(())
+    }
+    pub fn program_complete(&self, cx: &mut Cx<'_>) {
+        let mut program = self.program.lock().unwrap();
+        program.0 |= 0x20;
+        if let Some(irq) = self.program_irq
+            && program.0 & !program.1 != 0
+        {
+            cx.set_irq(irq, true);
+        }
+    }
+    fn acknowledge(&self, cx: &mut Cx<'_>, mask: u32) {
+        let mut program = self.program.lock().unwrap();
+        *program = (program.0 & !mask, mask);
+        if let Some(irq) = self.program_irq {
+            cx.set_irq(irq, program.0 & !mask != 0);
+        }
+    }
+    fn program_status(&self) -> u32 {
+        self.program.lock().unwrap().0
     }
     pub fn base(&self) -> u64 {
         self.base
@@ -102,10 +151,12 @@ impl Aperture {
         }
         let start = (address - self.base) as usize;
         let mut out = vec![0xff; len];
-        if start < self.image.len() {
-            let n = len.min(self.image.len() - start);
-            out[..n].copy_from_slice(&self.image[start..start + n]);
+        let image = self.image.lock().unwrap();
+        if start < image.len() {
+            let n = len.min(image.len() - start);
+            out[..n].copy_from_slice(&image[start..start + n]);
         }
+        drop(image);
         self.reads
             .lock()
             .unwrap()
@@ -243,6 +294,9 @@ impl Device for FlashController {
                 }
             };
         }
+        if offset == 0x24 {
+            return u64::from(self.registers[0x24 / 4] | self.aperture.program_status());
+        }
         u64::from(self.registers[(offset / 4) as usize])
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
@@ -262,6 +316,7 @@ impl Device for FlashController {
                         cx.fail("Unsupported serial-flash status acknowledgement");
                     } else {
                         self.registers[0x24 / 4] &= !(value as u32);
+                        self.aperture.acknowledge(cx, value as u32);
                     }
                 }
                 0x1c => {
@@ -362,6 +417,32 @@ impl Device for FlashController {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::{TestHost, read, write};
+
+    #[test]
+    fn declared_program_irq_lets_stores_clear_bits_and_set_status() {
+        let base = 0xfff14000;
+        let read_only = Aperture::new(0xf0000000, 0x1000, vec![0x0f; 4]).unwrap();
+        assert!(!read_only.writable());
+        let aperture =
+            Arc::new(Aperture::new(0xf0000000, 0x1000, vec![0x0f; 4]).unwrap().with_program_irq(35));
+        aperture.program(0xf0000002, &[0xf5, 0xf5, 0x55]).unwrap();
+        assert_eq!(aperture.read(0xf0000000, 6).unwrap(), [0x0f, 0x0f, 0x05, 0x05, 0x55, 0xff]);
+        let mut d = FlashController::new(
+            Options {
+                base,
+                transfer_ticks: 2,
+            },
+            aperture.clone(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let mut h = TestHost::new();
+        assert_eq!(read(&mut d, &mut h, base + 0x24), 0);
+        aperture.program_complete(&mut h.cx());
+        assert_eq!(read(&mut d, &mut h, base + 0x24), 0x20);
+        write(&mut d, &mut h, base + 0x28, 0x20);
+        assert_eq!(read(&mut d, &mut h, base + 0x24), 0);
+    }
 
     #[test]
     fn command_chip_select_requires_its_own_attached_register_device() {

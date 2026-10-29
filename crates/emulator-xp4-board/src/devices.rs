@@ -678,12 +678,21 @@ impl Devices {
             fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
                 self.0.read(address, len)
             }
+            fn writable(&self) -> bool {
+                self.0.writable()
+            }
+            fn store(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+                self.0.program(address, bytes)
+            }
+            fn stored(&self, cx: &mut Cx<'_>) {
+                self.0.program_complete(cx)
+            }
         }
-        let aperture = Arc::new(Aperture::new(
-            storage.aperture,
-            storage.aperture_size,
-            image,
-        )?);
+        let mut aperture = Aperture::new(storage.aperture, storage.aperture_size, image)?;
+        if let Some(irq) = storage.program_irq {
+            aperture = aperture.with_program_irq(irq);
+        }
+        let aperture = Arc::new(aperture);
         let mut nor = BTreeMap::new();
         for attachment in storage.nor {
             let registers =
