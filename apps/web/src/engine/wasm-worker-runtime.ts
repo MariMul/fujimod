@@ -636,7 +636,7 @@ export class WasmWorkerRuntime {
     this.send({
       type: 'progress',
       message: 'Booting camera…',
-      assets: [loadingStep('build', 'complete'), bootProgress(0, manifest.bootInstructions)],
+      assets: [loadingStep('build', 'complete'), bootProgress(0, manifest.bootTicks || undefined)],
     });
     if (scene && 'raf' in scene) {
       showScene(session, scene);
@@ -679,14 +679,15 @@ export class WasmWorkerRuntime {
     if (this.scene) showScene(s, this.scene);
     if (this.state?.poweredOn !== false) {
       let lastProgress = -Infinity;
-      const reportProgress = (instructions: number) => {
+      const start = Number(s.status().ticks);
+      const reportProgress = (ticks: number) => {
         const now = performance.now();
         if (now - lastProgress < 100) return;
         lastProgress = now;
         this.send({
           type: 'progress',
           message: 'Booting camera…',
-          assets: [bootProgress(instructions, this.manifest!.bootInstructions)],
+          assets: [bootProgress(ticks - start, this.manifest!.bootTicks || undefined)],
         });
       };
       if (this.manifest!.bootTicks)

@@ -74,14 +74,14 @@ export function testCameraModule(shared = false) {
     free() {}
     [Symbol.dispose]() {}
     close() {}
-    runUntil(until: bigint, progress?: (instructions: number) => void) {
+    runUntil(until: bigint, progress?: (ticks: number) => void) {
       if (failed) {
         const error = Error('unmapped guest load');
         error.name = 'GuestExecutionError';
         throw error;
       }
       ticks = until;
-      progress?.(Number(ticks * 2n));
+      progress?.(Number(ticks));
     }
     input(key: string, pressed: boolean, at: bigint) {
       calls.push({ action: 'input', options: { key, pressed, at }, bytes: [] });
@@ -210,8 +210,8 @@ export function testCameraModule(shared = false) {
       record('card_format');
       return state;
     }
-    bootToRec(limit: bigint, progress?: (instructions: number) => void) {
-      progress?.(Number(ticks * 2n));
+    bootToRec(limit: bigint, progress?: (ticks: number) => void) {
+      progress?.(Number(ticks));
       record('boot_to_rec', { limit });
       return {
         status: 'rec',

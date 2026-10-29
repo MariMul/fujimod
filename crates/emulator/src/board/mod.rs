@@ -721,8 +721,9 @@ impl Board {
         self.mmio.push((core, address, bytes));
         Ok(())
     }
-    /// Observe executed instructions at existing scheduler boundaries. The listener
-    /// receives no board access and does not change guest scheduling or stop criteria.
+    /// Observe guest ticks every 100,000 executed instructions, at existing scheduler
+    /// boundaries. The listener receives no board access and does not change guest
+    /// scheduling or stop criteria.
     pub fn set_progress_observer(&mut self, observer: Option<Box<dyn FnMut(u64)>>) {
         self.progress_observer = observer;
     }
@@ -816,9 +817,12 @@ impl Board {
         let mut next_progress = 0;
         loop {
             if let Some(observer) = &mut self.progress_observer {
-                let instructions = self.state.borrow().total_instructions()?;
+                let (instructions, now) = {
+                    let s = self.state.borrow();
+                    (s.total_instructions()?, s.timeline.now())
+                };
                 if instructions >= next_progress {
-                    observer(instructions);
+                    observer(now);
                     next_progress = instructions.saturating_add(100_000);
                 }
             }

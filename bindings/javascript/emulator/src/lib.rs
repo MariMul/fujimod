@@ -244,9 +244,9 @@ impl Camera {
             .core
             .board
             .set_progress_observer(progress.map(|progress| {
-                Box::new(move |instructions: u64| {
+                Box::new(move |ticks: u64| {
                     // Advisory host display only; a detached listener cannot change guest execution.
-                    let _ = progress.call1(&JsValue::NULL, &JsValue::from_f64(instructions as f64));
+                    let _ = progress.call1(&JsValue::NULL, &JsValue::from_f64(ticks as f64));
                 }) as Box<dyn FnMut(u64)>
             }));
         let result = self.with(run);
@@ -313,7 +313,7 @@ impl Camera {
     pub fn run_until(
         &mut self,
         tick: u64,
-        #[wasm_bindgen(unchecked_optional_param_type = "(instructions: number) => void")] progress: Option<
+        #[wasm_bindgen(unchecked_optional_param_type = "(ticks: number) => void")] progress: Option<
             js_sys::Function,
         >,
     ) -> Result<(), Failure> {
@@ -557,7 +557,7 @@ impl Camera {
     pub fn boot_to_rec(
         &mut self,
         limit: u64,
-        #[wasm_bindgen(unchecked_optional_param_type = "(instructions: number) => void")] progress: Option<
+        #[wasm_bindgen(unchecked_optional_param_type = "(ticks: number) => void")] progress: Option<
             js_sys::Function,
         >,
     ) -> Result<Ts<RecReport>, Failure> {

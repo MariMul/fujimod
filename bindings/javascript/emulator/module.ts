@@ -161,8 +161,6 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
     manifest.ticksPerSecond <= 0 ||
     !Number.isSafeInteger(manifest.bootTicks) ||
     manifest.bootTicks < 0 ||
-    (manifest.bootInstructions !== undefined &&
-      (!Number.isSafeInteger(manifest.bootInstructions) || manifest.bootInstructions <= 0)) ||
     !Number.isSafeInteger(manifest.output) ||
     manifest.output < 0 ||
     manifest.output > 0xffffffff
@@ -211,8 +209,6 @@ export interface EmulatorManifest {
   session: Record<string, unknown>;
   ticksPerSecond: number;
   bootTicks: number;
-  /** Observed cold-boot instructions to initialized idle REC. */
-  bootInstructions?: number;
   output: number;
   inputs?: ControlInput[];
   /** Optional external endpoint and boot inputs configured by the caller. */

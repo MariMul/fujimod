@@ -13,7 +13,7 @@ declare class Camera {
     /**
      * Native first-start and REC observation, bounded by an instruction budget.
      */
-    bootToRec(limit: bigint, progress?: (instructions: number) => void): RecReport;
+    bootToRec(limit: bigint, progress?: (ticks: number) => void): RecReport;
     cardFormat(): SessionState;
     cardInsert(present: boolean): SessionState;
     /**
@@ -96,7 +96,7 @@ declare class Camera {
     restore(id: string): Point;
     rollback(tick: bigint): Point;
     rotate(id: string, steps: number): SessionState;
-    runUntil(tick: bigint, progress?: (instructions: number) => void): void;
+    runUntil(tick: bigint, progress?: (ticks: number) => void): void;
     /**
      * Export committed storage; restore it with `restoreDurable`.
      */
