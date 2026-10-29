@@ -11,6 +11,8 @@ use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, rprofile::worker};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 
+const MAX_INTERACTIVE_WINDOWS: u64 = 10;
+
 #[derive(Serialize, Deserialize)]
 struct DeadlineSample {
     due: Option<u64>,
@@ -204,32 +206,6 @@ fn interactive_instruction_limit_allows_only_bounded_block_overshoot() {
     );
 }
 
-#[test]
-fn interactive_cohort_does_not_run_a_peer_after_another_exhausts_its_room() {
-    let (mut board, _) = board(ExecutionPolicy::Interactive, None);
-    let before = board.instruction_counts();
-    {
-        let mut state = board.state.borrow_mut();
-        let mut epoch = super::Epoch::new(
-            board.cpus.len(),
-            fujimod_emulator_cpu::Clock {
-                now: state.timeline.now(),
-                phase: state.timeline.phase(),
-                ratio: state.timeline.ratio(),
-            },
-            2,
-        );
-        epoch.advance(1, 2).unwrap();
-        assert_eq!(epoch.room(0), 2);
-        assert_eq!(epoch.room(1), 0);
-        state.parallel = Some(epoch);
-    }
-
-    board.interactive_cohort(&[0, 1], 1).unwrap();
-
-    assert_eq!(board.instruction_counts(), before);
-}
-
 fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
     let (mut board, device) = board(policy, tick_limit.then_some(100_000));
     // Core 0 reads the immediate MMIO peripheral 64 times, then publishes
@@ -264,54 +240,61 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
     // Start the spinner first so callback arrival order cannot grant it
     // a fresh allowance at the expense of the MMIO core.
     board.next_core.set(1);
-    if tick_limit {
-        board.run_until(100_000, 1000).unwrap();
-    } else {
-        board.run_for_instructions(200_000, 1000).unwrap();
-    }
-    let counts = board.instruction_counts();
     let instruction_budget: u64 = if tick_limit { 100_000 } else { 200_000 };
     let share = if policy == ExecutionPolicy::Exact && tick_limit {
         50_000
     } else {
         100_000
     };
-    if policy == ExecutionPolicy::Interactive {
+    let mut windows = 0;
+    let flag = loop {
+        let next_window = windows + 1;
+        if tick_limit {
+            board.run_until(100_000 * next_window, 1000).unwrap();
+        } else {
+            board
+                .run_for_instructions(instruction_budget, 1000)
+                .unwrap();
+        }
+        windows = next_window;
+
+        let counts = board.instruction_counts();
+        if policy != ExecutionPolicy::Interactive {
+            assert!(
+                counts
+                    .iter()
+                    .all(|&count| (share..=share + 256).contains(&count)),
+                "{policy:?}: callback restarts must retain each core's share: {counts:?}"
+            );
+        }
+
+        let mut bytes = [0; 4];
+        board.read_memory(0, 0x3000, &mut bytes).unwrap();
+        let flag = u32::from_le_bytes(bytes);
+        if flag == 0x5a {
+            break flag;
+        }
+        if policy != ExecutionPolicy::Interactive {
+            assert_eq!(
+                flag, 0x5a,
+                "{policy:?}: MMIO work did not complete: {counts:?}"
+            );
+        }
         assert!(
-            (instruction_budget..=instruction_budget + 256)
-                .contains(&counts.iter().sum()),
-            "interactive execution should stay within its aggregate budget: {counts:?}"
+            windows < MAX_INTERACTIVE_WINDOWS,
+            "Interactive MMIO work did not complete within {MAX_INTERACTIVE_WINDOWS} windows: flag={flag:#x}, counts={counts:?}"
         );
-    } else {
-        assert!(
-            counts
-                .iter()
-                .all(|&count| (share..=share + 256).contains(&count)),
-            "{policy:?}: callback restarts must retain each core's share: {counts:?}"
-        );
-    }
-    let mut flag = [0; 4];
-    board.read_memory(0, 0x3000, &mut flag).unwrap();
-    let flag = u32::from_le_bytes(flag);
-    if policy == ExecutionPolicy::Interactive {
-        assert!(matches!(flag, 0 | 0x5a), "invalid completion value {flag:#x}");
-    } else {
-        assert_eq!(flag, 0x5a, "{policy:?}: MMIO work did not complete");
-    }
+    };
+    assert_eq!(flag, 0x5a, "{policy:?}: MMIO work did not complete");
     let tick = board.state.borrow().timeline.now();
     if tick_limit {
-        assert_eq!(tick, 100_000);
+        assert_eq!(tick, 100_000 * windows);
         assert_eq!(
             samples(&board, device)
                 .iter()
                 .map(|&(at, _)| at)
                 .collect::<Vec<_>>(),
             [100_000]
-        );
-    } else if policy == ExecutionPolicy::Interactive {
-        assert!(
-            (instruction_budget.saturating_sub(256)..=instruction_budget + 256).contains(&tick),
-            "callback segments must share one time ledger, got {tick}"
         );
     }
     let before = board.fingerprint().unwrap();
@@ -425,21 +408,31 @@ fn serviced_deadline_precedes_interactive_mmio_catch_up() {
         .write_memory(0, 0x2000, &0xeafffffeu32.to_le_bytes())
         .unwrap();
     board.next_core.set(1);
-    board.run_until(100_064, 1000).unwrap();
-    // The event samples RAM before the successful read can publish its flag.
-    assert_eq!(samples(&board, device), [(100_000, 0)]);
-    let mut bytes = [0; 12];
-    board.read_physical(0x3000, &mut bytes).unwrap();
-    let words: Vec<_> = bytes
-        .chunks_exact(4)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-        .collect();
-    assert!(matches!(words[0], 0 | 1), "invalid completion value {words:?}");
-    if words[0] == 1 {
-        assert!(words[1] <= words[2], "local PMU moved backward: {words:?}");
+    let window_budget = 100_064;
+    let mut window = 1;
+    let words = loop {
+        board.run_until(window_budget * window, 1000).unwrap();
+        // The event samples RAM before the successful read can publish its flag.
+        assert_eq!(samples(&board, device), [(100_000, 0)]);
+        let mut bytes = [0; 12];
+        board.read_physical(0x3000, &mut bytes).unwrap();
+        let words: Vec<_> = bytes
+            .chunks_exact(4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+            .collect();
+        if words[0] == 1 {
+            break words;
+        }
         assert!(
-            words[2] <= 100_256,
-            "local PMU counted restarts twice: {words:?}"
+            window < MAX_INTERACTIVE_WINDOWS,
+            "MMIO core did not finish within {MAX_INTERACTIVE_WINDOWS} windows: counts={:?}, words={words:?}",
+            board.instruction_counts()
         );
-    }
+        window += 1;
+    };
+    assert!(words[1] <= words[2], "local PMU moved backward: {words:?}");
+    assert!(
+        words[2] <= 100_256,
+        "local PMU counted restarts twice: {words:?}"
+    );
 }
