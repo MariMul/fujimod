@@ -4,9 +4,10 @@ use super::{ffi, machine::Machine};
 use fujimod_emulator_cpu::{arm64::TranslationState, *};
 use std::sync::{
     Arc, Condvar, Mutex,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
     mpsc,
 };
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 mod portable;
 
@@ -58,6 +59,11 @@ pub struct Shared {
     pub progress: AtomicU64,
     pub limit: AtomicU64,
     pub measured: AtomicBool,
+    pub budget_active: AtomicBool,
+    pub budget_start_ticks: AtomicU64,
+    pub budget_generation: AtomicU64,
+    pub budget_shutdown: AtomicBool,
+    pub budget_timer_thread: AtomicU32,
     pub budget_lock: Mutex<()>,
     pub budget_changed: Condvar,
     run_wakeup: Mutex<Option<RunWakeup>>,
@@ -71,6 +77,11 @@ impl Default for Shared {
             progress: AtomicU64::new(0),
             limit: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
+            budget_active: AtomicBool::new(false),
+            budget_start_ticks: AtomicU64::new(0),
+            budget_generation: AtomicU64::new(0),
+            budget_shutdown: AtomicBool::new(false),
+            budget_timer_thread: AtomicU32::new(0),
             budget_lock: Mutex::new(()),
             budget_changed: Condvar::new(),
             run_wakeup: Mutex::new(None),
@@ -78,6 +89,18 @@ impl Default for Shared {
     }
 }
 impl Shared {
+    pub fn notify_budget_change(&self, abort_wait: bool) {
+        self.budget_changed.notify_all();
+        if abort_wait {
+            let thread = self.budget_timer_thread.load(Ordering::Acquire);
+            if thread != 0 {
+                unsafe {
+                    let _ = ffi::thread_abort(thread);
+                }
+            }
+        }
+    }
+
     pub fn set_run_wakeup(&self, wakeup: RunWakeup) {
         *self
             .run_wakeup
@@ -95,6 +118,183 @@ impl Shared {
             wakeup.notify();
         }
     }
+}
+
+/// One high-priority deadline timer for the lifetime of a vCPU core.
+pub struct BudgetTimer {
+    shared: Arc<Shared>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl BudgetTimer {
+    pub fn new(cpu: u64, shared: Arc<Shared>) -> Result<Self, String> {
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let timer_shared = shared.clone();
+        let thread = thread::Builder::new()
+            .name("camera-hvf-budget".into())
+            .spawn(move || budget_timer(cpu, timer_shared, ready_tx))
+            .map_err(|error| error.to_string())?;
+        match ready_rx.recv() {
+            Ok(Ok(())) => Ok(Self {
+                shared,
+                thread: Some(thread),
+            }),
+            Ok(Err(error)) => {
+                let _ = thread.join();
+                Err(error)
+            }
+            Err(error) => {
+                let _ = thread.join();
+                Err(error.to_string())
+            }
+        }
+    }
+}
+
+impl Drop for BudgetTimer {
+    fn drop(&mut self) {
+        self.shared.budget_shutdown.store(true, Ordering::Release);
+        self.shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+        self.shared.notify_budget_change(true);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// Marks one active interactive run for the persistent timer thread.
+pub struct BudgetRun(Arc<Shared>);
+
+impl BudgetRun {
+    pub fn start(shared: Arc<Shared>) -> Self {
+        {
+            let _guard = shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            shared
+                .budget_start_ticks
+                .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
+            shared.budget_active.store(true, Ordering::Release);
+            shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        shared.notify_budget_change(true);
+        Self(shared)
+    }
+}
+
+impl Drop for BudgetRun {
+    fn drop(&mut self) {
+        {
+            let _guard = self
+                .0
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.0.budget_active.store(false, Ordering::Release);
+            self.0.budget_generation.fetch_add(1, Ordering::AcqRel);
+        }
+        self.0.notify_budget_change(true);
+    }
+}
+
+fn budget_timer(cpu: u64, shared: Arc<Shared>, ready: mpsc::Sender<Result<(), String>>) {
+    let mut timebase = ffi::MachTimebaseInfo::default();
+    let setup = unsafe {
+        let qos = ffi::pthread_set_qos_class_self_np(ffi::QOS_CLASS_USER_INTERACTIVE, 0);
+        if qos != 0 {
+            Err(format!("set HVF budget timer QoS: {qos}"))
+        } else {
+            let result = ffi::mach_timebase_info(&mut timebase);
+            if result != 0 || timebase.numer == 0 || timebase.denom == 0 {
+                Err(format!("read Mach timebase: {result}"))
+            } else {
+                Ok(())
+            }
+        }
+    };
+    if let Err(error) = setup {
+        let _ = ready.send(Err(error));
+        return;
+    }
+
+    let port = unsafe { ffi::mach_thread_self() };
+    shared.budget_timer_thread.store(port, Ordering::Release);
+    if ready.send(Ok(())).is_err() {
+        shared.budget_timer_thread.store(0, Ordering::Release);
+        unsafe {
+            let _ = ffi::mach_port_deallocate(ffi::mach_task_self_, port);
+        }
+        return;
+    }
+
+    loop {
+        let mut guard = shared
+            .budget_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        while !shared.budget_shutdown.load(Ordering::Acquire)
+            && !shared.budget_active.load(Ordering::Acquire)
+        {
+            guard = shared
+                .budget_changed
+                .wait(guard)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+        if shared.budget_shutdown.load(Ordering::Acquire) {
+            break;
+        }
+
+        let generation = shared.budget_generation.load(Ordering::Acquire);
+        let limit_ns = shared.limit.load(Ordering::Acquire);
+        let start_ticks = shared.budget_start_ticks.load(Ordering::Acquire);
+        let deadline = mach_deadline(start_ticks, limit_ns, timebase);
+        drop(guard);
+
+        let result = unsafe { ffi::mach_wait_until(deadline) };
+        if result == ffi::KERN_ABORTED {
+            continue;
+        }
+
+        guard = shared
+            .budget_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if shared.budget_shutdown.load(Ordering::Acquire) {
+            break;
+        }
+        if !shared.budget_active.load(Ordering::Acquire)
+            || shared.budget_generation.load(Ordering::Acquire) != generation
+        {
+            continue;
+        }
+
+        // An unexpected Mach wait error must still end this bounded run.
+        shared.deadline.store(true, Ordering::Release);
+        unsafe {
+            let _ = ffi::hv_vcpus_exit(&cpu, 1);
+        }
+        while !shared.budget_shutdown.load(Ordering::Acquire)
+            && shared.budget_active.load(Ordering::Acquire)
+            && shared.budget_generation.load(Ordering::Acquire) == generation
+        {
+            guard = shared
+                .budget_changed
+                .wait(guard)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+        }
+    }
+
+    shared.budget_timer_thread.store(0, Ordering::Release);
+    unsafe {
+        let _ = ffi::mach_port_deallocate(ffi::mach_task_self_, port);
+    }
+}
+
+fn mach_deadline(start: u64, limit_ns: u64, timebase: ffi::MachTimebaseInfo) -> u64 {
+    let numerator = u128::from(limit_ns) * u128::from(timebase.denom);
+    let ticks = numerator.div_ceil(u128::from(timebase.numer));
+    start.saturating_add(ticks.min(u128::from(u64::MAX)) as u64)
 }
 struct Processor {
     cpu: u64,
@@ -719,7 +919,7 @@ impl Processor {
         self.shared.limit.store(limit, Ordering::Release);
 
         let started = Instant::now();
-        let _budget = super::Watchdog::budget(self.cpu, started, self.shared.clone());
+        let _budget = BudgetRun::start(self.shared.clone());
         let mdscr = self.sys(ffi::MDSCR)?;
         self.set_sys(ffi::MDSCR, mdscr & !1)?;
         let pstate = self.reg(ffi::PSTATE)?;

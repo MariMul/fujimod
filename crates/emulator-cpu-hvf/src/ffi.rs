@@ -13,6 +13,12 @@ pub struct Exit {
     pub reason: u32,
     pub exception: Exception,
 }
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MachTimebaseInfo {
+    pub numer: u32,
+    pub denom: u32,
+}
 pub const PC: u32 = 31;
 pub const FPCR: u32 = 32;
 pub const FPSR: u32 = 33;
@@ -22,6 +28,19 @@ pub const SCTLR: u16 = 0xc080;
 pub const TCR: u16 = 0xc102;
 pub const SP0: u16 = 0xc208;
 pub const SP1: u16 = 0xe208;
+pub const KERN_ABORTED: i32 = 14;
+pub const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+#[link(name = "System")]
+unsafe extern "C" {
+    pub fn mach_absolute_time() -> u64;
+    pub fn mach_timebase_info(info: *mut MachTimebaseInfo) -> i32;
+    pub fn mach_wait_until(deadline: u64) -> i32;
+    pub fn mach_thread_self() -> u32;
+    pub fn mach_port_deallocate(task: u32, name: u32) -> i32;
+    pub static mach_task_self_: u32;
+    pub fn thread_abort(thread: u32) -> i32;
+    pub fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+}
 #[link(name = "Hypervisor", kind = "framework")]
 unsafe extern "C" {
     pub fn hv_vm_create(config: *const c_void) -> u32;

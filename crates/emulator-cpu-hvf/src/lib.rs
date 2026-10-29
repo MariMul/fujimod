@@ -53,6 +53,7 @@ struct Window {
 }
 pub struct Core {
     worker: Option<JoinHandle<()>>,
+    budget_timer: Option<worker::BudgetTimer>,
     commands: mpsc::Sender<Command>,
     machine: Arc<Machine>,
     shared: Arc<worker::Shared>,
@@ -107,23 +108,34 @@ impl Core {
             .recv()
             .map_err(|_| "HVF worker disconnected at creation")?
         {
-            Ok(native_cpu) => Ok(Self {
-                worker: Some(worker),
-                commands,
-                machine,
-                shared,
-                identity: Identity::allocate(),
-                native_cpu,
-                hooks: RefCell::new(BTreeMap::new()),
-                next_hook: Cell::new(0),
-                next_run: Cell::new(1),
-                active_run: RefCell::new(None),
-                mmio: RefCell::new(BTreeMap::new()),
-                running: Cell::new(false),
-                instruction_hook: Cell::new(false),
-                execution_policy: Cell::new(ExecutionPolicy::Exact),
-                _owner: PhantomData,
-            }),
+            Ok(native_cpu) => {
+                let budget_timer = match worker::BudgetTimer::new(native_cpu, shared.clone()) {
+                    Ok(timer) => timer,
+                    Err(error) => {
+                        drop(commands);
+                        let _ = worker.join();
+                        return Err(error);
+                    }
+                };
+                Ok(Self {
+                    worker: Some(worker),
+                    budget_timer: Some(budget_timer),
+                    commands,
+                    machine,
+                    shared,
+                    identity: Identity::allocate(),
+                    native_cpu,
+                    hooks: RefCell::new(BTreeMap::new()),
+                    next_hook: Cell::new(0),
+                    next_run: Cell::new(1),
+                    active_run: RefCell::new(None),
+                    mmio: RefCell::new(BTreeMap::new()),
+                    running: Cell::new(false),
+                    instruction_hook: Cell::new(false),
+                    execution_policy: Cell::new(ExecutionPolicy::Exact),
+                    _owner: PhantomData,
+                })
+            }
             Err(e) => {
                 let _ = worker.join();
                 Err(e)
@@ -846,14 +858,21 @@ impl Cpu for Core {
         if total_entries < self.shared.progress.load(Ordering::Acquire) {
             return Err("instruction limit precedes an entered instruction".into());
         }
-        let _budget = self
-            .shared
-            .budget_lock
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let previous = self.shared.limit.fetch_min(total_entries, Ordering::AcqRel);
-        if total_entries < previous {
-            self.shared.budget_changed.notify_all();
+        let changed = {
+            let _budget = self
+                .shared
+                .budget_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let previous = self.shared.limit.fetch_min(total_entries, Ordering::AcqRel);
+            let changed = total_entries < previous;
+            if changed {
+                self.shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+            }
+            changed
+        };
+        if changed {
+            self.shared.notify_budget_change(true);
         }
         Ok(())
     }
@@ -906,7 +925,10 @@ impl Cpu for Core {
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
         // HVF has no watched-store hook. Accept synchronization hooks as markers
         // only: vCPUs share coherent RAM and execute exclusives natively.
-        if !matches!(hook, Hook::Instruction { .. } | Hook::Synchronization { .. }) {
+        if !matches!(
+            hook,
+            Hook::Instruction { .. } | Hook::Synchronization { .. }
+        ) {
             return Err("HVF supports instruction and synchronization hooks only".into());
         }
         if self.execution_policy.get() == ExecutionPolicy::Interactive
@@ -980,8 +1002,6 @@ impl Cpu for Core {
 struct Watchdog {
     done: Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
     thread: Option<JoinHandle<()>>,
-    budget_shared: Option<Arc<worker::Shared>>,
-    budget_done: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 impl Watchdog {
     fn new(cpu: u64, micros: u64, shared: Arc<worker::Shared>) -> Self {
@@ -1007,49 +1027,7 @@ impl Watchdog {
                 }
             }))
         };
-        Self {
-            done,
-            thread,
-            budget_shared: None,
-            budget_done: None,
-        }
-    }
-    fn budget(cpu: u64, started: std::time::Instant, shared: Arc<worker::Shared>) -> Self {
-        let done = Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
-        let budget_done = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let wait = budget_done.clone();
-        let budget_shared = shared.clone();
-        let thread = Some(std::thread::spawn(move || loop {
-            let guard = budget_shared
-                .budget_lock
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if wait.load(Ordering::Acquire) {
-                break;
-            }
-            let limit = budget_shared.limit.load(Ordering::Acquire);
-            let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed >= limit {
-                drop(guard);
-                budget_shared.deadline.store(true, Ordering::Release);
-                unsafe {
-                    let _ = ffi::hv_vcpus_exit(&cpu, 1);
-                }
-                break;
-            }
-            let remaining = limit - elapsed;
-            let wait_for = std::time::Duration::from_nanos(remaining.min(60_000_000_000));
-            let _ = budget_shared
-                .budget_changed
-                .wait_timeout(guard, wait_for)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-        }));
-        Self {
-            done,
-            thread,
-            budget_shared: Some(shared),
-            budget_done: Some(budget_done),
-        }
+        Self { done, thread }
     }
 }
 impl Drop for Watchdog {
@@ -1057,18 +1035,6 @@ impl Drop for Watchdog {
         let (lock, cv) = &*self.done;
         *lock.lock().unwrap() = true;
         cv.notify_one();
-        if let Some(done) = &self.budget_done {
-            done.store(true, Ordering::Release);
-        }
-        if let Some(shared) = &self.budget_shared {
-            {
-                let _budget = shared
-                    .budget_lock
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                shared.budget_changed.notify_all();
-            }
-        }
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
@@ -1094,6 +1060,7 @@ impl Drop for Core {
             }
             active.watchdog.take();
         }
+        self.budget_timer.take();
         let _ = self.rpc(Op::Shutdown);
         if let Some(thread) = self.worker.take() {
             let _ = thread.join();
