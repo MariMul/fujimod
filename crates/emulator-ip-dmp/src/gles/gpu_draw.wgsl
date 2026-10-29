@@ -1,35 +1,13 @@
-struct DrawVertexInput {
-    @location(0) position: vec4<f32>,
-    @location(1) primary: vec4<f32>,
-    @location(2) uv0: vec2<f32>,
-    @location(3) uv1: vec2<f32>,
-};
-
-struct DrawVertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) primary: vec4<f32>,
-    @location(1) uv0: vec2<f32>,
-    @location(2) uv1: vec2<f32>,
-};
-
-@vertex
-fn draw_vertex(input: DrawVertexInput) -> DrawVertexOutput {
-    var output: DrawVertexOutput;
-    output.position = input.position;
-    output.primary = input.primary;
-    output.uv0 = input.uv0;
-    output.uv1 = input.uv1;
-    return output;
-}
-
 @group(0) @binding(3) var color_destination: texture_2d<u32>;
 @group(0) @binding(4) var depth_destination: texture_2d<u32>;
 
 struct DrawFragmentInput {
     @builtin(position) position: vec4<f32>,
     @location(0) primary: vec4<f32>,
-    @location(1) uv0: vec2<f32>,
-    @location(2) uv1: vec2<f32>,
+    @location(1) texcoords01: vec4<f32>,
+    @location(2) texcoord2: vec2<f32>,
+    @location(3) @interpolate(linear) depth: f32,
+    @location(6) @interpolate(flat) valid: u32,
 };
 
 struct DrawFragmentOutput {
@@ -131,7 +109,7 @@ fn shade_color_and_depth(
     input: DrawFragmentInput,
     source_color: vec4<f32>,
 ) -> DrawFragmentOutput {
-    let z = input.position.z;
+    let z = input.depth;
     var color = source_color;
     var output: DrawFragmentOutput;
     output.color_mask = 0u;
@@ -257,9 +235,12 @@ fn shade_color_and_depth(
 
 @fragment
 fn draw_fragment(input: DrawFragmentInput) -> DrawFragmentOutput {
+    if input.valid == 0u {
+        discard;
+    }
     let x = u32(input.position.x);
     let y = u32(input.position.y);
-    let z = input.position.z;
+    let z = input.depth;
     let origin = reg(0u, 0x266u);
     let end = reg(0u, 0x267u);
     if x < (origin & 65535u) || y < (origin >> 16u)
@@ -273,12 +254,22 @@ fn draw_fragment(input: DrawFragmentInput) -> DrawFragmentOutput {
     if (texture_enable & 1u) != 0u {
         let tex_dimensions = reg(0u, 0x282u);
         let size = vec2<f32>(f32(tex_dimensions >> 16u), f32(tex_dimensions & 65535u));
-        texture0 = sample_texture(0u, 0u, input.uv0, lod_from_derivatives(input.uv0, size));
+        texture0 = sample_texture(
+            0u,
+            0u,
+            input.texcoords01.xy,
+            lod_from_derivatives(input.texcoords01.xy, size),
+        );
     }
     if (texture_enable & 2u) != 0u {
         let tex_dimensions = reg(0u, 0x292u);
         let size = vec2<f32>(f32(tex_dimensions >> 16u), f32(tex_dimensions & 65535u));
-        texture1 = sample_texture(0u, 1u, input.uv1, lod_from_derivatives(input.uv1, size));
+        texture1 = sample_texture(
+            0u,
+            1u,
+            input.texcoords01.zw,
+            lod_from_derivatives(input.texcoords01.zw, size),
+        );
     }
 
     var color = combine(0u, input.primary, texture0, texture1);

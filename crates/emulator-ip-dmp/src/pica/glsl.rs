@@ -44,9 +44,10 @@ fn translate(
     program: &Program,
     entry_point: u32,
     semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
+    flat_shading: bool,
 ) -> Result<String, String> {
     let translator = Translator::new(program, entry_point)?;
-    Ok(translator.shader(semantics))
+    Ok(translator.shader(semantics, flat_shading))
 }
 
 /// translates uploaded PICA instructions into WGSL for a vertex stage.
@@ -56,8 +57,19 @@ pub fn translate_vertex_to_wgsl(
     entry_point: u32,
     semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
 ) -> Result<String, String> {
+    translate_vertex_to_wgsl_for_draw(program_words, descriptor_words, entry_point, semantics, false)
+}
+
+/// Translates uploaded PICA instructions for the DMP render pipeline.
+pub fn translate_vertex_to_wgsl_for_draw(
+    program_words: &[u32],
+    descriptor_words: &[u32],
+    entry_point: u32,
+    semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
+    flat_shading: bool,
+) -> Result<String, String> {
     let program = Program::decode(program_words, descriptor_words)?;
-    let source = translate(&program, entry_point, semantics)?;
+    let source = translate(&program, entry_point, semantics, flat_shading)?;
     compile(&source)
 }
 
@@ -176,7 +188,7 @@ impl<'a> Translator<'a> {
             .any(|run| matches!(run.exit, Exit::Flow(_)))
     }
 
-    fn shader(mut self, semantics: &[u32; SEMANTICS]) -> String {
+    fn shader(mut self, semantics: &[u32; SEMANTICS], flat_shading: bool) -> String {
         let flows = self.flows();
         let mut run = String::new();
         if flows {
@@ -186,7 +198,14 @@ impl<'a> Translator<'a> {
         }
 
         let mut out = String::with_capacity(run.len() + 8192);
-        out.push_str(HEADER);
+        if flat_shading {
+            out.push_str(&HEADER.replace(
+                "layout(location = 0) out vec4 out_color;",
+                "layout(location = 0) flat out vec4 out_color;",
+            ));
+        } else {
+            out.push_str(HEADER);
+        }
         if flows {
             out.push_str(BLOCKS);
         }
@@ -1010,5 +1029,5 @@ const EPILOGUE: &str = r#"    if (position.w > 1e-5) {
     } else if (z_over_w < -1.0 && z_over_w > -1.00001) {
         position.z = -position.w;
     }
-    gl_Position = vec4(position.xy, -position.z, position.w);
+    gl_Position = vec4(position.x, -position.y, -position.z, position.w);
 "#;

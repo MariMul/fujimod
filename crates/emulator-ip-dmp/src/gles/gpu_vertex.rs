@@ -1,20 +1,10 @@
-//! Host execution of uploaded DMP vertex programs.
-//!
-//! The runner keeps the interpreter's register output shape so draw assembly
-//! can consume the result without translating it back through vertex inputs.
+//! Prepares guest vertex inputs for the host GPU render pipeline.
 
 use super::{Engine, Reader, draw_state::DrawState, shader::Vector};
-use crate::pica::{VERTEX_OUTPUT_SEMANTICS, translate_vertex_to_wgsl};
+use crate::pica::{VERTEX_OUTPUT_SEMANTICS, translate_vertex_to_wgsl_for_draw};
 use sha2::{Digest, Sha256};
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::{Mutex, OnceLock},
-};
-use wgpu::util::DeviceExt;
+use std::collections::BTreeSet;
 
-const OUTPUT_REGISTERS: usize = 16;
-const OUTPUT_WORDS: usize = OUTPUT_REGISTERS * 4 + 4;
-const VALID_WORD: usize = OUTPUT_REGISTERS * 4;
 const MAX_VERTEX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_REMAP_ENTRIES: usize = 1 << 24;
 
@@ -38,17 +28,32 @@ struct GroupPlan {
     stride: usize,
 }
 
-/// Runs one draw's guest vertex arrays and indices through the translated
-/// program, returning the same register vectors the interpreter produces.
-pub(super) fn run_draw(
+#[derive(Clone, Debug)]
+pub(super) struct PreparedDraw {
+    pub(super) shader_source: String,
+    pub(super) shader_key: [u8; 32],
+    pub(super) shading_bytes: Vec<u8>,
+    pub(super) input_bytes: Vec<u8>,
+    pub(super) indices: Vec<u32>,
+    pub(super) topology: wgpu::PrimitiveTopology,
+}
+
+pub(super) fn prepare_draw(
     engine: &Engine,
     state: &DrawState,
     vertex_count: usize,
     indexed: bool,
     read: &mut Reader<'_>,
-) -> Result<Vec<[Vector; OUTPUT_REGISTERS]>, String> {
+) -> Result<PreparedDraw, String> {
     if vertex_count == 0 {
-        return Ok(Vec::new());
+        return Ok(PreparedDraw {
+            shader_source: String::new(),
+            shader_key: [0; 32],
+            shading_bytes: Vec::new(),
+            input_bytes: vec![0; 4],
+            indices: Vec::new(),
+            topology: primitive_topology(state.raster.primitive_mode)?,
+        });
     }
     if vertex_count > 1_048_576 {
         return Err("DMP host GPU vertex count exceeds bound".into());
@@ -78,19 +83,165 @@ pub(super) fn run_draw(
             bytes.into_iter().map(u32::from).collect()
         }
     } else {
-        let start = engine.reg(0x42a) as usize;
+        let start = engine.reg(0x42a);
         (0..vertex_count)
             .map(|offset| {
                 start
-                    .checked_add(offset)
-                    .and_then(|vertex| u32::try_from(vertex).ok())
+                    .checked_add(offset as u32)
                     .ok_or("DMP host GPU vertex index overflow")
             })
             .collect::<Result<Vec<_>, _>>()?
     };
 
     let packed = pack_draw_vertices(engine, state, &draw_indices, read)?;
-    run_packed(engine, state, packed)
+    prepare_packed_draw(engine, state, packed)
+}
+
+pub(super) fn prepare_immediate_draw(
+    engine: &Engine,
+    state: &DrawState,
+    vertices: &[[Vector; 16]],
+) -> Result<PreparedDraw, String> {
+    let stride = 16 * 4 * std::mem::size_of::<f32>();
+    let mut bytes = Vec::with_capacity(vertices.len() * stride);
+    for vertex in vertices {
+        for vector in vertex {
+            for component in vector {
+                bytes.extend_from_slice(&component.to_le_bytes());
+            }
+        }
+    }
+    let attributes = std::array::from_fn(|register| {
+        [
+            (register * 4 * std::mem::size_of::<f32>()) as u32,
+            stride as u32,
+            (4 << 16) | (3 << 8),
+            0,
+        ]
+    });
+    let defaults = [[0.0, 0.0, 0.0, 1.0]; 16];
+    let indices = (0..vertices.len())
+        .map(|index| u32::try_from(index).map_err(|_| "DMP immediate vertex index overflow"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let packed = PackedVertices {
+        bytes,
+        draw_indices: indices.clone(),
+        vertex_remap: indices.clone(),
+        attributes,
+        defaults,
+    };
+    prepare_packed_draw(engine, state, packed)
+}
+
+fn prepare_packed_draw(
+    engine: &Engine,
+    state: &DrawState,
+    packed: PackedVertices,
+) -> Result<PreparedDraw, String> {
+    let semantics = draw_vertex_semantics(state);
+    let shader_source = translate_vertex_to_wgsl_for_draw(
+        &engine.code,
+        &engine.operands,
+        engine.reg(0x48a) & 0xffff,
+        &semantics,
+        state.raster.flat_shading,
+    )?;
+    let mut shader_hash = Sha256::new();
+    shader_hash.update(shader_source.as_bytes());
+    shader_hash.update([state.raster.flat_shading as u8]);
+    shader_hash.update([match state.raster.cull_mode {
+        super::draw_state::CullMode::Disabled => 0,
+        super::draw_state::CullMode::Front => 1,
+        super::draw_state::CullMode::Back => 2,
+        super::draw_state::CullMode::Other(code) => code.saturating_add(3),
+    }]);
+    shader_hash.update([match state.raster.primitive_mode {
+        super::draw_state::PrimitiveMode::Triangles => 0,
+        super::draw_state::PrimitiveMode::TriangleStrip => 1,
+        super::draw_state::PrimitiveMode::TriangleFan => 2,
+        other => return Err(format!("DMP unsupported host GPU primitive mode {other:?}")),
+    }]);
+
+    let draw_indices = packed
+        .draw_indices
+        .iter()
+        .map(|index| {
+            packed
+                .vertex_remap
+                .get(*index as usize)
+                .copied()
+                .ok_or("DMP host GPU vertex index remap outside buffer")
+                .and_then(|index| {
+                    u32::try_from(index).map_err(|_| "DMP host GPU remapped vertex exceeds u32")
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mode = state.raster.primitive_mode;
+    let expand = state.raster.flat_shading
+        || mode == super::draw_state::PrimitiveMode::TriangleFan;
+    let (topology, mut indices) = if expand {
+        let mut triangles = Vec::with_capacity(draw_indices.len().saturating_sub(2) * 3);
+        match mode {
+            super::draw_state::PrimitiveMode::Triangles => {
+                triangles.extend(draw_indices.chunks_exact(3).flatten().copied());
+            }
+            super::draw_state::PrimitiveMode::TriangleStrip => {
+                for index in 2..draw_indices.len() {
+                    if index & 1 == 0 {
+                        triangles.extend([
+                            draw_indices[index - 2],
+                            draw_indices[index - 1],
+                            draw_indices[index],
+                        ]);
+                    } else {
+                        triangles.extend([
+                            draw_indices[index - 1],
+                            draw_indices[index - 2],
+                            draw_indices[index],
+                        ]);
+                    }
+                }
+            }
+            super::draw_state::PrimitiveMode::TriangleFan => {
+                for index in 2..draw_indices.len() {
+                    triangles.extend([
+                        draw_indices[0],
+                        draw_indices[index - 1],
+                        draw_indices[index],
+                    ]);
+                }
+            }
+            other => return Err(format!("DMP unsupported host GPU primitive mode {other:?}")),
+        }
+        (wgpu::PrimitiveTopology::TriangleList, triangles)
+    } else {
+        (primitive_topology(mode)?, draw_indices)
+    };
+    if state.raster.flat_shading {
+        for triangle in indices.chunks_exact_mut(3) {
+            triangle.rotate_left(2);
+        }
+    }
+
+    Ok(PreparedDraw {
+        shader_source,
+        shader_key: shader_hash.finalize().into(),
+        shading_bytes: shading_bytes(engine, state, packed.attributes, packed.defaults),
+        input_bytes: packed.bytes,
+        indices,
+        topology,
+    })
+}
+
+fn primitive_topology(mode: super::draw_state::PrimitiveMode) -> Result<wgpu::PrimitiveTopology, String> {
+    match mode {
+        super::draw_state::PrimitiveMode::Triangles => Ok(wgpu::PrimitiveTopology::TriangleList),
+        super::draw_state::PrimitiveMode::TriangleStrip => {
+            Ok(wgpu::PrimitiveTopology::TriangleStrip)
+        }
+        super::draw_state::PrimitiveMode::TriangleFan => Ok(wgpu::PrimitiveTopology::TriangleList),
+        other => Err(format!("DMP host GPU draw does not support primitive mode {other:?}")),
+    }
 }
 
 fn pack_draw_vertices(
@@ -262,27 +413,6 @@ fn attribute_type(kind: super::draw_state::AttributeKind) -> u32 {
     }
 }
 
-fn run_packed(
-    engine: &Engine,
-    state: &DrawState,
-    packed: PackedVertices,
-) -> Result<Vec<[Vector; OUTPUT_REGISTERS]>, String> {
-    if packed.draw_indices.is_empty() {
-        return Ok(Vec::new());
-    }
-    let semantics = vertex_semantics(state);
-    let context = fujimod_emulator_gpu::context()?;
-    if context.adapter_device_type() == wgpu::DeviceType::Cpu {
-        return Err("host GPU adapter: a hardware adapter is required".into());
-    }
-    let _submission = context.acquire()?;
-    let mut gpu = GPU
-        .get_or_init(|| Mutex::new(Gpu::new()))
-        .lock()
-        .map_err(|_| "DMP host GPU vertex lock poisoned")?;
-    gpu.execute(context, engine, state, &semantics, packed)
-}
-
 fn vertex_semantics(state: &DrawState) -> [u32; VERTEX_OUTPUT_SEMANTICS] {
     let mut semantics = [u32::MAX; VERTEX_OUTPUT_SEMANTICS];
     for (register, vector) in state.vertex.output_map.0.iter().enumerate() {
@@ -296,183 +426,17 @@ fn vertex_semantics(state: &DrawState) -> [u32; VERTEX_OUTPUT_SEMANTICS] {
     semantics
 }
 
-struct Gpu {
-    pipelines: HashMap<[u8; 32], wgpu::ComputePipeline>,
-}
-
-impl Gpu {
-    fn new() -> Self {
-        Self {
-            pipelines: HashMap::new(),
-        }
-    }
-
-    fn execute(
-        &mut self,
-        context: &fujimod_emulator_gpu::GpuContext,
-        engine: &Engine,
-        state: &DrawState,
-        semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
-        packed: PackedVertices,
-    ) -> Result<Vec<[Vector; OUTPUT_REGISTERS]>, String> {
-        let device = context.device();
-        let queue = context.queue();
-        let key = pipeline_key(engine, semantics);
-        if !self.pipelines.contains_key(&key) {
-            let mut source = translate_vertex_to_wgsl(
-                &engine.code,
-                &engine.operands,
-                engine.reg(0x48a) & 0xffff,
-                semantics,
-            )?;
-            source.push_str(COMPUTE_ENTRY);
-            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("DMP translated vertex program"),
-                source: wgpu::ShaderSource::Wgsl(source.into()),
-            });
-            let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("DMP translated vertex program"),
-                layout: None,
-                module: &shader,
-                entry_point: Some("capture_vertex"),
-                compilation_options: Default::default(),
-                cache: None,
-            });
-            self.pipelines.insert(key, pipeline);
-        }
-
-        let shading_bytes = shading_bytes(engine, state, packed.attributes, packed.defaults);
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("DMP vertex uniforms"),
-            contents: &shading_bytes,
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-        let input_buffer = storage_buffer(device, "DMP vertex attributes", &packed.bytes);
-        let draw_index_bytes = words_to_bytes(&packed.draw_indices);
-        let draw_index_buffer =
-            storage_buffer(device, "DMP vertex draw indices", &draw_index_bytes);
-        let remap_bytes = words_to_bytes(&packed.vertex_remap);
-        let remap_buffer = storage_buffer(device, "DMP vertex index remap", &remap_bytes);
-        let output_size = u64::try_from(packed.draw_indices.len())
-            .ok()
-            .and_then(|count| count.checked_mul((OUTPUT_WORDS * 4) as u64))
-            .ok_or("DMP host GPU vertex output size overflow")?;
-        if output_size > u64::from(device.limits().max_storage_buffer_binding_size) {
-            return Err("DMP host GPU vertex output exceeds storage binding limit".into());
-        }
-        let output = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("DMP vertex register outputs"),
-            size: output_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let readback = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("DMP vertex register readback"),
-            size: output_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let pipeline = self
-            .pipelines
-            .get(&key)
-            .ok_or("DMP host GPU vertex pipeline missing")?;
-        let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("DMP vertex program buffers"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: input_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
-                    resource: draw_index_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 9,
-                    resource: remap_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 10,
-                    resource: output.as_entire_binding(),
-                },
-            ],
-        });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("DMP vertex program pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(0, &bindings, &[]);
-            pass.dispatch_workgroups((packed.draw_indices.len() as u32).div_ceil(64), 1, 1);
-        }
-        encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, output_size);
-        queue.submit([encoder.finish()]);
-
-        let (sender, receiver) = std::sync::mpsc::channel();
-        readback
-            .slice(..)
-            .map_async(wgpu::MapMode::Read, move |result| {
-                let _ = sender.send(result);
-            });
-        device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|error| format!("DMP host GPU vertex polling: {error}"))?;
-        receiver
-            .recv()
-            .map_err(|error| error.to_string())?
-            .map_err(|error| error.to_string())?;
-        let bytes = readback
-            .slice(..)
-            .get_mapped_range()
-            .map_err(|error| error.to_string())?;
-        let words = bytes
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|word| u32::from_le_bytes(*word))
-            .collect::<Vec<_>>();
-        drop(bytes);
-        readback.unmap();
-
-        let mut vertices = Vec::with_capacity(packed.draw_indices.len());
-        for (vertex, output) in words.chunks_exact(OUTPUT_WORDS).enumerate() {
-            if output[VALID_WORD] == 0 {
-                return Err(format!(
-                    "DMP host GPU refused vertex {vertex} for the translated program"
-                ));
-            }
-            let registers = std::array::from_fn(|register| {
-                let at = register * 4;
-                std::array::from_fn(|component| f32::from_bits(output[at + component]))
-            });
-            vertices.push(registers);
-        }
-        Ok(vertices)
-    }
-}
-
-fn storage_buffer(device: &wgpu::Device, label: &str, bytes: &[u8]) -> wgpu::Buffer {
-    let mut padded = bytes.to_vec();
-    padded.resize((padded.len() + 3) & !3, 0);
-    if padded.is_empty() {
-        padded.resize(4, 0);
-    }
-    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some(label),
-        contents: &padded,
-        usage: wgpu::BufferUsages::STORAGE,
+fn draw_vertex_semantics(state: &DrawState) -> [u32; VERTEX_OUTPUT_SEMANTICS] {
+    let outputs = vertex_semantics(state);
+    std::array::from_fn(|semantic| {
+        let source = match semantic {
+            4..=7 => semantic + 4,
+            8..=11 => semantic + 4,
+            12..=13 => semantic + 2,
+            _ => semantic,
+        };
+        outputs[source]
     })
-}
-
-fn words_to_bytes(words: &[u32]) -> Vec<u8> {
-    words.iter().flat_map(|word| word.to_le_bytes()).collect()
 }
 
 fn shading_bytes(
@@ -503,7 +467,7 @@ fn shading_bytes(
     push_u32(&mut bytes, engine.reg(0x48a) & 0xffff);
     push_u32(&mut bytes, 0);
     push_u32(&mut bytes, 0);
-    for semantic in vertex_semantics(state) {
+    for semantic in draw_vertex_semantics(state) {
         push_u32(&mut bytes, semantic);
     }
     push_u32(&mut bytes, super::float24(engine.reg(0x24d)).to_bits());
@@ -536,47 +500,6 @@ fn shading_bytes(
 fn push_u32(bytes: &mut Vec<u8>, value: u32) {
     bytes.extend_from_slice(&value.to_le_bytes());
 }
-
-fn pipeline_key(engine: &Engine, semantics: &[u32; VERTEX_OUTPUT_SEMANTICS]) -> [u8; 32] {
-    let mut hash = Sha256::new();
-    for words in [&engine.code, &engine.operands] {
-        hash.update((words.len() as u64).to_le_bytes());
-        for word in words {
-            hash.update(word.to_le_bytes());
-        }
-    }
-    hash.update((engine.reg(0x48a) & 0xffff).to_le_bytes());
-    for semantic in semantics {
-        hash.update(semantic.to_le_bytes());
-    }
-    hash.finalize().into()
-}
-
-const COMPUTE_ENTRY: &str = r#"
-@group(0) @binding(8) var<storage, read> draw_indices: array<u32>;
-@group(0) @binding(9) var<storage, read> vertex_remap: array<u32>;
-@group(0) @binding(10) var<storage, read_write> captures: array<u32>;
-
-@compute @workgroup_size(64)
-fn capture_vertex(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    if (global_id.x >= arrayLength(&draw_indices)) {
-        return;
-    }
-    gl_VertexIndex_1 = vertex_remap[draw_indices[global_id.x]];
-    main_1();
-    let base = global_id.x * 68u;
-    for (var i = 0u; i < 16u; i = i + 1u) {
-        let value = bitcast<vec4<u32>>(outputs[i]);
-        captures[base + i * 4u] = value.x;
-        captures[base + i * 4u + 1u] = value.y;
-        captures[base + i * 4u + 2u] = value.z;
-        captures[base + i * 4u + 3u] = value.w;
-    }
-    captures[base + 64u] = out_valid;
-}
-"#;
-
-static GPU: OnceLock<Mutex<Gpu>> = OnceLock::new();
 
 #[cfg(test)]
 mod tests {
@@ -620,7 +543,7 @@ mod tests {
     }
 
     #[test]
-    fn indexed_typed_fetch_matches_interpreter_registers() {
+    fn indexed_typed_fetch_prepares_gpu_vertex_inputs() {
         let engine = test_engine();
         let state = engine.draw_state();
         let memory = vertex_memory();
@@ -631,30 +554,10 @@ mod tests {
                 .cloned()
                 .ok_or_else(|| format!("missing test guest range {address:#x}+{length:#x}"))
         };
-        let actual = match run_draw(&engine, &state, 3, true, &mut read) {
-            Ok(actual) => actual,
-            Err(error) if error.starts_with("host GPU adapter:") => {
-                eprintln!("skipping DMP vertex conformance without an adapter: {error}");
-                return;
-            }
-            Err(error) => panic!("GPU vertex runner failed: {error}"),
-        };
-        let expected = [2, 0, 1].map(|vertex| {
-            let mut fetch = |address, length| {
-                memory
-                    .get(&address)
-                    .filter(|bytes| bytes.len() == length)
-                    .cloned()
-                    .ok_or_else(|| format!("missing test guest range {address:#x}+{length:#x}"))
-            };
-            let inputs = engine.fetch(vertex, &state, &mut fetch).unwrap();
-            super::super::shader::execute(&engine, &inputs).unwrap()
-        });
-        for (actual, expected) in actual.iter().zip(expected) {
-            assert_eq!(
-                actual.map(|register| register.map(f32::to_bits)),
-                expected.map(|register| register.map(f32::to_bits))
-            );
-        }
+        let prepared = prepare_draw(&engine, &state, 3, true, &mut read).unwrap();
+        assert_eq!(prepared.indices, [2, 0, 1]);
+        assert_eq!(prepared.input_bytes.len(), 3 * 12);
+        assert_eq!(prepared.shading_bytes.len(), 2256);
+        assert!(prepared.shader_source.contains("@vertex"));
     }
 }

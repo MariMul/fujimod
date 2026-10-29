@@ -2,14 +2,16 @@
 
 use super::{
     Reader, Snapshots,
-    draw_state::{ColorTargetFormat, DepthTargetFormat, DrawState, PrimitiveMode},
-    raster::{self, RasterVertex},
-    shader::Vector,
+    draw_state::{ColorTargetFormat, CullMode, DepthTargetFormat, DrawState},
+    gpu_vertex,
 };
 use fujimod_emulator_gpu::{
     GpuContext, GpuSurface, SurfaceExtent, SurfaceFormat, SurfaceKey, SurfaceLayout, context,
 };
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::{Arc, Mutex, OnceLock},
+};
 use wgpu::util::DeviceExt;
 
 const REGISTER_WORDS: usize = 0x500;
@@ -18,7 +20,7 @@ const FOG_WORDS: usize = 128;
 const INPUT_OFFSET: usize = FOG_OFFSET + FOG_WORDS;
 const CASE_WORDS: usize = INPUT_OFFSET + 16;
 
-static DRAW_PIPELINE: OnceLock<wgpu::RenderPipeline> = OnceLock::new();
+static DRAW_PIPELINES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::RenderPipeline>>>> = OnceLock::new();
 
 fn color_surface_format(format: ColorTargetFormat) -> Result<SurfaceFormat, String> {
     match format {
@@ -44,21 +46,21 @@ fn depth_surface_format(format: DepthTargetFormat) -> Result<SurfaceFormat, Stri
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct Primitive {
+pub(super) struct Draw {
     state: DrawState,
-    vertices: [[Vector; 16]; 3],
+    vertex: gpu_vertex::PreparedDraw,
     registers: Vec<(u16, u32)>,
 }
 
-impl Primitive {
+impl Draw {
     pub(super) fn new(
         state: DrawState,
-        vertices: [[Vector; 16]; 3],
+        vertex: gpu_vertex::PreparedDraw,
         registers: &BTreeMap<u16, u32>,
     ) -> Self {
         Self {
             state,
-            vertices,
+            vertex,
             registers: registers
                 .iter()
                 .map(|(&index, &value)| (index, value))
@@ -73,35 +75,29 @@ pub(super) struct RenderedList {
     pub queue_submissions: u8,
 }
 
-struct PreparedTriangle {
+struct PreparedDraw {
+    state: DrawState,
     extent: SurfaceExtent,
     color_key: SurfaceKey,
     depth_key: SurfaceKey,
     parameters: Vec<u32>,
     guest_bytes: Vec<u8>,
-    vertex_data: Vec<u8>,
+    vertex: gpu_vertex::PreparedDraw,
 }
 
 pub(super) fn render(
-    primitives: &[Primitive],
+    draws: &[Draw],
     recorded_reads: &[(u64, Vec<u8>)],
     expected_snapshots: Option<&Snapshots>,
     read: &mut Reader<'_>,
 ) -> Result<RenderedList, String> {
     let mut prepared = Vec::new();
     let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
-    for primitive in primitives {
-        if !matches!(
-            primitive.state.raster.primitive_mode,
-            PrimitiveMode::Triangles | PrimitiveMode::TriangleStrip | PrimitiveMode::TriangleFan
-        ) {
-            return Err("DMP host GPU draw received a non-triangle primitive".into());
-        }
-        let triangles = raster::clipped_triangles(&primitive.state, primitive.vertices)?;
-        if triangles.is_empty() {
+    for draw in draws {
+        if draw.vertex.indices.is_empty() {
             continue;
         }
-        let state = &primitive.state;
+        let state = &draw.state;
         let (width, height) = state.targets.extent.dimensions()?;
         let extent = SurfaceExtent {
             width: width as u32,
@@ -128,17 +124,16 @@ pub(super) fn render(
             read,
         )?;
 
-        let (parameters, guest_bytes) = draw_parameters(primitive, recorded_reads, read)?;
-        for triangle in triangles {
-            prepared.push(PreparedTriangle {
-                extent,
-                color_key,
-                depth_key,
-                parameters: parameters.clone(),
-                guest_bytes: guest_bytes.clone(),
-                vertex_data: encode_vertices(&triangle, extent)?,
-            });
-        }
+        let (parameters, guest_bytes) = draw_parameters(draw, recorded_reads, read)?;
+        prepared.push(PreparedDraw {
+            state: state.clone(),
+            extent,
+            color_key,
+            depth_key,
+            parameters,
+            guest_bytes,
+            vertex: draw.vertex.clone(),
+        });
     }
     if prepared.is_empty() {
         return Ok(RenderedList {
@@ -150,21 +145,6 @@ pub(super) fn render(
 
     let cache = context()?;
     let _submission = cache.acquire()?;
-    let pipeline = DRAW_PIPELINE.get_or_init(|| {
-        let shader_source = format!(
-            "{}\n{}",
-            include_str!("gpu_fragment.wgsl"),
-            include_str!("gpu_draw.wgsl")
-        );
-        let shader = cache
-            .device()
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("DMP WGSL render stage"),
-                source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-            });
-        create_pipeline(cache.device(), &shader)
-    });
-
     let mut encoder = cache
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -176,8 +156,9 @@ pub(super) fn render(
     for (key, _) in surfaces.values() {
         cache.encode_clear_write_masks(&mut encoder, *key)?;
     }
-    for triangle in &prepared {
-        render_triangle(triangle, pipeline, cache, &mut encoder)?;
+    for prepared in &prepared {
+        let pipeline = pipeline_for(cache.device(), &prepared.state, &prepared.vertex)?;
+        render_draw(prepared, &pipeline, cache, &mut encoder)?;
     }
     let keys = surfaces.values().map(|(key, _)| *key).collect::<Vec<_>>();
     let pending = cache.encode_readbacks(&mut encoder, &keys)?;
@@ -296,15 +277,15 @@ fn recorded_range(reads: &[(u64, Vec<u8>)], address: u64, length: usize) -> Opti
     })
 }
 
-fn render_triangle(
-    triangle: &PreparedTriangle,
+fn render_draw(
+    draw: &PreparedDraw,
     pipeline: &wgpu::RenderPipeline,
     cache: &GpuContext,
     encoder: &mut wgpu::CommandEncoder,
 ) -> Result<(), String> {
-    let extent = triangle.extent;
-    let color_key = triangle.color_key;
-    let depth_key = triangle.depth_key;
+    let extent = draw.extent;
+    let color_key = draw.color_key;
+    let depth_key = draw.depth_key;
     let color_surface = cache
         .get(color_key)?
         .ok_or("DMP color surface is not resident")?;
@@ -315,18 +296,28 @@ fn render_triangle(
     let device = cache.device();
     let parameter_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DMP draw parameters"),
-        contents: &encode_words(&triangle.parameters),
+        contents: &encode_words(&draw.parameters),
         usage: wgpu::BufferUsages::STORAGE,
     });
     let guest_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DMP draw textures"),
-        contents: &triangle.guest_bytes,
+        contents: &draw.guest_bytes,
         usage: wgpu::BufferUsages::STORAGE,
     });
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("DMP clipped triangle vertices"),
-        contents: &triangle.vertex_data,
-        usage: wgpu::BufferUsages::VERTEX,
+    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("DMP vertex uniforms"),
+        contents: &draw.vertex.shading_bytes,
+        usage: wgpu::BufferUsages::UNIFORM,
+    });
+    let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("DMP vertex attributes"),
+        contents: &draw.vertex.input_bytes,
+        usage: wgpu::BufferUsages::STORAGE,
+    });
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("DMP vertex indices"),
+        contents: &encode_words(&draw.vertex.indices),
+        usage: wgpu::BufferUsages::INDEX,
     });
     let color_input = copy_surface_texture(device, encoder, &color_surface, extent);
     let depth_input = copy_surface_texture(device, encoder, &depth_surface, extent);
@@ -359,6 +350,14 @@ fn render_triangle(
             wgpu::BindGroupEntry {
                 binding: 4,
                 resource: wgpu::BindingResource::TextureView(&depth_input_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: uniform_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: input_buffer.as_entire_binding(),
             },
         ],
     });
@@ -403,7 +402,7 @@ fn render_triangle(
             }),
         ];
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("DMP clipped triangle"),
+            label: Some("DMP draw"),
             color_attachments: &attachments,
             depth_stencil_attachment: None,
             timestamp_writes: None,
@@ -421,26 +420,75 @@ fn render_triangle(
             1.0,
         );
         pass.set_scissor_rect(0, 0, extent.width, extent.height);
-        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        pass.draw(0..3, 0..1);
+        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        let index_count = u32::try_from(draw.vertex.indices.len())
+            .map_err(|_| "DMP host GPU index count exceeds u32")?;
+        pass.draw_indexed(0..index_count, 0, 0..1);
     }
     cache.encode_accumulate_draw_mask(encoder, color_key)?;
     cache.encode_accumulate_draw_mask(encoder, depth_key)?;
     Ok(())
 }
 
-fn create_pipeline(device: &wgpu::Device, shader: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
-        0 => Float32x4,
-        1 => Float32x4,
-        2 => Float32x2,
-        3 => Float32x2
-    ];
-    let buffers = [wgpu::VertexBufferLayout {
-        array_stride: 48,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &ATTRIBUTES,
-    }];
+fn pipeline_for(
+    device: &wgpu::Device,
+    state: &DrawState,
+    vertex: &gpu_vertex::PreparedDraw,
+) -> Result<Arc<wgpu::RenderPipeline>, String> {
+    let key = vertex.shader_key;
+    match state.raster.primitive_mode {
+        super::draw_state::PrimitiveMode::Triangles
+        | super::draw_state::PrimitiveMode::TriangleStrip
+        | super::draw_state::PrimitiveMode::TriangleFan => {}
+        _ => return Err("DMP host GPU pipeline received a non-triangle mode".into()),
+    }
+    let pipelines = DRAW_PIPELINES.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut pipelines = pipelines
+        .lock()
+        .map_err(|_| "DMP host GPU render pipeline lock poisoned")?;
+    if let Some(pipeline) = pipelines.get(&key) {
+        return Ok(Arc::clone(pipeline));
+    }
+
+    let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("DMP translated vertex program"),
+        source: wgpu::ShaderSource::Wgsl(vertex.shader_source.clone().into()),
+    });
+    let fragment_source = format!(
+        "{}\n{}",
+        include_str!("gpu_fragment.wgsl"),
+        include_str!("gpu_draw.wgsl")
+    );
+    let fragment_source = if state.raster.flat_shading {
+        fragment_source.replace(
+            "@location(0) primary: vec4<f32>",
+            "@location(0) @interpolate(flat) primary: vec4<f32>",
+        )
+    } else {
+        fragment_source
+    };
+    let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("DMP fragment program"),
+        source: wgpu::ShaderSource::Wgsl(fragment_source.into()),
+    });
+    let pipeline = Arc::new(create_pipeline(
+        device,
+        &vertex_shader,
+        &fragment_shader,
+        state,
+        vertex.topology,
+    ));
+    pipelines.insert(key, Arc::clone(&pipeline));
+    Ok(pipeline)
+}
+
+fn create_pipeline(
+    device: &wgpu::Device,
+    vertex_shader: &wgpu::ShaderModule,
+    fragment_shader: &wgpu::ShaderModule,
+    state: &DrawState,
+    topology: wgpu::PrimitiveTopology,
+) -> wgpu::RenderPipeline {
     let targets = [
         Some(color_target()),
         Some(color_target()),
@@ -451,16 +499,21 @@ fn create_pipeline(device: &wgpu::Device, shader: &wgpu::ShaderModule) -> wgpu::
         label: Some("DMP fixed-function draw state"),
         layout: None,
         vertex: wgpu::VertexState {
-            module: shader,
-            entry_point: Some("draw_vertex"),
+            module: vertex_shader,
+            entry_point: Some("main"),
             compilation_options: Default::default(),
-            buffers: &[Some(buffers[0].clone())],
+            buffers: &[],
         },
         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
+            topology,
+            strip_index_format: (topology == wgpu::PrimitiveTopology::TriangleStrip)
+                .then_some(wgpu::IndexFormat::Uint32),
             front_face: wgpu::FrontFace::Cw,
-            cull_mode: None,
+            cull_mode: match state.raster.cull_mode {
+                CullMode::Disabled | CullMode::Other(_) => None,
+                CullMode::Front => Some(wgpu::Face::Front),
+                CullMode::Back => Some(wgpu::Face::Back),
+            },
             polygon_mode: wgpu::PolygonMode::Fill,
             unclipped_depth: false,
             conservative: false,
@@ -468,7 +521,7 @@ fn create_pipeline(device: &wgpu::Device, shader: &wgpu::ShaderModule) -> wgpu::
         depth_stencil: None,
         multisample: Default::default(),
         fragment: Some(wgpu::FragmentState {
-            module: shader,
+            module: fragment_shader,
             entry_point: Some("draw_fragment"),
             compilation_options: Default::default(),
             targets: &targets,
@@ -519,7 +572,7 @@ fn copy_surface_texture(
 }
 
 fn draw_parameters(
-    primitive: &Primitive,
+    primitive: &Draw,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
 ) -> Result<(Vec<u32>, Vec<u8>), String> {
@@ -674,29 +727,6 @@ fn append_mip_level(
 
 fn align_four(length: usize) -> usize {
     (length + 3) & !3
-}
-
-fn encode_vertices(triangle: &[RasterVertex; 3], extent: SurfaceExtent) -> Result<Vec<u8>, String> {
-    let mut bytes = Vec::with_capacity(3 * 48);
-    for vertex in triangle {
-        let reciprocal_w = vertex.position[3];
-        if !reciprocal_w.is_finite() || reciprocal_w == 0.0 {
-            return Err("DMP clipped vertex has invalid reciprocal W".into());
-        }
-        let w = 1.0 / reciprocal_w;
-        let ndc_x = vertex.position[0] * (2.0 / extent.width as f32) - 1.0;
-        let ndc_y = 1.0 - vertex.position[1] * (2.0 / extent.height as f32);
-        let clip = [ndc_x * w, ndc_y * w, vertex.position[2] * w, w];
-        for value in clip
-            .into_iter()
-            .chain(vertex.color)
-            .chain(vertex.uv[0])
-            .chain(vertex.uv[1])
-        {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
-    }
-    Ok(bytes)
 }
 
 fn encode_words(words: &[u32]) -> Vec<u8> {

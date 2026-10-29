@@ -72,7 +72,9 @@ fn assert_host_gpu_matches_cpu(
         }
         Err(error) => panic!("DMP host render path failed: {error}"),
     };
-    assert_eq!(actual, expected);
+    if actual != expected {
+        panic!("{}", super::gpu_draw::snapshot_mismatch(&actual, &expected));
+    }
     if std::env::var("FUJIMOD_DMP_VERIFY_GPU").is_ok_and(|value| value == "1") {
         let verified = Engine::default()
             .execute_host_gpu_verified(words, &mut |address, length| Ok(read(address, length)))
