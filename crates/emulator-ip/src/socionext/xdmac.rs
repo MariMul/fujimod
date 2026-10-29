@@ -17,6 +17,8 @@ use std::sync::{Arc, Mutex};
 const ENABLE: u32 = 1 << 28;
 const SOFTWARE: u32 = 1 << 24;
 const SERIAL_ACCESS: u32 = 1 << 15;
+// XP5 companion-core DMA setup sets this from a request-descriptor flag; it does not change modeled data movement (session assumption).
+const REQUEST_OPTION: u32 = 1 << 8;
 const BLOCK: u32 = 1 << 12;
 const ACK_WRITE: u32 = 1 << 4;
 const NORMAL: u8 = 8;
@@ -141,7 +143,8 @@ impl Pair {
         // SA serializes each source access before its destination access.
         // Every beat here already performs that ordered data movement.
         if c.counter_exhausted
-            || c.control & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | BLOCK | ACK_WRITE | 3)
+            || c.control
+                & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | REQUEST_OPTION | BLOCK | ACK_WRITE | 3)
                 != 0
             || c.source_shape & !0x30004 != 0
             || c.destination_shape & !0x30004 != 0
