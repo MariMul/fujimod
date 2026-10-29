@@ -3,7 +3,7 @@
   "schema": 1,
   "id": "gfx50r",
   "soc_id": "xpp",
-  "dram_bytes": 536870912,
+  "dram_bytes": 1073741824,
   "nand": null,
   "sensor": null,
   "lens": null,
