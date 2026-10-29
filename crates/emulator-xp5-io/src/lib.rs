@@ -15,4 +15,5 @@ pub mod sd_interface;
 pub mod spi;
 pub mod temperature;
 pub mod timer;
+pub mod usb_connection_status;
 pub mod write_only_registers;

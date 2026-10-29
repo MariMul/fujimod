@@ -4,7 +4,7 @@ use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
     adc, discarded_read, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
-    write_only_registers,
+    usb_connection_status, write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
@@ -102,6 +102,19 @@ fn register_with_resources(
                 window.base,
                 window.size,
                 Box::new(discarded_read::DiscardedRead::new(window.base, window.size)?),
+            )?;
+        }
+        "usb-connection-status" => {
+            if !window.options.is_empty() {
+                return Err("USB connection-status takes no options".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(usb_connection_status::UsbConnectionStatus::new(
+                    window.base,
+                    window.size,
+                )?),
             )?;
         }
         "battery-i2c" => {
