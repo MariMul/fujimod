@@ -1079,6 +1079,36 @@ pub struct DisplayFrames {
     pub period_ticks: u64,
 }
 
+/// Status bits of one display output register.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayStatusBits"))]
+pub struct DisplayStatusBits {
+    /// Word offset from the output base.
+    pub offset: u64,
+    /// Bits that read with the declared level.
+    pub mask: u64,
+}
+
+/// Register window of one display output with status bits that read fixed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayOutput"))]
+pub struct DisplayOutput {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Bits a completed request leaves clear.
+    pub clear_bits: Vec<DisplayStatusBits>,
+    /// Bits that report a completed request as set.
+    pub set_bits: Vec<DisplayStatusBits>,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// Declared dmp facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1430,6 +1460,9 @@ pub struct RegisterLayouts {
     /// Declared display frame interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_frames: Option<DisplayFrames>,
+    /// Declared display output register windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_outputs: Option<Vec<DisplayOutput>>,
     /// Declared dmp.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dmp: Option<Dmp>,

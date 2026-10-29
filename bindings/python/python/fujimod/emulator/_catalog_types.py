@@ -2292,6 +2292,19 @@ class HardwareDisplayFrames(TypedDict, total=False):
     period_ticks: Required[int]
 
 
+class HardwareDisplayOutput(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    clear_bits: Required[list[HardwareDisplayStatusBits]]
+    set_bits: Required[list[HardwareDisplayStatusBits]]
+    size: Required[int]
+
+
+class HardwareDisplayStatusBits(TypedDict, total=False):
+    mask: Required[int]
+    offset: Required[int]
+
+
 class HardwareDisplayTiming(TypedDict, total=False):
     basis: Required[str]
     frame_period_ticks: Required[int]
@@ -2580,6 +2593,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     control_requests: NotRequired[HardwareControlRequests | None]
     decompressor: NotRequired[HardwareDecompressor | None]
     display_frames: NotRequired[HardwareDisplayFrames | None]
+    display_outputs: NotRequired[list[HardwareDisplayOutput] | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
     flash_controller: NotRequired[HardwareFlashController | None]

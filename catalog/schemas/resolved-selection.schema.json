@@ -10272,6 +10272,73 @@
       ],
       "type": "object"
     },
+    "HardwareDisplayOutput": {
+      "additionalProperties": false,
+      "description": "Register window of one display output with status bits that read fixed.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "clear_bits": {
+          "description": "Bits a completed request leaves clear.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "set_bits": {
+          "description": "Bits that report a completed request as set.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayStatusBits"
+          },
+          "type": "array"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "clear_bits",
+        "set_bits",
+        "size"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayStatusBits": {
+      "additionalProperties": false,
+      "description": "Status bits of one display output register.",
+      "properties": {
+        "mask": {
+          "description": "Bits that read with the declared level.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Word offset from the output base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "mask"
+      ],
+      "type": "object"
+    },
     "HardwareDisplayTiming": {
       "additionalProperties": false,
       "description": "Declared display timing facts.",
@@ -11829,6 +11896,16 @@
             }
           ],
           "description": "Declared display frame interrupts."
+        },
+        "display_outputs": {
+          "description": "Declared display output register windows.",
+          "items": {
+            "$ref": "#/$defs/HardwareDisplayOutput"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "dma": {
           "anyOf": [

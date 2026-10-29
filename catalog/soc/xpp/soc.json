@@ -98,7 +98,7 @@
     {
       "id": "display",
       "base": 4294328320,
-      "size": 8192,
+      "size": 12288,
       "kind": "display-controller",
       "clock_id": null
     },
@@ -493,11 +493,20 @@
             "irq_routes": [112, 113, 114, 117, 118, 119],
             "period_ticks": 800000,
             "basis": "Frame interrupts of the display controller, as an interrupt law without its registers. Seg5 source table 0xed4720 rows 73-78 connect lines 112-114 and 117-119 (edge) to handlers that run the callbacks queued by 0xc9dc38 for output 0 or 1 and event 0-2 (0xc9d854, 0xc9d994); the handlers read no controller register. The X-T20 2.11 vglib thread clears bit 16 of 0xfff65000 or 0xfff5a000, queues such a callback and yields at priority 7 until it runs (0xcad290), which starves flashload before section 7 loads. The period is an assumed 60 Hz in 48 MHz timer ticks (the 10 ms system tick reloads 480000); the panel rate is not measured."
-          }
+          },
+          "display_outputs": [
+            {
+              "base": 4294328320,
+              "size": 12288,
+              "set_bits": [{ "offset": 0, "mask": 65536 }],
+              "clear_bits": [{ "offset": 8192, "mask": 268435456 }],
+              "basis": "Output 1 of the display controller, 0xfff64000-0xfff67000, as word registers that read back their last write. Two status laws from X-T20 2.11 seg5: 0xca37ac saves +0, writes bit 16, clears it and polls until bit 16 reads set before restoring the saved word with bit 16; 0xca9df0 sets bit 28 of +0x2000 and polls until it reads clear. Both requests complete at once; the controller's real latency (likely one frame) is not measured. Output 0 at 0xfff59000 follows the same bit-16 law in 0xca37ac but is not exercised up to REC and is not declared."
+            }
+          ]
         },
         "limits": [
           "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer is declared; no display output block is.",
+          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; no pixels are scanned out.",
           "No boot ROM, reset-release controller or external peripheral replies are assumed."
         ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."
