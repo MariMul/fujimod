@@ -55,7 +55,7 @@ impl Default for Engine {
             written_ranges: Vec::new(),
             vertices_executed: 0,
             primitive_index: 0,
-            cpu_only: std::env::var_os("FUJIMOD_DMP_CPU").is_some(),
+            cpu_only: std::env::var("FUJIMOD_DMP_CPU").is_ok_and(|value| value == "1"),
             #[cfg(not(target_arch = "wasm32"))]
             gpu_primitives: None,
             last_output: None,

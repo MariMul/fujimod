@@ -1100,7 +1100,12 @@ fn gpu_mode() -> (bool, bool) {
 fn dmp_gpu_mode() -> (bool, bool) {
     let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
     let verify = enabled("FUJIMOD_DMP_VERIFY_GPU");
-    (enabled("FUJIMOD_DMP_GPU") || verify, verify)
+    dmp_gpu_mode_for(enabled("FUJIMOD_DMP_CPU"), verify)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn dmp_gpu_mode_for(cpu_only: bool, verify: bool) -> (bool, bool) {
+    (verify || !cpu_only, verify)
 }
 
 fn paint_cpu_draws(
@@ -1166,6 +1171,15 @@ mod tests {
     use super::*;
     use fujimod_emulator_devices::Host;
     use fujimod_emulator_devices::test_host::{bus::TestBus, recording::RecordingHost};
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn dmp_gles_uses_gpu_by_default_and_cpu_when_requested() {
+        assert_eq!(dmp_gpu_mode_for(false, false), (true, false));
+        assert_eq!(dmp_gpu_mode_for(true, false), (false, false));
+        assert_eq!(dmp_gpu_mode_for(true, true), (true, true));
+    }
+
     /// The pixmap high-address register beside the renderer reads zero and
     /// refuses nonzero writes, like the XP5 register at the same address.
     struct AddressHigh;
