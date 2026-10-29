@@ -137,7 +137,8 @@ pub fn register_all(
                 )?),
             )?);
         }
-        bus.register(0xff90e564, 24, Box::new(Global::default()))?;
+        // e560 is an M4-read retained word whose reset value is a session assumption.
+        bus.register(0xff90e560, 28, Box::new(Global::default()))?;
     }
     for w in windows
         .iter()
