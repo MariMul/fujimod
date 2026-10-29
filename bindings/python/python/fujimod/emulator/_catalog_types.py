@@ -379,6 +379,11 @@ class BoundPosition(TypedDict, total=False):
     key: NotRequired[InputBinding | None]
 
 
+class BulkDma(TypedDict, total=False):
+    address_alignment: Required[int]
+    length_granule: Required[int]
+
+
 class BulkRange(TypedDict, total=False):
     address: Required[int]
     size: Required[int]
@@ -1496,6 +1501,7 @@ FirmwareBulk = TypedDict(
         "$schema": Required["str"],
         "code_alias": Required["int"],
         "code_checks": Required["list[CodeCheck]"],
+        "dma": NotRequired["BulkDma | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
         "internal_version": Required["str"],
