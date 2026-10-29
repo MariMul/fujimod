@@ -271,7 +271,7 @@ impl Bus {
         if let Some(before) = before {
             if before != self.windows[id].device.save() {
                 if let Some(stops) = &self.continuation {
-                    stops.borrow_mut().fired = true;
+                    stops.borrow_mut().device(id);
                 }
             }
         }
