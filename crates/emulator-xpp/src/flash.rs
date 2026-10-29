@@ -4,8 +4,11 @@
 //! explicitly attached NOR register device. Array commands refuse. The aperture
 //! reads attached array contents, erased (0xff) past the supplied image.
 //! With a declared program IRQ, DMA stores program the array by clearing bits.
-//! Each programming DMA thread sets status bit 5 at its end. The IRQ is the
-//! status bits 0-5 not held by mask +0x28; mask writes acknowledge status.
+//! Each programming DMA thread sets status bit 5 at its end. Mask +0x28 is a
+//! stored register and status stays latched while masked; the IRQ is the
+//! status bits 0-5 the mask leaves open. GFX 50R never writes +0x24: its
+//! handler masks handled bits. A command trigger clears bits 0 and 3 and a
+//! new DMA program clears bit 5; these clearing points are inferred.
 use fujimod_emulator_devices::parts::micron_nor;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -107,6 +110,7 @@ impl Aperture {
         if !self.contains(address, bytes.len()) {
             return Err("Flash program outside the aperture".into());
         }
+        self.program.lock().unwrap().0 = 0;
         let start = (address - self.base) as usize;
         let mut image = self.image.lock().unwrap();
         if image.len() < start + bytes.len() {
@@ -135,9 +139,8 @@ impl Aperture {
             cx.set_irq(irq, true);
         }
     }
-    fn acknowledge(&self, mask: u32) {
-        let mut program = self.program.lock().unwrap();
-        *program = (program.0 & !mask, mask);
+    fn set_mask(&self, mask: u32) {
+        self.program.lock().unwrap().1 = mask;
     }
     fn program_status(&self) -> u32 {
         self.program.lock().unwrap().0
@@ -347,18 +350,22 @@ impl Device for FlashController {
                 0x18 | 0x24 => cx.fail("Write to read-only serial-flash register"),
                 0x28 => {
                     if value & !0x3f != 0 {
-                        cx.fail("Unsupported serial-flash status acknowledgement");
+                        cx.fail("Unsupported serial-flash status mask");
                     } else {
-                        self.registers[0x24 / 4] &= !(value as u32);
-                        self.aperture.acknowledge(value as u32);
+                        self.registers[0x28 / 4] = value as u32;
+                        self.aperture.set_mask(value as u32);
                         self.aperture.update_irq(cx, self.registers[0x24 / 4]);
                     }
                 }
                 0x1c => {
                     if value != 1 {
                         cx.fail("Unsupported serial-flash command trigger");
-                    } else if let Err(error) = self.start(cx) {
-                        cx.fail(error);
+                    } else {
+                        self.registers[0x24 / 4] &= !9;
+                        self.aperture.update_irq(cx, self.registers[0x24 / 4]);
+                        if let Err(error) = self.start(cx) {
+                            cx.fail(error);
+                        }
                     }
                 }
                 _ => self.registers[(offset / 4) as usize] = value as u32,
@@ -445,6 +452,7 @@ impl Device for FlashController {
         }
         self.aperture.restore_audit(audit)?;
         self.registers = registers;
+        self.aperture.set_mask(self.registers[0x28 / 4]);
         self.nor = nor;
         self.pending = pending;
         self.received = received;
@@ -480,6 +488,9 @@ mod tests {
         aperture.program_complete(&mut h.cx());
         assert_eq!(read(&mut d, &mut h, base + 0x24), 0x20);
         write(&mut d, &mut h, base + 0x28, 0x20);
+        assert_eq!(read(&mut d, &mut h, base + 0x28), 0x20);
+        assert_eq!(read(&mut d, &mut h, base + 0x24), 0x20);
+        aperture.program(0xf0000000, &[0xff]).unwrap();
         assert_eq!(read(&mut d, &mut h, base + 0x24), 0);
     }
 
@@ -567,11 +578,10 @@ mod tests {
         for pass in 0..2 {
             advance(&mut d, &mut h, 6);
             assert_eq!(read(&mut d, &mut h, base + 0x24), 9);
-            write(&mut d, &mut h, base + 0x28, 8);
-            assert_eq!(read(&mut d, &mut h, base + 0x24), 1);
+            write(&mut d, &mut h, base + 0x28, 9);
+            assert_eq!(read(&mut d, &mut h, base + 0x28), 9);
+            assert_eq!(read(&mut d, &mut h, base + 0x24), 9);
             assert_eq!(read(&mut d, &mut h, base + 0x18), 1);
-            write(&mut d, &mut h, base + 0x28, 1);
-            assert_eq!(read(&mut d, &mut h, base + 0x24), 0);
             if pass == 0 {
                 d.restore(&saved).unwrap();
                 h.now = 4;
