@@ -5,6 +5,38 @@ use fujimod_emulator_devices::parts::switch_panel::{Case, Circuit, Control, Sign
 use fujimod_emulator_imaging::scene::{Frame, FramePixels, SensorFrames};
 use std::sync::{Arc, Mutex};
 
+#[test]
+fn durable_card_uses_the_new_hosts_allocation_limit_without_changing_saved_files() {
+    let mut source = card_session();
+    let mut card = source.card_medium("sd").unwrap();
+    let old_limit = card.dirty_sectors();
+    card.set_allocation_limit(old_limit).unwrap();
+    let revision = card.revision();
+    let capacity = card.sectors();
+    source.retain_card("sd", card, true, false).unwrap();
+    let spec = crate::durable::Spec {
+        cards: vec!["sd".into()],
+        nands: vec![],
+    };
+    let saved = crate::durable::Media::capture(&source, &spec).unwrap();
+    let mut cold = card_session();
+    let limit = cold.card_medium("sd").unwrap().allocation_limit();
+    assert!(limit > old_limit);
+    saved.apply(&mut cold, &spec).unwrap();
+    let retained = cold.card_medium("sd").unwrap();
+    assert_eq!(retained.allocation_limit(), limit);
+    assert_eq!(retained.sectors(), capacity);
+    assert_eq!(retained.revision(), revision);
+    assert_eq!(
+        cold.card_read("sd", "/DCIM/100_FUJI/A.JPG", Some(revision), 100)
+            .unwrap(),
+        b"card bytes"
+    );
+    retained
+        .reserve_write(0x100000, old_limit as u32 + 1)
+        .unwrap();
+}
+
 fn session() -> Session {
     let mut session = card_session();
     session
