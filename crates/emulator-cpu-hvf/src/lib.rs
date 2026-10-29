@@ -778,7 +778,8 @@ impl Cpu for Core {
 
     fn request_pause(&self, run: RunToken) -> Result<(), ExecutionError> {
         let active = self.validate_active_run(run)?;
-        if active.as_ref().unwrap().result.is_none() {
+        let state = active.as_ref().unwrap();
+        if state.result.is_none() && state.pending_callback.is_none() {
             self.preempt_native_run();
         }
         Ok(())

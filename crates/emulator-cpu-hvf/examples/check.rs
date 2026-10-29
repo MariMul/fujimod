@@ -1375,3 +1375,39 @@ fn main() -> Result<(), String> {
     );
     Ok(())
 }
+    // A board barrier also requests a pause on the callback owner, which is
+    // already parked. Its asynchronous load must still commit once.
+    code(&cpu, 0x10300, &[0xf9400020, 0x14000000]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    set(&cpu, Register::X(1), 0x8000000);
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+    let async_reads = io.reads.len();
+    let async_run = cpu
+        .start_run(Run {
+            begin: 0x10300,
+            until: None,
+            watchdog_us: 2_000_000,
+            instructions: Some(100_000_000),
+        })
+        .map_err(|e| e.to_string())?;
+    loop {
+        match cpu.poll_run(async_run).map_err(|e| e.to_string())? {
+            RunStatus::Running => thread::yield_now(),
+            RunStatus::CallbackPending => {
+                cpu.request_pause(async_run).map_err(|e| e.to_string())?;
+                cpu.service_pending_callback(async_run)
+                    .map_err(|e| e.to_string())?;
+            }
+            RunStatus::Complete(result) => {
+                result.map_err(|e| e.to_string())?;
+                break;
+            }
+        }
+    }
+    assert_eq!(io.reads.split_off(async_reads), vec![(0, 8)]);
+    assert_eq!(get(&cpu, Register::X(0)), 0x1234567800000080);
+    assert_eq!(get(&cpu, Register::Pc), 0x10304);
+    code(&cpu, 0x10300, &[0xf9400020, 0xf9000420]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    cpu.set_execution_policy(ExecutionPolicy::Exact)?;
+    println!("PASS: asynchronous MMIO load completed once");
