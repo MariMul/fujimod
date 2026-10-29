@@ -86,6 +86,33 @@ pub struct CoverageKernel {
     pipeline: wgpu::ComputePipeline,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CoverageRaster {
+    pub offset: u32,
+    pub length: usize,
+}
+
+/// Coverage counts written by a GPU dispatch for direct use by later GPU passes.
+pub struct CoverageBatch {
+    output: Option<wgpu::Buffer>,
+    rasters: Vec<CoverageRaster>,
+    total_count: usize,
+}
+
+impl CoverageBatch {
+    pub fn buffer(&self) -> Option<&wgpu::Buffer> {
+        self.output.as_ref()
+    }
+
+    pub fn rasters(&self) -> &[CoverageRaster] {
+        &self.rasters
+    }
+
+    pub fn total_count(&self) -> usize {
+        self.total_count
+    }
+}
+
 impl CoverageKernel {
     pub fn new(context: &GpuContext) -> Self {
         let device = context.device();
@@ -104,19 +131,24 @@ impl CoverageKernel {
         Self { pipeline }
     }
 
-    /// Rasterize a batch of edge sets to row-major per-pixel sample counts.
-    pub fn coverage_batch(
+    /// Encode row-major coverage counts for later GPU passes in the same command list.
+    pub fn encode_batch(
         &self,
         context: &GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
         requests: &[CoverageRequest<'_>],
-    ) -> Result<Vec<Vec<u32>>, String> {
+    ) -> Result<CoverageBatch, String> {
         if requests.is_empty() {
-            return Ok(Vec::new());
+            return Ok(CoverageBatch {
+                output: None,
+                rasters: Vec::new(),
+                total_count: 0,
+            });
         }
 
         let mut jobs = Vec::<u32>::with_capacity(requests.len() * 12);
         let mut edges = Vec::<[f32; 8]>::new();
-        let mut output_lengths = Vec::with_capacity(requests.len());
+        let mut rasters = Vec::with_capacity(requests.len());
         let mut output_count = 0usize;
         let mut max_width = 0usize;
         let mut max_height = 0usize;
@@ -223,13 +255,20 @@ impl CoverageKernel {
             output_count = output_count
                 .checked_add(output_len)
                 .ok_or("coverage batch output overflow")?;
-            output_lengths.push(output_len);
+            rasters.push(CoverageRaster {
+                offset: coverage_offset,
+                length: output_len,
+            });
             max_width = max_width.max(width);
             max_height = max_height.max(height);
         }
 
         if output_count == 0 {
-            return Ok(output_lengths.iter().map(|_| Vec::new()).collect());
+            return Ok(CoverageBatch {
+                output: None,
+                rasters,
+                total_count: 0,
+            });
         }
         if edges.is_empty() {
             edges.push([0.0; 8]);
@@ -264,7 +303,6 @@ impl CoverageKernel {
             .collect();
         let job_bytes_data: Vec<u8> = jobs.into_iter().flat_map(u32::to_le_bytes).collect();
         let device = context.device();
-        let queue = context.queue();
         let jobs_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("coverage jobs"),
             contents: &job_bytes_data,
@@ -279,12 +317,6 @@ impl CoverageKernel {
             label: Some("coverage output"),
             size: output_bytes as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-        let download = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("coverage readback"),
-            size: output_bytes as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -305,9 +337,11 @@ impl CoverageKernel {
                 },
             ],
         });
-        let mut encoder = device.create_command_encoder(&Default::default());
         {
-            let mut pass = encoder.begin_compute_pass(&Default::default());
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("coverage raster"),
+                timestamp_writes: None,
+            });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bindings, &[]);
             pass.dispatch_workgroups(
@@ -316,8 +350,44 @@ impl CoverageKernel {
                 requests.len() as u32,
             );
         }
-        encoder.copy_buffer_to_buffer(&output, 0, &download, 0, output_bytes as u64);
-        queue.submit([encoder.finish()]);
+        Ok(CoverageBatch {
+            output: Some(output),
+            rasters,
+            total_count: output_count,
+        })
+    }
+
+    /// Rasterize a batch and return the sample counts to the CPU.
+    pub fn coverage_batch(
+        &self,
+        context: &GpuContext,
+        requests: &[CoverageRequest<'_>],
+    ) -> Result<Vec<Vec<u32>>, String> {
+        if requests.is_empty() {
+            return Ok(Vec::new());
+        }
+        let device = context.device();
+        let mut encoder = device.create_command_encoder(&Default::default());
+        let batch = self.encode_batch(context, &mut encoder, requests)?;
+        if batch.total_count == 0 {
+            return Ok(batch.rasters.iter().map(|_| Vec::new()).collect());
+        }
+        let output = batch
+            .output
+            .as_ref()
+            .ok_or("coverage output buffer is missing")?;
+        let output_bytes = batch
+            .total_count
+            .checked_mul(size_of::<u32>())
+            .ok_or("coverage readback size overflow")?;
+        let download = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("coverage readback"),
+            size: output_bytes as u64,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        encoder.copy_buffer_to_buffer(output, 0, &download, 0, output_bytes as u64);
+        context.submit(encoder.finish());
 
         let (sender, receiver) = std::sync::mpsc::channel();
         download
@@ -345,14 +415,12 @@ impl CoverageKernel {
         drop(bytes);
         download.unmap();
 
-        let mut offset = 0usize;
-        let result = output_lengths
-            .into_iter()
-            .map(|length| {
-                let end = offset + length;
-                let values = values[offset..end].to_vec();
-                offset = end;
-                values
+        let result = batch
+            .rasters
+            .iter()
+            .map(|raster| {
+                let start = raster.offset as usize;
+                values[start..start + raster.length].to_vec()
             })
             .collect();
         Ok(result)

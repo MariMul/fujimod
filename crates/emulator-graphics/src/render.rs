@@ -143,6 +143,11 @@ impl CoveragePlan {
         self.width == 0 || self.height == 0
     }
 
+    /// Per-pixel clip inclusion in row-major bounds order.
+    pub fn clip_mask(&self) -> &[bool] {
+        &self.clipped
+    }
+
     /// Pixel bounds as `[left, right, top, bottom)`, with exclusive end values.
     pub fn bounds(&self) -> [u32; 4] {
         if self.is_empty() {

@@ -6,7 +6,8 @@ mod coverage;
 mod surfaces;
 #[cfg(not(target_os = "emscripten"))]
 pub use coverage::{
-    CoverageEdge, CoverageKernel, CoverageRequest, EdgeCoordinates, FillRule, SampleGrid,
+    CoverageBatch, CoverageEdge, CoverageKernel, CoverageRaster, CoverageRequest, EdgeCoordinates,
+    FillRule, SampleGrid,
 };
 #[cfg(not(target_os = "emscripten"))]
 pub use surfaces::{

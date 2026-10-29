@@ -21,5 +21,8 @@ serde = { version = "1", features = ["derive", "rc"] }
 sha2 = "0.10"
 fujimod-workspace-hack.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "vulkan", "dx12", "wgsl"] }
+
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

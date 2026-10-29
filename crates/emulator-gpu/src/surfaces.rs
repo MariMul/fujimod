@@ -472,6 +472,11 @@ impl GpuContext {
         self.gpu.device_type
     }
 
+    /// Whether native `R32Uint` surfaces support in-place storage access.
+    pub fn supports_read_write_r32uint_storage(&self) -> bool {
+        self.gpu.read_write_r32uint_storage
+    }
+
     pub fn accumulate_draw_mask(&self, key: SurfaceKey) -> Result<(), String> {
         let surface = self
             .surfaces
@@ -535,6 +540,7 @@ struct Gpu {
     device_type: wgpu::DeviceType,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    read_write_r32uint_storage: bool,
     upload_pipeline: wgpu::ComputePipeline,
     clear_mask_pipeline: wgpu::ComputePipeline,
     record_mask_pipeline: wgpu::ComputePipeline,
@@ -556,8 +562,23 @@ impl Gpu {
             .await
             .map_err(|error| format!("host GPU adapter: {error}"))?;
         let info = adapter.get_info();
+        let read_write_r32uint_storage = adapter
+            .features()
+            .contains(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+            && adapter
+                .get_texture_format_features(wgpu::TextureFormat::R32Uint)
+                .flags
+                .contains(wgpu::TextureFormatFeatureFlags::STORAGE_READ_WRITE);
+        let required_features = if read_write_r32uint_storage {
+            wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+        } else {
+            wgpu::Features::empty()
+        };
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features,
+                ..Default::default()
+            })
             .await
             .map_err(|error| format!("host GPU device: {error}"))?;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -588,6 +609,7 @@ impl Gpu {
             device_type: info.device_type,
             device,
             queue,
+            read_write_r32uint_storage,
             upload_pipeline,
             clear_mask_pipeline,
             record_mask_pipeline,
