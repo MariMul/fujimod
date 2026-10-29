@@ -1907,6 +1907,7 @@ impl Session {
                 .collect(),
             failure: s.failure.clone(),
             cbar_reads: s.cbar_reads,
+            gpio: s.devices.as_ref().and_then(|devices| devices.gpio_registers()),
             history: observations.then(|| observation::History {
                 recent: s
                     .recent

@@ -173,6 +173,10 @@ impl Devices {
             .set_input(port, pin, high);
         Ok(())
     }
+    pub fn gpio_registers(&self) -> Option<Vec<[u32; 8]>> {
+        let pins = self.pins.as_ref()?.lock().unwrap();
+        Some((0..16).map(|port| pins.registers(port)).collect())
+    }
     pub fn gpio(&mut self, base: u64, inputs: [u16; 16]) -> Result<(), String> {
         if self.pins.is_some()
             || self

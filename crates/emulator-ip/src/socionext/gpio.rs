@@ -18,6 +18,10 @@ impl Pins {
             changes: [[0; 16]; 16],
         }))
     }
+    /// Register words of `port`, indexed by offset / 4.
+    pub fn registers(&self, port: usize) -> [u32; 8] {
+        self.regs[port]
+    }
     pub fn output(&self, port: usize, pin: usize) -> (bool, u64) {
         (
             self.regs[port][0] & (1 << pin) != 0,
