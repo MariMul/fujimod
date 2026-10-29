@@ -6,7 +6,6 @@ use super::preservation::{
     PreservationViolation, ProtectedRanges,
 };
 use super::*;
-use fujimod_emulator_cpu::Cpu as _;
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 
 fn board(alias: bool) -> Board {
@@ -41,58 +40,6 @@ fn board(alias: bool) -> Board {
         dma_mappings: vec![BusMapping::ram(0x10000, 0x4000)],
         decoders: vec![],
         mappings,
-        peripherals: vec![],
-        instructions_per_tick: Ratio::new(1, 1).unwrap(),
-    }
-    .build(
-        Options {
-            engine: Engine::Unicorn,
-            translation_cache_bytes: 1 << 20,
-        },
-        Bus::new(Mode::Strict),
-        None,
-    )
-    .unwrap()
-}
-
-fn permissioned_board() -> Board {
-    Graph {
-        processors: vec![Processor {
-            model: Model::CortexR5F,
-            registers: vec![(Register::Pc, 0x10000)],
-            released: true,
-            mprofile: None,
-            rprofile: Some(Default::default()),
-        }],
-        ram: vec![Ram {
-            base: 0x10000,
-            size: 0x4000,
-        }],
-        dma_mappings: vec![BusMapping::ram(0x10000, 0x4000)],
-        decoders: vec![],
-        mappings: vec![
-            MemoryMap {
-                core: 0,
-                address: 0x10000,
-                physical: 0x10000,
-                size: 0x1000,
-                permissions: 7,
-            },
-            MemoryMap {
-                core: 0,
-                address: 0x11000,
-                physical: 0x11000,
-                size: 0x1000,
-                permissions: 2,
-            },
-            MemoryMap {
-                core: 0,
-                address: 0x12000,
-                physical: 0x11000,
-                size: 0x1000,
-                permissions: 7,
-            },
-        ],
         peripherals: vec![],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
@@ -466,18 +413,14 @@ fn host_and_model_bus_writes_are_unverifiable() {
 
 #[test]
 fn integrity_fault_dominates_an_earlier_cpu_change() {
-    let mut board = permissioned_board();
-    code(
-        &board,
-        &[
-            0xe3a00001, 0xe3021000, 0xe3401001, 0xe5810000, 0xe3011000, 0xe5810000, 0xeafffffe,
-        ],
-    );
-    data(&board, 0x12000, &[0; 4]);
+    let mut board = board(false);
+    code(&board, &[0xe3a00001, 0xe5810000, 0xeafffffe]);
+    data(&board, 0x10080, &[0; 4]);
+    address(&board, 0x10080);
     let preservation = board
-        .preservation_begin(protected(&[(0x11000, 0x11020)]))
+        .preservation_begin(protected(&[(0x10080, 0x10090)]))
         .unwrap();
-    run(&mut board, 7);
+    run(&mut board, 2);
     let state = preservation.state();
     assert_eq!(
         (
@@ -486,12 +429,20 @@ fn integrity_fault_dominates_an_earlier_cpu_change() {
         ),
         (0, 1)
     );
-    assert_eq!(
-        state.violation().cloned(),
-        Some(PreservationViolation::IntegrityFault {
-            reason: PreservationFault::UnreadablePreimage
-        })
-    );
+    assert!(matches!(
+        state.violation(),
+        Some(PreservationViolation::CpuChange { .. })
+    ));
+    assert!(board.write_physical(0x20000, &[1]).is_err());
+    let integrity = Some(PreservationViolation::IntegrityFault {
+        reason: PreservationFault::UnresolvedMapping,
+    });
+    assert_eq!(preservation.state().violation().cloned(), integrity);
+    board.write_physical(0x10084, &[9]).unwrap();
+    board.write_memory(0, 0x10084, &[8]).unwrap();
+    let state = preservation.state();
+    assert_eq!(state.host_writes().get(), 2);
+    assert_eq!(state.violation().cloned(), integrity);
 }
 
 #[test]
@@ -539,7 +490,7 @@ fn dropping_preservation_removes_hooks_and_rearms() {
 fn host_write_uses_the_target_core_mapping() {
     let board = two_core_board();
     let preservation = board
-        .preservation_begin(protected(&[(0x11000, 0x11020)]))
+        .preservation_begin(protected(&[(0x11080, 0x11090)]))
         .unwrap();
     board.write_memory(0, 0x10080, &[1]).unwrap();
     assert_eq!(preservation.state().host_writes().get(), 0);
@@ -552,7 +503,7 @@ fn host_write_uses_the_target_core_mapping() {
     else {
         panic!("expected an unverifiable write");
     };
-    assert_eq!((address.get(), physical.get()), (0x10080, 0x11000));
+    assert_eq!((address.get(), physical.get()), (0x10080, 0x11080));
 }
 
 #[test]

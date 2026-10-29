@@ -481,7 +481,6 @@ impl Board {
             .write_host(&self.cpus, &state.exclusive, address, bytes)
     }
     pub fn write_memory(&self, core: usize, address: u64, bytes: &[u8]) -> Result<(), String> {
-        self.record_host_cpu_write(core, address, bytes.len());
         self.cpu(core)?.write_memory(address, bytes)?;
         let mut state = self.state.borrow_mut();
         state.code_run = None;

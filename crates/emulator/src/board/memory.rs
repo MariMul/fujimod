@@ -240,15 +240,6 @@ impl Memory {
             for (offset, bytes) in changed {
                 let pointer = unsafe { NonNull::new_unchecked(b.as_ptr().add(offset)) };
                 let physical = *base + offset as u64;
-                for cpu in cpus {
-                    unsafe {
-                        cpu.backing_written(physical, pointer, bytes)?;
-                    }
-                }
-                domain
-                    .lock()
-                    .map_err(|_| "exclusive monitors poisoned")?
-                    .written(Some((physical, bytes)))?;
                 if let Some(observer) = &preservation {
                     let typed = (|| {
                         Ok::<_, String>((
@@ -269,6 +260,15 @@ impl Memory {
                             .fault(super::preservation::PreservationFault::UnsupportedAccess),
                     }
                 }
+                for cpu in cpus {
+                    unsafe {
+                        cpu.backing_written(physical, pointer, bytes)?;
+                    }
+                }
+                domain
+                    .lock()
+                    .map_err(|_| "exclusive monitors poisoned")?
+                    .written(Some((physical, bytes)))?;
             }
         }
         self.mappings.borrow_mut().clone_from(&saved.mappings);

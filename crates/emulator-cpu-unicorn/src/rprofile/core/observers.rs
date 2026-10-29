@@ -98,6 +98,7 @@ pub(super) struct Index {
     pub writes: Ranges,
     pub exceptions: Vec<(usize, Hook)>,
     pub synchronization: Vec<(usize, Hook)>,
+    pub host_writes: Vec<(usize, Hook)>,
 }
 
 impl Index {
@@ -118,6 +119,7 @@ impl Index {
                     self.writes.insert(key, hook, range);
                 }
             }
+            Hook::HostWrite { .. } => self.host_writes.push((key, hook)),
             Hook::Fault { .. } => (),
         }
     }
@@ -139,6 +141,7 @@ impl Index {
                     self.writes.remove(key, range);
                 }
             }
+            Hook::HostWrite { .. } => self.host_writes.retain(|(id, _)| *id != key),
             Hook::Fault { .. } => (),
         }
     }

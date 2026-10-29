@@ -492,6 +492,7 @@ impl PreservationContext {
     }
     fn store(&self, address: u64, size: i32, value: i64) {
         let (Some(state), Some(cpu)) = (self.state.upgrade(), self.cpu.upgrade()) else {
+            self.fault(PreservationFault::UnresolvedMapping);
             return;
         };
         let state = state.borrow();
@@ -532,10 +533,11 @@ impl PreservationContext {
                     })
                     .map(|map| map.physical + address - map.address)
             });
-        let Ok(physical) = physical
-            .ok_or_else(|| "unresolved".to_owned())
-            .and_then(PhysicalAddress::new)
-        else {
+        let Some(physical) = physical else {
+            self.fault(PreservationFault::UnresolvedMapping);
+            return;
+        };
+        let Ok(physical) = PhysicalAddress::new(physical) else {
             self.fault(PreservationFault::UnresolvedMapping);
             return;
         };
@@ -644,11 +646,60 @@ impl PreservationContext {
     fn overlaps_spans(&self, address: CpuAddress, width: u64) -> bool {
         self.spans.iter().any(|span| span.overlaps(address, width))
     }
+    fn host_write(&self, address: u64, bytes: usize) {
+        if bytes == 0 {
+            return;
+        }
+        let Some(state) = self.state.upgrade() else {
+            self.fault(PreservationFault::UnresolvedMapping);
+            return;
+        };
+        let state = state.borrow();
+        let Ok(size) = WriteSize::new(bytes) else {
+            self.fault(PreservationFault::UnsupportedAccess);
+            return;
+        };
+        let Ok(cpu_address) = CpuAddress::new(address) else {
+            self.fault(PreservationFault::UnsupportedAccess);
+            return;
+        };
+        let physical = state
+            .decoders
+            .observed_physical(self.core.get() as usize, address, size.get())
+            .or_else(|| {
+                self.maps
+                    .iter()
+                    .find(|map| {
+                        map.address <= address
+                            && address.saturating_add(size.get()) <= map.address + map.size as u64
+                    })
+                    .map(|map| map.physical + address - map.address)
+            });
+        let Some(physical) = physical else {
+            self.fault(PreservationFault::UnresolvedMapping);
+            return;
+        };
+        let Ok(physical) = PhysicalAddress::new(physical) else {
+            self.fault(PreservationFault::UnresolvedMapping);
+            return;
+        };
+        self.records.borrow_mut().bus_write(
+            PreservationBusSource::HostWrite,
+            physical,
+            cpu_address,
+            size,
+        );
+    }
 }
 
 unsafe fn write(_: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
     let context = unsafe { &*data.cast::<PreservationContext>() };
     context.store(address, size, value);
+}
+
+unsafe fn host_write(address: u64, bytes: usize, data: *mut c_void) {
+    let context = unsafe { &*data.cast::<PreservationContext>() };
+    context.host_write(address, bytes);
 }
 
 impl Board {
@@ -659,58 +710,6 @@ impl Board {
             .as_ref()
             .and_then(Weak::upgrade)
             .is_some()
-    }
-    pub(super) fn preservation_records(&self) -> Option<Rc<RefCell<PreservationRecords>>> {
-        self.physical_memory
-            .preservation
-            .borrow()
-            .as_ref()
-            .and_then(Weak::upgrade)
-    }
-    pub(super) fn record_host_cpu_write(&self, core: usize, address: u64, bytes: usize) {
-        if bytes == 0 {
-            return;
-        }
-        let Some(records) = self.preservation_records() else {
-            return;
-        };
-        let state = self.state.borrow();
-        let physical = state
-            .decoders
-            .observed_physical(core, address, bytes as u64)
-            .or_else(|| {
-                self.mappings
-                    .iter()
-                    .find(|map| {
-                        map.core == core
-                            && map.address <= address
-                            && address.saturating_add(bytes as u64) <= map.address + map.size as u64
-                    })
-                    .map(|map| map.physical + address - map.address)
-            });
-        let Ok(size) = WriteSize::new(bytes) else {
-            records
-                .borrow_mut()
-                .fault(PreservationFault::UnsupportedAccess);
-            return;
-        };
-        let Ok(address) = CpuAddress::new(address) else {
-            records
-                .borrow_mut()
-                .fault(PreservationFault::UnsupportedAccess);
-            return;
-        };
-        match physical.map(PhysicalAddress::new) {
-            Some(Ok(physical)) => {
-                records.borrow_mut().bus_write(
-                    PreservationBusSource::HostWrite,
-                    physical,
-                    address,
-                    size,
-                );
-            }
-            _ => records.borrow_mut().unresolved(),
-        }
     }
     pub fn preservation_begin(&self, ranges: ProtectedRanges) -> Result<Box<Preservation>, String> {
         if self.cpus.iter().any(|cpu| cpu.model() != Model::CortexR5F) {
@@ -815,10 +814,16 @@ impl Board {
             broken: false,
             ended: false,
         });
+        self.physical_memory
+            .preservation
+            .replace(Some(Rc::downgrade(&records)));
         for (core, core_spans) in spans.into_iter().enumerate() {
-            if core_spans.is_empty() {
-                continue;
-            }
+            let ranges = union(
+                core_spans
+                    .iter()
+                    .map(|span| (span.start().saturating_sub(HOOK_REACH), span.end()))
+                    .collect(),
+            );
             let context_merged = records.borrow().merged.clone();
             preservation.contexts.push(Box::new(PreservationContext {
                 state: Rc::downgrade(&self.state),
@@ -837,16 +842,22 @@ impl Board {
             let data = (&**preservation.contexts.last().unwrap() as *const PreservationContext)
                 .cast_mut()
                 .cast();
-            for (begin, end) in union(
-                preservation
-                    .contexts
-                    .last()
-                    .unwrap()
-                    .spans
-                    .iter()
-                    .map(|span| (span.start().saturating_sub(HOOK_REACH), span.end()))
-                    .collect(),
-            ) {
+            match unsafe {
+                self.cpus[core].install_hook(Hook::HostWrite {
+                    callback: host_write,
+                    data,
+                    range: HookRange::All,
+                })
+            } {
+                Ok(id) => preservation
+                    .hooks
+                    .push((Rc::downgrade(&self.cpus[core]), id)),
+                Err(error) => {
+                    self.preservation_end(&mut preservation)?;
+                    return Err(error);
+                }
+            }
+            for (begin, end) in ranges {
                 match unsafe {
                     self.cpus[core].install_hook(Hook::Memory {
                         callback: write,
@@ -869,9 +880,6 @@ impl Board {
                 }
             }
         }
-        self.physical_memory
-            .preservation
-            .replace(Some(Rc::downgrade(&records)));
         Ok(preservation)
     }
     pub fn preservation_end(&self, preservation: &mut Preservation) -> Result<(), String> {
