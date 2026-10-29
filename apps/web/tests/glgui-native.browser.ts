@@ -114,6 +114,41 @@ try {
     await engine.dispose();
   });
   assert.deepEqual(errors, []);
+
+  const scenarioPage = await context.newPage();
+  const scenarioErrors: string[] = [];
+  scenarioPage.on('pageerror', (error) => scenarioErrors.push(error.message));
+  const scenarioUrl = new URL('/review/glgui-native/', base);
+  scenarioUrl.searchParams.set('scenario', 'shooting-menu');
+  if (nativeWebSocket) scenarioUrl.searchParams.set('ws', nativeWebSocket);
+  await scenarioPage.goto(scenarioUrl.href, { waitUntil: 'domcontentloaded' });
+  await scenarioPage.waitForFunction(
+    () => {
+      const state = (window as Window & {
+        nativeDisplayState?: { source: string; title: string | null };
+      }).nativeDisplayState;
+      return state?.source === 'glgui' && state.title === 'SHOOTING MENU';
+    },
+    undefined,
+    { timeout: 32000 },
+  );
+  assert.equal(await scenarioPage.locator('#status').textContent(), 'SHOOTING MENU');
+  await scenarioPage.screenshot({ path: resolve(screenshots, 'phone-scenario-menu.png') });
+  const scenarioCanvas = scenarioPage.locator('#lcd');
+  await scenarioCanvas.click({ position: { x: 360, y: 240 } });
+  await scenarioPage.waitForFunction(
+    () => (window as Window & { nativeTouchCount?: number }).nativeTouchCount! >= 2,
+    undefined,
+    { timeout: 10000 },
+  );
+  assert.match((await scenarioCanvas.getAttribute('data-last-touch')) ?? '', /"accepted":true/);
+  await scenarioPage.evaluate(async () => {
+    const engine = (window as Window & { nativeEngine?: { dispose(): Promise<void> } })
+      .nativeEngine;
+    if (!engine) throw Error('Native engine was not installed on the scenario URL.');
+    await engine.dispose();
+  });
+  assert.deepEqual(scenarioErrors, []);
   await context.close();
 } finally {
   await browser.close();

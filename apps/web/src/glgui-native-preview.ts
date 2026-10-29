@@ -69,6 +69,12 @@ void engine
   .then(() => {
     status.textContent = 'LIVE';
     status.dataset.state = 'LIVE';
+    if (parameters.get('scenario') === 'shooting-menu') {
+      void activateMenu().catch((error: unknown) => {
+        status.textContent = error instanceof Error ? error.message : String(error);
+        status.dataset.state = 'ERROR';
+      });
+    }
   })
   .catch((error: unknown) => {
     status.textContent = error instanceof Error ? error.message : String(error);
