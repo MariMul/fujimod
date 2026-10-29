@@ -411,6 +411,12 @@
       ],
       "basis": "Measured: the battery task of X-T20 2.11 keeps the gauge's replies in its block at 0xfda4fc (status register 0 at +0, register 8 at +4, 0x0c at +6, 0x10 at +8; 0xc711f0..0xc712bc), read over the live service in the s1 REC capture (2026-10-29). The s2 and s3 captures and the 2026-10-22 live-view dumps agree on register 0 and register 8 (0); register 0x0c ranges over 0x1cb..0x202 and 0x10 over 0x2b6..0x2bf. Wiring from section 5: the gauge sits on serial port 4 (resource 0xf of 0xed389c, chip select bank 13 bit 8, 8-bit transfers). 0xc70748 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc4b87c and 0 by 0xc4b8c0); the first byte names the register and bit 0 writes it, and the bytes read back from +0x60 carry the value, high byte first. The start-up 0xc70e7c polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Unlisted registers read zero, including 0x1c and the updater's 0x54; they are not measured. Register 0x54 is the data-line detection: after a cable raises VBUS, the USB manager 0x168ece0 writes 0xb00 to register 0x50 and reads 0x54, and (value & 0xd) == 1 means a PC, anything else a charger. It is declared 1, so a cable always reaches a PC; the camera's value is not measured."
     },
+    "idle_serial_ports": [
+      {
+        "port": 4294094848,
+        "basis": "Measured: nothing answers on serial channel 3 (logical device 0xb of the 0xed389c table). X-T20 2.11 section 5 0xc94358 sends a command byte, then 0xaa fill bytes, reading each received byte from +0x60 (0xc4b964) into the frame buffer at 0x11ddc55. In the s1 REC capture (2026-10-29) that buffer holds 23 ff: the command byte the body heard while sending it, then the idle-high line. The link's state byte 0x11dda50 is 0xff (0xc92a04), and the record 0x11ddb49 that command 0x20 fills (dispatcher 0xc92a28) is zero, so UI_SETP_FLASH_KIND (0x3e1) stays 0. On a port that read back its send word, the 0xaa fill decoded as flash kind 2, model 5 (0xc20090, 0xcec52c), and the AE statistics gate 0x1a36b55 stayed closed. Here every received byte reads 0xff, including the command byte, which the camera hears as sent."
+      }
+    ],
     "usb_cable": {
       "vbus_bank": 1,
       "vbus_pin": 14,

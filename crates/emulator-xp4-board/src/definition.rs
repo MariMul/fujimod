@@ -46,6 +46,10 @@ pub struct Definition {
     pub xpp_sub_cpu: Option<XppSubCpu>,
     #[serde(default)]
     pub xpp_battery_gauge: Option<XppBatteryGauge>,
+    /// X-Processor Pro serial ports with nothing attached: every byte
+    /// received reads 0xff.
+    #[serde(default)]
+    pub xpp_idle_serial: Vec<u64>,
     /// X-mount lens on an X-Processor Pro serial port; requires
     /// `xpp_storage`, `xpp_reset_gates` and the GPIO banks.
     #[serde(default)]

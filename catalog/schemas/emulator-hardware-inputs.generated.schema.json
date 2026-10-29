@@ -106,6 +106,13 @@
           },
           "type": "array"
         },
+        "idle_serial_ports": {
+          "description": "Declared serial ports with nothing attached: every byte received\nreads 0xff.",
+          "items": {
+            "$ref": "#/$defs/ResetIdleSerialPort"
+          },
+          "type": "array"
+        },
         "inputs": {
           "anyOf": [
             {
@@ -1259,6 +1266,27 @@
         "registers",
         "select_mask",
         "width"
+      ],
+      "type": "object"
+    },
+    "ResetIdleSerialPort": {
+      "additionalProperties": false,
+      "description": "Declared serial port with nothing attached.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "port"
       ],
       "type": "object"
     },

@@ -24,6 +24,9 @@
 //! the register in bits 7..1 and writes it when bit 0 is set; the next two
 //! bytes clock the value out, high byte first, or in when writing, and the
 //! byte read back from +0x60 after each send is the value byte shifted out.
+//!
+//! A port may instead be declared idle, with nothing attached: the receive
+//! line stays high, so the word read back from +0x60 after each send is 0xff.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -42,6 +45,8 @@ pub const PEER_REGISTERS: usize = 128;
 const PEER_WRITE: u32 = 1 << 15;
 const ENABLE: u64 = 0x08;
 const FRAME_BYTES: usize = 3;
+/// What an idle-high receive line clocks in for each byte sent.
+const IDLE: u32 = 0xff;
 
 /// Controller configuration only. Status and data transfers require a modeled
 /// controller/endpoint protocol and refuse on this port.
@@ -233,6 +238,8 @@ impl ClockState {
 /// The peer declared behind a discovery port.
 pub enum Peer {
     None,
+    /// Nothing attached: every byte received reads 0xff.
+    Idle,
     /// Register file addressed by 16-bit send words (`PEER_REGISTERS` bytes).
     Registers(Vec<u8>),
     /// Byte-frame peer with even-numbered 16-bit registers.
@@ -246,6 +253,7 @@ pub struct DiscoveryPort {
     peer: Option<Vec<u8>>,
     clock: Option<ClockState>,
     frames: Option<FramePeer>,
+    idle: bool,
 }
 impl DiscoveryPort {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -258,12 +266,17 @@ impl DiscoveryPort {
             peer: None,
             clock: None,
             frames: None,
+            idle: false,
         })
     }
     /// A port with its declared peer.
     pub fn attached(base: u64, peer: Peer) -> Result<Self, String> {
         match peer {
             Peer::None => Self::new(base),
+            Peer::Idle => Ok(Self {
+                idle: true,
+                ..Self::new(base)?
+            }),
             Peer::Registers(registers) => Self::with_peer(base, registers),
             Peer::Frames(registers) => Self::with_frame_peer(base, registers),
         }
@@ -366,6 +379,7 @@ impl Device for DiscoveryPort {
                             .and_then(|c| c.transfer(cx.now(), register as u8, write));
                         counted.unwrap_or(peer[register]).into()
                     }
+                    None if self.idle => IDLE,
                     None => word,
                 };
                 self.registers[STATUS] |= DONE;
@@ -384,6 +398,9 @@ impl Device for DiscoveryPort {
         if let Some(clock) = &self.clock {
             state["clock"] = json!(clock);
         }
+        if self.idle {
+            state["idle"] = json!(true);
+        }
         state
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
@@ -401,6 +418,9 @@ impl Device for DiscoveryPort {
             Some(clock) => Some(serde_json::from_value(clock.clone()).map_err(|e| e.to_string())?),
             None => None,
         };
+        if value.get("idle").and_then(Value::as_bool).unwrap_or(false) != self.idle {
+            return Err("X-Processor Pro serial idle line checkpoint differs".into());
+        }
         if clock.as_ref().map(|c| &c.clock) != self.clock.as_ref().map(|c| &c.clock) {
             return Err("X-Processor Pro serial clock checkpoint differs".into());
         }
@@ -479,6 +499,25 @@ mod tests {
         let mut cx = h.cx();
         port.write(&mut cx, base + 0x28, 4, 0);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn idle_port_reads_ff_for_every_byte_sent() {
+        let base = 0xfff2b000;
+        let mut port = DiscoveryPort::attached(base, Peer::Idle).unwrap();
+        let mut h = TestHost::new();
+        for byte in [0x20, 0xaa, 0x23] {
+            write(&mut port, &mut h, base + 0x60, byte);
+            assert_eq!(read(&mut port, &mut h, base + 0x60), 0xff);
+            assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM | DONE));
+        }
+        let saved = port.save();
+        port.restore(&saved).unwrap();
+        let mut echo = DiscoveryPort::new(base).unwrap();
+        write(&mut echo, &mut h, base + 0x60, 0xaa);
+        assert_eq!(read(&mut echo, &mut h, base + 0x60), 0xaa);
+        assert!(echo.restore(&saved).is_err());
+        assert!(port.restore(&echo.save()).is_err());
     }
 
     #[test]

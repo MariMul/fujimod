@@ -932,6 +932,7 @@ impl Session {
             xpp_serial,
             xpp_sub_cpu,
             xpp_battery_gauge,
+            xpp_idle_serial,
             xpp_lens,
             xpp_shutter,
             xpp_display_frames,
@@ -1123,6 +1124,17 @@ impl Session {
             }
             None => None,
         };
+        let peers = [
+            sub_cpu.as_ref().map(|(port, _)| *port),
+            battery_gauge.as_ref().map(|(port, _)| *port),
+            xpp_lens.as_ref().map(|lens| lens.port),
+        ];
+        if xpp_idle_serial
+            .iter()
+            .any(|port| !xpp_serial.contains(port) || peers.contains(&Some(*port)))
+        {
+            return Err("X-Processor Pro idle serial port needs a free declared port".to_owned());
+        }
         if let Some(adc) = xpp_adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -1242,6 +1254,7 @@ impl Session {
                 (_, Some((port, _))) if *port == base => {
                     Peer::Frames(battery_gauge.take().map(|(_, r)| r).unwrap_or_default())
                 }
+                _ if xpp_idle_serial.contains(&base) => Peer::Idle,
                 _ => Peer::None,
             };
             let clock = match peer {
