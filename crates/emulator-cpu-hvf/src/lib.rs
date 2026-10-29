@@ -797,10 +797,6 @@ impl Cpu for Core {
             .ok_or_else(|| {
                 ExecutionError::Backend("HVF run has no parked callback to service".into())
             })?;
-        // A board barrier can pause this CPU after it has already parked on
-        // its callback. Let the access commit, then restore that sticky pause
-        // before the worker resumes.
-        let pause_requested = self.shared.stop.swap(false, Ordering::AcqRel);
         let handled = match event {
             Event::Before(pc) => {
                 self.before(pc);
@@ -818,9 +814,6 @@ impl Cpu for Core {
             },
             Event::Done => unreachable!("completion events cannot become callbacks"),
         };
-        if pause_requested {
-            self.shared.stop.store(true, Ordering::Release);
-        }
         self.rpc(Op::Resume(handled))
             .map_err(ExecutionError::Backend)?;
         Ok(())
