@@ -104,15 +104,12 @@ impl BootController {
             }
             return Ok((*word).into());
         }
-        // Control words the GFX 50R 3.11 application references; none is
-        // polled. E.g. 0xcb0684 pulses +0x1c bit 18+n, then sets bit 0.
-        const RETAINED: [u64; 18] = [
-            0x8, 0x14, 0x1c, 0x20, 0x24, 0x6c, 0x70, 0x88, 0x8c, 0x9c, 0xc4, 0xcc, 0x10c,
-            0x110, 0x118, 0x11c, 0x120, 0x2c4,
-        ];
+        // Other selector-page words are system control. Every GFX 50R 3.11
+        // access identified (e.g. 0xcb0684 on +0x1c, 0xa9c48c on +0x218) is a
+        // read-modify-write and none is polled, so they retain writes.
         if address
             .checked_sub(o.selector_base)
-            .is_some_and(|offset| RETAINED.contains(&offset))
+            .is_some_and(|offset| offset < 0x1000)
         {
             let word = self.state.io_words.entry(address).or_default();
             if let Some(v) = value {
