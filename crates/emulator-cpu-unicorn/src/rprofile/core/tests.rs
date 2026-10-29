@@ -858,6 +858,55 @@ fn exact_block_budgets_ring_wrap_pause_and_thumb_resume() {
 }
 
 #[test]
+fn repeated_thumb_blocks_publish_clock_on_the_common_path() {
+    unsafe fn observe_tick(_: u64, _: u32, data: *mut c_void) {
+        let ticks = unsafe { &*data.cast::<RefCell<Vec<Option<u64>>>>() };
+        ticks
+            .borrow_mut()
+            .push(crate::rprofile::approximate_guest_tick());
+    }
+
+    let cpu = processor(&Memory::default());
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    cpu.write_memory(0x1800, &[0x01, 0x30, 0x00, 0xe0, 0xc0, 0x46, 0x01, 0x30, 0xfa, 0xe7])
+        .unwrap(); // two Thumb blocks that each add and branch to the other
+    cpu.set_guest_clock(Clock {
+        now: 50,
+        phase: 0,
+        ratio: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
+    })
+    .unwrap();
+    let ticks = RefCell::new(Vec::new());
+    let hook = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            callback: observe_tick,
+            data: (&ticks as *const RefCell<Vec<Option<u64>>>)
+                .cast_mut()
+                .cast(),
+            range: HookRange::Inclusive {
+                begin: 0x1800,
+                end: 0x1809,
+            },
+        })
+    }
+    .unwrap();
+
+    run(&cpu, 0x1801, 101).unwrap();
+
+    assert_eq!(
+        (cpu.instruction_progress(), get(&cpu, arm::CORE[0])),
+        (Some(101), 51)
+    );
+    assert_eq!(
+        *ticks.borrow(),
+        (0_u64..101).map(|entry| Some(50 + 2 * (entry / 2))).collect::<Vec<_>>()
+    );
+    assert_eq!(cpu.execution.clock.get().unwrap().now, 151);
+    assert!(cpu.execution.block_hook_thumb_common_path.get() > 0);
+    cpu.remove_hook(hook).unwrap();
+}
+
+#[test]
 fn interactive_policy_runs_full_blocks_and_rebases_clock_after_bounded_overshoot() {
     let setup = |memory: &Memory| {
         let cpu = processor(memory);

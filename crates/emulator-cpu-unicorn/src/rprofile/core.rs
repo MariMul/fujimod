@@ -85,6 +85,7 @@ pub(super) struct Execution {
     pause_requested: Arc<AtomicU32>,
     settled_head: Cell<u64>,
     thumb: Cell<bool>,
+    thumb_entry_ready: Cell<bool>,
     restarted: Cell<Option<u64>>,
     active: Cell<bool>,
     owner_barrier_complete: Cell<bool>,
@@ -101,6 +102,8 @@ pub(super) struct Execution {
     block_hook_budget_fallback_guest_clock: Cell<u64>,
     block_hook_budget_fallback_other: Cell<u64>,
     block_hook_other: Cell<u64>,
+    #[cfg(test)]
+    block_hook_thumb_common_path: Cell<u64>,
     user_stop: Cell<bool>,
     irq: Cell<bool>,
     hint: Cell<Option<Hint>>,
@@ -196,6 +199,7 @@ impl Core {
             pause_requested: Arc::new(AtomicU32::new(0)),
             settled_head: Cell::new(0),
             thumb: Cell::new(false),
+            thumb_entry_ready: Cell::new(false),
             restarted: Cell::new(None),
             active: Cell::new(false),
             owner_barrier_complete: Cell::new(false),
@@ -212,6 +216,8 @@ impl Core {
             block_hook_budget_fallback_guest_clock: Cell::new(0),
             block_hook_budget_fallback_other: Cell::new(0),
             block_hook_other: Cell::new(0),
+            #[cfg(test)]
+            block_hook_thumb_common_path: Cell::new(0),
             user_stop: Cell::new(false),
             irq: Cell::new(false),
             hint: Cell::new(None),
@@ -510,17 +516,31 @@ impl Execution {
         })
     }
     fn block(&self, block: Block) -> Result<(), String> {
+        self.settle(0, true)?;
+        let tick = self
+            .clock
+            .get()
+            .map(|clock| clock.after(self.count.get()).map(|current| current.now))
+            .transpose()?;
+        crate::rprofile::publish_guest_tick(tick);
+        if self.thumb_common_block_path(block) {
+            #[cfg(test)]
+            self.block_hook_thumb_common_path
+                .set(self.block_hook_thumb_common_path.get().saturating_add(1));
+            return Ok(());
+        }
+
         #[cfg(debug_assertions)]
         self.loops.record_unsupported_model_block(block);
         self.block_hook_executions
             .set(self.block_hook_executions.get().saturating_add(1));
-        if !self
+        let block_observed = !self
             .observer_index
             .borrow()
             .blocks
             .at(block.address)
-            .is_empty()
-        {
+            .is_empty();
+        if block_observed {
             self.block_hook_block_observer
                 .set(self.block_hook_block_observer.get().saturating_add(1));
         } else if block.thumb == Some(true) {
@@ -565,17 +585,34 @@ impl Execution {
             self.block_hook_other
                 .set(self.block_hook_other.get().saturating_add(1));
         }
-        self.settle(0, true)?;
-        let tick = self
-            .clock
-            .get()
-            .map(|clock| clock.after(self.count.get()).map(|current| current.now))
-            .transpose()?;
-        crate::rprofile::publish_guest_tick(tick);
         self.at_block.set(true);
         let result = self.publish_stores().and_then(|_| self.enter_block(block));
         self.at_block.set(false);
         result
+    }
+    // Thumb entry counts each instruction, and classify installs code watches
+    // while translating it. After entry setup, block changes need only count
+    // and tick updates until store, invalidation, pause, or cap work is due.
+    fn thumb_common_block_path(&self, block: Block) -> bool {
+        if block.thumb != Some(true)
+            || !self.thumb.get()
+            || !self.thumb_entry_ready.get()
+            || self.restarted.get().is_some()
+            || self.user_stop.get()
+            || self.pause_requested.load(Ordering::Acquire) != 0
+            || self.count.get() >= self.cap.get()
+        {
+            return false;
+        }
+        if !self.pending_stores.borrow().is_empty() || self.memory.flush_pending() {
+            self.thumb_entry_ready.set(false);
+            return false;
+        }
+        self.observer_index
+            .borrow()
+            .blocks
+            .at(block.address)
+            .is_empty()
     }
     fn publish_stores(&self) -> Result<(), String> {
         let stores = std::mem::take(&mut *self.pending_stores.borrow_mut());
@@ -653,6 +690,7 @@ impl Execution {
             self.restarted.set(None);
         }
         self.memory.apply_watches()?;
+        self.thumb_entry_ready.set(thumb);
         Ok(())
     }
     fn instruction(&self, address: u64, size: u32) -> Result<(), String> {

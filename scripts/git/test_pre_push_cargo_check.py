@@ -48,3 +48,26 @@ def test_wasm_check_is_selected_for_a_wasm_capable_crate(tmp_path: Path) -> None
     package = {"name": "fujimod-web", "manifest_path": str(manifest)}
 
     assert package_supports_wasm(package)
+
+
+def test_wasm_check_can_be_skipped_for_a_crate_that_uses_a_separate_target_build(
+    tmp_path: Path,
+) -> None:
+    package_root = tmp_path / "crates/unicorn"
+    package_root.mkdir(parents=True)
+    manifest = package_root / "Cargo.toml"
+    manifest.write_text(
+        '[package.metadata.fujimod]\n'
+        'skip-wasm32-unknown-unknown-check = true\n'
+        '[dependencies]\nweb-sys = "1"\n',
+        encoding="utf-8",
+    )
+    package = {
+        "name": "fujimod-unicorn",
+        "manifest_path": str(manifest),
+        "metadata": {
+            "fujimod": {"skip-wasm32-unknown-unknown-check": True},
+        },
+    }
+
+    assert not package_supports_wasm(package)

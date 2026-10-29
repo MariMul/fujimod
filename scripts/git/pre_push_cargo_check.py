@@ -113,6 +113,10 @@ def select_touched_crates(
 
 
 def package_supports_wasm(package: dict) -> bool:
+    fujimod_metadata = (package.get("metadata") or {}).get("fujimod") or {}
+    if fujimod_metadata.get("skip-wasm32-unknown-unknown-check") is True:
+        return False
+
     package_root = Path(package["manifest_path"]).parent
     candidates = [package_root / "Cargo.toml", package_root / "README.md"]
     candidates.extend(package_root.rglob("*.rs"))
