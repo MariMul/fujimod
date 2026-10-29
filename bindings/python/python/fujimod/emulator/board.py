@@ -357,7 +357,7 @@ class Board:
     @property
     def failure(self) -> dict[str, object] | None:
         self._ensure_open()
-        failure = _json_object(json.loads(self._native.observation()))["failure"]
+        failure = json.loads(self._native.failure())
         if failure is None:
             return None
         if isinstance(failure, str):

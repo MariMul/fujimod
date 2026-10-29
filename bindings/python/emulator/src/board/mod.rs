@@ -1413,6 +1413,20 @@ impl Board {
         serde_json::to_string(&self.board()?.observation().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    fn failure(&self, py: Python<'_>) -> PyResult<String> {
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            let state = session.state(py, false)?;
+            let failure = state
+                .get_item("failure")?
+                .ok_or_else(|| PyRuntimeError::new_err("XP4 state is missing failure"))?;
+            return py
+                .import("json")?
+                .call_method1("dumps", (failure,))?
+                .extract();
+        }
+        serde_json::to_string(&self.board()?.failure().map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
     fn device_states(&self, kind: &str) -> PyResult<String> {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))

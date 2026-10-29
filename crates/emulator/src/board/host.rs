@@ -21,6 +21,12 @@ impl Board {
         Ok(serde_json::json!(state.bus.device_fingerprints(kind)?))
     }
 
+    /// The current execution failure without observing devices.
+    pub fn failure(&self) -> Result<Option<String>, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        Ok(state.error.clone())
+    }
+
     pub fn device_buffer(&self, kind: &str, name: &str) -> Result<Vec<u8>, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
         self.track_device_kind(kind, &state.bus);
