@@ -3907,7 +3907,7 @@
       "debug_key": "FUNCTION2",
       "target": {
         "kind": "control",
-        "control_id": "fn2_button"
+        "control_id": "fn1_button"
       },
       "scanner": {
         "index": 19,
