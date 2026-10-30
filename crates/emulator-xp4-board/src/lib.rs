@@ -1540,6 +1540,8 @@ impl Session {
                                     mpidr: 0x80000000 | core as u32,
                                     configuration_base: cbar.unwrap_or(0),
                                     cycles_per_tick,
+                                    // The XP4 board answers CCSIDR from its own cache geometry.
+                                    cache_sizes: None,
                                 },
                             )
                         })
