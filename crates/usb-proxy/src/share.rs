@@ -14,9 +14,9 @@ pub struct Ticket {
 }
 
 /// Persistent owner credentials stored locally, with a controller link that
-/// contains only the room and link key.
+/// contains only the room and link key. Other fields belong to the program
+/// that keeps the ticket and are ignored.
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct OwnerTicket {
     pub link: String,
     pub owner_key: String,
