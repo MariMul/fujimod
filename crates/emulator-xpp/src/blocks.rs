@@ -39,6 +39,13 @@
 //! idle, bit 0 done; 0xfffc3000: +0xdc 0x01000100 idle, bit 0 done, which
 //! its handler 0xcce510 clears through 0xc6d580). What a job computes is not
 //! modeled.
+//!
+//! A block may declare [`Command`]s: writing exactly a command's value to its
+//! word sets the declared field of a status word, which otherwise reads back
+//! its last write. After a still, reccont takes the second DRAM controller
+//! 0xfff0f000 through 0xc6c64c (+0xb8 = 0x6a020202, then waits for +0xbc bits
+//! 5..0 = 0x27) and back through 0xc6c700 (0x01020202, waits for 0x20); these
+//! are its only +0xb8 commands. What the states mean is not known.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,6 +70,16 @@ pub struct Job {
     pub stop: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
+}
+/// Command law of a block: writing `value` to `word` sets the bits `mask` of
+/// the status word `status` to `state`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Command {
+    pub word: u64,
+    pub value: u32,
+    pub status: u64,
+    pub mask: u32,
+    pub state: u32,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -96,6 +113,7 @@ pub struct Block {
     image: Option<(u32, [u8; 4])>,
     /// (offset, value) of words that read a fixed value whatever is written.
     fixed: Vec<(u64, u32)>,
+    commands: Vec<Command>,
     state: State,
 }
 impl Block {
@@ -129,6 +147,7 @@ impl Block {
             job: None,
             image: None,
             fixed: Vec::new(),
+            commands: Vec::new(),
             state: State::default(),
         })
     }
@@ -175,6 +194,35 @@ impl Block {
             return Err("Invalid X-Processor Pro register block fixed word".into());
         }
         self.fixed = fixed;
+        Ok(self)
+    }
+    /// Commands that set a field of a status word.
+    pub fn with_commands(mut self, commands: Vec<Command>) -> Result<Self, String> {
+        let word = |o: u64| o & 3 != 0 || o >= self.size;
+        let special = |o: u64| {
+            self.idle.iter().any(|&(i, _)| i == o)
+                || self.fixed.iter().any(|&(f, _)| f == o)
+                || self.job.is_some_and(|j| {
+                    j.start.0 == o
+                        || j.status.is_some_and(|s| s.0 == o)
+                        || j.stop.is_some_and(|s| s.0 == o)
+                })
+                || self
+                    .frames
+                    .is_some_and(|f| f.start.0 == o || f.stopped.0 == o)
+        };
+        if commands.iter().any(|c| {
+            word(c.word)
+                || word(c.status)
+                || c.word == c.status
+                || c.mask == 0
+                || c.state & !c.mask != 0
+                || special(c.word)
+                || special(c.status)
+        }) {
+            return Err("Invalid X-Processor Pro register block command".into());
+        }
+        self.commands = commands;
         Ok(self)
     }
     /// A uniform live-view image written at each frame: lines and Y, Cb, Cr.
@@ -288,6 +336,18 @@ impl Device for Block {
                 self.state.words.insert(offset, value);
             }
             _ => return cx.unmodeled(),
+        }
+        if let Some(c) = self
+            .commands
+            .iter()
+            .find(|c| Some(c.word) == self.offset(address, size) && u64::from(c.value) == value)
+        {
+            let word = self.state.words.get(&c.status).copied().unwrap_or(0) & !c.mask | c.state;
+            if word == 0 {
+                self.state.words.remove(&c.status);
+            } else {
+                self.state.words.insert(c.status, word);
+            }
         }
         if let Some(frames) = self.frames {
             self.state.due = match (self.started(&frames), self.state.due) {
@@ -575,6 +635,54 @@ mod tests {
         assert_eq!(read(&mut engine, &mut h, 0xfff98000), 1);
         engine.restore(&saved).unwrap();
         assert_eq!(engine.state.status, 1);
+    }
+
+    #[test]
+    fn commands_set_their_status_field() {
+        let dram = |commands| {
+            Block::new(0xfff0f000, 0x1000, vec![(0x14c, 8)], None)?.with_commands(commands)
+        };
+        let enter = Command {
+            word: 0xb8,
+            value: 0x6a02_0202,
+            status: 0xbc,
+            mask: 0x3f,
+            state: 0x27,
+        };
+        let leave = Command {
+            value: 0x0102_0202,
+            state: 0x20,
+            ..enter
+        };
+        assert!(
+            dram(vec![Command {
+                state: 0x40,
+                ..enter
+            }])
+            .is_err()
+        );
+        assert!(
+            dram(vec![Command {
+                status: 0x14c,
+                ..enter
+            }])
+            .is_err()
+        );
+        let mut block = dram(vec![enter, leave]).unwrap();
+        let base = 0xfff0f000;
+        let mut h = TestHost::new();
+        write(&mut block, &mut h, base + 0xbc, 0x100);
+        write(&mut block, &mut h, base + 0xb8, 0x6a02_0202);
+        assert_eq!(read(&mut block, &mut h, base + 0xbc), 0x127);
+        assert_eq!(read(&mut block, &mut h, base + 0xb8), 0x6a02_0202);
+        write(&mut block, &mut h, base + 0xb8, 0x6a02_0203);
+        assert_eq!(read(&mut block, &mut h, base + 0xbc), 0x127);
+        write(&mut block, &mut h, base + 0xb8, 0x0102_0202);
+        let saved = block.save();
+        assert_eq!(read(&mut block, &mut h, base + 0xbc), 0x120);
+        let mut other = dram(vec![enter, leave]).unwrap();
+        other.restore(&saved).unwrap();
+        assert_eq!(read(&mut other, &mut h, base + 0xbc), 0x120);
     }
 
     #[test]
