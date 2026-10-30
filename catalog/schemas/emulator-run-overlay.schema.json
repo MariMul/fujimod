@@ -2455,6 +2455,11 @@
             "clear_profile": {
               "$ref": "#/$defs/NativeVectorGpuInputsClearProfile"
             },
+            "copy_bytes_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "copy_profile": {
               "$ref": "#/$defs/NativeVectorGpuInputsCopyProfile"
             },
@@ -2486,11 +2491,6 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
-            },
-            "tile_copy_bytes_per_tick": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
             }
           },
           "required": [
@@ -2500,7 +2500,7 @@
             "max_copy_bytes",
             "max_clear_bytes",
             "bytes_per_tick",
-            "tile_copy_bytes_per_tick",
+            "copy_bytes_per_tick",
             "max_command_capture_bytes",
             "copy_profile",
             "clear_profile"

@@ -584,7 +584,7 @@ fn graphics_uses_real_constructor_and_two_declared_controller_outputs() {
             0x5000,
             json!({"kind":"vector-gpu","options":{
             "ram_bytes":4096,"max_fill_bytes":4096,"max_copy_bytes":4096,
-            "max_clear_bytes":4096,"max_command_capture_bytes":65536,"bytes_per_tick":16,"tile_copy_bytes_per_tick":16,
+            "max_clear_bytes":4096,"max_command_capture_bytes":65536,"bytes_per_tick":16,"copy_bytes_per_tick":16,
             "copy_profile":null,"clear_profile":null
         },"controllers":["irq0","irq1"]}),
         ),

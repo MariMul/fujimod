@@ -20,7 +20,7 @@ pub struct Header {
     pub max_command_capture_bytes: u64,
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
-    pub tile_copy_bytes_per_tick: u64,
+    pub copy_bytes_per_tick: u64,
     pub copy_profile: Option<Profile>,
     pub clear_profile: Option<Profile>,
 }
@@ -34,7 +34,7 @@ impl From<&CommandProcessor> for Header {
             max_command_capture_bytes: state.max_command_capture_bytes,
             max_clear_bytes: state.max_clear_bytes,
             bytes_per_tick: state.bytes_per_tick,
-            tile_copy_bytes_per_tick: state.tile_copy_bytes_per_tick,
+            copy_bytes_per_tick: state.copy_bytes_per_tick,
             copy_profile: state.copy_profile,
             clear_profile: state.clear_profile,
         }
@@ -123,7 +123,7 @@ impl Recorder {
             header.max_command_capture_bytes,
             header.max_clear_bytes,
             header.bytes_per_tick,
-            header.tile_copy_bytes_per_tick,
+            header.copy_bytes_per_tick,
         ] {
             self.writer.write_all(&value.to_le_bytes())?;
         }
@@ -281,8 +281,8 @@ impl RecordingReader {
         let max_command_capture_bytes = read_u64(&mut reader)?;
         let max_clear_bytes = read_u64(&mut reader)?;
         let bytes_per_tick = read_u64(&mut reader)?;
-        // Legacy recordings priced tile copies at the device byte rate.
-        let tile_copy_bytes_per_tick = if legacy {
+        // Legacy recordings priced copies at the device byte rate.
+        let copy_bytes_per_tick = if legacy {
             bytes_per_tick
         } else {
             read_u64(&mut reader)?
@@ -294,7 +294,7 @@ impl RecordingReader {
             max_command_capture_bytes,
             max_clear_bytes,
             bytes_per_tick,
-            tile_copy_bytes_per_tick,
+            copy_bytes_per_tick,
             copy_profile: read_profile(&mut reader)?,
             clear_profile: read_profile(&mut reader)?,
         };
@@ -632,7 +632,7 @@ mod tests {
             max_command_capture_bytes: 4096,
             max_clear_bytes: 4096,
             bytes_per_tick: 16,
-            tile_copy_bytes_per_tick: 16,
+            copy_bytes_per_tick: 16,
             copy_profile: None,
             clear_profile: None,
         }

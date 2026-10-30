@@ -4511,6 +4511,7 @@ class RunNativeDeviceInputsVariant32(TypedDict, total=False):
 class RunNativeDeviceInputsVariant33(TypedDict, total=False):
     bytes_per_tick: Required[int]
     clear_profile: Required[NativeVectorGpuInputsClearProfile]
+    copy_bytes_per_tick: Required[int]
     copy_profile: Required[NativeVectorGpuInputsCopyProfile]
     kind: Required[Literal["vector-gpu"]]
     max_clear_bytes: Required[int]
@@ -4518,7 +4519,6 @@ class RunNativeDeviceInputsVariant33(TypedDict, total=False):
     max_copy_bytes: Required[int]
     max_fill_bytes: Required[int]
     ram_bytes: Required[int]
-    tile_copy_bytes_per_tick: Required[int]
 
 
 class RunNativeDeviceInputsVariant34(TypedDict, total=False):

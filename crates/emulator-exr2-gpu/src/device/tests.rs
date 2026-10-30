@@ -46,7 +46,7 @@ fn options() -> Options {
         max_clear_bytes: 4096,
         max_command_capture_bytes: 65536,
         bytes_per_tick: 16,
-        tile_copy_bytes_per_tick: 16,
+        copy_bytes_per_tick: 16,
         copy_profile: None,
         clear_profile: None,
     }
@@ -552,7 +552,7 @@ fn pitched_tile_copy_preserves_gaps_and_commits_only_at_completion() {
 }
 
 #[test]
-fn full_frame_tile_copy_costs_the_measured_eglcopybuffers_time() {
+fn full_frame_copy_costs_the_measured_eglcopybuffers_time() {
     // Measured on hardware: eglCopyBuffers of one 720x480 RGBA8 frame to a
     // display buffer takes 3.6 to 5.7 ms, which is 43,200 to 68,400 ticks at
     // 12 MHz. The X70 rate of 25 bytes per tick prices it at 55,296 ticks.
@@ -564,21 +564,18 @@ fn full_frame_tile_copy_costs_the_measured_eglcopybuffers_time() {
         max_command_capture_bytes: 65536,
         max_clear_bytes: 0x400000,
         bytes_per_tick: 16,
-        tile_copy_bytes_per_tick: 25,
-        copy_profile: None,
+        copy_bytes_per_tick: 25,
+        copy_profile: Some(Profile::GpuCopyProfile),
         clear_profile: None,
     });
     enable(&mut controllers, &mut host, 1);
-    // Contiguous 16-byte chunks: one descriptor word of 1 and no gap.
+    let dimensions = 720 | 480 << 16;
     for (offset, value) in [
         (0xc00, 0x40000000),
         (0xc04, 0x40200000),
-        (0xc08, 0),
-        (0xc0c, 0),
-        (0xc10, 8),
-        (0xc20, FRAME_BYTES),
-        (0xc24, 1),
-        (0xc28, 1),
+        (0xc08, dimensions),
+        (0xc0c, dimensions),
+        (0xc10, 1),
         (0xc18, 1),
     ] {
         assert_eq!(put(&mut gpu, &mut host, offset, value), None);
@@ -586,4 +583,5 @@ fn full_frame_tile_copy_costs_the_measured_eglcopybuffers_time() {
     let ticks = gpu.next_deadline(host.now).unwrap() - host.now;
     assert_eq!(ticks, 55_296);
     assert!((43_200..=68_400).contains(&ticks));
+    assert_eq!(FRAME_BYTES.div_ceil(25), 55_296);
 }

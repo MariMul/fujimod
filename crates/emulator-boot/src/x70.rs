@@ -74,10 +74,10 @@ fn model_recipe(name: &str) -> Result<Value, String> {
         "hdmisink" => serde_json::from_str::<Value>("{\"kind\":\"hdmi-sink\",\"options\":{\"connected\":false,\"edid\":[]}}").map_err(|e| e.to_string())?,
         "hdmi" => serde_json::from_str::<Value>("{\"kind\":\"hdmi\",\"options\":{},\"sink\":\"hdmisink\",\"hot_plug\":{\"Core\":{\"core\":0,\"line\":0}}}").map_err(|e| e.to_string())?,
         "output" => serde_json::from_str::<Value>("{\"kind\":\"block86000\",\"options\":{}}").map_err(|e| e.to_string())?,
-        // Tile copies (eglCopyBuffers to a display buffer) cost one tick per
-        // 25 bytes: a 720x480 RGBA8 frame takes 4.61 ms, inside the 3.6 to 5.7 ms
-        // range measured on hardware.
-        "graphics" => serde_json::from_str::<Value>("{\"kind\":\"vector-gpu\",\"options\":{\"ram_bytes\":536870912,\"max_fill_bytes\":67108864,\"max_copy_bytes\":67108864,\"max_clear_bytes\":67108864,\"bytes_per_tick\":16,\"tile_copy_bytes_per_tick\":25,\"max_command_capture_bytes\":524288,\"copy_profile\":\"vg-32bpp-untile-unrotated\",\"clear_profile\":\"declared-vg-ui-primitives-unmeasured\"},\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
+        // Software-profile copies (eglCopyBuffers of a full 720x480 RGBA8 frame to
+        // a display buffer) cost one tick per 25 bytes: 4.61 ms, inside the 3.6 to
+        // 5.7 ms range measured on hardware.
+        "graphics" => serde_json::from_str::<Value>("{\"kind\":\"vector-gpu\",\"options\":{\"ram_bytes\":536870912,\"max_fill_bytes\":67108864,\"max_copy_bytes\":67108864,\"max_clear_bytes\":67108864,\"bytes_per_tick\":16,\"copy_bytes_per_tick\":25,\"max_command_capture_bytes\":524288,\"copy_profile\":\"vg-32bpp-untile-unrotated\",\"clear_profile\":\"declared-vg-ui-primitives-unmeasured\"},\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
         "scanout" => serde_json::from_str::<Value>("{\"kind\":\"scanout\",\"options\":{\"ram_bytes\":536870912,\"packing\":\"yycbcr\",\"matrix\":\"bt601-full\",\"graphics_profile\":\"mode1-abgr8888-straight\",\"backdrop_profile\":\"declared-black-canvas-unmeasured\",\"rectangle_profile\":\"exr2-signed-ycbcr-rectangle-overlay-unmeasured\",\"max_pixels\":8847360,\"reset_ticks\":2}}").map_err(|e| e.to_string())?,
         "display_timing" => serde_json::from_str::<Value>("{\"kind\":\"display-timing\",\"options\":{\"mode\":\"configured_clocked\",\"frame_ticks\":400000,\"stop_ticks\":2},\"clock\":\"clocks\",\"controllers\":[\"irq0\",\"irq1\"]}").map_err(|e| e.to_string())?,
         "display_formatter" => serde_json::from_str::<Value>("{\"kind\":\"formatter\",\"options\":{\"latch_delay\":2}}").map_err(|e| e.to_string())?,
