@@ -97,6 +97,17 @@
         "width": 1
       },
       {
+        "address": 54,
+        "basis": "Measured: fuel gauge at 0x36 on bus 1 (device 10 of the X-T20 2.11 I2C descriptor table 0xed412c, handle 0xa of 0xc53614). 0xc7873c reads two bytes from register 4, high byte first, into 0xfda5f0 + 0xc, and turns them with the temperature (+0x10) and configuration bytes 0x3f6/0x3f7 (0x3b9/0x3ba/0x3f8/0x3f9 when 0x40c6 bit 3 is set) into the charge level +0x14 (0xc78a38..0xc78a78); 0xc78a94 passes it, at least 1, to the battery status 0x11e350c + 0xf0, whose thresholds 0x11df5cc select the icon BATT_STS (0x11e350c + 0x60, 0xc77b64). When the temperature moves it writes register 0x0c with 0x5f plus a temperature term and 0x1c (0xc78854..0xc78878), as RCOMP and alert bytes of a MAX1704x-type gauge. In the s1 REC capture (2026-10-29) +0xc holds 0x5440 and the level is 89 (status 0, five segments); without the part the read is NACKed, +0xc keeps 0xfd00, the level is -6 and the icon shows one segment. Other registers are not declared.",
+        "bus": 1,
+        "little_endian": false,
+        "registers": [
+          [4, 21568]
+        ],
+        "select_mask": 255,
+        "width": 2
+      },
+      {
         "address": 57,
         "basis": "Eye-sensor proximity part at 0x39 on bus 1 (device 4). Its command byte is 0xa0 | address (0xc76484). Start-up writes the thresholds and ENABLE = 0x2f; 0xc76500 reads STATUS 0x13 (bit 5: proximity interrupt) and the count at 0x18/0x19, low byte first. The s1-s3 captures hold eye state 2 (no eye, 0xfdad40) with a far-to-near threshold of 662. The declared count 0 is below that threshold and the status has no interrupt pending; neither value is measured.",
         "bus": 1,
@@ -147,6 +158,15 @@
       "positions": [[false, true], [false, false], [true, true]],
       "sensors": [[0, 3], [10, 2]],
       "step_ticks": 1440000
+    },
+    "key_lines": {
+      "basis": "The shutter button of X-T20 2.11: key rows 0xf79cbc (index 2, S1) and 0xf79cd8 (index 3, S2) are kind 4 on GPIO bank 0 bits 0 and 1, high when released (the power-on GPIO words). The key scan 0xc8d5c8 evaluates kind 4 rows only while their reported state is pressed, so it reports the release only; the press arrives through the rows' external interrupts: the handler 0xc8d0e0 toggles the row and calls key_event(index, 1) (0xc8cee4), whose UI side logs marker 0x2f000000 for index 2 (0xc22f48), as in the camera's marker logs of half presses (evf-2026-10-22). The rows name interrupt rows 20 and 21 (+0x12), which the table 0xed4720 maps to GIC 151 and 152, external lines 0 and 1 (the same lookup gives line 15 for the lens's ready rows 0x52/0x53). The 1 ms sampling is a model choice.",
+      "lines": [[0, 0, 0], [1, 0, 1]],
+      "poll_ticks": 48000
+    },
+    "imaging_frames": {
+      "basis": "Measured: the imaging frame period of X-T20 2.11 in REC live view is 880000 ticks (18.333 ms). The count at 0x1c51068 advances once per frame sync frame (on the XP4 board it follows the frame sync period alone), and the statistics engine paces the live-view markers: one 0x02010400 per four statistics completions. In the camera's marker logs (evf-2026-10-22, lens-2026-10-29 and the REC and menu captures of 2026-10-29) the base 0x02010400 spacing is 73.33 ms (medians 73.325 to 73.345 ms over 300 to 1100 gaps), and between RAM captures of one boot the count at 0x1c51068 advances 4.01 and 4.02 per marker, so the frames themselves last 18.333 ms (4 x 880000 ticks = 73.33 ms). The camera also runs phases of 3 and 6 times the base period (220.0 ms and 440.0 ms between markers, the count still advancing 4 per marker); what selects them is not modeled. The display frame interrupts keep their own period.",
+      "period_ticks": 880000
     },
     "kernel_unit": "kernel",
     "loader_handoff": {

@@ -24,6 +24,14 @@
 //! 0xa7d6000 + 0x180000*k, 720 pixels) and the display shows the buffer the
 //! unit finished last. Other data the unit or the rest of the pipeline moves
 //! is not modeled.
+//!
+//! A block may instead declare a [`Job`]: each write that sets its start bit
+//! while no job is in flight finishes one job after the declared ticks. The
+//! job sets the status bit, the interrupt line is high while a status bit is
+//! set, and writing a status bit clears it, as for the face detection engine.
+//! The block at 0xfff7f000 (driver 0x1558424..0x1558a94) starts with +0x04
+//! bit 0 (0x15589c4); its handler 0x1558108 reads +0x44, writes 1 to it and
+//! calls the job's callback. What a job computes is not modeled.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -38,6 +46,15 @@ pub struct Frames {
     pub irq: u32,
     pub period: u64,
 }
+/// Job law of a block: (offset, mask) of the start and status bits, the
+/// level interrupt line and the ticks a job takes.
+#[derive(Clone, Copy, Debug)]
+pub struct Job {
+    pub start: (u64, u32),
+    pub status: (u64, u32),
+    pub irq: u32,
+    pub ticks: u64,
+}
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
@@ -46,10 +63,17 @@ struct State {
     due: Option<u64>,
     #[serde(default, skip_serializing_if = "is_zero")]
     frames: u64,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    status: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    jobs: u64,
 }
 const BUFFER: u64 = 0xc0;
 const WIDTH: u64 = 0xc4;
 fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+fn is_zero_u32(n: &u32) -> bool {
     *n == 0
 }
 pub struct Block {
@@ -58,6 +82,7 @@ pub struct Block {
     /// (offset, mask) of status bits that always read set.
     idle: Vec<(u64, u32)>,
     frames: Option<Frames>,
+    job: Option<Job>,
     /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
     image: Option<(u32, [u8; 4])>,
     state: State,
@@ -90,9 +115,26 @@ impl Block {
             size,
             idle,
             frames,
+            job: None,
             image: None,
             state: State::default(),
         })
+    }
+    /// One job per start, finished after the declared ticks.
+    pub fn with_job(mut self, job: Job) -> Result<Self, String> {
+        let bit = |(o, mask): (u64, u32)| o & 3 != 0 || o >= self.size || mask == 0;
+        if self.frames.is_some()
+            || bit(job.start)
+            || bit(job.status)
+            || job.start.0 == job.status.0
+            || self.idle.iter().any(|&(o, _)| o == job.status.0)
+            || !(32..512).contains(&job.irq)
+            || job.ticks == 0
+        {
+            return Err("Invalid X-Processor Pro register block job".into());
+        }
+        self.job = Some(job);
+        Ok(self)
     }
     /// A uniform live-view image written at each frame: lines and Y, Cb, Cr.
     pub fn with_live_view_image(mut self, lines: u32, ycbcr: [u8; 3]) -> Result<Self, String> {
@@ -153,6 +195,9 @@ impl Device for Block {
             .iter()
             .filter(|(o, _)| *o == offset)
             .fold(0, |bits, (_, mask)| bits | mask);
+        if let Some(job) = self.job.filter(|j| j.status.0 == offset) {
+            return u64::from(self.state.status & job.status.1);
+        }
         if let Some(frames) = self.frames.filter(|f| f.stopped.0 == offset) {
             idle = idle & !frames.stopped.1
                 | if self.started(&frames) {
@@ -166,6 +211,23 @@ impl Device for Block {
         )
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if let (Some(job), Some(offset), Ok(value)) =
+            (self.job, self.offset(address, size), u32::try_from(value))
+        {
+            if offset == job.status.0 {
+                self.state.status &= !value;
+                if self.state.status == 0 {
+                    cx.set_irq(job.irq, false);
+                }
+                return;
+            }
+            if offset == job.start.0 && value & job.start.1 != 0 && self.state.due.is_none() {
+                self.state.due = cx.now().checked_add(job.ticks);
+                if self.state.due.is_none() {
+                    cx.fail("Register block job deadline overflow");
+                }
+            }
+        }
         match (self.offset(address, size), u32::try_from(value)) {
             (Some(offset), Ok(0)) => {
                 self.state.words.remove(&offset);
@@ -186,6 +248,15 @@ impl Device for Block {
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        if let Some(job) = self.job {
+            if self.state.due.is_some_and(|at| at <= cx.now()) {
+                self.state.due = None;
+                self.state.jobs += 1;
+                self.state.status |= job.status.1;
+                cx.set_irq(job.irq, true);
+            }
+            return;
+        }
         let (Some(frames), Some(due)) = (self.frames, self.state.due) else {
             return;
         };
@@ -218,7 +289,12 @@ impl Device for Block {
             .words
             .iter()
             .any(|(o, v)| o & 3 != 0 || *o >= self.size || *v == 0)
-            || started != state.due.is_some()
+            || self.frames.is_some() && started != state.due.is_some()
+            || self.frames.is_none() && self.job.is_none() && state.due.is_some()
+            || self.job.is_none() && (state.status != 0 || state.jobs != 0)
+            || self.job.is_some_and(|j| {
+                state.status & !j.status.1 != 0 || state.words.contains_key(&j.status.0)
+            })
             || self
                 .frames
                 .zip(state.due)
@@ -293,6 +369,70 @@ mod tests {
             unit.restore(&serde_json::json!({ "words": [] , "due": 30 }))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn a_started_job_finishes_once_and_holds_its_level_interrupt() {
+        use fujimod_emulator_devices::test_host::advance;
+        const ENGINE: u64 = 0xfff7f000;
+        let job = Job {
+            start: (0x04, 1),
+            status: (0x44, 1),
+            irq: 128,
+            ticks: 100,
+        };
+        let block = || Block::new(ENGINE, 0x1000, vec![(0, 1), (0x40, 0x1_0001)], None).unwrap();
+        assert!(block().with_job(Job { ticks: 0, ..job }).is_err());
+        assert!(
+            block()
+                .with_job(Job {
+                    status: (0x40, 1),
+                    ..job
+                })
+                .is_err()
+        );
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 107,
+            period: 10,
+        };
+        assert!(
+            Block::new(ENGINE, 0x1000, vec![], Some(frames))
+                .unwrap()
+                .with_job(job)
+                .is_err()
+        );
+        let mut engine = block().with_job(job).unwrap();
+        let mut h = TestHost::new();
+        // 0x1558468 writes 1 to the status; 0x15589c4 waits for +0x40 and
+        // sets +0x04 bit 0.
+        write(&mut engine, &mut h, ENGINE + 0x44, 1);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x40), 0x1_0001);
+        h.now = 5;
+        write(&mut engine, &mut h, ENGINE + 0x04, 1);
+        assert_eq!(engine.next_deadline(5), Some(105));
+        // A second start while the job runs does not move it.
+        write(&mut engine, &mut h, ENGINE + 0x04, 1);
+        assert_eq!(engine.next_deadline(5), Some(105));
+        advance(&mut engine, &mut h, 104);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x44), 0);
+        advance(&mut engine, &mut h, 105);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x44), 1);
+        assert_eq!(engine.state.status, 1);
+        assert_eq!(engine.next_deadline(105), None);
+        let saved = engine.save();
+        // 0x1558108 reads the status and writes 1 to acknowledge it.
+        write(&mut engine, &mut h, ENGINE + 0x44, 1);
+        assert_eq!(engine.state.status, 0);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x44), 0);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x04), 1);
+        engine.restore(&saved).unwrap();
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x44), 1);
+        assert!(block().restore(&saved).is_err());
+        write(&mut engine, &mut h, ENGINE + 0x04, 1);
+        advance(&mut engine, &mut h, 205);
+        assert_eq!(engine.state.jobs, 2);
     }
 
     #[test]

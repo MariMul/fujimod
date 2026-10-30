@@ -1000,6 +1000,21 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn xpp_key_lines(
+        &mut self,
+        keys: crate::definition::XppKeyLines,
+        lines: fujimod_emulator_xpp::resets::ExternalLines,
+    ) -> Result<(), String> {
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("Key lines require GPIO wiring")?
+            .clone();
+        let model =
+            fujimod_emulator_xpp::keys::KeyLines::new(&keys.lines, keys.poll_ticks, pins, lines)?;
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn xpp_sd(
         &mut self,
         sd: crate::definition::XppSd,
@@ -1044,6 +1059,14 @@ impl Devices {
         });
         let mut model =
             fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle, frames)?;
+        if let Some(j) = block.job {
+            model = model.with_job(fujimod_emulator_xpp::blocks::Job {
+                start: j.start,
+                status: j.status,
+                irq: j.irq,
+                ticks: j.ticks,
+            })?;
+        }
         if let Some((lines, ycbcr)) = image {
             model = model.with_live_view_image(lines, ycbcr)?;
         }

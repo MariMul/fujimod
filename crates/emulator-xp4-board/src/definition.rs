@@ -57,6 +57,9 @@ pub struct Definition {
     /// Shutter motor and position sensors on the GPIO banks.
     #[serde(default)]
     pub xpp_shutter: Option<XppShutter>,
+    /// Keys on external interrupt lines: (line, bank, pin) and the poll period.
+    #[serde(default)]
+    pub xpp_key_lines: Option<XppKeyLines>,
     #[serde(default)]
     pub xpp_display_frames: Option<XppDisplayFrames>,
     #[serde(default)]
@@ -244,6 +247,14 @@ pub struct XppShutter {
     pub poll_ticks: u64,
 }
 
+/// Keys whose GPIO inputs also reach external interrupt lines.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppKeyLines {
+    pub lines: Vec<(usize, usize, usize)>,
+    pub poll_ticks: u64,
+}
+
 /// X-Processor Pro display frame interrupts: one edge per line each period.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -296,7 +307,7 @@ pub struct XppFrameSync {
 }
 
 /// X-Processor Pro register block: base, window size, the (offset, mask)
-/// status bits that always read set and an optional frame law.
+/// status bits that always read set and an optional frame or job law.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppRegisterBlock {
@@ -305,6 +316,19 @@ pub struct XppRegisterBlock {
     pub idle: Vec<(u64, u32)>,
     #[serde(default)]
     pub frames: Option<XppBlockFrames>,
+    #[serde(default)]
+    pub job: Option<XppBlockJob>,
+}
+
+/// Job law of a register block: (offset, mask) of the start and status bits,
+/// the level interrupt line and the ticks a job takes.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBlockJob {
+    pub start: (u64, u32),
+    pub status: (u64, u32),
+    pub irq: u32,
+    pub ticks: u64,
 }
 
 /// Frame law of a register block: (offset, mask) of the start and stopped

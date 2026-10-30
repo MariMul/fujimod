@@ -113,6 +113,17 @@
           },
           "type": "array"
         },
+        "imaging_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetImagingFrames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared frame period of the imaging pipeline."
+        },
         "inputs": {
           "anyOf": [
             {
@@ -130,6 +141,17 @@
             "string",
             "null"
           ]
+        },
+        "key_lines": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetKeyLines"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared keys on external interrupt lines."
         },
         "lens": {
           "anyOf": [
@@ -1312,6 +1334,27 @@
       ],
       "type": "object"
     },
+    "ResetImagingFrames": {
+      "additionalProperties": false,
+      "description": "Frame period of the imaging pipeline: the frame sync, the statistics\nengine and the frame laws of the imaging register blocks.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "period_ticks": {
+          "description": "Frame period in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
     "ResetInitialOutputs": {
       "additionalProperties": false,
       "description": "Declared initial outputs facts.",
@@ -1428,6 +1471,54 @@
         "kind",
         "lower",
         "upper"
+      ],
+      "type": "object"
+    },
+    "ResetKeyLines": {
+      "additionalProperties": false,
+      "description": "Keys whose GPIO inputs also reach external interrupt lines.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "lines": {
+          "description": "External interrupt line, GPIO bank and pin of each key.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "poll_ticks": {
+          "description": "Ticks between samples of the key inputs.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "lines",
+        "poll_ticks"
       ],
       "type": "object"
     },
