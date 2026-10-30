@@ -452,3 +452,9 @@ pub fn gpu_ui_render<'py>(
     }
     Ok((out, touched))
 }
+
+#[pyfunction]
+pub fn prepare_host_gpu(py: Python<'_>) -> PyResult<()> {
+    py.detach(fujimod_emulator_exr2_gpu::prepare_host_gpu)
+        .map_err(DeviceRefusal::new_err)
+}

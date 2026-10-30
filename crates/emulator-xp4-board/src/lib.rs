@@ -1,9 +1,9 @@
 //! ARM application-profile cluster alongside the shared R-profile runtime.
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
-pub mod memory;
 mod client;
 mod definition;
+pub mod memory;
 pub use definition::Definition;
 pub mod observation;
 use observation::Call;
@@ -79,6 +79,11 @@ struct RunState {
     pc_observers: Vec<BTreeSet<u64>>,
     devices: Option<devices::Devices>,
     cache_dirty: bool,
+    pmu: Vec<Option<fujimod_emulator::board::armv7a::Profile>>,
+    // Memory window shown at physical 0 until the guest selects the remap.
+    low_alias: Option<usize>,
+    remap_pending: bool,
+    remap_ready: bool,
     driver_guard: Option<driver_guard::Guard>,
 }
 
@@ -86,6 +91,7 @@ struct Cluster {
     // Destroy processors before their RAM backing and callback contexts.
     cpus: Vec<Box<dyn Cpu>>,
     ram: Backing,
+    dram_alias: Option<u64>,
     memory: Vec<memory::Window>,
     hooks: Vec<Box<Hook>>,
     labels: Vec<u32>,
@@ -444,6 +450,12 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         ));
     }
     c.due();
+    if unsafe { (*c.state.get()).remap_pending } && c.cp(core, 1, 0, 0, 0)? & 1 == 0 {
+        unsafe {
+            (*c.state.get()).remap_ready = true;
+            (*c.state.get()).cache_dirty = true;
+        }
+    }
     if unsafe { (*c.state.get()).cache_dirty } {
         return c.redirect(core, address as u32);
     }
@@ -565,6 +577,20 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         }
     }
     let state = unsafe { &mut *c.state.get() };
+    // PMCR, PMCNTENSET/CLR and PMCCNTR follow the shared ARMv7-A PMU profile.
+    if word & 0x0fef0f10 == 0x0e090f10
+        && matches!(word & 15, 12 | 13)
+        && let Some(pmu) = state.pmu.get_mut(core).and_then(Option::as_mut)
+    {
+        use fujimod_emulator::board::armv7a::Entry;
+        if !matches!(
+            pmu.before(&*c.cpus[core], address, state.ticks)?,
+            Entry::Execute
+        ) {
+            state.redirected = Some(address as u32 + 4);
+            return Ok(());
+        }
+    }
     let load_exclusive = word & 0x0f900fff == 0x01900f9f;
     let store_exclusive = word & 0x0f900ff0 == 0x01800f90;
     let cp_read = word & 0x0fff0fff;
@@ -910,7 +936,11 @@ impl Session {
     pub fn ram_bytes(&self) -> usize {
         self.inner.ram.len()
     }
-    pub fn new(definition: Definition, storage_image: Option<Vec<u8>>) -> Result<Self, String> {
+    pub fn new(
+        definition: Definition,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+    ) -> Result<Self, String> {
         let Definition {
             ram_size,
             cores,
@@ -973,6 +1003,9 @@ impl Session {
             instructions_per_tick,
             usb,
             usb_phy,
+            xpp_boot,
+            pmu_cycles_per_tick,
+            xpp_serial_replies,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -982,6 +1015,7 @@ impl Session {
             return Err("A7 needs at least one instruction per guest tick".to_owned());
         }
         if !(1..=4).contains(&cores)
+            || pmu_cycles_per_tick == Some(0)
             || ram_size < 0x10000
             || ram_size & 4095 != 0
             || ram_size > 0x80000000
@@ -1020,17 +1054,28 @@ impl Session {
         }
         let ram = Backing::zeros(ram_size);
         let memory = memory::allocate(memory_regions, ram_size)?;
-        if let Some(base) = dram_alias {
-            let end = base.checked_add(ram_size as u64);
-            if base % 4096 != 0
-                || base < ram_size as u64
-                || !end.is_some_and(|end| end <= 1 << 32)
+        let low_alias = xpp_boot
+            .as_ref()
+            .and_then(|boot| boot.low_alias)
+            .map(|base| {
+                memory
+                    .iter()
+                    .position(|window| window.base == base && window.data.len() < ram_size)
+                    .ok_or_else(|| "Low-memory alias names no smaller memory window".to_owned())
+            })
+            .transpose()?;
+        if let Some(alias) = dram_alias
+            && (alias % 4096 != 0
+                || alias < ram_size as u64
+                || !alias
+                    .checked_add(ram_size as u64)
+                    .is_some_and(|end| end <= 1 << 32)
                 || memory.iter().any(|window| {
-                    base < window.base + window.data.len() as u64 && window.base < end.unwrap()
-                })
-            {
-                return Err("Invalid or overlapping ARM32 DRAM alias".into());
-            }
+                    alias < window.base + window.data.len() as u64
+                        && window.base < alias + ram_size as u64
+                }))
+        {
+            return Err("Invalid or overlapping ARM32 DRAM alias".into());
         }
         if !initial_registers.is_empty() && initial_registers.len() != cores {
             return Err("Initial ARM32 register sets must name every processor".into());
@@ -1101,6 +1146,31 @@ impl Session {
             }
             None
         };
+        let boot_wiring = xpp_boot.as_ref().map(|b| b.options.clone());
+        if let Some(wiring) = &boot_wiring {
+            if xpp_reset_gates != Some(wiring.selector_base)
+                || xpp_power != Some(wiring.clock_base)
+                || xpp_dram != Some((wiring.ddr_base, wiring.refresh_level))
+            {
+                return Err(
+                    "Cold boot requires matching reset, power and DRAM declarations".into(),
+                );
+            }
+        }
+        let boot_lines = match xpp_boot {
+            Some(boot) => Some(
+                devices
+                    .get_or_insert_with(devices::Devices::empty)
+                    .xpp_boot(boot.options, boot.card_strap)?,
+            ),
+            None => None,
+        };
+        if xpp_serial_replies
+            .iter()
+            .any(|(base, _, _)| !xpp_serial.contains(base))
+        {
+            return Err("Serial reply names no X-Processor Pro serial port".to_owned());
+        }
         let mut sub_cpu_clock = None;
         let mut sub_cpu = match xpp_sub_cpu {
             Some(peer) => {
@@ -1160,18 +1230,25 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_frame_sync(sync)?;
         }
-        let mut external_lines = None;
-        let reset_gates = match xpp_reset_gates {
-            Some(base) => Some(
-                devices
-                    .get_or_insert_with(devices::Devices::empty)
-                    .xpp_reset_gates(base)
-                    .map(|(resets, lines)| {
-                        external_lines = Some(lines);
-                        resets
-                    })?,
-            ),
-            None => None,
+        let (mut external_lines, boot_resets) = match boot_lines {
+            Some((resets, external)) => (Some(external), Some(resets)),
+            None => (None, None),
+        };
+        let reset_gates = if boot_wiring.is_some() {
+            boot_resets
+        } else {
+            match xpp_reset_gates {
+                Some(base) => Some(
+                    devices
+                        .get_or_insert_with(devices::Devices::empty)
+                        .xpp_reset_gates(base)
+                        .map(|(resets, lines)| {
+                            external_lines = Some(lines);
+                            resets
+                        })?,
+                ),
+                None => None,
+            }
         };
         if let Some(sd) = xpp_sd {
             let reset = match (sd.reset_channel, &reset_gates) {
@@ -1188,7 +1265,9 @@ impl Session {
             };
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_sd(sd, reset)?;
+                .xpp_sd(sd, reset, &card_files)?;
+        } else if !card_files.is_empty() {
+            return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
         }
         if let Some((unit, ..)) = xpp_live_view_image
             && !xpp_register_blocks
@@ -1239,12 +1318,12 @@ impl Session {
                 },
             )?;
         }
-        if let Some(base) = xpp_power {
+        if let Some(base) = xpp_power.filter(|_| boot_wiring.is_none()) {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_power(base)?;
         }
-        if let Some((base, level)) = xpp_dram {
+        if let Some((base, level)) = xpp_dram.filter(|_| boot_wiring.is_none()) {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_dram(base, level)?;
@@ -1262,7 +1341,7 @@ impl Session {
         if let Some(frames) = xpp_display_frames {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_display_frames(frames.irqs, frames.period_ticks)?;
+                .xpp_display_frames(frames.irqs, frames.period_ticks, frames.timing)?;
         }
         for base in xpp_serial {
             if xpp_lens.as_ref().is_some_and(|lens| lens.port == base) {
@@ -1283,9 +1362,15 @@ impl Session {
                 Peer::Registers(_) => sub_cpu_clock.take(),
                 _ => None,
             };
+            let mut replies = BTreeMap::new();
+            for &(_, command, reply) in xpp_serial_replies.iter().filter(|r| r.0 == base) {
+                if replies.insert(command, reply).is_some() {
+                    return Err("Repeated serial reply command".to_owned());
+                }
+            }
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_serial(base, peer, clock)?;
+                .xpp_serial(base, peer, clock, replies)?;
         }
         if battery_gauge.is_some() {
             return Err("X-Processor Pro battery gauge shares its serial port".to_owned());
@@ -1440,7 +1525,11 @@ impl Session {
         if let Some((base, irq)) = decompressor {
             // The same engine sits at 0xfff79000 on XP4 and at 0xfff80000 on
             // the X-Processor Pro, whose storage is the flash-controller map.
-            let expected = if has_xpp_storage { 0xfff80000 } else { 0xfff79000 };
+            let expected = if has_xpp_storage {
+                0xfff80000
+            } else {
+                0xfff79000
+            };
             if base != expected || !(32..512).contains(&irq) {
                 return Err("Invalid XP4 decompressor wiring".to_owned());
             }
@@ -1454,6 +1543,7 @@ impl Session {
         let mut inner = Box::new(Cluster {
             cpus,
             ram,
+            dram_alias,
             memory,
             hooks: Vec::new(),
             labels,
@@ -1491,25 +1581,54 @@ impl Session {
                 pc_observers: vec![BTreeSet::new(); cores],
                 devices,
                 cache_dirty: false,
+                pmu: (0..cores)
+                    .map(|core| {
+                        pmu_cycles_per_tick.map(|cycles_per_tick| {
+                            fujimod_emulator::board::armv7a::Profile::new(
+                                fujimod_emulator::board::armv7a::Config {
+                                    mpidr: 0x80000000 | core as u32,
+                                    configuration_base: cbar.unwrap_or(0),
+                                    cycles_per_tick,
+                                    // The XP4 board answers CCSIDR from its own cache geometry.
+                                    cache_sizes: None,
+                                },
+                            )
+                        })
+                    })
+                    .collect(),
+                low_alias,
+                remap_pending: false,
+                remap_ready: false,
                 driver_guard: None,
             }),
         });
         for core in 0..cores {
+            let low = low_alias.map_or(0, |index| inner.memory[index].data.len());
             unsafe {
                 inner.cpus[core].map_backing(
-                    0,
-                    ram_size,
+                    low as u64,
+                    ram_size - low,
                     7,
-                    NonNull::new(inner.ram.as_ptr()).unwrap(),
+                    NonNull::new(inner.ram.as_ptr().add(low)).unwrap(),
                 )
             }?;
-            if let Some(base) = dram_alias {
+            if let Some(index) = low_alias {
+                let window = &inner.memory[index];
                 unsafe {
-                    inner.cpus[core].map_physical(
-                        base,
+                    inner.cpus[core].map_backing(
                         0,
+                        low,
+                        window.permissions,
+                        NonNull::new(window.data.as_ptr()).unwrap(),
+                    )
+                }?;
+            }
+            if let Some(alias) = inner.dram_alias {
+                unsafe {
+                    inner.cpus[core].map_backing(
+                        alias,
                         ram_size,
-                        1,
+                        7,
                         NonNull::new(inner.ram.as_ptr()).unwrap(),
                     )
                 }?;
@@ -1802,11 +1921,7 @@ impl Session {
     pub fn write(&self, address: usize, data: &[u8]) -> Result<(), String> {
         let target = self.inner.memory_pointer(address as u64, data.len(), 0)?;
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                target,
-                data.len(),
-            );
+            std::ptr::copy_nonoverlapping(data.as_ptr(), target, data.len());
         }
         Ok(())
     }
@@ -2063,6 +2178,10 @@ impl Session {
                 .collect(),
             failure: s.failure.clone(),
             cbar_reads: s.cbar_reads,
+            gpio: s
+                .devices
+                .as_ref()
+                .and_then(|devices| devices.gpio_registers()),
             history: observations.then(|| observation::History {
                 recent: s
                     .recent
@@ -2078,7 +2197,10 @@ impl Session {
             }),
         }
     }
-    pub fn frontier(&self, by_count: bool) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
+    pub fn frontier(
+        &self,
+        by_count: bool,
+    ) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
         unsafe { (*self.inner.state.get()).discovery.frontier(by_count) }
     }
     pub fn discovery_shadow(&self) -> Vec<(u64, u8)> {

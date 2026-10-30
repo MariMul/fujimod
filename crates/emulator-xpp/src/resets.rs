@@ -138,6 +138,7 @@ pub struct Gates {
     words: BTreeMap<u64, u32>,
     sd: [ResetPulses; SD_CHANNELS],
     lines: ExternalLines,
+    selector: Option<(Vec<fujimod_emulator_devices::signals::Level>, u32, u32)>,
 }
 impl Gates {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -149,7 +150,21 @@ impl Gates {
             words: BTreeMap::new(),
             sd: Default::default(),
             lines: ExternalLines::default(),
+            selector: None,
         })
+    }
+    /// Reset strap values sampled from physical contacts at register +0.
+    pub fn with_selector(
+        mut self,
+        contacts: Vec<fujimod_emulator_devices::signals::Level>,
+        normal: u32,
+        card: u32,
+    ) -> Self {
+        self.selector = Some((contacts, normal, card));
+        self
+    }
+    fn known(&self, offset: u64) -> bool {
+        WORDS.contains(&offset) || self.selector.is_some() && offset < WINDOW && offset & 3 == 0
     }
     /// The external interrupt lines whose polarity this block holds.
     pub fn external_lines(&self) -> ExternalLines {
@@ -164,7 +179,7 @@ impl Gates {
     }
     fn offset(&self, address: u64, size: u8) -> Option<u64> {
         let offset = address.checked_sub(self.base)?;
-        (size == 4 && WORDS.contains(&offset)).then_some(offset)
+        (size == 4 && self.known(offset)).then_some(offset)
     }
 }
 impl Device for Gates {
@@ -172,6 +187,15 @@ impl Device for Gates {
         "xpp-reset-gates"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if address == self.base && size == 4 {
+            if let Some((contacts, normal, card)) = &self.selector {
+                return u64::from(if contacts.iter().all(|v| v.high()) {
+                    *card
+                } else {
+                    *normal
+                });
+            }
+        }
         match self.offset(address, size) {
             Some(offset) => self.words.get(&offset).copied().unwrap_or(0).into(),
             None => {
@@ -185,6 +209,10 @@ impl Device for Gates {
             cx.unmodeled();
             return;
         };
+        if value > u32::MAX.into() || offset == 0 && self.selector.is_some() {
+            cx.unmodeled();
+            return;
+        }
         let value = value as u32;
         if offset == SD_RESETS {
             let old = self.words.get(&offset).copied().unwrap_or(0);
@@ -210,7 +238,7 @@ impl Device for Gates {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.words.keys().any(|offset| !WORDS.contains(offset)) {
+        if state.words.keys().any(|offset| !self.known(*offset)) {
             return Err("Invalid reset/gate checkpoint".into());
         }
         let polarity = state.words.get(&POLARITY).copied().unwrap_or(0);

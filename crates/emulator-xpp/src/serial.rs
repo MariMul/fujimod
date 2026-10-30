@@ -6,6 +6,9 @@
 //! reads zero. Other words retain writes. No timing or IRQ is modeled; this
 //! is a provisional law for discovery.
 //!
+//! A port without a peer may carry declared replies: reading +0x60 returns
+//! the declared reply to the last send word, else that word.
+//!
 //! A port may carry a declared register-file peer: each 16-bit send word names
 //! register bits 14..8, bit 15 writes the low byte into it, and the word read
 //! back from +0x60 is that register's value. Without a peer, +0x60 reads the
@@ -254,6 +257,7 @@ pub struct DiscoveryPort {
     clock: Option<ClockState>,
     frames: Option<FramePeer>,
     idle: bool,
+    replies: BTreeMap<u32, u32>,
 }
 impl DiscoveryPort {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -267,6 +271,7 @@ impl DiscoveryPort {
             clock: None,
             frames: None,
             idle: false,
+            replies: BTreeMap::new(),
         })
     }
     /// A port with its declared peer.
@@ -280,6 +285,14 @@ impl DiscoveryPort {
             Peer::Registers(registers) => Self::with_peer(base, registers),
             Peer::Frames(registers) => Self::with_frame_peer(base, registers),
         }
+    }
+    /// Answer each declared send word with its reply; a port with a peer refuses.
+    pub fn with_replies(mut self, replies: BTreeMap<u32, u32>) -> Result<Self, String> {
+        if !replies.is_empty() && (self.peer.is_some() || self.frames.is_some() || self.idle) {
+            return Err("X-Processor Pro serial replies need a port without a peer".into());
+        }
+        self.replies = replies;
+        Ok(self)
     }
     /// A port whose peer is a register file with these values after reset.
     pub fn with_peer(base: u64, registers: Vec<u8>) -> Result<Self, String> {
@@ -380,7 +393,7 @@ impl Device for DiscoveryPort {
                         counted.unwrap_or(peer[register]).into()
                     }
                     None if self.idle => IDLE,
-                    None => word,
+                    None => self.replies.get(&word).copied().unwrap_or(word),
                 };
                 self.registers[STATUS] |= DONE;
             }
@@ -485,13 +498,19 @@ mod tests {
     #[test]
     fn send_sets_done_and_clear_drops_written_status_bits() {
         let base = 0xfff2a000;
-        let mut port = DiscoveryPort::new(base).unwrap();
+        let mut port = DiscoveryPort::new(base)
+            .unwrap()
+            .with_replies(BTreeMap::from([(0x6000, 0x40)]))
+            .unwrap();
         let mut h = TestHost::new();
         assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM));
         write(&mut port, &mut h, base + 0x2c, 0x7f);
         assert_eq!(read(&mut port, &mut h, base + 0x48), 0);
         write(&mut port, &mut h, base + 0x60, 0xe800);
         assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM | DONE));
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0xe800);
+        write(&mut port, &mut h, base + 0x60, 0x6000);
+        assert_eq!(read(&mut port, &mut h, base + 0x60), 0x40);
         write(&mut port, &mut h, base + 0x2c, DONE);
         assert_eq!(read(&mut port, &mut h, base + 0x28), u64::from(ROOM));
         write(&mut port, &mut h, base + 0x14, 0xa);

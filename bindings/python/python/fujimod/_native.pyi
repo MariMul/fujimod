@@ -169,6 +169,7 @@ class emulator:
         def from_xp4(
             definition: str,
             storage_image: SupportsGetItem[int, SupportsIndex] | None = None,
+            card_files: Sequence[tuple[str, SupportsGetItem[int, SupportsIndex]]] = ...,
         ) -> emulator.Board: ...
         def function_watch_begin(
             self,

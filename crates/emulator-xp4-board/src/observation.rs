@@ -27,6 +27,8 @@ pub struct State {
     pub eligible_irqs: Vec<Option<usize>>,
     pub failure: Option<String>,
     pub cbar_reads: u64,
+    /// GPIO register words per port: +0 output latch, +8 direction.
+    pub gpio: Option<Vec<[u32; 8]>>,
     pub history: Option<History>,
 }
 

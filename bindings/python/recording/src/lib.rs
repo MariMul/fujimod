@@ -38,6 +38,14 @@ impl Frame {
         })
     }
     #[staticmethod]
+    fn abgr(width: u32, height: u32, data: &[u8]) -> PyResult<Self> {
+        Ok(Self {
+            inner: RgbFrame::abgr(width, height, data).map_err(error)?,
+            state: "{}".into(),
+            instance: None,
+        })
+    }
+    #[staticmethod]
     fn from_png(data: &[u8]) -> PyResult<Self> {
         Ok(Self {
             inner: RgbFrame::from_png(data).map_err(error)?,

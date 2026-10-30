@@ -7,8 +7,8 @@
 //! each channel's 10-bit result reads at `+0x10 + 4*channel`. A single conversion
 //! clears bit 0 after the declared conversion ticks; in continuous mode bit 0
 //! stays set. Results are explicit inputs, not analog hardware, and read the
-//! same before and after a conversion. The power-down bit is stored only;
-//! conversions do not depend on it.
+//! same before and after a conversion. Power-down cancels a pending conversion;
+//! enabling starts a requested single conversion.
 //!
 //! [`Converter::set_input`] changes a channel's result, as a key on the
 //! X-T20's channel 3 ladder does (pad, MENU/OK, Q, DISP/BACK; bands from the
@@ -107,7 +107,7 @@ impl Device for Converter {
             0 => {
                 // A pending single conversion keeps its deadline; any other
                 // single-mode start begins one.
-                let single = value & (START | CONTINUOUS) == START;
+                let single = value & (START | CONTINUOUS) == START && self.state.power_down == 0;
                 self.state.control = value;
                 self.state.deadline = match (single, self.state.deadline) {
                     (false, _) => None,
@@ -122,7 +122,17 @@ impl Device for Converter {
                 };
             }
             4 => self.state.divider = value,
-            8 if value <= 1 => self.state.power_down = value,
+            8 if value <= 1 => {
+                self.state.power_down = value;
+                if value != 0 {
+                    self.state.deadline = None;
+                } else if self.state.control & (START | CONTINUOUS) == START {
+                    self.state.deadline = cx.now().checked_add(self.conversion_ticks);
+                    if self.state.deadline.is_none() {
+                        cx.fail("X-Processor Pro ADC deadline overflow");
+                    }
+                }
+            }
             _ => cx.unmodeled(),
         }
     }
@@ -140,13 +150,16 @@ impl Device for Converter {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.deadline.is_some() != (state.control & (START | CONTINUOUS) == START) {
+        if state.deadline.is_some()
+            != (state.control & (START | CONTINUOUS) == START && state.power_down == 0)
+        {
             return Err("X-Processor Pro ADC checkpoint deadline differs from its control".into());
         }
-        if state
-            .inputs
-            .iter()
-            .any(|(&channel, &sample)| channel >= CHANNELS || sample > 0x3ff)
+        if state.power_down > 1
+            || state
+                .inputs
+                .iter()
+                .any(|(&channel, &sample)| channel >= CHANNELS || sample > 0x3ff)
         {
             return Err("Invalid X-Processor Pro ADC checkpoint input".into());
         }
@@ -189,6 +202,28 @@ mod tests {
         let mut cx = h.cx();
         adc.read(&mut cx, BASE + 0xc, 4);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn power_down_cancels_a_conversion_and_enable_restarts_its_clock() {
+        use fujimod_emulator_devices::test_host::advance;
+        let mut adc = converter();
+        let mut host = TestHost::new();
+        write(&mut adc, &mut host, BASE, START | 1 << 16);
+        write(&mut adc, &mut host, BASE + 8, 1);
+        assert_eq!(adc.next_deadline(0), None);
+        let powered_down = adc.save();
+        advance(&mut adc, &mut host, 32);
+        assert_eq!(read(&mut adc, &mut host, BASE) & 1, 1);
+        write(&mut adc, &mut host, BASE + 8, 0);
+        assert_eq!(adc.next_deadline(32), Some(48));
+        advance(&mut adc, &mut host, 48);
+        assert_eq!(read(&mut adc, &mut host, BASE) & 1, 0);
+        adc.restore(&powered_down).unwrap();
+        assert_eq!(adc.next_deadline(48), None);
+        let mut invalid = powered_down;
+        invalid["power_down"] = serde_json::json!(2);
+        assert!(adc.restore(&invalid).is_err());
     }
 
     #[test]

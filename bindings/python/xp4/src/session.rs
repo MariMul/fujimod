@@ -24,11 +24,15 @@ macro_rules! forward {
 }
 
 impl Xp4Session {
-    pub fn from_definition(definition: &str, storage_image: Option<Vec<u8>>) -> PyResult<Self> {
+    pub fn from_definition(
+        definition: &str,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+    ) -> PyResult<Self> {
         let definition: Definition = serde_json::from_str(definition)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let inner =
-            Session::new(definition, storage_image).map_err(fujimod_python_base::error)?;
+            Session::new(definition, storage_image, card_files).map_err(fujimod_python_base::error)?;
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
         inner.set_instruction_observer(Some(Rc::new(move |core, address| {

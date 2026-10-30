@@ -158,6 +158,8 @@ pub enum Model {
         parts: Value,
     },
     DisplayOutput {
+        #[serde(default)]
+        handshake_ticks: Option<u64>,
         base: u64,
         size: u64,
         set_bits: Vec<(u64, u32)>,
@@ -592,22 +594,26 @@ pub fn build(
                 )?
             }
             Model::DisplayOutput {
+                handshake_ticks,
                 base,
                 size,
                 set_bits,
                 clear_bits,
                 scanout,
-            } => devices.register(
-                base,
-                size,
-                Box::new(display::Output::new(
+            } => {
+                let output = display::Output::new(
                     base,
                     size,
                     &set_bits,
                     &clear_bits,
                     scanout.map(|(output, period)| display::Scanout { output, period }),
-                )?),
-            )?,
+                )?;
+                let output = match handshake_ticks {
+                    Some(ticks) => output.with_handshake(ticks)?,
+                    None => output,
+                };
+                devices.register(base, size, Box::new(output))?
+            }
             Model::DisplayFrames { irqs, period_ticks } => {
                 devices.attach(Box::new(display::FrameClock::new(irqs, period_ticks)?))
             }

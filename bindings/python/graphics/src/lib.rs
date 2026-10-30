@@ -9,6 +9,7 @@ mod scanout_observation;
 /// Add these functions and classes to the `fujimod._native.emulator` module.
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<python_graphics::UiBatch>()?;
+    module.add_function(wrap_pyfunction!(python_graphics::prepare_host_gpu, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::clear_parse, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::clear_path_descriptor, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::clear_render, module)?)?;

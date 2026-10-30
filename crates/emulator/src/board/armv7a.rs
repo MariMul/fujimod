@@ -27,14 +27,14 @@ impl Config {
         })
     }
 }
-pub(super) enum Entry {
+pub enum Entry {
     Execute,
     Completed,
     Hint(Hint),
 }
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Profile {
+pub struct Profile {
     pub config: Config,
     pmcr: u32,
     enabled: bool,
@@ -42,7 +42,7 @@ pub(super) struct Profile {
     anchor: u64,
 }
 impl Profile {
-    fn new(config: Config) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             config,
             pmcr: 0,
@@ -59,7 +59,7 @@ impl Profile {
         self.counter
             .wrapping_add((cycles / if self.pmcr & 8 != 0 { 64 } else { 1 }) as u32)
     }
-    pub(super) fn before(&mut self, cpu: &dyn Cpu, pc: u64, now: u64) -> Result<Entry, String> {
+    pub fn before(&mut self, cpu: &dyn Cpu, pc: u64, now: u64) -> Result<Entry, String> {
         let cpsr = scalar(cpu, arm::CPSR)? as u32;
         if cpsr & 0x20 != 0 {
             return Ok(Entry::Execute);
