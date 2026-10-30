@@ -18,6 +18,7 @@ fn options(protocol: Protocol, initialization_fault: InitializationFault) -> Opt
         ram_bytes: 0x4000,
         initialization_fault,
         high_speed: false,
+        ram_banks: vec![],
     }
 }
 

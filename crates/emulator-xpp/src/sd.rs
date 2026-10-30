@@ -31,6 +31,10 @@ pub struct Options {
     /// The card offers high speed (CMD6 group 1 function 1).
     #[serde(default)]
     pub high_speed: bool,
+    /// Further DRAM banks SDMA reaches: (physical base, bytes). X-T20 2.11
+    /// writes the JPEG file from the second bank (0xbed74000).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ram_banks: Vec<(u64, u64)>,
 }
 type Saved = (Options, Option<u64>, BTreeMap<u64, u32>, Option<u64>);
 pub struct Controller {
@@ -59,6 +63,7 @@ impl Controller {
             ram_bytes: options.ram_bytes,
             initialization_fault: host::InitializationFault::None,
             high_speed: options.high_speed,
+            ram_banks: options.ram_banks.clone(),
         };
         let host = if let Some(irq) = irq {
             SdHost::new(
@@ -301,6 +306,7 @@ mod tests {
                 rca: 1,
                 ram_bytes: 0x10000,
                 high_speed: false,
+                ram_banks: vec![],
             };
             let mut d = Controller::new(options, card, Contacts::new(true, false), None).unwrap();
             let mut h = TestHost::new();
@@ -375,6 +381,7 @@ mod tests {
             rca: 1,
             ram_bytes: 0x10000,
             high_speed: false,
+            ram_banks: vec![],
         };
         let mut gates = crate::resets::Gates::new(0xfff0a000).unwrap();
         let mut d = Controller::new(options, card, Contacts::new(true, false), None)
