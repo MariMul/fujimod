@@ -422,7 +422,8 @@
       "buffers": [
         {
           "output": 464,
-          "words": [641739, 0, 1700693, 0, 150556, 0, 0, 0, 590, 0, 1676, 0, 158, 0, 0, 0, 480, 0, 1461, 0, 137, 0, 0, 0, 508, 0, 1312, 0, 115, 0, 0, 0, 521, 0, 1360, 0, 125, 0, 0, 0, 502, 0, 1369, 0, 120, 0, 0, 0, 632, 0, 1582, 0, 143, 0, 0, 0, 562, 0, 1466, 0, 124, 0, 0, 0, 527, 0, 1405, 0, 113, 0, 0, 0, 0, 0, 365, 0, 0, 0, 0, 0],
+          "asset": "xt20-211-statistics-window",
+          "sha256": "63ffb961adf0066f4c80ec5ea5e35c521cea2780edf88e5fa3e016d91bc3f7c0",
           "basis": "Measured: the second statistics window buffer (+0x1d0, 0x3f481360 in the first half, 80 u32) of the same s2 REC capture, first half, copied unchanged. Words 0/2/4 are red/green/blue sums of a window of about 4.4 zones (641739 / 1700693 / 150556); nine smaller windows follow at stride 8 (red, green, blue at +0/+2/+4), and word 74 reads 365..368 in every scene. On the XP4 board (previous lens inputs) this buffer alone moves AE record field +0x10e (setter 0xd289dc, struct 0x1d09168) from -595 to 196 at the 170M write (camera s2: 53, offset as the zone-sum fields); the coarse 8x8 planes (+0x2670), the 256-bin histogram (+0x3290) and the other buffers left the record unchanged."
         }
       ],
