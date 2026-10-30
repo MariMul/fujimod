@@ -34,6 +34,7 @@ async-channel = "2"
 socket2 = "0.6"
 aes-gcm = "0.11"
 rand = "0.9"
+sha2.workspace = true
 if-addrs = "0.15"
 stunclient = "0.4"
 async-tungstenite = { version = "0.35", features = ["smol-runtime", "smol-native-tls"] }

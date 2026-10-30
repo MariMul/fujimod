@@ -1,6 +1,7 @@
 //! Camera-independent USB forwarding. No Fujifilm framing, firmware or policy.
 #![forbid(unsafe_code)]
 mod client;
+pub mod pipeline;
 pub mod protocol;
 pub use client::{Client, Outcome, Progress, RemoteDevice};
 pub use protocol::{
@@ -18,6 +19,8 @@ pub mod dev_shares;
 pub mod relay;
 
 mod peer;
+#[cfg(not(target_arch = "wasm32"))]
+pub use peer::{HostEvent, HostRoom, PeerSocket};
 pub mod share;
 #[cfg(all(feature = "relay", not(target_arch = "wasm32")))]
 mod signaling;

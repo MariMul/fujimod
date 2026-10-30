@@ -18,12 +18,14 @@ use rand::Rng;
 use serde_json::{Value, json};
 use std::{
     collections::VecDeque,
+    future::Future,
     net::{SocketAddr, ToSocketAddrs},
+    thread,
     time::{Duration, Instant},
 };
 use str0m::{
     Candidate, Event, Input, Output, Rtc,
-    change::SdpAnswer,
+    change::{SdpAnswer, SdpOffer},
     channel::ChannelId,
     net::{Protocol, Receive},
 };
@@ -89,29 +91,35 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
         .map_err(|_| error("signaling authentication failed"))?;
     serde_json::from_slice(&decoded).map_err(error)
 }
-pub(crate) struct PeerSocket {
+pub struct PeerSocket {
     send: Sender<Vec<u8>>,
     receive: Receiver<Result<Vec<u8>>>,
     /// Closed when the I/O thread has flushed and exited.
     finished: Receiver<()>,
 }
 impl PeerSocket {
-    pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
-        let ticket = Ticket::from_url(url)?.ok_or_else(|| error("invalid share URL"))?;
-        progress("share link parsed");
-        let progress = progress.clone();
+    pub(crate) async fn start<F, Fut>(name: &'static str, task: F) -> Result<Self>
+    where
+        F: FnOnce(PeerChannels) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<()>> + 'static,
+    {
         let (tx, outbound) = async_channel::bounded(1);
-        // Unbounded: results queue while the controller is still sending; its
-        // in-flight limit bounds them. A bounded queue would block the I/O thread.
+        // The controller can queue replies while the caller is still sending;
+        // its in-flight limit bounds this queue. A bounded queue can deadlock
+        // the I/O thread when it tries to publish a result.
         let (incoming, rx) = async_channel::unbounded();
         let (ready, wait) = async_channel::bounded(1);
         let (finish, finished) = async_channel::bounded::<()>(1);
-        std::thread::Builder::new()
-            .name("fujimod-webrtc".into())
+        thread::Builder::new()
+            .name(name.into())
             .spawn(move || {
                 futures_lite::future::block_on(async {
-                    if let Err(error) =
-                        run(ticket, outbound, incoming.clone(), ready.clone(), progress).await
+                    if let Err(error) = task(PeerChannels {
+                        outbound,
+                        incoming: incoming.clone(),
+                        ready: ready.clone(),
+                    })
+                    .await
                     {
                         let _ = ready.send(Err(error.to_string())).await;
                         let _ = incoming.send(Err(error)).await;
@@ -126,6 +134,32 @@ impl PeerSocket {
             receive: rx,
             finished,
         })
+    }
+
+    pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
+        let ticket = Ticket::from_url(url)?.ok_or_else(|| error("invalid share URL"))?;
+        progress("share link parsed");
+        let progress = progress.clone();
+        Self::start("fujimod-webrtc", move |channels| async move {
+            run(ticket, channels, progress).await
+        })
+        .await
+    }
+
+    pub(crate) async fn answer(
+        ticket: Ticket,
+        peer: String,
+        sealed_offer: String,
+        signaling: async_channel::Sender<Value>,
+    ) -> Result<Self> {
+        Self::start("fujimod-webrtc-host", move |channels| async move {
+            run_answer(ticket, peer, sealed_offer, signaling, channels).await
+        })
+        .await
+    }
+
+    pub(crate) fn close_handle(&self) -> Sender<Vec<u8>> {
+        self.send.clone()
     }
     /// Queue a final message, close, and wait up to a second for it to be sent.
     pub fn goodbye(&mut self, bytes: Vec<u8>) {
@@ -156,6 +190,12 @@ impl PeerSocket {
             .map_err(|_| error("peer disconnected; completion unknown"))?
     }
 }
+
+pub(crate) struct PeerChannels {
+    outbound: Receiver<Vec<u8>>,
+    incoming: Sender<Result<Vec<u8>>>,
+    ready: Sender<std::result::Result<(), String>>,
+}
 impl Drop for PeerSocket {
     fn drop(&mut self) {
         self.send.close();
@@ -170,19 +210,12 @@ fn drain_setup(rtc: &mut Rtc) -> Result<()> {
         }
     }
 }
-async fn run(
-    ticket: Ticket,
-    outbound: Receiver<Vec<u8>>,
-    incoming: Sender<Result<Vec<u8>>>,
-    ready: Sender<std::result::Result<(), String>>,
-    progress: crate::Progress,
-) -> Result<()> {
-    // str0m counts unacknowledged bytes against this bound. Its 128 KiB
-    // default limits a bulk sender to 128 KiB per RTT (6.6 MB/s at 20 ms).
-    // Reserve a bounded bulk window rather than the interactive default.
-    let mut rtc = Rtc::builder()
-        .set_sctp_max_buffered_amount(512 * 1024)
-        .build(Instant::now());
+
+fn gather_candidates(
+    rtc: &mut Rtc,
+    ticket: &Ticket,
+    progress: &crate::Progress,
+) -> Result<DatagramIo> {
     let mut local = Vec::new();
     for iface in if_addrs::get_if_addrs().map_err(error)? {
         if iface.ip().is_ipv4() {
@@ -196,7 +229,7 @@ async fn run(
         let socket = std::net::UdpSocket::bind(SocketAddr::new(*ip, 0)).map_err(error)?;
         let addr = socket.local_addr().map_err(error)?;
         rtc.add_local_candidate(Candidate::host(addr, "udp").map_err(error)?);
-        drain_setup(&mut rtc)?;
+        drain_setup(rtc)?;
         sockets.push(socket);
     }
     progress(&format!("local candidates: {}", local.len()));
@@ -232,11 +265,26 @@ async fn run(
                 rtc.add_local_candidate(
                     Candidate::server_reflexive(external, base, "udp").map_err(error)?,
                 );
-                drain_setup(&mut rtc)?;
+                drain_setup(rtc)?;
             }
         }
     }
-    let mut udp = DatagramIo::new(sockets).map_err(error)?;
+    DatagramIo::new(sockets).map_err(error)
+}
+
+async fn run(ticket: Ticket, channels: PeerChannels, progress: crate::Progress) -> Result<()> {
+    let PeerChannels {
+        outbound,
+        incoming,
+        ready,
+    } = channels;
+    // str0m counts unacknowledged bytes against this bound. Its 128 KiB
+    // default limits a bulk sender to 128 KiB per RTT (6.6 MB/s at 20 ms).
+    // Reserve a bounded bulk window rather than the interactive default.
+    let mut rtc = Rtc::builder()
+        .set_sctp_max_buffered_amount(512 * 1024)
+        .build(Instant::now());
+    let udp = gather_candidates(&mut rtc, &ticket, &progress)?;
     let mut signal_url = url::Url::parse(&ticket.signal).map_err(error)?;
     signal_url
         .query_pairs_mut()
@@ -249,6 +297,13 @@ async fn run(
     )
     .await?;
     let welcome = read(&mut signal).await?;
+    if welcome["type"] == "error" {
+        return Err(error(
+            welcome["message"]
+                .as_str()
+                .unwrap_or("camera share unavailable"),
+        ));
+    }
     let peer = welcome["peer"]
         .as_str()
         .filter(|_| welcome["type"] == "ready")
@@ -292,11 +347,97 @@ async fn run(
         )
         .map_err(error)?;
     progress("WebRTC answer accepted; connecting ICE");
-    let mut channel: Option<ChannelId> = None;
+    pump(
+        rtc,
+        udp,
+        None,
+        outbound,
+        incoming,
+        ready,
+        progress,
+        Some(&mut signal),
+    )
+    .await
+}
+
+async fn run_answer(
+    ticket: Ticket,
+    peer: String,
+    sealed_offer: String,
+    signaling: async_channel::Sender<Value>,
+    channels: PeerChannels,
+) -> Result<()> {
+    let PeerChannels {
+        outbound,
+        incoming,
+        ready,
+    } = channels;
+    let prepared = (|| -> Result<(Rtc, DatagramIo, String)> {
+        let offer = unseal(&ticket, &peer, &sealed_offer)?;
+        if offer["type"] != "offer" {
+            return Err(error("invalid WebRTC offer"));
+        }
+        let sdp = offer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?;
+        let mut rtc = Rtc::builder()
+            .set_sctp_max_buffered_amount(512 * 1024)
+            .build(Instant::now());
+        let progress: crate::Progress = std::sync::Arc::new(|_| {});
+        let udp = gather_candidates(&mut rtc, &ticket, &progress)?;
+        let offer = SdpOffer::from_sdp_string(sdp).map_err(error)?;
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(error)?;
+        drain_setup(&mut rtc)?;
+        Ok((rtc, udp, answer.to_sdp_string()))
+    })();
+    let (rtc, udp, sdp) = match prepared {
+        Ok(prepared) => prepared,
+        Err(failure) => {
+            let frame = json!({
+                "type": "signal",
+                "to": peer,
+                "data": seal(&ticket, &peer, json!({
+                    "type": "error",
+                    "message": failure.to_string(),
+                }))?,
+            });
+            let _ = signaling.send(frame).await;
+            return Err(failure);
+        }
+    };
+    signaling
+        .send(json!({
+            "type": "signal",
+            "to": peer,
+            "data": seal(&ticket, &peer, json!({"type":"answer","sdp":sdp}))?,
+        }))
+        .await
+        .map_err(error)?;
+    pump(
+        rtc,
+        udp,
+        None,
+        outbound,
+        incoming,
+        ready,
+        std::sync::Arc::new(|_| {}),
+        None,
+    )
+    .await
+}
+
+async fn pump(
+    mut rtc: Rtc,
+    mut udp: DatagramIo,
+    mut channel: Option<ChannelId>,
+    outbound: Receiver<Vec<u8>>,
+    incoming: Sender<Result<Vec<u8>>>,
+    ready: Sender<std::result::Result<(), String>>,
+    progress: crate::Progress,
+    mut signal: Option<&mut Socket>,
+) -> Result<()> {
     let mut assembled = Vec::new();
     let mut packets: VecDeque<Vec<u8>> = VecDeque::new();
     let mut writable = true;
-    let mut signal_alive = true;
+    let mut signal_alive = signal.is_some();
     let started = Instant::now();
     // Set when the controller closes: flush queued messages, then exit.
     let mut closing: Option<Instant> = None;
@@ -429,7 +570,10 @@ async fn run(
                             if !signal_alive {
                                 std::future::pending::<()>().await;
                             }
-                            Wake::Signal(read(&mut signal).await)
+                            match signal.as_mut() {
+                                Some(socket) => Wake::Signal(read(socket).await),
+                                None => std::future::pending::<Wake>().await,
+                            }
                         },
                     ),
                 ),
