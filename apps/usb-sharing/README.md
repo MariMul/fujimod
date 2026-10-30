@@ -9,8 +9,10 @@ Each share room is a hibernating SQLite Durable Object. It routes opaque,
 authenticated-encrypted SDP and assigns controller IDs. USB requests and payloads
 travel on WebRTC, either directly or through TURN; they never pass through this
 Worker. Closing the owner revokes the room and attempts to revoke its temporary
-TURN credentials. A room cannot reopen after revocation. Rooms expire after the
+TURN credentials. A room cannot reopen after revocation. Browser rooms expire after the
 configured TURN credential lifetime, including when TURN is not enabled.
+Persistent rooms outlive their owner's connection until ended or idle; see
+[persistent links](../../crates/usb-proxy/SHARING.md#persistent-links-and-the-native-owner).
 
 ## Deploy
 
@@ -102,6 +104,7 @@ Configuration defaults:
 | `CONNECTIONS` rate limit | 60/minute/IP     | WebSocket upgrade requests                                                 |
 | Room sockets             | 17               | One owner and up to 16 controllers, including pending handshakes           |
 | Signaling frames         | 60/minute/socket | Bounded encrypted connection setup, maximum 64 KiB                         |
+| `SHARE_IDLE_SECONDS`     | 604800           | A persistent room with no owner for this long is revoked                   |
 
 The issuance quota is **not a bandwidth or billing cap**. Public clients receive
 temporary relay access, so configure the quota for the intended audience and

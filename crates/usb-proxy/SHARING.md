@@ -197,3 +197,70 @@ These operations are separate from battery reports and urgent camera alerts.
 Rust USB sessions expose `owner_status(message)` and `owner_attention(message)`,
 also available on native Python sessions. Local USB status does nothing; local
 USB attention fails because it has no owner page.
+
+## Persistent links and the native owner
+
+Agreed design, 2026-10-30. A camera on a computer's local USB can be shared
+without a browser, on a link made before sharing starts that survives camera
+restarts and owner restarts.
+
+### Rooms
+
+- **Owner key.** A persistent link has a second secret, the 256-bit owner key,
+  kept only in the owner's ticket file and never in the link. The owner joins
+  with `{type: "join", role: "host", room, owner_key}`. The first such join
+  stores SHA-256 of the key in the room; later owner joins must present a key
+  with the same hash. An owner join without `owner_key` to a persistent room,
+  or with one to an ordinary room, is refused.
+- **Owner away.** When a persistent room's owner disconnects (closed socket,
+  error or the 24-hour TURN lifetime), the room is not revoked. Its clients
+  get `{type: "host_offline"}`; established WebRTC connections are left alone.
+  A client joining while the owner is away is refused with
+  `Camera share offline`. A rejoining owner gets fresh TURN credentials.
+- **End.** The owner sends `{type: "end"}` to revoke the room, as closing a
+  browser share does. A persistent room with no owner for `SHARE_IDLE_SECONDS`
+  (default 604800, 7 days) is revoked by its alarm.
+- **Creating a link.** Creating a ticket joins once as owner and leaves, so the
+  room exists, offline, before any camera is shared. Opening the link then
+  shows the camera as offline rather than missing.
+- Browser shares are unchanged: no owner key, and the room ends with its tab.
+
+### Controllers
+
+`Camera share offline` is a waiting state, not a failure. Dev Tools shows
+**Waiting for shared camera** and retries the join every 5 seconds until it
+connects, the room ends (`Camera sharing ended`) or the viewer leaves. Native
+discovery reports a share that is offline as no device, so tools wait as they
+do for an unplugged camera.
+
+### Native owner
+
+`fujimod-share-owner`, built from `crates/usb`:
+
+```sh
+fujimod-share-owner create --signal wss://share.fujimod.com/usb-proxy/signal TICKET.json
+fujimod-share-owner serve TICKET.json [--device SELECTOR] [--attention-command CMD...]
+fujimod-share-owner end TICKET.json
+```
+
+- `create` writes a mode-0600 ticket `{ "link": "...", "owner_key": "..." }`
+  and prints the link. The link is an ordinary Dev Tools share URL
+  (`https://fujimod.com/dev-tools/#?remotecontrol=...`, or `--site`).
+- `serve` opens the selected local camera through `DeviceOwners`, joins as
+  owner and serves controllers until interrupted. It uses the same Rust USB
+  execution as the browser (`fujimod_usb::owner::Exporter`) and the same
+  pipeline rules ([PIPELINE.md](PIPELINE.md)). When the camera disconnects it
+  stays in the room and lists the device offline with its reason; when the same
+  body returns (`DeviceOwners` identity), it shares it again. When its
+  signaling connection drops, it rejoins with the owner key, retrying every
+  5 seconds. SIGINT or SIGTERM leaves the room without ending it.
+- Controller notices are printed one per line: connects, disconnects with
+  their reasons, `owner_status` messages and battery reports. `owner_attention`
+  runs `--attention-command` with the message as its last argument and replies
+  when it exits 0; without the option, attention is refused.
+- `end` joins with the owner key and revokes the room. It is refused while an
+  owner is serving it.
+
+The native owner uses STUN and host candidates only. Browser controllers can
+still reach it through their own TURN relay; a native controller needs a direct
+or STUN-mapped path.
