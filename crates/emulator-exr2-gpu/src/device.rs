@@ -16,6 +16,8 @@ pub struct Options {
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
     pub copy_bytes_per_tick: u64,
+    /// Completion time of every 3D draw job, in ticks. See `X70_GLES_JOB_TICKS`.
+    pub gles_job_ticks: u64,
     pub copy_profile: Option<Profile>,
     pub clear_profile: Option<Profile>,
 }
@@ -58,6 +60,7 @@ impl VectorGpu {
             .any(|&n| n == 0 || n > options.ram_bytes)
             || options.bytes_per_tick == 0
             || options.copy_bytes_per_tick == 0
+            || options.gles_job_ticks == 0
             || !(8..=capture_limit).contains(&options.max_command_capture_bytes)
             || options.max_command_capture_bytes & 7 != 0
             || !matches!(options.copy_profile, None | Some(Profile::GpuCopyProfile))
@@ -76,6 +79,7 @@ impl VectorGpu {
             max_clear_bytes: options.max_clear_bytes,
             bytes_per_tick: options.bytes_per_tick,
             copy_bytes_per_tick: options.copy_bytes_per_tick,
+            gles_job_ticks: options.gles_job_ticks,
             copy_profile: options.copy_profile,
             clear_profile: options.clear_profile,
             ..CommandProcessor::default()
@@ -435,7 +439,9 @@ impl Device for VectorGpu {
             "max_copy_bytes":s.max_copy_bytes,"max_clear_bytes":s.max_clear_bytes,
             "max_command_capture_bytes":s.max_command_capture_bytes,
             "bytes_per_tick":s.bytes_per_tick,
-            "copy_bytes_per_tick":s.copy_bytes_per_tick,"copy_profile":s.copy_profile,
+            "copy_bytes_per_tick":s.copy_bytes_per_tick,"gles_job_ticks":s.gles_job_ticks,
+            "gles_latency_ticks":s.gles_latency_ticks,"gles_byte_rate_ticks":s.gles_byte_rate_ticks,
+            "copy_profile":s.copy_profile,
             "clear_profile":s.clear_profile,"pending_completions":s.completions.len(),
             "next_token":s.next_token,"next_job":s.next_job
         },"deadlines":self.due})

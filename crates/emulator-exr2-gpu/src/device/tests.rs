@@ -47,6 +47,7 @@ fn options() -> Options {
         max_command_capture_bytes: 65536,
         bytes_per_tick: 16,
         copy_bytes_per_tick: 16,
+        gles_job_ticks: super::super::X70_GLES_JOB_TICKS,
         copy_profile: None,
         clear_profile: None,
     }
@@ -219,6 +220,43 @@ fn stock_gles_submit_register_executes_uniform_shader_draw() {
             .count(),
         288
     );
+}
+fn uniform_triangle_job_ticks(mut options: Options) -> u64 {
+    options.ram_bytes = 0x20000;
+    let address = 0xfff7c1e0;
+    let (mut gpu, mut host, mut controllers) = setup_with_options(options);
+    enable(&mut controllers, &mut host, 1);
+    let command_address = 0x800usize;
+    let commands = dmp_uniform_triangle();
+    for (index, word) in commands.iter().enumerate() {
+        let start = command_address + index * 4;
+        host.bytes[start..start + 4].copy_from_slice(&word.to_le_bytes());
+    }
+    assert_eq!(
+        put(&mut gpu, &mut host, 0x20e0, (commands.len() * 4 / 8) as u64),
+        None
+    );
+    assert_eq!(
+        put(&mut gpu, &mut host, 0x20e8, (command_address / 8) as u64),
+        None
+    );
+    let mut cx = Cx::new(&mut host, 0, 0x12345678, 2);
+    gpu.write(&mut cx, address, 4, 1);
+    assert_eq!(cx.take_refusal(), None);
+    gpu.next_deadline(host.now).unwrap() - host.now
+}
+#[test]
+fn gles_draw_job_completes_after_the_x70_interval_whatever_its_byte_rate() {
+    // Measured on hardware: a 3D draw job of a menu frame completes 6.988 ms
+    // after submission, 83,852 ticks at 12 MHz. Byte rates price fill, copy
+    // and clear work, so a draw job's time must not depend on them.
+    assert_eq!(super::super::X70_GLES_JOB_TICKS, 83_852);
+    let mut slow = options();
+    slow.bytes_per_tick = 1;
+    let mut fast = options();
+    fast.bytes_per_tick = 64;
+    assert_eq!(uniform_triangle_job_ticks(slow), 83_852);
+    assert_eq!(uniform_triangle_job_ticks(fast), 83_852);
 }
 fn put(gpu: &mut VectorGpu, host: &mut Ram, logical: u64, value: u64) -> Option<String> {
     let mut cx = Cx::new(host, 0, 0x12345678, 2);
@@ -565,6 +603,7 @@ fn full_frame_copy_costs_the_measured_eglcopybuffers_time() {
         max_clear_bytes: 0x400000,
         bytes_per_tick: 16,
         copy_bytes_per_tick: 25,
+        gles_job_ticks: super::super::X70_GLES_JOB_TICKS,
         copy_profile: Some(Profile::GpuCopyProfile),
         clear_profile: None,
     });

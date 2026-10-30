@@ -4513,6 +4513,7 @@ class RunNativeDeviceInputsVariant33(TypedDict, total=False):
     clear_profile: Required[NativeVectorGpuInputsClearProfile]
     copy_bytes_per_tick: Required[int]
     copy_profile: Required[NativeVectorGpuInputsCopyProfile]
+    gles_job_ticks: Required[int]
     kind: Required[Literal["vector-gpu"]]
     max_clear_bytes: Required[int]
     max_command_capture_bytes: Required[int]

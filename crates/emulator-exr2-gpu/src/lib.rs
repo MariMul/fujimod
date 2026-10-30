@@ -51,6 +51,9 @@ pub const FILL_STATUS: u32 = 1 << 26;
 pub const COPY_STATUS: u32 = 1 << 30;
 pub const CLEAR_STATUS: u32 = 1 << 31;
 pub const FILL_CONTROL: u32 = 0x0f100201;
+/// X70 1.10 3D draw job completion time, in 12 MHz ticks: 6.988 ms, measured on
+/// hardware as a fixed cost per job. No content-dependent term is modeled.
+pub const X70_GLES_JOB_TICKS: u64 = 83_852;
 /// Tile bytes are retained unchanged by the optional untile profile.
 pub const COPY_PROFILE: &str = "vg-32bpp-untile-unrotated";
 pub const CLEAR_PROFILE: &str = "stock-vg-clear-only";
@@ -329,6 +332,12 @@ pub struct CommandProcessor {
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
     pub copy_bytes_per_tick: u64,
+    pub gles_job_ticks: u64,
+    /// Sum of the 3D completion delays scheduled so far, in ticks.
+    pub gles_latency_ticks: u64,
+    /// Ticks the superseded byte rate would have charged for the same 3D jobs.
+    /// Comparison only; never scheduled.
+    pub gles_byte_rate_ticks: u64,
     pub copy_profile: Option<Profile>,
     pub clear_profile: Option<Profile>,
     pub completions: BTreeMap<u64, Completion>,
@@ -364,6 +373,9 @@ impl Default for CommandProcessor {
             max_clear_bytes: 0x04000000,
             bytes_per_tick: 16,
             copy_bytes_per_tick: 16,
+            gles_job_ticks: X70_GLES_JOB_TICKS,
+            gles_latency_ticks: 0,
+            gles_byte_rate_ticks: 0,
             copy_profile: None,
             clear_profile: None,
             completions: BTreeMap::new(),
@@ -732,8 +744,14 @@ impl CommandProcessor {
                     })
                     .collect::<Result<_>>()?;
                 let bytes = output.iter().map(|(_, data)| data.len() as u64).sum::<u64>();
+                let delay = self.gles_job_ticks;
+                self.gles_latency_ticks += delay;
+                self.gles_byte_rate_ticks += self.delay(command_bytes + bytes);
                 if job.record_receipts {
-                    update(&mut job, vec![("bytes", num(bytes))]);
+                    update(
+                        &mut job,
+                        vec![("bytes", num(bytes)), ("latency_ticks", num(delay))],
+                    );
                 }
                 self.pending_webgpu = None;
                 self.last_job = if job.record_receipts { Some(job.clone()) } else { None };
@@ -748,7 +766,7 @@ impl CommandProcessor {
                         event: CompletionEvent::Gles,
                         ui: false,
                     },
-                    self.delay(command_bytes + bytes),
+                    delay,
                     actions,
                 );
                 let _ = command_address;
@@ -935,12 +953,14 @@ impl CommandProcessor {
             if let Some(id) =
                 host.submit_webgpu_request("vector-gles-webgpu", webgpu_request)?
             {
+            let delay = self.gles_job_ticks;
             let job = self.new_job_with_receipts(receipts, || {
                 vec![
                     ("operation", Value::constant("3D")),
                     ("command_address", hex(address)),
                     ("command_bytes", num(length)),
                     ("bytes", num(0)),
+                    ("latency_ticks", num(delay)),
                     ("completed", Value::Bool(false)),
                 ]
             });
@@ -994,12 +1014,16 @@ impl CommandProcessor {
             })
             .collect::<Result<_>>()?;
         let count = output.iter().map(|(_, b)| b.len() as u64).sum::<u64>();
+        let delay = self.gles_job_ticks;
+        self.gles_latency_ticks += delay;
+        self.gles_byte_rate_ticks += self.delay(length + count);
         let job = self.new_job_with_receipts(receipts, || {
             vec![
                 ("operation", Value::constant("3D")),
                 ("command_address", hex(address)),
                 ("command_bytes", num(length)),
                 ("bytes", num(count)),
+                ("latency_ticks", num(delay)),
                 ("completed", Value::Bool(false)),
             ]
         });
@@ -1019,7 +1043,7 @@ impl CommandProcessor {
                 event: CompletionEvent::Gles,
                 ui: false,
             },
-            self.delay(length + count),
+            delay,
             actions,
         );
         Ok(())
@@ -2095,6 +2119,9 @@ impl CommandProcessor {
             ("last_job".into(), j),
             ("bytes_per_tick".into(), num(self.bytes_per_tick)),
             ("copy_bytes_per_tick".into(), num(self.copy_bytes_per_tick)),
+            ("gles_job_ticks".into(), num(self.gles_job_ticks)),
+            ("gles_latency_ticks".into(), num(self.gles_latency_ticks)),
+            ("gles_byte_rate_ticks".into(), num(self.gles_byte_rate_ticks)),
             (
                 "copy_profile".into(),
                 self.copy_profile.map_or(Value::None, Profile::value),

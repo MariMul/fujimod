@@ -21725,6 +21725,11 @@
             "copy_profile": {
               "$ref": "#/$defs/NativeVectorGpuInputsCopyProfile"
             },
+            "gles_job_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "kind": {
               "const": "vector-gpu",
               "type": "string"
@@ -21763,6 +21768,7 @@
             "max_clear_bytes",
             "bytes_per_tick",
             "copy_bytes_per_tick",
+            "gles_job_ticks",
             "max_command_capture_bytes",
             "copy_profile",
             "clear_profile"
