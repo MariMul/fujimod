@@ -675,3 +675,20 @@ fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
         assert_eq!(&memory[memory.len() - 4..], &[0x5a; 4]);
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn ordered_draw_uploads_preserve_overlapping_byte_masks_and_depth_transitions() {
+    let mut words = Vec::new();
+    // Repeated textures/uniforms and overlapping geometry share upload arenas.
+    // Later draws must retain earlier byte writes, including rejected depth
+    // fragments and partial color masks, through one list completion.
+    for control in [0x100, 0x200, 0x400, 0x800, 0xf00, 0x1f11, 0xf00] {
+        words.extend(triangle_list(&[
+            (0x307, control),
+            (0x316, 3),
+            (0x301, 0x77100000),
+        ]));
+    }
+    let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);
+}

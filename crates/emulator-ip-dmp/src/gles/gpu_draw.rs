@@ -15,7 +15,13 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
-use wgpu::util::DeviceExt;
+
+mod buffers;
+#[cfg(not(target_arch = "wasm32"))]
+mod compiler;
+mod fragment_program;
+use buffers::DrawBuffers;
+use fragment_program::FragmentProgram;
 
 const REGISTER_WORDS: usize = 0x500;
 const FOG_OFFSET: usize = REGISTER_WORDS;
@@ -23,8 +29,9 @@ const FOG_WORDS: usize = 128;
 const INPUT_OFFSET: usize = FOG_OFFSET + FOG_WORDS;
 const CASE_WORDS: usize = INPUT_OFFSET + 16;
 
-static DRAW_PIPELINES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::RenderPipeline>>>> =
-    OnceLock::new();
+static DRAW_PIPELINES: OnceLock<
+    Mutex<HashMap<([u8; 32], FragmentProgram), Arc<wgpu::RenderPipeline>>>,
+> = OnceLock::new();
 static VERTEX_SHADER_MODULES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::ShaderModule>>>> =
     OnceLock::new();
 static FRAGMENT_SHADER_MODULES: OnceLock<Mutex<HashMap<bool, Arc<wgpu::ShaderModule>>>> =
@@ -114,6 +121,7 @@ pub(super) fn render(
 ) -> Result<RenderedList, String> {
     let mut prepared = Vec::new();
     let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
+    let mut texture_dma = HashMap::new();
     for draw in draws {
         if draw.vertex.indices.is_empty() {
             continue;
@@ -145,7 +153,8 @@ pub(super) fn render(
             read,
         )?;
 
-        let (parameters, guest_bytes) = draw_parameters(draw, recorded_reads, read)?;
+        let (parameters, guest_bytes) =
+            draw_parameters(draw, recorded_reads, read, &mut texture_dma)?;
         prepared.push(PreparedDraw {
             state: state.clone(),
             extent,
@@ -179,11 +188,40 @@ pub(super) fn render(
     for (key, _) in surfaces.values() {
         cache.encode_clear_write_masks(&mut encoder, *key)?;
     }
-    for prepared in &prepared {
-        let pipeline = pipeline_for(cache.device(), &prepared.state, &prepared.vertex)?;
-        render_draw(prepared, &pipeline, cache, &mut encoder)?;
+    let mut snapshots = HashMap::new();
+    let buffers = DrawBuffers::new(cache.device(), &prepared)?;
+    for (index, prepared) in prepared.iter().enumerate() {
+        let pipeline = pipeline_for(
+            cache.device(),
+            &prepared.state,
+            &prepared.vertex,
+            &prepared.parameters,
+        )?;
+        render_draw(
+            prepared,
+            &pipeline,
+            cache,
+            &mut encoder,
+            &mut snapshots,
+            &buffers,
+            index,
+        )?;
     }
-    let keys = surfaces.values().map(|(key, _)| *key).collect::<Vec<_>>();
+    // A disabled depth/stencil stage cannot write this surface. Preserve the
+    // resident target, but do not transfer its entire extent back to the host.
+    let keys = surfaces
+        .values()
+        .filter_map(|(key, _)| {
+            prepared
+                .iter()
+                .any(|draw| {
+                    draw.color_key == *key
+                        || (draw.depth_key == *key
+                            && (draw.state.depth_test.enabled || draw.state.stencil_test.enabled))
+                })
+                .then_some(*key)
+        })
+        .collect::<Vec<_>>();
     let pending = cache.encode_readbacks(&mut encoder, &keys)?;
     cache.submit(encoder.finish());
     let readbacks = cache.finish_readbacks(pending)?;
@@ -217,6 +255,7 @@ pub(super) async fn render_async(
 ) -> Result<RenderedList, String> {
     let mut prepared = Vec::new();
     let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
+    let mut texture_dma = HashMap::new();
     for draw in draws {
         if draw.vertex.indices.is_empty() {
             continue;
@@ -245,7 +284,8 @@ pub(super) async fn render_async(
             recorded_reads,
             read,
         )?;
-        let (parameters, guest_bytes) = draw_parameters(draw, recorded_reads, read)?;
+        let (parameters, guest_bytes) =
+            draw_parameters(draw, recorded_reads, read, &mut texture_dma)?;
         prepared.push(PreparedDraw {
             state: state.clone(),
             extent,
@@ -268,7 +308,9 @@ pub(super) async fn render_async(
 
     let cache = context()?;
     let _submission = cache.acquire()?;
-    let validation_scope = cache.device().push_error_scope(wgpu::ErrorFilter::Validation);
+    let validation_scope = cache
+        .device()
+        .push_error_scope(wgpu::ErrorFilter::Validation);
     let mut encoder = cache
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -280,11 +322,40 @@ pub(super) async fn render_async(
     for (key, _) in surfaces.values() {
         cache.encode_clear_write_masks(&mut encoder, *key)?;
     }
-    for prepared in &prepared {
-        let pipeline = pipeline_for(cache.device(), &prepared.state, &prepared.vertex)?;
-        render_draw(prepared, &pipeline, cache, &mut encoder)?;
+    let mut snapshots = HashMap::new();
+    let buffers = DrawBuffers::new(cache.device(), &prepared)?;
+    for (index, prepared) in prepared.iter().enumerate() {
+        let pipeline = pipeline_for(
+            cache.device(),
+            &prepared.state,
+            &prepared.vertex,
+            &prepared.parameters,
+        )?;
+        render_draw(
+            prepared,
+            &pipeline,
+            cache,
+            &mut encoder,
+            &mut snapshots,
+            &buffers,
+            index,
+        )?;
     }
-    let keys = surfaces.values().map(|(key, _)| *key).collect::<Vec<_>>();
+    // A disabled depth/stencil stage cannot write this surface. Preserve the
+    // resident target, but do not transfer its entire extent back to the host.
+    let keys = surfaces
+        .values()
+        .filter_map(|(key, _)| {
+            prepared
+                .iter()
+                .any(|draw| {
+                    draw.color_key == *key
+                        || (draw.depth_key == *key
+                            && (draw.state.depth_test.enabled || draw.state.stencil_test.enabled))
+                })
+                .then_some(*key)
+        })
+        .collect::<Vec<_>>();
     let pending = cache.encode_readbacks(&mut encoder, &keys)?;
     cache.submit(encoder.finish());
     let readbacks = cache.finish_readbacks_async(pending).await?;
@@ -406,8 +477,20 @@ fn render_draw(
     pipeline: &wgpu::RenderPipeline,
     cache: &GpuContext,
     encoder: &mut wgpu::CommandEncoder,
+    snapshots: &mut HashMap<SurfaceKey, wgpu::Texture>,
+    buffers: &DrawBuffers,
+    index: usize,
 ) -> Result<(), String> {
     let extent = draw.extent;
+    let scissor = draw.state.scissor;
+    let left = u32::from(scissor.left).min(extent.width);
+    let top = u32::from(scissor.top).min(extent.height);
+    let right = (u32::from(scissor.right) + 1).min(extent.width);
+    let bottom = (u32::from(scissor.bottom) + 1).min(extent.height);
+    if right <= left || bottom <= top {
+        return Ok(());
+    }
+    let bounds = [left, top, right - left, bottom - top];
     let color_key = draw.color_key;
     let depth_key = draw.depth_key;
     let color_surface = cache
@@ -418,54 +501,25 @@ fn render_draw(
         .ok_or("DMP depth surface is not resident")?;
 
     let device = cache.device();
-    let parameter_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("DMP draw parameters"),
-        contents: &encode_words(&draw.parameters),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
-    let guest_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("DMP draw textures"),
-        contents: &draw.guest_bytes,
-        usage: wgpu::BufferUsages::STORAGE,
-    });
-    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("DMP vertex uniforms"),
-        contents: &draw.vertex.shading_bytes,
-        usage: wgpu::BufferUsages::UNIFORM,
-    });
-    let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("DMP vertex attributes"),
-        contents: &draw.vertex.input_bytes,
-        usage: wgpu::BufferUsages::STORAGE,
-    });
-    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("DMP vertex indices"),
-        contents: &encode_words(&draw.vertex.indices),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-    let color_input = copy_surface_texture(device, encoder, &color_surface, extent);
-    let depth_input = copy_surface_texture(device, encoder, &depth_surface, extent);
+    let color_input =
+        copy_surface_texture(device, encoder, &color_surface, extent, bounds, snapshots);
+    let depth_input =
+        copy_surface_texture(device, encoder, &depth_surface, extent, bounds, snapshots);
     let color_input_view = color_input.create_view(&Default::default());
     let depth_input_view = depth_input.create_view(&Default::default());
     let color_view = color_surface.texture().create_view(&Default::default());
     let depth_view = depth_surface.texture().create_view(&Default::default());
-    let color_mask_view = color_surface
-        .write_mask_texture()
-        .create_view(&Default::default());
-    let depth_mask_view = depth_surface
-        .write_mask_texture()
-        .create_view(&Default::default());
     let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("DMP render bindings"),
         layout: &pipeline.get_bind_group_layout(0),
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: parameter_buffer.as_entire_binding(),
+                resource: buffers.parameters(index),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: guest_buffer.as_entire_binding(),
+                resource: buffers.guest(index),
             },
             wgpu::BindGroupEntry {
                 binding: 3,
@@ -477,11 +531,19 @@ fn render_draw(
             },
             wgpu::BindGroupEntry {
                 binding: 6,
-                resource: uniform_buffer.as_entire_binding(),
+                resource: buffers.uniforms(index),
             },
             wgpu::BindGroupEntry {
                 binding: 7,
-                resource: input_buffer.as_entire_binding(),
+                resource: buffers.inputs(index),
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: color_surface.write_mask_accumulator().as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: depth_surface.write_mask_accumulator().as_entire_binding(),
             },
         ],
     });
@@ -506,24 +568,6 @@ fn render_draw(
                     store: wgpu::StoreOp::Store,
                 },
             }),
-            Some(wgpu::RenderPassColorAttachment {
-                view: &color_mask_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-            Some(wgpu::RenderPassColorAttachment {
-                view: &depth_mask_view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
         ];
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("DMP draw"),
@@ -543,14 +587,12 @@ fn render_draw(
             0.0,
             1.0,
         );
-        pass.set_scissor_rect(0, 0, extent.width, extent.height);
-        pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        pass.set_scissor_rect(left, top, right - left, bottom - top);
+        pass.set_index_buffer(buffers.indices(index), wgpu::IndexFormat::Uint32);
         let index_count = u32::try_from(draw.vertex.indices.len())
             .map_err(|_| "DMP host GPU index count exceeds u32")?;
         pass.draw_indexed(0..index_count, 0, 0..1);
     }
-    cache.encode_accumulate_draw_mask(encoder, color_key)?;
-    cache.encode_accumulate_draw_mask(encoder, depth_key)?;
     Ok(())
 }
 
@@ -558,8 +600,41 @@ fn pipeline_for(
     device: &wgpu::Device,
     state: &DrawState,
     vertex: &gpu_vertex::PreparedDraw,
+    parameters: &[u32],
 ) -> Result<Arc<wgpu::RenderPipeline>, String> {
-    let key = vertex.pipeline_key;
+    #[cfg(not(target_arch = "wasm32"))]
+    let program = FragmentProgram::new(state.raster.flat_shading, parameters);
+    #[cfg(target_arch = "wasm32")]
+    let program = FragmentProgram::generic(state.raster.flat_shading);
+    let key = (vertex.pipeline_key, program.clone());
+    if let Some(pipeline) = DRAW_PIPELINES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "DMP host GPU render pipeline lock poisoned")?
+        .get(&key)
+    {
+        return Ok(Arc::clone(pipeline));
+    }
+    // The shared generic equations remain usable while the host compiler
+    // specializes a new control configuration away from the execution owner.
+    let pipeline = cached_pipeline(
+        device,
+        state,
+        vertex,
+        &FragmentProgram::generic(state.raster.flat_shading),
+    )?;
+    #[cfg(not(target_arch = "wasm32"))]
+    compiler::request(device, state, vertex, program);
+    Ok(pipeline)
+}
+
+fn cached_pipeline(
+    device: &wgpu::Device,
+    state: &DrawState,
+    vertex: &gpu_vertex::PreparedDraw,
+    program: &FragmentProgram,
+) -> Result<Arc<wgpu::RenderPipeline>, String> {
+    let key = (vertex.pipeline_key, program.clone());
     match state.raster.primitive_mode {
         super::draw_state::PrimitiveMode::Triangles
         | super::draw_state::PrimitiveMode::TriangleStrip
@@ -567,13 +642,14 @@ fn pipeline_for(
         _ => return Err("DMP host GPU pipeline received a non-triangle mode".into()),
     }
     let pipelines = DRAW_PIPELINES.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut pipelines = pipelines
+    let pipelines = pipelines
         .lock()
         .map_err(|_| "DMP host GPU render pipeline lock poisoned")?;
     if let Some(pipeline) = pipelines.get(&key) {
         return Ok(Arc::clone(pipeline));
     }
 
+    drop(pipelines);
     let vertex_shader = vertex_shader_module(device, vertex)?;
     let fragment_shader = fragment_shader_module(device, state.raster.flat_shading)?;
     let pipeline = Arc::new(create_pipeline(
@@ -582,9 +658,15 @@ fn pipeline_for(
         &fragment_shader,
         state,
         vertex.topology,
+        program,
     ));
     PIPELINE_CREATIONS.fetch_add(1, Ordering::Relaxed);
-    pipelines.insert(key, Arc::clone(&pipeline));
+    DRAW_PIPELINES
+        .get()
+        .unwrap()
+        .lock()
+        .map_err(|_| "DMP host GPU render pipeline lock poisoned")?
+        .insert(key, Arc::clone(&pipeline));
     Ok(pipeline)
 }
 
@@ -624,6 +706,7 @@ fn fragment_shader_module(
         include_str!("gpu_fragment.wgsl"),
         include_str!("gpu_draw.wgsl")
     );
+    let fragment_source = FragmentProgram::shader(fragment_source);
     let fragment_source = if flat_shading {
         fragment_source.replace(
             "@location(0) primary: vec4<f32>",
@@ -647,13 +730,14 @@ fn create_pipeline(
     fragment_shader: &wgpu::ShaderModule,
     state: &DrawState,
     topology: wgpu::PrimitiveTopology,
+    program: &FragmentProgram,
 ) -> wgpu::RenderPipeline {
-    let targets = [
-        Some(color_target()),
-        Some(color_target()),
-        Some(color_target()),
-        Some(color_target()),
-    ];
+    let constants = program.constants();
+    let constants: Vec<_> = constants
+        .iter()
+        .map(|(name, value)| (name.as_str(), *value))
+        .collect();
+    let targets = [Some(color_target()), Some(color_target())];
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("DMP fixed-function draw state"),
         layout: None,
@@ -682,7 +766,10 @@ fn create_pipeline(
         fragment: Some(wgpu::FragmentState {
             module: fragment_shader,
             entry_point: Some("draw_fragment"),
-            compilation_options: Default::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &constants,
+                ..Default::default()
+            },
             targets: &targets,
         }),
         multiview_mask: None,
@@ -703,43 +790,66 @@ fn copy_surface_texture(
     encoder: &mut wgpu::CommandEncoder,
     surface: &GpuSurface,
     extent: SurfaceExtent,
+    bounds: [u32; 4],
+    snapshots: &mut HashMap<SurfaceKey, wgpu::Texture>,
 ) -> wgpu::Texture {
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("DMP draw destination snapshot"),
-        size: wgpu::Extent3d {
-            width: extent.width,
-            height: extent.height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R32Uint,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
+    let texture = snapshots.entry(surface.key()).or_insert_with(|| {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("DMP draw destination snapshot"),
+            size: wgpu::Extent3d {
+                width: extent.width,
+                height: extent.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Uint,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        })
     });
+    // Destination reads use only the fragment's own pixel. Hardware scissor
+    // bounds therefore also bound the feedback snapshot, for arbitrary shaders.
+    let [left, top, width, height] = bounds;
+    let origin = wgpu::Origin3d {
+        x: left,
+        y: top,
+        z: 0,
+    };
+    let mut source = surface.texture().as_image_copy();
+    source.origin = origin;
+    let mut destination = texture.as_image_copy();
+    destination.origin = origin;
     encoder.copy_texture_to_texture(
-        surface.texture().as_image_copy(),
-        texture.as_image_copy(),
+        source,
+        destination,
         wgpu::Extent3d {
-            width: extent.width,
-            height: extent.height,
+            width,
+            height,
             depth_or_array_layers: 1,
         },
     );
-    texture
+    texture.clone()
 }
 
 fn draw_parameters(
     primitive: &Draw,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
+    texture_dma: &mut HashMap<(u64, usize), Vec<u8>>,
 ) -> Result<(Vec<u32>, Vec<u8>), String> {
     let mut registers = vec![0u32; REGISTER_WORDS];
     for &(index, value) in &primitive.registers {
         registers[index as usize] = value;
     }
-    let guest = texture_bytes(&primitive.state, &mut registers, recorded_reads, read)?;
+    let guest = texture_bytes(
+        &primitive.state,
+        &mut registers,
+        recorded_reads,
+        read,
+        texture_dma,
+    )?;
     validate_blend(&primitive.state)?;
     let mut parameters = vec![0u32; CASE_WORDS];
     parameters[..REGISTER_WORDS].copy_from_slice(&registers);
@@ -786,6 +896,7 @@ fn texture_bytes(
     registers: &mut [u32],
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
+    texture_dma: &mut HashMap<(u64, usize), Vec<u8>>,
 ) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     for (unit, texture) in state.textures.iter().enumerate() {
@@ -817,6 +928,7 @@ fn texture_bytes(
             bytes_per_pixel,
             recorded_reads,
             read,
+            texture_dma,
         )?;
 
         let mip_offset = align_four(bytes.len());
@@ -843,6 +955,7 @@ fn texture_bytes(
                 bytes_per_pixel,
                 recorded_reads,
                 read,
+                texture_dma,
             )?;
             maximum_level = level;
         }
@@ -866,21 +979,29 @@ fn append_mip_level(
     bytes_per_pixel: usize,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
+    texture_dma: &mut HashMap<(u64, usize), Vec<u8>>,
 ) -> Result<(), String> {
     let size = width
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(bytes_per_pixel))
         .ok_or("DMP draw texture size overflow")?;
-    let level = recorded_range(recorded_reads, address, size)
-        .map(Ok)
-        .unwrap_or_else(|| read(address, size))?;
+    // A list samples guest memory before any output commits. Identical DMA
+    // ranges are immutable throughout preparation, including target aliases.
+    let level = match texture_dma.entry((address, size)) {
+        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
+            recorded_range(recorded_reads, address, size)
+                .map(Ok)
+                .unwrap_or_else(|| read(address, size))?,
+        ),
+    };
     if level.len() != size {
         return Err(format!(
             "DMP draw texture at {address:#x} has {} bytes, expected {size}",
             level.len()
         ));
     }
-    bytes.extend_from_slice(&level);
+    bytes.extend_from_slice(level);
     Ok(())
 }
 
