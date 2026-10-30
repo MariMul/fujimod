@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn catalog_capture_power_fields_match_the_native_recipe() {
+    let body: Value =
+        serde_json::from_str(include_str!("../../../../catalog/bodies/x70/body.json")).unwrap();
+    for (path, masks) in [
+        (
+            "/hardware/profiles/x70-rec-usb/controllers/control_bus1/replies",
+            "pwic_write_masks",
+        ),
+        (
+            "/hardware/profiles/x70-110-browser-usb/controllers/control_bus1/replies",
+            "pwic_write_masks",
+        ),
+        (
+            "/hardware/profiles/x70-runtime/construction/nodes/30/model/hardware/parts",
+            "pwic_masks",
+        ),
+    ] {
+        let parts = body.pointer(path).unwrap();
+        assert!(
+            parts["pwic_values"]
+                .as_array()
+                .unwrap()
+                .contains(&json!([1, 0])),
+            "{path}"
+        );
+        assert!(
+            parts[masks].as_array().unwrap().contains(&json!([1, 0x1f])),
+            "{path}"
+        );
+    }
+}
+
+#[test]
 fn capture_power_register_is_declared_for_both_native_and_browser_runs() {
     for overlays in [vec![], vec!["x70-110-browser-camera".into()]] {
         let prepared = prepare("x70-110-rec", &overlays).unwrap();
