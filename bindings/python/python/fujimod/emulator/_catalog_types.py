@@ -2683,6 +2683,7 @@ class HardwareRegisterBlock(TypedDict, total=False):
     basis: Required[str]
     frames: NotRequired[HardwareRegisterBlockFrames | None]
     idle_bits: Required[list[HardwareRegisterIdleBits]]
+    job: NotRequired[HardwareRegisterBlockJob | None]
     size: Required[int]
 
 
@@ -2691,6 +2692,13 @@ class HardwareRegisterBlockFrames(TypedDict, total=False):
     period_ticks: Required[int]
     start: Required[HardwareRegisterIdleBits]
     stopped: Required[HardwareRegisterIdleBits]
+
+
+class HardwareRegisterBlockJob(TypedDict, total=False):
+    irq_route: Required[int]
+    start: Required[HardwareRegisterIdleBits]
+    status: Required[HardwareRegisterIdleBits]
+    ticks: Required[int]
 
 
 class HardwareRegisterIdleBits(TypedDict, total=False):
