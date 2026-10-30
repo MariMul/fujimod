@@ -57,6 +57,9 @@ pub struct Definition {
     /// Shutter motor and position sensors on the GPIO banks.
     #[serde(default)]
     pub xpp_shutter: Option<XppShutter>,
+    /// Keys on external interrupt lines: (line, bank, pin) and the poll period.
+    #[serde(default)]
+    pub xpp_key_lines: Option<XppKeyLines>,
     #[serde(default)]
     pub xpp_display_frames: Option<XppDisplayFrames>,
     #[serde(default)]
@@ -234,6 +237,14 @@ pub struct XppShutter {
     pub line: usize,
     pub positions: Vec<Vec<bool>>,
     pub step_ticks: u64,
+    pub poll_ticks: u64,
+}
+
+/// Keys whose GPIO inputs also reach external interrupt lines.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppKeyLines {
+    pub lines: Vec<(usize, usize, usize)>,
     pub poll_ticks: u64,
 }
 

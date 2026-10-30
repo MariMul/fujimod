@@ -131,6 +131,17 @@
             "null"
           ]
         },
+        "key_lines": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetKeyLines"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared keys on external interrupt lines."
+        },
         "lens": {
           "anyOf": [
             {
@@ -1428,6 +1439,54 @@
         "kind",
         "lower",
         "upper"
+      ],
+      "type": "object"
+    },
+    "ResetKeyLines": {
+      "additionalProperties": false,
+      "description": "Keys whose GPIO inputs also reach external interrupt lines.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "lines": {
+          "description": "External interrupt line, GPIO bank and pin of each key.",
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "poll_ticks": {
+          "description": "Ticks between samples of the key inputs.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "lines",
+        "poll_ticks"
       ],
       "type": "object"
     },

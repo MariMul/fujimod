@@ -700,6 +700,20 @@ pub struct ShutterInput {
     pub step_ticks: u64,
 }
 
+/// Keys whose GPIO inputs also reach external interrupt lines.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetKeyLines"))]
+pub struct KeyLinesInput {
+    /// Declared basis.
+    pub basis: String,
+    /// External interrupt line, GPIO bank and pin of each key.
+    pub lines: Vec<(u64, u64, u64)>,
+    /// Ticks between samples of the key inputs.
+    pub poll_ticks: u64,
+}
+
 /// Instruction throughput of each core against the tick clock.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1312,6 +1326,9 @@ pub struct HardwareReset {
     /// Declared shutter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shutter: Option<ShutterInput>,
+    /// Declared keys on external interrupt lines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_lines: Option<KeyLinesInput>,
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,

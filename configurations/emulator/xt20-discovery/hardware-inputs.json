@@ -148,6 +148,11 @@
       "sensors": [[0, 3], [10, 2]],
       "step_ticks": 1440000
     },
+    "key_lines": {
+      "basis": "The shutter button of X-T20 2.11: key rows 0xf79cbc (index 2, S1) and 0xf79cd8 (index 3, S2) are kind 4 on GPIO bank 0 bits 0 and 1, high when released (the power-on GPIO words). The key scan 0xc8d5c8 evaluates kind 4 rows only while their reported state is pressed, so it reports the release only; the press arrives through the rows' external interrupts: the handler 0xc8d0e0 toggles the row and calls key_event(index, 1) (0xc8cee4), whose UI side logs marker 0x2f000000 for index 2 (0xc22f48), as in the camera's marker logs of half presses (evf-2026-10-22). The rows name interrupt rows 20 and 21 (+0x12), which the table 0xed4720 maps to GIC 151 and 152, external lines 0 and 1 (the same lookup gives line 15 for the lens's ready rows 0x52/0x53). The 1 ms sampling is a model choice.",
+      "lines": [[0, 0, 0], [1, 0, 1]],
+      "poll_ticks": 48000
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

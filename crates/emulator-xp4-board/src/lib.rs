@@ -935,6 +935,7 @@ impl Session {
             xpp_idle_serial,
             xpp_lens,
             xpp_shutter,
+            xpp_key_lines,
             xpp_display_frames,
             xpp_adc,
             xpp_display_outputs,
@@ -1322,6 +1323,14 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
+        }
+        if let Some(keys) = xpp_key_lines {
+            let lines = external_lines
+                .clone()
+                .ok_or("Key lines require the reset and gate controls")?;
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xpp_key_lines(keys, lines)?;
         }
         if let (Some(lens), Some(link), Some(lines)) = (xpp_lens, &lens_link, external_lines) {
             devices
