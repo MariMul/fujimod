@@ -250,13 +250,16 @@ fn gles_draw_job_completes_after_the_x70_interval_whatever_its_byte_rate() {
     // Measured on hardware: a 3D draw job of a menu frame completes 6.988 ms
     // after submission, 83,852 ticks at 12 MHz. Byte rates price fill, copy
     // and clear work, so a draw job's time must not depend on them.
-    assert_eq!(super::super::X70_GLES_JOB_TICKS, 83_852);
+    assert_eq!(super::super::X70_GLES_JOB_TICKS, 33_884);
+    // The frame copy that follows a draw job costs 720 x 480 x 4 bytes at 25 per tick.
+    assert_eq!((720_u64 * 480 * 4).div_ceil(25), 55_296);
+    assert_eq!(super::super::X70_GLES_JOB_TICKS + 55_296, 89_180);
     let mut slow = options();
     slow.bytes_per_tick = 1;
     let mut fast = options();
     fast.bytes_per_tick = 64;
-    assert_eq!(uniform_triangle_job_ticks(slow), 83_852);
-    assert_eq!(uniform_triangle_job_ticks(fast), 83_852);
+    assert_eq!(uniform_triangle_job_ticks(slow), 33_884);
+    assert_eq!(uniform_triangle_job_ticks(fast), 33_884);
 }
 fn put(gpu: &mut VectorGpu, host: &mut Ram, logical: u64, value: u64) -> Option<String> {
     let mut cx = Cx::new(host, 0, 0x12345678, 2);

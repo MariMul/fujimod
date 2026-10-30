@@ -618,7 +618,7 @@
         "max_clear_bytes": 67108864,
         "bytes_per_tick": 16,
         "copy_bytes_per_tick": 25,
-        "gles_job_ticks": 83852,
+        "gles_job_ticks": 33884,
         "max_command_capture_bytes": 524288,
         "copy_profile": "vg-32bpp-untile-unrotated",
         "clear_profile": "declared-vg-ui-primitives-unmeasured"

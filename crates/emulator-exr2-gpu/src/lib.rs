@@ -51,9 +51,11 @@ pub const FILL_STATUS: u32 = 1 << 26;
 pub const COPY_STATUS: u32 = 1 << 30;
 pub const CLEAR_STATUS: u32 = 1 << 31;
 pub const FILL_CONTROL: u32 = 0x0f100201;
-/// X70 1.10 3D draw job completion time, in 12 MHz ticks: 6.988 ms, measured on
-/// hardware as a fixed cost per job. No content-dependent term is modeled.
-pub const X70_GLES_JOB_TICKS: u64 = 83_852;
+/// X70 1.10 3D draw job time, in 12 MHz ticks: 2.824 ms from submission to the
+/// draw's completion. The frame copy follows it, so submission to copy completion
+/// is this plus the copy's 55,296 ticks, 7.432 ms, the measured gpu_finish_wait
+/// median. No content-dependent term is modeled.
+pub const X70_GLES_JOB_TICKS: u64 = 33_884;
 /// Tile bytes are retained unchanged by the optional untile profile.
 pub const COPY_PROFILE: &str = "vg-32bpp-untile-unrotated";
 pub const CLEAR_PROFILE: &str = "stock-vg-clear-only";
