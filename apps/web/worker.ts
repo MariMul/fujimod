@@ -22,6 +22,13 @@ export interface ReleaseCache {
   match(request: Request): Promise<Response | undefined>;
   put(request: Request, response: Response): Promise<unknown>;
 }
+/** Global last-known current release, read when GitHub's API refuses (its
+ * unauthenticated limit is shared by every Worker on an egress address). */
+export interface ReleaseStore {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<unknown>;
+}
+const lastCurrent = 'current';
 class UpstreamError extends Error {
   readonly status: number;
   constructor(status: number) {
@@ -70,6 +77,7 @@ function failure(status: number, message: string) {
 export async function serveRelease(
   request: Request,
   cache: ReleaseCache,
+  store: ReleaseStore,
   context: Context,
   fetcher: typeof fetch = fetch,
 ): Promise<Response> {
@@ -92,9 +100,29 @@ export async function serveRelease(
   try {
     let response: Response;
     if (route.kind === 'current') {
-      const release = await currentRelease(fetcher);
+      let release: ReleaseInfo | undefined;
+      try {
+        release = await currentRelease(fetcher);
+      } catch (error) {
+        const known = await store.get(lastCurrent);
+        if (!known) throw error;
+        return head(
+          new Response(known, {
+            headers: {
+              ...runtimeHeaders,
+              'Content-Type': 'application/json',
+              'X-Content-Type-Options': 'nosniff',
+              'Cache-Control': 'no-store',
+            },
+          }),
+        );
+      }
       if (!release) return head(failure(404, 'No patch release has been published.'));
-      response = Response.json(release);
+      const text = JSON.stringify(release);
+      context.waitUntil(
+        store.get(lastCurrent).then((known) => known === text || store.put(lastCurrent, text)),
+      );
+      response = new Response(text, { headers: { 'Content-Type': 'application/json' } });
     } else {
       const upstream = await fetcher(
         `https://github.com/${repository}/releases/download/${encodeURIComponent(route.tag)}/${encodeURIComponent(route.file)}`,
@@ -129,8 +157,12 @@ export async function serveRelease(
   }
 }
 export default {
-  async fetch(request: Request, env: { ASSETS: Assets }, context: Context): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: { ASSETS: Assets; RELEASES: ReleaseStore },
+    context: Context,
+  ): Promise<Response> {
     if (!new URL(request.url).pathname.startsWith('/releases/')) return env.ASSETS.fetch(request);
-    return serveRelease(request, await caches.open('fujimod-releases'), context);
+    return serveRelease(request, await caches.open('fujimod-releases'), env.RELEASES, context);
   },
 };

@@ -1,7 +1,13 @@
 import { test, expect, vi } from 'vite-plus/test';
-import worker, { serveRelease, type ReleaseCache } from '../worker.ts';
-function harness(fetcher: typeof fetch) {
+import worker, { serveRelease, type ReleaseCache, type ReleaseStore } from '../worker.ts';
+function harness(fetcher: typeof fetch, known = new Map<string, string>()) {
   const stored = new Map<string, Response>();
+  const store: ReleaseStore = {
+    get: async (key) => known.get(key) ?? null,
+    put: async (key, value) => {
+      known.set(key, value);
+    },
+  };
   const cache: ReleaseCache = {
     match: async (request) => stored.get(request.url)?.clone(),
     put: async (request, response) => {
@@ -17,6 +23,7 @@ function harness(fetcher: typeof fetch) {
   return {
     pending,
     cache,
+    known,
     context,
     request: async (path: string, method = 'GET') => {
       const response = await serveRelease(
@@ -25,6 +32,7 @@ function harness(fetcher: typeof fetch) {
           headers: { Authorization: 'secret', Cookie: 'secret' },
         }),
         cache,
+        store,
         context,
         fetcher,
       );
@@ -104,10 +112,23 @@ test('upstream errors and missing releases are never cached', async () => {
     expect((await h.request('/releases/current')).status).toBe(502);
     expect((await h.request('/releases/v2/notes.md')).status).toBe(status === 404 ? 404 : 502);
     expect(h.pending).toHaveLength(0);
+    expect(h.known.size).toBe(0);
   }
   const h = harness(async () => Response.json([]));
   expect((await h.request('/releases/current')).status).toBe(404);
   expect(h.pending).toHaveLength(0);
+});
+test('current serves the last known release uncached when GitHub refuses', async () => {
+  const known = { tag: 'v1', name: 'Release v1', published_at: '2026-10-20', prerelease: true };
+  const ok = harness(async () => Response.json([release('v1', '2026-10-20', { prerelease: true })]));
+  await ok.request('/releases/current');
+  expect(JSON.parse(ok.known.get('current')!)).toEqual(known);
+  const limited = harness(async () => new Response(null, { status: 403 }), ok.known),
+    response = await limited.request('/releases/current');
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(known);
+  expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(limited.pending).toHaveLength(0);
 });
 test('malformed and traversing paths and non-read methods never reach GitHub', async () => {
   const fetcher = vi.fn<typeof fetch>(),
@@ -126,7 +147,7 @@ test('ordinary routes pass to the static asset binding', async () => {
   const fetcher = vi.fn(async () => new Response('static'));
   const response = await worker.fetch(
     new Request('https://fujimod.com/'),
-    { ASSETS: { fetch: fetcher } },
+    { ASSETS: { fetch: fetcher }, RELEASES: { get: async () => null, put: async () => {} } },
     { waitUntil() {} },
   );
   expect(await response.text()).toBe('static');

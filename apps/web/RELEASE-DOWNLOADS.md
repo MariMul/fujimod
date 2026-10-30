@@ -22,6 +22,8 @@ visitor), but not release files: every download path ends at
   Both routes accept GET and HEAD. No GitHub token or browser credentials are
   forwarded. Tags use up to 96 ASCII letters, digits, periods, underscores or
   hyphens, starting with a letter or digit; filenames use the same characters.
+- When GitHub's API refuses, `/releases/current` serves the last successful
+  result from the `RELEASES` KV namespace without caching it.
 - Cloudflare's edge cache keeps current metadata for five minutes and release
   files for one year. Development routes read `FUJIMOD_PATCHES` with no cache.
   The browser still verifies
