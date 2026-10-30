@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from os import PathLike
 from typing import Final, Self, SupportsFloat, SupportsIndex, final
 
@@ -38,6 +38,14 @@ class emulator:
     @staticmethod
     def prepare_configuration(
         configuration_id: str, overlays: Sequence[str] = ...
+    ) -> str: ...
+    @staticmethod
+    def xpp_definition(
+        configuration_id: str,
+        registers: str,
+        overlays: Sequence[str] = ...,
+        sub_cpu_registers: Sequence[tuple[int, int]] = ...,
+        assets: Mapping[str, bytes] | None = None,
     ) -> str: ...
 
     @final
