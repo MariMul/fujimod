@@ -78,6 +78,14 @@ pub struct BlockFrames {
     pub period_ticks: u64,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockJob {
+    pub start: (u64, u32),
+    pub status: (u64, u32),
+    pub irq: u32,
+    pub ticks: u64,
+}
+#[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Model {
     Gpio {
@@ -127,6 +135,8 @@ pub enum Model {
         size: u64,
         idle: Vec<(u64, u32)>,
         frames: Option<BlockFrames>,
+        #[serde(default)]
+        job: Option<BlockJob>,
     },
     Statistics {
         base: u64,
@@ -519,6 +529,7 @@ pub fn build(
                 size,
                 idle,
                 frames,
+                job,
             } => {
                 let frames = frames.map(|f| blocks::Frames {
                     start: f.start,
@@ -526,7 +537,15 @@ pub fn build(
                     irq: f.irq,
                     period: f.period_ticks,
                 });
-                let model = blocks::Block::new(base, size, idle, frames)?;
+                let mut model = blocks::Block::new(base, size, idle, frames)?;
+                if let Some(j) = job {
+                    model = model.with_job(blocks::Job {
+                        start: j.start,
+                        status: j.status,
+                        irq: j.irq,
+                        ticks: j.ticks,
+                    })?;
+                }
                 devices.register(base, model.window(), Box::new(model))?
             }
             Model::Statistics {

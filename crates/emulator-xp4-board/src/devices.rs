@@ -1059,6 +1059,14 @@ impl Devices {
         });
         let mut model =
             fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle, frames)?;
+        if let Some(j) = block.job {
+            model = model.with_job(fujimod_emulator_xpp::blocks::Job {
+                start: j.start,
+                status: j.status,
+                irq: j.irq,
+                ticks: j.ticks,
+            })?;
+        }
         if let Some((lines, ycbcr)) = image {
             model = model.with_live_view_image(lines, ycbcr)?;
         }

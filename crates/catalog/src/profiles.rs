@@ -1358,8 +1358,29 @@ pub struct RegisterBlock {
     /// Frames the block finishes while started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frames: Option<RegisterBlockFrames>,
+    /// One job per start, finished after the declared ticks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job: Option<RegisterBlockJob>,
     /// Declared size.
     pub size: u64,
+}
+
+/// Job law of a register block: each start finishes one job after the
+/// declared ticks; the status bit is set and the level interrupt line is high
+/// until the status bit is written.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlockJob"))]
+pub struct RegisterBlockJob {
+    /// Level interrupt line of the job status.
+    pub irq_route: u32,
+    /// Start bit.
+    pub start: RegisterIdleBits,
+    /// Status bit the job sets; writing it clears it.
+    pub status: RegisterIdleBits,
+    /// Device ticks a job takes.
+    pub ticks: u64,
 }
 
 /// Frame law of a register block: one interrupt edge per frame period while

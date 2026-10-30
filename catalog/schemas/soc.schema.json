@@ -2243,6 +2243,17 @@
           },
           "type": "array"
         },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterBlockJob"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "One job per start, finished after the declared ticks."
+        },
         "size": {
           "description": "Declared size.",
           "format": "uint64",
@@ -2288,6 +2299,39 @@
         "period_ticks",
         "start",
         "stopped"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterBlockJob": {
+      "additionalProperties": false,
+      "description": "Job law of a register block: each start finishes one job after the\ndeclared ticks; the status bit is set and the level interrupt line is high\nuntil the status bit is written.",
+      "properties": {
+        "irq_route": {
+          "description": "Level interrupt line of the job status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Start bit."
+        },
+        "status": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Status bit the job sets; writing it clears it."
+        },
+        "ticks": {
+          "description": "Device ticks a job takes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "irq_route",
+        "start",
+        "status",
+        "ticks"
       ],
       "type": "object"
     },
