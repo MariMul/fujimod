@@ -48,6 +48,9 @@ impl Cpu for Core {
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         self.execution.cpu.set_execution_policy(policy)
     }
+    fn exception_entries(&self) -> Option<armv7a::Entries> {
+        self.execution.a32.then(|| self.execution.entries.get())
+    }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let e = &self.execution;
         e.memory.prepare_external_write()?;
@@ -110,6 +113,34 @@ impl Cpu for Core {
             Some(physical),
         );
         e.memory.apply_watches()
+    }
+    unsafe fn replace_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("physical replacement requires a stopped A-profile processor".into());
+        }
+        e.memory
+            .validate_mapping(backing.as_ptr() as usize, bytes, Some(physical))?;
+        unsafe {
+            e.cpu
+                .replace_physical(address, physical, bytes, permissions, backing)?;
+        }
+        e.memory.unmap(e.id.get(), address, bytes);
+        e.memory.undeclare(e.id.get(), address, bytes);
+        let pointer = backing.as_ptr() as usize;
+        e.memory
+            .declare(e.id.get(), address, pointer, bytes, Some(physical));
+        e.memory
+            .map(e.id.get(), address, pointer, bytes, Some(physical));
+        e.memory.apply_watches()?;
+        e.cpu.invalidate_code(None)
     }
     fn map_zeroed(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
         let b = Backing::aligned_zeros(bytes, 0x1000)?;
@@ -183,6 +214,7 @@ impl Cpu for Core {
         );
         e.stopped.set(false);
         e.exit.set(None);
+        e.exception.set(None);
         e.restart.set(None);
         e.failure.borrow_mut().take();
         if request.instructions == Some(0) {
@@ -223,6 +255,18 @@ impl Cpu for Core {
                 e.publish()?;
             } else {
                 e.stores.borrow_mut().clear();
+            }
+            if let Some(exception) = e.exception.take() {
+                let fetch = exception == arm::Exception::PrefetchAbort;
+                armv7a::abort::enter(&*e.cpu, fetch)?;
+                e.count_entry(|n| {
+                    if fetch {
+                        n.prefetch_abort += 1
+                    } else {
+                        n.data_abort += 1
+                    }
+                });
+                return Ok(Exit::Stopped);
             }
             let exit = result?;
             if let Some(word) = e.exit.take() {

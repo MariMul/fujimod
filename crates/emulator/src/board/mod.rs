@@ -95,6 +95,9 @@ struct State {
     mprofile: Vec<Option<mprofile::Profile>>,
     aprofile: Vec<Option<aprofile::Profile>>,
     armv7a: Vec<Option<armv7a::Profile>>,
+    // Observational, outside keyframes: IRQ and disabled-VFP entries the
+    // board performed on ARMv7-A cores.
+    armv7a_entries: Vec<fujimod_emulator_cpu::armv7a::Entries>,
     entry_points: Vec<Vec<Weak<observation::EntryPoints>>>,
     implementation_cluster: aprofile::cortex_a53::Registers,
     unmodeled_system: std::collections::BTreeMap<(usize, u16, u64), (u64, u64)>,
@@ -351,6 +354,7 @@ impl Board {
             mprofile: (0..n).map(|_| None).collect(),
             aprofile: (0..n).map(|_| None).collect(),
             armv7a: (0..n).map(|_| None).collect(),
+            armv7a_entries: vec![Default::default(); n],
             entry_points: (0..n).map(|_| Vec::new()).collect(),
             implementation_cluster: Default::default(),
             unmodeled_system: Default::default(),
@@ -604,6 +608,30 @@ impl Board {
         let mut state = self.state.borrow_mut();
         state.bus.inputs_changed(source)?;
         state.refresh_deadlines()
+    }
+    /// Change a stopped device's external inputs through its concrete
+    /// model at the current device time (`f`'s second argument), then
+    /// publish the change as `inputs_changed` does.
+    pub fn with_device_inputs<T: fujimod_emulator_devices::Device, R>(
+        &mut self,
+        id: usize,
+        f: impl FnOnce(&mut T, u64) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let result = {
+            let mut s = self.state.borrow_mut();
+            let now = s.timeline.now();
+            f(s.bus.device_mut::<T>(id)?, now)?
+        };
+        self.inputs_changed(id)?;
+        Ok(result)
+    }
+    /// Observe a device through its concrete model without changing it.
+    pub fn with_device<T: fujimod_emulator_devices::Device, R>(
+        &self,
+        id: usize,
+        f: impl FnOnce(&T) -> R,
+    ) -> Result<R, String> {
+        Ok(f(self.state.borrow().bus.device::<T>(id)?))
     }
     pub fn configure_core_interrupts(
         &mut self,
@@ -1015,6 +1043,18 @@ impl Board {
             if let Some(error) = s.error.take() {
                 return Err(error);
             }
+            // Unicorn reports disabled VFP/Advanced SIMD as an invalid
+            // instruction; the Cortex-A7 takes the undefined exception.
+            let result = match result {
+                Err(fujimod_emulator_cpu::ExecutionError::InvalidInstruction(_))
+                    if cpu.model() == fujimod_emulator_cpu::Model::CortexA7
+                        && fujimod_emulator_cpu::armv7a::enter_disabled_vfp(&**cpu)? =>
+                {
+                    s.armv7a_entries[core].undefined += 1;
+                    Ok(fujimod_emulator_cpu::Exit::Stopped)
+                }
+                other => other,
+            };
             let exit = result.map_err(|error| {
                 if cpu.model() == fujimod_emulator_cpu::Model::ArmV8A {
                     let stop_pc = scalar(&**cpu, Register::Pc).unwrap_or(pc);
@@ -1158,10 +1198,25 @@ impl State {
     ) -> Result<(), String> {
         match exit {
             Exit::BeforeInstruction(word) => {
-                if cpu.model() != fujimod_emulator_cpu::Model::ArmV8A {
-                    return Err("unsupported framework instruction exit".into());
+                let pc = scalar(cpu, Register::Pc)?;
+                match cpu.model() {
+                    fujimod_emulator_cpu::Model::ArmV8A => {
+                        self.aarch64_instruction(cpu, core, pc, word)?;
+                    }
+                    fujimod_emulator_cpu::Model::CortexA7 => {
+                        let now = self.timeline.now();
+                        let profile = self.armv7a[core]
+                            .as_mut()
+                            .ok_or("ARMv7-A framework instruction without a profile")?;
+                        match profile.before(cpu, pc, now)? {
+                            // A failed condition retires the instruction unexecuted.
+                            armv7a::Entry::Execute => set(cpu, Register::Pc, pc.wrapping_add(4))?,
+                            armv7a::Entry::Completed => (),
+                            armv7a::Entry::Hint(hint) => self.hint(core, hint),
+                        }
+                    }
+                    _ => return Err("unsupported framework instruction exit".into()),
                 }
-                self.aarch64_instruction(cpu, core, scalar(cpu, Register::Pc)?, word)?;
                 self.timeline.advance_instructions(1)?;
                 self.instructions[core] = self.instructions[core]
                     .checked_add(1).ok_or("instruction counter overflow")?;
@@ -1867,7 +1922,10 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             return Ok(());
         }
         if let Some(p) = &s.armv7a[b.core]
-            && s.pins[b.core].0 && p.enter_irq(cpu)? { return Ok(()); }
+            && s.pins[b.core].0 && p.enter_irq(cpu)? {
+            s.armv7a_entries[b.core].irq += 1;
+            return Ok(());
+        }
         if s.observe_entry(b.core,pc,cpu)? {return Ok(());}
         let now = s.timeline.now();
         if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }

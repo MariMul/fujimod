@@ -205,7 +205,12 @@ impl Engines {
             .as_ref()
             .ok_or("Unicorn engine was not constructed")?
             .open(model, translation_cache_size_bytes)?;
-        if model == Model::ArmV8A {
+        // Cortex-A7 cores run on the counted A-profile backend in ARM state.
+        // FUJIMOD_A7_PER_INSTRUCTION keeps the per-instruction ARMv7-A path,
+        // for comparing the two.
+        if model == Model::ArmV8A
+            || model == Model::CortexA7 && std::env::var_os("FUJIMOD_A7_PER_INSTRUCTION").is_none()
+        {
             return Ok(Box::new(fujimod_emulator_cpu_unicorn::aprofile::Core::new(
                 raw,
                 memory.clone(),

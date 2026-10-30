@@ -122,6 +122,7 @@ impl State {
             mprofile,
             aprofile,
             armv7a,
+            armv7a_entries: _,
             entry_points: _,
             implementation_cluster,
             unmodeled_system,
