@@ -438,6 +438,8 @@ mod tests {
             for (offset, value) in [
                 (0, 1),
                 (0x10, 0x10000),
+                (0x1c, 0),
+                (0x20, 0x10000),
                 (0x24, 0),
                 (0x28, 0x10000),
                 (0x2c, 0x3e100000),
@@ -508,6 +510,8 @@ mod tests {
         for (o, v) in [
             (0, 1),
             (0x10, 0x10000),
+            (0x1c, 0),
+            (0x20, 0x10000),
             (0x24, 0),
             (0x28, 0x10000),
             (0x2c, 0x1000),
@@ -533,6 +537,44 @@ mod tests {
         assert_eq!(d.save(), before);
         assert_eq!(d.metadata(), meta);
     }
+
+    #[test]
+    fn video_clip_blanks_padding_without_recoloring_active_samples_or_ram() {
+        for pipe in 0..2 {
+            for source in [0x1000, 0x3000] {
+                let mut d = model();
+                let mut host = TestHost::new();
+                for (offset, value) in [
+                    (0, 1), (0x10, 7 << 16 | 5), (0x1c, 2 << 16 | 1),
+                    (0x20, 3 << 16 | 3), (0x24, 0), (0x28, 7 << 16 | 5),
+                    (0x2c, source), (0x30, 0), (0xd4, 0x10001000), (0xd8, 0), (0xdc, 0),
+                ] {
+                    write(&mut d, &mut host, scanout::BASES[pipe] + offset, value);
+                }
+                let memory = vec![0; 0x10000];
+                let mut read = |address: u64, count: usize| {
+                    let address = (address & 0x3fffffff) as usize;
+                    Ok(memory[address..address + count].to_vec())
+                };
+                let mut observer = Observation { read: &mut read, diagnostic_hashes: true };
+                let before = d.save();
+                let frame = d.frame(pipe, true, &mut observer).unwrap().unwrap();
+                assert_eq!(frame.raw, vec![0; 8 * 6 * 2]);
+                let rgb = frame.rgb.unwrap();
+                for y in 0..6 {
+                    for x in 0..8 {
+                        let expected = if (2..6).contains(&x) && (1..5).contains(&y) {
+                            [0, 135, 0]
+                        } else { [0, 0, 0] };
+                        assert_eq!(&rgb[(y * 8 + x) * 3..(y * 8 + x + 1) * 3], &expected);
+                    }
+                }
+                assert_eq!(d.save(), before);
+                write(&mut d, &mut host, scanout::BASES[pipe] + 0x1c, 7 << 16);
+                assert!(d.frame(pipe, true, &mut observer).is_err());
+            }
+        }
+    }
     #[test]
     fn scanout_reads_the_declared_high_ram_span_and_refuses_an_overrun_without_effects() {
         // Exercise scanout with the maximum declared RAM aperture.
@@ -553,6 +595,8 @@ mod tests {
         for (o, v) in [
             (0, 1),
             (0x10, 0x10001),
+            (0x1c, 0),
+            (0x20, 0x10001),
             (0x24, 0),
             (0x28, 0x10001),
             (0x2c, source),
