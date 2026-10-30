@@ -2933,8 +2933,12 @@
     },
     "ResetStatisticsBuffer": {
       "additionalProperties": false,
-      "description": "Declared contents of one statistics engine output buffer.",
+      "description": "Declared contents of one statistics engine output buffer: an asset\nholding the little-endian u32 words written each frame.",
       "properties": {
+        "asset": {
+          "description": "Asset identity in the configuration assets.",
+          "type": "string"
+        },
         "basis": {
           "description": "Declared basis.",
           "type": "string"
@@ -2945,20 +2949,16 @@
           "minimum": 0,
           "type": "integer"
         },
-        "words": {
-          "description": "Words written each frame.",
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
+        "sha256": {
+          "description": "SHA-256 of the asset.",
+          "type": "string"
         }
       },
       "required": [
+        "asset",
         "basis",
         "output",
-        "words"
+        "sha256"
       ],
       "type": "object"
     },

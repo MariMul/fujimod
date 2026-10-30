@@ -65,7 +65,7 @@
           "id": "ae_lock_button"
         },
         {
-          "id": "fn2_button"
+          "id": "fn1_button"
         }
       ]
     },
@@ -355,26 +355,11 @@
       "manual_page": 39,
       "face": "Fn1",
       "icon": null,
-      "connection_ids": [],
-      "assignable": true,
-      "default_function": "Default role: select bracketing or advanced filter options.",
-      "role": null,
-      "mechanical": false,
-      "behavior": null,
-      "pushable": false,
-      "positions": []
-    },
-    "fn2_button": {
-      "name": "Fn2 button (function button 2)",
-      "location": "top",
-      "manual_page": 41,
-      "face": "Fn2",
-      "icon": null,
       "connection_ids": [
         "controls-gpio-0-11"
       ],
       "assignable": true,
-      "default_function": "Default shooting role: connect to a smartphone or tablet using Wi-Fi. In playback mode the manual labels it the Wi-Fi button and it opens wireless options.",
+      "default_function": "Default role: select bracketing or advanced filter options.",
       "role": null,
       "mechanical": false,
       "behavior": {
@@ -385,6 +370,21 @@
         }
       },
       "pushable": true,
+      "positions": []
+    },
+    "fn2_button": {
+      "name": "Fn2 button (function button 2)",
+      "location": "top",
+      "manual_page": 41,
+      "face": "Fn2",
+      "icon": null,
+      "connection_ids": [],
+      "assignable": true,
+      "default_function": "Default shooting role: connect to a smartphone or tablet using Wi-Fi. In playback mode the manual labels it the Wi-Fi button and it opens wireless options.",
+      "role": null,
+      "mechanical": false,
+      "behavior": null,
+      "pushable": false,
       "positions": []
     },
     "focus_assist_button": {

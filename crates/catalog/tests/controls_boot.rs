@@ -20,6 +20,40 @@ fn confirmed_combinations_load_from_controls() {
             x70.boot[&BootMode::Service].hold[1].stage.as_deref(),
             Some("full")
         );
+        let xt1 = catalog.resolve_firmware("xt1-552").unwrap();
+        let xt1_controls = xt1.physical_controls.as_ref().unwrap();
+        let xt1_boot =
+            fujimod_catalog_controls::PhysicalControls::decode_document(xt1_controls, "xt1")
+                .unwrap();
+        assert_eq!(
+            xt1_boot.boot[&BootMode::Sd]
+                .hold
+                .iter()
+                .map(|input| input.id.as_str())
+                .collect::<Vec<_>>(),
+            ["ae_lock_button", "fn1_button"]
+        );
+        // The physical front Fn1 input has the internal event name FUNCTION2.
+        assert_eq!(
+            xt1_controls
+                .pointer("/controls/fn1_button/location")
+                .and_then(|v| v.as_str()),
+            Some("front")
+        );
+        assert_eq!(
+            xt1_controls
+                .pointer("/controls/fn1_button/connection_ids/0")
+                .and_then(|v| v.as_str()),
+            Some("controls-gpio-0-11")
+        );
+        let key = xt1.control_ids.as_ref().unwrap()["inputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "row-19")
+            .unwrap();
+        assert_eq!(key["event"], 0x224);
+        assert_eq!(key["target"]["control_id"], "fn1_button");
         let xm5 = catalog
             .resolve_firmware("xm5-130")
             .unwrap()

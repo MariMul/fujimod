@@ -5667,7 +5667,7 @@
           "errors": [
             {
               "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
+              "reason": "ValueError: No unique referenced physical-to-UI translation table"
             }
           ]
         },

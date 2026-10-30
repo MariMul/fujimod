@@ -1250,18 +1250,21 @@ pub struct LiveViewImage {
     pub ycbcr: [u8; 3],
 }
 
-/// Declared contents of one statistics engine output buffer.
+/// Declared contents of one statistics engine output buffer: an asset
+/// holding the little-endian u32 words written each frame.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetStatisticsBuffer"))]
 pub struct StatisticsBuffer {
+    /// Asset identity in the configuration assets.
+    pub asset: String,
     /// Declared basis.
     pub basis: String,
     /// Engine register holding the buffer's address (+0x1b8..+0x1e4).
     pub output: u64,
-    /// Words written each frame.
-    pub words: Vec<u32>,
+    /// SHA-256 of the asset.
+    pub sha256: String,
 }
 
 /// Declared hardware reset facts.
