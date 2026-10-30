@@ -1,5 +1,9 @@
 @group(0) @binding(3) var color_destination: texture_2d<u32>;
 @group(0) @binding(4) var depth_destination: texture_2d<u32>;
+// Accumulate exact byte writes across ordered draws without a full-surface
+// mask clear and resolve after each primitive batch.
+@group(0) @binding(8) var<storage, read_write> color_writes: array<atomic<u32>>;
+@group(0) @binding(9) var<storage, read_write> depth_writes: array<atomic<u32>>;
 
 struct DrawFragmentInput {
     @builtin(position) position: vec4<f32>,
@@ -13,8 +17,13 @@ struct DrawFragmentInput {
 struct DrawFragmentOutput {
     @location(0) color: u32,
     @location(1) depth: u32,
-    @location(2) color_mask: u32,
-    @location(3) depth_mask: u32,
+};
+
+struct ShadedFragment {
+    color: u32,
+    depth: u32,
+    color_mask: u32,
+    depth_mask: u32,
 };
 
 fn unpack_surface(pixel: u32, format: u32) -> vec4<f32> {
@@ -108,10 +117,10 @@ fn lod_from_derivatives(uv: vec2<f32>, dimensions: vec2<f32>) -> f32 {
 fn shade_color_and_depth(
     input: DrawFragmentInput,
     source_color: vec4<f32>,
-) -> DrawFragmentOutput {
+) -> ShadedFragment {
     let z = input.depth;
     var color = source_color;
-    var output: DrawFragmentOutput;
+    var output: ShadedFragment;
     output.color_mask = 0u;
     output.depth_mask = 0u;
     let color_code = (reg(0u, 0x317u) >> 16u) & 15u;
@@ -306,5 +315,13 @@ fn draw_fragment(input: DrawFragmentInput) -> DrawFragmentOutput {
     }
 
     let output = shade_color_and_depth(input, color);
-    return output;
+    let width = reg(0u, 0x31eu) & 8191u;
+    let at = y * width + x;
+    if output.color_mask != 0u {
+        atomicOr(&color_writes[at], output.color_mask);
+    }
+    if output.depth_mask != 0u {
+        atomicOr(&depth_writes[at], output.depth_mask);
+    }
+    return DrawFragmentOutput(output.color, output.depth);
 }
