@@ -1,11 +1,11 @@
 import type { Miniflare, WebSocket } from 'miniflare';
 interface TestFrame {
   type: string;
-  peer: string;
-  ice_servers: unknown[];
-  message: string;
-  from: string;
-  data: string;
+  peer?: string;
+  ice_servers?: unknown[];
+  message?: string;
+  from?: string;
+  data?: string;
 }
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,7 +48,13 @@ function inbox(socket: WebSocket) {
     }
   };
 }
-async function connect(mf: Miniflare, id: string, role: string, native = false) {
+async function connect(
+  mf: Miniflare,
+  id: string,
+  role: string,
+  native = false,
+  ownerKey?: string,
+) {
   const response = await mf.dispatchFetch(`https://worker.example/usb-proxy/signal?room=${id}`, {
     headers: { Upgrade: 'websocket', ...(native ? {} : { Origin: origin }) },
   });
@@ -57,7 +63,9 @@ async function connect(mf: Miniflare, id: string, role: string, native = false) 
   assert.ok(socket);
   const next = inbox(socket);
   socket.accept();
-  socket.send(JSON.stringify({ type: 'join', room: id, role }));
+  socket.send(
+    JSON.stringify({ type: 'join', room: id, role, ...(ownerKey ? { owner_key: ownerKey } : {}) }),
+  );
   return {
     socket,
     next,
@@ -90,7 +98,7 @@ await test('real Worker routes encrypted signaling to assigned peers and revokes
     const client = await connect(mf, room(), 'client', true);
     assert.equal((await owner.next('joined')).peer, client.ready.peer);
     const duplicate = await connect(mf, room(), 'host');
-    assert.match(duplicate.ready.message, /already has an owner/);
+    assert.match(duplicate.ready.message ?? '', /already has an owner/);
     client.send({ type: 'signal', from: 'forged', data: 'ZW5jcnlwdGVk' });
     assert.deepEqual(await owner.next('signal'), {
       type: 'signal',
@@ -154,7 +162,7 @@ await test('master secret stays server-side; one temporary credential per room i
     assert.deepEqual(client.ready.ice_servers, ice);
     assert.equal(requests.length, 1);
     const denied = await connect(mf, room(2), 'host');
-    assert.match(denied.ready.message, /Daily TURN credential limit/);
+    assert.match(denied.ready.message ?? '', /Daily TURN credential limit/);
     assert.equal(requests.length, 1);
     owner.socket.close(1000);
     assert.equal((await client.next('ended')).type, 'ended');
@@ -170,7 +178,7 @@ await test('invalid frames and partial credential configuration fail closed', as
   const mf = await runtime({ bindings: { TURN_KEY_ID: 'missing-token' } });
   try {
     const owner = await connect(mf, room(), 'host');
-    assert.match(owner.ready.message, /not configured/);
+    assert.match(owner.ready.message ?? '', /not configured/);
   } finally {
     await mf.dispose();
   }
@@ -179,10 +187,81 @@ await test('invalid frames and partial credential configuration fail closed', as
     const owner = await connect(direct, room(), 'host');
     const client = await connect(direct, room(), 'client');
     client.send({ type: 'signal', data: '!' });
-    assert.match((await client.next('error')).message, /Invalid signaling frame/);
+    assert.match((await client.next('error')).message ?? '', /Invalid signaling frame/);
     assert.equal((await owner.next('left')).peer, client.ready.peer);
     owner.socket.close(1000);
   } finally {
     await direct.dispose();
+  }
+});
+
+await test('persistent owner key is bound on first join and authorizes offline recovery', async () => {
+  const mf = await runtime();
+  const id = room(9);
+  const ownerKey = Buffer.alloc(32, 73).toString('base64url');
+  const wrongKey = Buffer.alloc(32, 74).toString('base64url');
+  try {
+    const owner = await connect(mf, id, 'host', false, ownerKey);
+    assert.equal(owner.ready.peer, 'host');
+    assert.deepEqual(owner.ready.ice_servers, [{ urls: ['stun:stun.cloudflare.com:3478'] }]);
+    const client = await connect(mf, id, 'client');
+
+    owner.socket.close(1000);
+    assert.equal((await client.next('host_offline')).type, 'host_offline');
+
+    const offlineClient = await connect(mf, id, 'client');
+    assert.match(offlineClient.ready.message ?? '', /Camera share offline/);
+
+    const wrongOwner = await connect(mf, id, 'host', false, wrongKey);
+    assert.match(wrongOwner.ready.message ?? '', /Invalid owner key/);
+    const missingOwnerKey = await connect(mf, id, 'host');
+    assert.match(missingOwnerKey.ready.message ?? '', /Owner key required/);
+
+    const resumedOwner = await connect(mf, id, 'host', false, ownerKey);
+    assert.equal(resumedOwner.ready.peer, 'host');
+    assert.deepEqual(resumedOwner.ready.ice_servers, [{ urls: ['stun:stun.cloudflare.com:3478'] }]);
+    const resumedClient = await connect(mf, id, 'client');
+    assert.equal(resumedClient.ready.peer?.length, 36);
+
+    resumedOwner.send({ type: 'end' });
+    assert.equal((await resumedOwner.next('ended')).type, 'ended');
+    assert.equal((await resumedClient.next('ended')).type, 'ended');
+    await until(
+      async () =>
+        (
+          await mf.dispatchFetch(`https://worker.example/usb-proxy/signal?room=${id}`, {
+            headers: { Upgrade: 'websocket' },
+          })
+        ).status === 410,
+    );
+
+    const ordinaryId = room(11);
+    const ordinaryOwner = await connect(mf, ordinaryId, 'host');
+    const keyedOrdinaryOwner = await connect(mf, ordinaryId, 'host', false, ownerKey);
+    assert.match(keyedOrdinaryOwner.ready.message ?? '', /not valid for this room/);
+    ordinaryOwner.socket.close(1000);
+  } finally {
+    await mf.dispose();
+  }
+});
+
+await test('persistent room idle alarm revokes after SHARE_IDLE_SECONDS', async () => {
+  const mf = await runtime({ bindings: { SHARE_IDLE_SECONDS: '1' } });
+  const id = room(10);
+  const ownerKey = Buffer.alloc(32, 75).toString('base64url');
+  try {
+    const owner = await connect(mf, id, 'host', false, ownerKey);
+    owner.socket.close(1000);
+    await delay(1200);
+    await until(async () => {
+      const response = await mf.dispatchFetch(
+        `https://worker.example/usb-proxy/signal?room=${id}`,
+        { headers: { Upgrade: 'websocket' } },
+      );
+      if (response.status === 101) response.webSocket?.close(1000);
+      return response.status === 410;
+    });
+  } finally {
+    await mf.dispose();
   }
 });

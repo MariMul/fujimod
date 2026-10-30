@@ -13,6 +13,7 @@ const ROOM = /^[A-Za-z0-9_-]{43}$/;
 const MAX_MESSAGE = 65536;
 const CLIENTS = 16;
 const PENDING_MS = 10000;
+const OWNER_KEY = /^[A-Za-z0-9_-]{43}$/;
 const STUN = [{ urls: ['stun:stun.cloudflare.com:3478'] }];
 const fail = (message: string, status: number) => new Response(message, { status });
 function integer(value: string | undefined, fallback: number, minimum: number, maximum: number) {
@@ -74,6 +75,7 @@ export class TurnBudget extends DurableObject<Env> {
 }
 
 export class ShareRoom extends DurableObject<Env> {
+  private ownerJoinPending = false;
   sockets() {
     return this.ctx.getWebSockets();
   }
@@ -81,6 +83,7 @@ export class ShareRoom extends DurableObject<Env> {
     return this.sockets().find((socket) => attachment(socket)?.role === 'host');
   }
   async fetch(request: Request) {
+    if (await this.expireIdle()) return fail('Camera sharing ended', 410);
     if (await this.ctx.storage.get('revoked')) return fail('Camera sharing ended', 410);
     if (this.sockets().length >= CLIENTS + 1) return fail('Room is full', 429);
     const pair = new WebSocketPair();
@@ -104,6 +107,13 @@ export class ShareRoom extends DurableObject<Env> {
           ? [state.expires]
           : [];
     });
+    if (
+      (await this.ctx.storage.get<string>('owner_key_hash')) &&
+      !this.sockets().some((socket) => ['host', 'preparing'].includes(attachment(socket)?.role ?? ''))
+    ) {
+      const idleUntil = await this.ctx.storage.get<number>('idle_until');
+      if (idleUntil) deadlines.push(idleUntil);
+    }
     if (deadlines.length)
       await this.ctx.storage.setAlarm(Math.max(Date.now() + 1, Math.min(...deadlines)));
     else await this.ctx.storage.deleteAlarm();
@@ -133,6 +143,142 @@ export class ShareRoom extends DurableObject<Env> {
       throw Error('Invalid TURN credential response');
     return result.iceServers;
   }
+  async rememberCredentials(iceServers: IceServer[]) {
+    const users = new Set((await this.ctx.storage.get<string[]>('turn_users')) ?? []);
+    for (const server of iceServers) if (server.username) users.add(server.username);
+    await this.ctx.storage.put('turn_users', [...users]);
+  }
+  async revokeCredentials() {
+    const users = (await this.ctx.storage.get<string[]>('turn_users')) ?? [];
+    const keyId = this.env.TURN_KEY_ID,
+      apiToken = this.env.TURN_API_TOKEN;
+    if (!keyId || !apiToken || !users.length) return;
+    await Promise.all(
+      users.map(async (user) => {
+        try {
+          await fetch(
+            `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(keyId)}/credentials/${encodeURIComponent(user)}/revoke`,
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${apiToken}` },
+              signal: AbortSignal.timeout(3000),
+            },
+          );
+        } catch {
+          /* The temporary credentials still expire at their original TTL. */
+        }
+      }),
+    );
+    await this.ctx.storage.delete('turn_users');
+  }
+  async revokeRoom() {
+    await this.ctx.storage.put('revoked', true);
+    await this.ctx.storage.delete('idle_until');
+    for (const peer of this.sockets()) {
+      if (attachment(peer)?.role === 'closed') continue;
+      send(peer, { type: 'ended' });
+      peer.close(1000, 'Camera sharing ended');
+      peer.serializeAttachment({ ...attachment(peer), role: 'closed' });
+    }
+    await this.revokeCredentials();
+    await this.schedule();
+  }
+  async expireIdle() {
+    if (await this.ctx.storage.get('revoked')) return true;
+    if (this.ownerJoinPending) return false;
+    const ownerKeyHash = await this.ctx.storage.get<string>('owner_key_hash');
+    const idleUntil = await this.ctx.storage.get<number>('idle_until');
+    if (
+      ownerKeyHash &&
+      idleUntil &&
+      idleUntil <= Date.now() &&
+      !this.sockets().some((socket) => ['host', 'preparing'].includes(attachment(socket)?.role ?? ''))
+    ) {
+      await this.revokeRoom();
+      return true;
+    }
+    return false;
+  }
+  async ownerKeyHash(key: string) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+  keyMatches(left: string, right: string) {
+    if (left.length !== right.length) return false;
+    let difference = 0;
+    for (let index = 0; index < left.length; index++)
+      difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+    return difference === 0;
+  }
+  async ownerOffline() {
+    const seconds = integer(this.env.SHARE_IDLE_SECONDS, 604800, 1, 31536000);
+    await this.ctx.storage.put('idle_until', Date.now() + seconds * 1000);
+    for (const peer of this.sockets())
+      if (attachment(peer)?.role === 'client') send(peer, { type: 'host_offline' });
+  }
+  async joinOwner(socket: WebSocket, state: Attachment, suppliedKey: unknown, now: number) {
+    if (this.ownerJoinPending) throw Error('Room already has an owner');
+    this.ownerJoinPending = true;
+    let ttl = 0;
+    try {
+      const storedHash = await this.ctx.storage.get<string>('owner_key_hash');
+      const roomMode = await this.ctx.storage.get<'ordinary' | 'persistent'>('room_mode');
+      if (storedHash) {
+        if (typeof suppliedKey !== 'string') throw Error('Owner key required');
+        if (!OWNER_KEY.test(suppliedKey)) throw Error('Invalid owner key');
+        if (!this.keyMatches(storedHash, await this.ownerKeyHash(suppliedKey)))
+          throw Error('Invalid owner key');
+      } else if (roomMode === 'persistent') {
+        throw Error('Owner key required');
+      } else if (roomMode === 'ordinary' && suppliedKey !== undefined) {
+        throw Error('Owner key is not valid for this room');
+      } else if (
+        suppliedKey !== undefined &&
+        (typeof suppliedKey !== 'string' || !OWNER_KEY.test(suppliedKey))
+      ) {
+        throw Error('Invalid owner key');
+      }
+      if (storedHash || suppliedKey !== undefined)
+        integer(this.env.SHARE_IDLE_SECONDS, 604800, 1, 31536000);
+      if (
+        this.sockets().some((peer) =>
+          ['host', 'preparing'].includes(attachment(peer)?.role ?? ''),
+        )
+      )
+        throw Error('Room already has an owner');
+      ttl = integer(this.env.TURN_TTL_SECONDS, 86400, 60, 86400);
+      if (socket.readyState !== WebSocket.OPEN) return;
+      if (!roomMode) {
+        if (suppliedKey === undefined) {
+          await this.ctx.storage.put('room_mode', 'ordinary');
+        } else {
+          await this.ctx.storage.put('owner_key_hash', await this.ownerKeyHash(suppliedKey));
+          await this.ctx.storage.put('room_mode', 'persistent');
+        }
+      }
+      await this.ctx.storage.delete('idle_until');
+      if (socket.readyState !== WebSocket.OPEN) {
+        if (storedHash || suppliedKey !== undefined) await this.ownerOffline();
+        else await this.revokeRoom();
+        return;
+      }
+      state.role = 'preparing';
+      state.peer = 'host';
+      state.expires = now + ttl * 1000;
+      socket.serializeAttachment(state); // Reserve ownership before asynchronous issuance.
+    } finally {
+      this.ownerJoinPending = false;
+    }
+    if (state.role !== 'preparing') return;
+    const iceServers = await this.credentials(ttl);
+    await this.rememberCredentials(iceServers);
+    if (socket.readyState !== WebSocket.OPEN) return;
+    if (JSON.stringify(iceServers).length > 1500) throw Error('TURN credential response too large');
+    state.role = 'host';
+    state.iceServers = iceServers;
+    socket.serializeAttachment(state);
+    send(socket, { type: 'ready', peer: 'host', ice_servers: iceServers });
+  }
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) {
     try {
       if (typeof message !== 'string' || message.length > MAX_MESSAGE)
@@ -141,6 +287,7 @@ export class ShareRoom extends DurableObject<Env> {
           type: string;
           room: string;
           role: 'host' | 'client';
+          owner_key?: string;
           to: string;
           data: string;
         } = JSON.parse(message),
@@ -160,30 +307,16 @@ export class ShareRoom extends DurableObject<Env> {
           !['host', 'client'].includes(frame.role)
         )
           throw Error('Invalid room handshake');
-        if (await this.ctx.storage.get('revoked')) throw Error('Camera sharing ended');
+        if (await this.expireIdle()) throw Error('Camera sharing ended');
         if (frame.role === 'host') {
-          if (
-            this.sockets().some((peer) =>
-              ['host', 'preparing'].includes(attachment(peer)?.role ?? ''),
-            )
-          )
-            throw Error('Room already has an owner');
-          const ttl = integer(this.env.TURN_TTL_SECONDS, 86400, 60, 86400);
-          state.role = 'preparing';
-          state.peer = 'host';
-          state.expires = now + ttl * 1000;
-          socket.serializeAttachment(state); // Reserve ownership before asynchronous issuance.
-          const iceServers = await this.credentials(ttl);
-          if (socket.readyState !== WebSocket.OPEN) return;
-          if (JSON.stringify(iceServers).length > 1500)
-            throw Error('TURN credential response too large');
-          state.role = 'host';
-          state.iceServers = iceServers;
-          socket.serializeAttachment(state);
-          send(socket, { type: 'ready', peer: 'host', ice_servers: iceServers });
+          await this.joinOwner(socket, state, frame.owner_key, now);
         } else {
+          if (frame.owner_key !== undefined) throw Error('Owner key is only valid for an owner');
           const host = this.host();
-          if (!host) throw Error('Camera share unavailable');
+          if (!host) {
+            if (await this.ctx.storage.get('owner_key_hash')) throw Error('Camera share offline');
+            throw Error('Camera share unavailable');
+          }
           state.role = 'client';
           state.peer = crypto.randomUUID();
           socket.serializeAttachment(state);
@@ -195,6 +328,10 @@ export class ShareRoom extends DurableObject<Env> {
           });
         }
         await this.schedule();
+        return;
+      }
+      if (frame.type === 'end' && state.role === 'host') {
+        await this.revokeRoom();
         return;
       }
       if (
@@ -227,31 +364,9 @@ export class ShareRoom extends DurableObject<Env> {
     if (!state || state.role === 'closed') return;
     socket.serializeAttachment({ ...state, role: 'closed' });
     if (['host', 'preparing'].includes(state.role)) {
-      await this.ctx.storage.put('revoked', true);
-      for (const peer of this.sockets()) {
-        if (peer === socket || attachment(peer)?.role === 'closed') continue;
-        send(peer, { type: 'ended' });
-        peer.close(1000, 'Camera sharing ended');
-        peer.serializeAttachment({ ...attachment(peer), role: 'closed' });
-      }
-      // End the room immediately, then revoke its shared temporary relay login.
-      const users = new Set(
-        (state.iceServers || []).flatMap((server) => (server.username ? [server.username] : [])),
-      );
-      for (const user of users) {
-        try {
-          await fetch(
-            `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(this.env.TURN_KEY_ID ?? '')}/credentials/${encodeURIComponent(user)}/revoke`,
-            {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${this.env.TURN_API_TOKEN}` },
-              signal: AbortSignal.timeout(3000),
-            },
-          );
-        } catch {
-          /* The temporary credentials still expire at their original TTL. */
-        }
-      }
+      if (await this.ctx.storage.get<string>('owner_key_hash')) {
+        await this.ownerOffline();
+      } else await this.revokeRoom();
     } else if (state.role === 'client') {
       const host = this.host();
       if (host) send(host, { type: 'left', peer: state.peer });
@@ -274,11 +389,12 @@ export class ShareRoom extends DurableObject<Env> {
         (state?.role === 'pending' && now >= state.accepted + PENDING_MS) ||
         (['host', 'preparing'].includes(state?.role ?? '') && state.expires && now >= state.expires)
       ) {
-        send(socket, { type: 'ended' });
+        if (state.role === 'pending') send(socket, { type: 'ended' });
         socket.close(1000, 'Sharing session expired');
         await this.remove(socket);
       }
     }
+    await this.expireIdle();
     await this.schedule();
   }
 }

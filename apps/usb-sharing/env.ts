@@ -13,6 +13,7 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   TURN_TTL_SECONDS?: string;
   TURN_DAILY_ISSUE_LIMIT?: string;
+  SHARE_IDLE_SECONDS?: string;
   TURN_KEY_ID?: string;
   TURN_API_TOKEN?: string;
   GITHUB_ISSUES_TOKEN?: string;
