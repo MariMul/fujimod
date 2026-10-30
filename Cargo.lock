@@ -1638,6 +1638,7 @@ dependencies = [
  "fujimod-emulator-models",
  "fujimod-emulator-preparation",
  "fujimod-emulator-session",
+ "fujimod-emulator-xpp",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",

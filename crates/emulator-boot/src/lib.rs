@@ -5,6 +5,7 @@
 mod first_start;
 pub mod graph;
 mod x70;
+pub mod xpp;
 
 use fujimod_emulator::board::{
         bus::{Bus, Mode},

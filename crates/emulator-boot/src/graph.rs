@@ -480,10 +480,21 @@ fn processor_model(model: Model) -> &'static str {
     }
 }
 
+/// Indexed registers keep their index as data, as `arm::Register` deserializes them.
+fn arm_register(register: arm::Register) -> Value {
+    match register {
+        arm::Register::R(index) => json!({"R": index}),
+        arm::Register::D(index) => json!({"D": index}),
+        arm::Register::Q(index) => json!({"Q": index}),
+        arm::Register::S(index) => json!({"S": index}),
+        named => json!(format!("{named:?}")),
+    }
+}
+
 fn processor_register(register: Register) -> Value {
     match register {
         Register::Diagnostic(value) => json!({"Diagnostic": format!("{value:?}")}),
-        Register::Arm32(value) => json!({"Arm32": format!("{value:?}")}),
+        Register::Arm32(value) => json!({"Arm32": arm_register(value)}),
         Register::X(value) => json!({"X": value}),
         Register::Pc => json!("Pc"),
         Register::Sp => json!("Sp"),
