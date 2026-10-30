@@ -962,6 +962,7 @@ impl Session {
             xpp_serial,
             xpp_sub_cpu,
             xpp_battery_gauge,
+            xpp_idle_serial,
             xpp_lens,
             xpp_shutter,
             xpp_display_frames,
@@ -978,6 +979,9 @@ impl Session {
             xpp_frame_sync,
             xpp_hdmi,
             xpp_statistics,
+            xpp_statistics_scene,
+            xpp_statistics_buffers,
+            xpp_live_view_image,
             xpp_face,
             xpp_register_blocks,
             xpp_clocks,
@@ -1193,6 +1197,17 @@ impl Session {
             }
             None => None,
         };
+        let peers = [
+            sub_cpu.as_ref().map(|(port, _)| *port),
+            battery_gauge.as_ref().map(|(port, _)| *port),
+            xpp_lens.as_ref().map(|lens| lens.port),
+        ];
+        if xpp_idle_serial
+            .iter()
+            .any(|port| !xpp_serial.contains(port) || peers.contains(&Some(*port)))
+        {
+            return Err("X-Processor Pro idle serial port needs a free declared port".to_owned());
+        }
         if let Some(adc) = xpp_adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -1253,15 +1268,33 @@ impl Session {
         } else if !card_files.is_empty() {
             return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
         }
+        if let Some((unit, ..)) = xpp_live_view_image
+            && !xpp_register_blocks
+                .iter()
+                .any(|b| b.base == unit && b.frames.is_some())
+        {
+            return Err("X-Processor Pro live-view image needs a unit with frames".into());
+        }
         for block in xpp_register_blocks {
+            let image = xpp_live_view_image
+                .filter(|(unit, ..)| *unit == block.base)
+                .map(|(_, lines, ycbcr)| (lines, ycbcr));
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_register_block(block)?;
+                .xpp_register_block(block, image)?;
         }
         if let Some((base, irq, period)) = xpp_statistics {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_statistics(base, irq, period)?;
+                .xpp_statistics(
+                    base,
+                    irq,
+                    period,
+                    xpp_statistics_scene,
+                    &xpp_statistics_buffers,
+                )?;
+        } else if xpp_statistics_scene.is_some() || !xpp_statistics_buffers.is_empty() {
+            return Err("X-Processor Pro statistics scene needs the statistics engine".into());
         }
         if let Some((base, irq, run_ticks)) = xpp_face {
             devices
@@ -1321,6 +1354,7 @@ impl Session {
                 (_, Some((port, _))) if *port == base => {
                     Peer::Frames(battery_gauge.take().map(|(_, r)| r).unwrap_or_default())
                 }
+                _ if xpp_idle_serial.contains(&base) => Peer::Idle,
                 _ => Peer::None,
             };
             let clock = match peer {

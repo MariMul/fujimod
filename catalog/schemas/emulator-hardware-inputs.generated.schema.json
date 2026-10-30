@@ -106,6 +106,13 @@
           },
           "type": "array"
         },
+        "idle_serial_ports": {
+          "description": "Declared serial ports with nothing attached: every byte received\nreads 0xff.",
+          "items": {
+            "$ref": "#/$defs/ResetIdleSerialPort"
+          },
+          "type": "array"
+        },
         "inputs": {
           "anyOf": [
             {
@@ -134,6 +141,17 @@
             }
           ],
           "description": "Declared lens on the mount."
+        },
+        "live_view_image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLiveViewImage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared live-view image of the same scene."
         },
         "loader_handoff": {
           "anyOf": [
@@ -254,6 +272,17 @@
             }
           ],
           "description": "Declared USB port: the cable's VBUS pin and the link speed a host\nnegotiates."
+        },
+        "zone_statistics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetZoneStatistics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared scene for the imaging statistics engine's zone sums."
         }
       },
       "type": "object"
@@ -1262,6 +1291,27 @@
       ],
       "type": "object"
     },
+    "ResetIdleSerialPort": {
+      "additionalProperties": false,
+      "description": "Declared serial port with nothing attached.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Serial port base address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "port"
+      ],
+      "type": "object"
+    },
     "ResetInitialOutputs": {
       "additionalProperties": false,
       "description": "Declared initial outputs facts.",
@@ -1612,6 +1662,47 @@
         "basis",
         "regions",
         "sha256"
+      ],
+      "type": "object"
+    },
+    "ResetLiveViewImage": {
+      "additionalProperties": false,
+      "description": "Declared uniform image a live-view output unit writes at each frame.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "lines": {
+          "description": "Lines written to each buffer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "description": "Base of the live-view output unit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ycbcr": {
+          "description": "Luma, blue-difference and red-difference value of every pixel.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "unit",
+        "lines",
+        "ycbcr"
       ],
       "type": "object"
     },
@@ -2749,6 +2840,37 @@
       ],
       "type": "object"
     },
+    "ResetStatisticsBuffer": {
+      "additionalProperties": false,
+      "description": "Declared contents of one statistics engine output buffer: an asset\nholding the little-endian u32 words written each frame.",
+      "properties": {
+        "asset": {
+          "description": "Asset identity in the configuration assets.",
+          "type": "string"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "output": {
+          "description": "Engine register holding the buffer's address (+0x1b8..+0x1e4).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the asset.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset",
+        "basis",
+        "output",
+        "sha256"
+      ],
+      "type": "object"
+    },
     "ResetStatisticsScene": {
       "additionalProperties": false,
       "description": "Declared statistics scene facts.",
@@ -3041,6 +3163,39 @@
         "name",
         "offset",
         "value"
+      ],
+      "type": "object"
+    },
+    "ResetZoneStatistics": {
+      "additionalProperties": false,
+      "description": "Declared uniform scene the imaging statistics engine sums.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "buffers": {
+          "description": "Measured buffers of the same scene.",
+          "items": {
+            "$ref": "#/$defs/ResetStatisticsBuffer"
+          },
+          "type": "array"
+        },
+        "zone_sums": {
+          "description": "Red, green and blue sum of every zone.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "zone_sums"
       ],
       "type": "object"
     }

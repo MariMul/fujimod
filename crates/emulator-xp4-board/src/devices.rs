@@ -1034,6 +1034,7 @@ impl Devices {
     pub fn xpp_register_block(
         &mut self,
         block: crate::definition::XppRegisterBlock,
+        image: Option<(u32, [u8; 3])>,
     ) -> Result<(), String> {
         let frames = block.frames.map(|f| fujimod_emulator_xpp::blocks::Frames {
             start: f.start,
@@ -1041,8 +1042,11 @@ impl Devices {
             irq: f.irq,
             period: f.period_ticks,
         });
-        let model =
+        let mut model =
             fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle, frames)?;
+        if let Some((lines, ycbcr)) = image {
+            model = model.with_live_view_image(lines, ycbcr)?;
+        }
         let end = block.base + model.window();
         if self
             .windows
@@ -1056,7 +1060,14 @@ impl Devices {
         self.windows.push((block.base, end, id));
         Ok(())
     }
-    pub fn xpp_statistics(&mut self, base: u64, irq: u32, period: u64) -> Result<(), String> {
+    pub fn xpp_statistics(
+        &mut self,
+        base: u64,
+        irq: u32,
+        period: u64,
+        scene: Option<[u32; 3]>,
+        buffers: &[(u64, Vec<u32>)],
+    ) -> Result<(), String> {
         use fujimod_emulator_xpp::statistics::{Engine, WINDOW};
         if self
             .windows
@@ -1065,7 +1076,13 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro statistics engine".into());
         }
-        let model = Engine::new(base, irq, period)?;
+        let mut model = Engine::new(base, irq, period)?;
+        if let Some(scene) = scene {
+            model = model.with_scene(scene);
+        }
+        for (output, words) in buffers {
+            model = model.with_buffer(*output, words)?;
+        }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + WINDOW, id));

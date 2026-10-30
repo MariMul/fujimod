@@ -46,6 +46,10 @@ pub struct Definition {
     pub xpp_sub_cpu: Option<XppSubCpu>,
     #[serde(default)]
     pub xpp_battery_gauge: Option<XppBatteryGauge>,
+    /// X-Processor Pro serial ports with nothing attached: every byte
+    /// received reads 0xff.
+    #[serde(default)]
+    pub xpp_idle_serial: Vec<u64>,
     /// X-mount lens on an X-Processor Pro serial port; requires
     /// `xpp_storage`, `xpp_reset_gates` and the GPIO banks.
     #[serde(default)]
@@ -90,6 +94,17 @@ pub struct Definition {
     /// frame period in ticks.
     #[serde(default)]
     pub xpp_statistics: Option<(u64, u32, u64)>,
+    /// Uniform scene for the statistics engine: the red, green and blue sum
+    /// of every zone.
+    #[serde(default)]
+    pub xpp_statistics_scene: Option<[u32; 3]>,
+    /// Statistics engine buffers written each frame: output register offset
+    /// and words.
+    #[serde(default)]
+    pub xpp_statistics_buffers: Vec<(u64, Vec<u32>)>,
+    /// Uniform live-view image: unit base, lines and Y, Cb, Cr.
+    #[serde(default)]
+    pub xpp_live_view_image: Option<(u64, u32, [u8; 3])>,
     /// X-Processor Pro face detection engine: base, interrupt line and run
     /// time in ticks.
     #[serde(default)]

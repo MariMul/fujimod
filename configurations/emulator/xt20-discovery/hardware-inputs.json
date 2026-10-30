@@ -411,6 +411,30 @@
       ],
       "basis": "Measured: the battery task of X-T20 2.11 keeps the gauge's replies in its block at 0xfda4fc (status register 0 at +0, register 8 at +4, 0x0c at +6, 0x10 at +8; 0xc711f0..0xc712bc), read over the live service in the s1 REC capture (2026-10-29). The s2 and s3 captures and the 2026-10-22 live-view dumps agree on register 0 and register 8 (0); register 0x0c ranges over 0x1cb..0x202 and 0x10 over 0x2b6..0x2bf. Wiring from section 5: the gauge sits on serial port 4 (resource 0xf of 0xed389c, chip select bank 13 bit 8, 8-bit transfers). 0xc70748 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc4b87c and 0 by 0xc4b8c0); the first byte names the register and bit 0 writes it, and the bytes read back from +0x60 carry the value, high byte first. The start-up 0xc70e7c polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Unlisted registers read zero, including 0x1c and the updater's 0x54; they are not measured. Register 0x54 is the data-line detection: after a cable raises VBUS, the USB manager 0x168ece0 writes 0xb00 to register 0x50 and reads 0x54, and (value & 0xd) == 1 means a PC, anything else a charger. It is declared 1, so a cable always reaches a PC; the camera's value is not measured."
     },
+    "idle_serial_ports": [
+      {
+        "port": 4294094848,
+        "basis": "Measured: nothing answers on serial channel 3 (logical device 0xb of the 0xed389c table). X-T20 2.11 section 5 0xc94358 sends a command byte, then 0xaa fill bytes, reading each received byte from +0x60 (0xc4b964) into the frame buffer at 0x11ddc55. In the s1 REC capture (2026-10-29) that buffer holds 23 ff: the command byte the body heard while sending it, then the idle-high line. The link's state byte 0x11dda50 is 0xff (0xc92a04), and the record 0x11ddb49 that command 0x20 fills (dispatcher 0xc92a28) is zero, so UI_SETP_FLASH_KIND (0x3e1) stays 0. On a port that read back its send word, the 0xaa fill decoded as flash kind 2, model 5 (0xc20090, 0xcec52c), and the AE statistics gate 0x1a36b55 stayed closed. Here every received byte reads 0xff, including the command byte, which the camera hears as sent."
+      }
+    ],
+    "zone_statistics": {
+      "zone_sums": [144736, 383321, 33695],
+      "buffers": [
+        {
+          "output": 464,
+          "asset": "xt20-211-statistics-window",
+          "sha256": "63ffb961adf0066f4c80ec5ea5e35c521cea2780edf88e5fa3e016d91bc3f7c0",
+          "basis": "Measured: the second statistics window buffer (+0x1d0, 0x3f481360 in the first half, 80 u32) of the same s2 REC capture, first half, copied unchanged. Words 0/2/4 are red/green/blue sums of a window of about 4.4 zones (641739 / 1700693 / 150556); nine smaller windows follow at stride 8 (red, green, blue at +0/+2/+4), and word 74 reads 365..368 in every scene. On the XP4 board (previous lens inputs) this buffer alone moves AE record field +0x10e (setter 0xd289dc, struct 0x1d09168) from -595 to 196 at the 170M write (camera s2: 53, offset as the zone-sum fields); the coarse 8x8 planes (+0x2670), the 256-bin histogram (+0x3290) and the other buffers left the record unchanged."
+        }
+      ],
+      "basis": "Measured mean zone sums, uniform scene: X-T20 2.11 REC live view of an evenly lit wall (s2, 2026-10-29). The statistics engine 0xfff54000 writes twelve buffers per frame into one of two halves 0x3690 apart (+0x10); the zone sums buffer (+0x1cc, 0x3f480360 in the first half) holds four 16x16 planes of u32: red, green (about 2.6 times red, probably both green sites), blue, and a plane of zeros. Both halves of the capture agree within 1%: mean 144736 / 383321 / 33695 / 0 (green zones 228289..478805: vignetting). Section 6 0x1698dd0 takes each completion as the half just written and alternates its pointer 0x1bc6310 without reprogramming the engine's buffer words; the engine keeps alternating across the firmware's per-frame restarts (with a restart from the first half, only the first half was ever written in the emulator, while the camera fills both). Declared uniform: every zone holds the mean."
+    },
+    "live_view_image": {
+      "unit": 4294270976,
+      "lines": 480,
+      "ycbcr": [73, 114, 138],
+      "basis": "Measured, uniform scene: X-T20 2.11 REC live view of the evenly lit wall (s2, 2026-10-29), the same capture as zone_statistics. Live-view output unit 1 (0xfff56000) holds the buffer address at +0xc0 and the line width at +0xc4 (0x2d0 = 720 pixels); on the XP4 board the firmware moves +0xc0 through 0xa7d6000 + 0x180000*k (k < 4) between frames and the display output scans out the buffer finished last. The camera's four buffers hold 720x480 packed 4:2:2 (Y0 Y1 Cb Cr, stride 1440): mean Y 73 (sd 26: texture and vignetting), Cb 114, Cr 138 in every buffer; with the lens cap on (s1) Y is 0 and Cb/Cr 128, so the range is full. Declared uniform: every pixel holds the means. The image the camera keeps below line 480 is not written."
+    },
     "usb_cable": {
       "vbus_bank": 1,
       "vbus_pin": 14,
