@@ -16,6 +16,14 @@
 //! output units at 0xfff55000 + 0x1000*n start with +0xc8 bit 28 (0xc3a98c),
 //! their stop clears it and waits for +0xd8 bit 8, and their edge handlers
 //! (GIC 107 + n) report the frame to the imaging dispatcher.
+//!
+//! A live-view output unit may declare a uniform image: before each frame
+//! interrupt it writes `lines` lines of packed 4:2:2 pixel pairs (Y0 Y1 Cb Cr)
+//! to the buffer at +0xc0, +0xc4 pixels wide (two bytes per pixel). The
+//! firmware moves +0xc0 through its buffers between frames (unit 1:
+//! 0xa7d6000 + 0x180000*k, 720 pixels) and the display shows the buffer the
+//! unit finished last. Other data the unit or the rest of the pipeline moves
+//! is not modeled.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -39,6 +47,8 @@ struct State {
     #[serde(default, skip_serializing_if = "is_zero")]
     frames: u64,
 }
+const BUFFER: u64 = 0xc0;
+const WIDTH: u64 = 0xc4;
 fn is_zero(n: &u64) -> bool {
     *n == 0
 }
@@ -48,6 +58,8 @@ pub struct Block {
     /// (offset, mask) of status bits that always read set.
     idle: Vec<(u64, u32)>,
     frames: Option<Frames>,
+    /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
+    image: Option<(u32, [u8; 4])>,
     state: State,
 }
 impl Block {
@@ -78,8 +90,35 @@ impl Block {
             size,
             idle,
             frames,
+            image: None,
             state: State::default(),
         })
+    }
+    /// A uniform live-view image written at each frame: lines and Y, Cb, Cr.
+    pub fn with_live_view_image(mut self, lines: u32, ycbcr: [u8; 3]) -> Result<Self, String> {
+        if self.frames.is_none() || self.size <= WIDTH || !(1..=4096).contains(&lines) {
+            return Err("Invalid X-Processor Pro live-view image".into());
+        }
+        let [y, cb, cr] = ycbcr;
+        self.image = Some((lines, [y, y, cb, cr]));
+        Ok(self)
+    }
+    fn write_image(&self, cx: &mut Cx<'_>) {
+        let Some((lines, pair)) = self.image else {
+            return;
+        };
+        let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
+        let (address, width) = (word(BUFFER), word(WIDTH));
+        if width == 0 {
+            return;
+        }
+        if width & 1 != 0 || width > 0x2000 {
+            return cx.fail("Unsupported live-view line width");
+        }
+        let image = pair.repeat(width as usize / 2 * lines as usize);
+        if cx.ram_write(u64::from(address), &image).is_err() {
+            cx.fail("Live-view buffer outside RAM");
+        }
     }
     fn started(&self, frames: &Frames) -> bool {
         let (offset, mask) = frames.start;
@@ -153,6 +192,7 @@ impl Device for Block {
         if cx.now() < due {
             return;
         }
+        self.write_image(cx);
         cx.set_irq(frames.irq, true);
         cx.set_irq(frames.irq, false);
         self.state.frames += 1;
@@ -253,5 +293,41 @@ mod tests {
             unit.restore(&serde_json::json!({ "words": [] , "due": 30 }))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn live_view_units_write_the_declared_image_each_frame() {
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let block = || Block::new(BASE, 0x200, vec![(0, 1)], Some(frames)).unwrap();
+        assert!(
+            Block::new(BASE, 0x200, vec![], None)
+                .unwrap()
+                .with_live_view_image(480, [73, 114, 138])
+                .is_err()
+        );
+        assert!(block().with_live_view_image(0, [73, 114, 138]).is_err());
+        let mut unit = block().with_live_view_image(3, [73, 114, 138]).unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        advance(&mut unit, &mut h, 10);
+        assert_eq!(h.ram[0x1000..0x1008], [73, 73, 114, 138, 73, 73, 114, 138]);
+        assert_eq!(h.ram[0x1014..0x1018], [73, 73, 114, 138]);
+        assert_eq!(h.ram[0x1018], 0);
+        write(&mut unit, &mut h, BASE + BUFFER, 0x2000);
+        advance(&mut unit, &mut h, 20);
+        assert_eq!(h.ram[0x2000..0x2004], [73, 73, 114, 138]);
+        write(&mut unit, &mut h, BASE + WIDTH, 3);
+        h.now = 30;
+        let mut cx = h.cx();
+        unit.advance(&mut cx);
+        assert_eq!(cx.refusal(), Some("Unsupported live-view line width"));
     }
 }

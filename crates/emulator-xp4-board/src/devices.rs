@@ -971,6 +971,7 @@ impl Devices {
     pub fn xpp_register_block(
         &mut self,
         block: crate::definition::XppRegisterBlock,
+        image: Option<(u32, [u8; 3])>,
     ) -> Result<(), String> {
         let frames = block.frames.map(|f| fujimod_emulator_xpp::blocks::Frames {
             start: f.start,
@@ -978,8 +979,11 @@ impl Devices {
             irq: f.irq,
             period: f.period_ticks,
         });
-        let model =
+        let mut model =
             fujimod_emulator_xpp::blocks::Block::new(block.base, block.size, block.idle, frames)?;
+        if let Some((lines, ycbcr)) = image {
+            model = model.with_live_view_image(lines, ycbcr)?;
+        }
         let end = block.base + model.window();
         if self
             .windows

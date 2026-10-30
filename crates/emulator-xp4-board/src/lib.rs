@@ -951,6 +951,7 @@ impl Session {
             xpp_statistics,
             xpp_statistics_scene,
             xpp_statistics_buffers,
+            xpp_live_view_image,
             xpp_face,
             xpp_register_blocks,
             xpp_clocks,
@@ -1188,10 +1189,20 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset)?;
         }
+        if let Some((unit, ..)) = xpp_live_view_image
+            && !xpp_register_blocks
+                .iter()
+                .any(|b| b.base == unit && b.frames.is_some())
+        {
+            return Err("X-Processor Pro live-view image needs a unit with frames".into());
+        }
         for block in xpp_register_blocks {
+            let image = xpp_live_view_image
+                .filter(|(unit, ..)| *unit == block.base)
+                .map(|(_, lines, ycbcr)| (lines, ycbcr));
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_register_block(block)?;
+                .xpp_register_block(block, image)?;
         }
         if let Some((base, irq, period)) = xpp_statistics {
             devices

@@ -142,6 +142,17 @@
           ],
           "description": "Declared lens on the mount."
         },
+        "live_view_image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLiveViewImage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared live-view image of the same scene."
+        },
         "loader_handoff": {
           "anyOf": [
             {
@@ -1651,6 +1662,47 @@
         "basis",
         "regions",
         "sha256"
+      ],
+      "type": "object"
+    },
+    "ResetLiveViewImage": {
+      "additionalProperties": false,
+      "description": "Declared uniform image a live-view output unit writes at each frame.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "lines": {
+          "description": "Lines written to each buffer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "description": "Base of the live-view output unit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ycbcr": {
+          "description": "Luma, blue-difference and red-difference value of every pixel.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "unit",
+        "lines",
+        "ycbcr"
       ],
       "type": "object"
     },

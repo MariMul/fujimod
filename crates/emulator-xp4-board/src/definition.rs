@@ -102,6 +102,9 @@ pub struct Definition {
     /// and words.
     #[serde(default)]
     pub xpp_statistics_buffers: Vec<(u64, Vec<u32>)>,
+    /// Uniform live-view image: unit base, lines and Y, Cb, Cr.
+    #[serde(default)]
+    pub xpp_live_view_image: Option<(u64, u32, [u8; 3])>,
     /// X-Processor Pro face detection engine: base, interrupt line and run
     /// time in ticks.
     #[serde(default)]

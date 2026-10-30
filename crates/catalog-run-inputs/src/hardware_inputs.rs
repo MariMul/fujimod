@@ -1207,6 +1207,22 @@ pub struct ZoneStatistics {
     pub buffers: Vec<StatisticsBuffer>,
 }
 
+/// Declared uniform image a live-view output unit writes at each frame.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewImage"))]
+pub struct LiveViewImage {
+    /// Declared basis.
+    pub basis: String,
+    /// Base of the live-view output unit.
+    pub unit: u64,
+    /// Lines written to each buffer.
+    pub lines: u32,
+    /// Luma, blue-difference and red-difference value of every pixel.
+    pub ycbcr: [u8; 3],
+}
+
 /// Declared contents of one statistics engine output buffer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1263,6 +1279,9 @@ pub struct HardwareReset {
     /// Declared scene for the imaging statistics engine's zone sums.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zone_statistics: Option<ZoneStatistics>,
+    /// Declared live-view image of the same scene.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_view_image: Option<LiveViewImage>,
     /// Declared register-file parts on the I2C buses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_parts: Vec<I2cPartInput>,
