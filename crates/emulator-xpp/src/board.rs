@@ -1,8 +1,8 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
-    adc, blocks, boot, clocks, display, dram, face, flash, i2c, imaging, lens, power, resets, sd,
-    serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, face, flash, i2c, imaging, keys, lens, power, resets,
+    sd, serial, shutter, statistics, sync, timer,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -54,12 +54,16 @@ pub struct Nor {
     #[serde(default)]
     pub array: Option<flash::Array>,
 }
-/// A serial port's peer: none, a register file (the X-T20 sub-CPU) or a
-/// byte-frame device with 16-bit registers (the battery gauge).
+/// A serial port's peer: none, an idle receive line (nothing attached), a
+/// register file (the X-T20 sub-CPU) or a byte-frame device with 16-bit
+/// registers (the battery gauge).
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Peer {
     None,
+    /// Nothing attached and the receive line idle high: every byte sent
+    /// clocks in 0xff.
+    Idle,
     Registers {
         registers: Vec<(u8, u8)>,
         #[serde(default)]
@@ -76,6 +80,12 @@ pub struct BlockFrames {
     pub stopped: (u64, u32),
     pub irq: u32,
     pub period_ticks: u64,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiveViewImage {
+    pub lines: u32,
+    pub ycbcr: [u8; 3],
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -137,11 +147,26 @@ pub enum Model {
         frames: Option<BlockFrames>,
         #[serde(default)]
         job: Option<BlockJob>,
+        /// A uniform live-view image written before each frame interrupt.
+        #[serde(default)]
+        live_view_image: Option<LiveViewImage>,
     },
     Statistics {
         base: u64,
         irq: u32,
         period_ticks: u64,
+        /// Uniform scene: red, green and blue zone sums.
+        #[serde(default)]
+        scene: Option<[u32; 3]>,
+        /// Measured buffers written each frame: output register offset and words.
+        #[serde(default)]
+        buffers: Vec<(u64, Vec<u32>)>,
+    },
+    /// GPIO keys whose inputs also drive external interrupt lines; follows
+    /// the GPIO bank and the reset/gate bank.
+    KeyLines {
+        lines: Vec<(usize, usize, usize)>,
+        poll_ticks: u64,
     },
     Face {
         base: u64,
@@ -480,6 +505,7 @@ pub fn build(
                 let mut clock = None;
                 let peer = match peer {
                     Peer::None => serial::Peer::None,
+                    Peer::Idle => serial::Peer::Idle,
                     Peer::Registers {
                         registers,
                         clock: c,
@@ -530,6 +556,7 @@ pub fn build(
                 idle,
                 frames,
                 job,
+                live_view_image,
             } => {
                 let frames = frames.map(|f| blocks::Frames {
                     start: f.start,
@@ -546,17 +573,36 @@ pub fn build(
                         ticks: j.ticks,
                     })?;
                 }
+                if let Some(image) = live_view_image {
+                    model = model.with_live_view_image(image.lines, image.ycbcr)?;
+                }
                 devices.register(base, model.window(), Box::new(model))?
             }
             Model::Statistics {
                 base,
                 irq,
                 period_ticks,
-            } => devices.register(
-                base,
-                statistics::WINDOW,
-                Box::new(statistics::Engine::new(base, irq, period_ticks)?),
-            )?,
+                scene,
+                buffers,
+            } => {
+                let mut model = statistics::Engine::new(base, irq, period_ticks)?;
+                if let Some(scene) = scene {
+                    model = model.with_scene(scene);
+                }
+                for (output, words) in buffers {
+                    model = model.with_buffer(output, &words)?;
+                }
+                devices.register(base, statistics::WINDOW, Box::new(model))?
+            }
+            Model::KeyLines { lines, poll_ticks } => {
+                let (_, external) = gates.as_ref().ok_or("Key lines follow the reset gates")?;
+                devices.attach(Box::new(keys::KeyLines::new(
+                    &lines,
+                    poll_ticks,
+                    pins.clone().ok_or("Key lines follow the GPIO bank")?,
+                    external.clone(),
+                )?))
+            }
             Model::Face {
                 base,
                 irq,
@@ -856,4 +902,97 @@ pub fn build(
         inputs,
         contacts: card_contacts,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn graph() -> factory::Graph {
+        serde_json::from_value(json!({
+            "processors": [{"model": "cortex-a7", "released": true, "mprofile": null,
+                            "rprofile": null, "registers": [["Pc", 0], ["Pstate", 0xd3]]}],
+            "ram": [{"base": 0, "size": 0x10000}],
+            "mappings": [{"core": 0, "address": 0, "physical": 0, "size": 0x10000,
+                          "permissions": 7}],
+            "dma_mappings": [{"address": 0, "physical": 0, "size": 0x10000, "permissions": 3}],
+            "peripherals": [{"core": 0, "address": 0xf0000000_u64, "physical": 0xf0000000_u64,
+                             "size": 0x10000000}],
+            "decoders": [],
+            "instructions_per_tick": [1, 1]
+        }))
+        .unwrap()
+    }
+    fn build_nodes(nodes: Value) -> Result<Built, String> {
+        let spec = serde_json::from_value(json!({
+            "kind": "xpp",
+            "cpus": [{"mpidr": 0x80000000_u32, "configuration_base": 0xffff0000_u32,
+                      "cycles_per_tick": 64}],
+            "gic": {"distributor": 0xffff1000_u64, "cpu_interface": 0xffff2000_u64, "lines": 512},
+            "nodes": nodes
+        }))
+        .map_err(|e| e.to_string())?;
+        build(graph(), spec, &BTreeMap::new(), Mode::Strict)
+    }
+
+    #[test]
+    fn graph_nodes_take_the_x_t20_imaging_and_key_inputs() {
+        // X-T20 2.11 values: the idle serial channel 3, the statistics scene
+        // and one measured buffer, live-view output unit 1 and the S1/S2 lines.
+        let gpio = json!({"name": "gpio", "model": {"kind": "gpio", "base": 0xfff10000_u64,
+                                                    "inputs": ([0_u16; 16])}});
+        let gates = json!({"name": "resets", "model": {"kind": "reset-gates",
+                                                       "base": 0xfff0a000_u64}});
+        let keys = json!({"name": "keys", "model": {"kind": "key-lines",
+                                                    "lines": [[0, 0, 0], [1, 0, 1]],
+                                                    "poll_ticks": 48000}});
+        let unit = |frames: Value| {
+            json!({"name": "live-view", "model": {
+                "kind": "register-block", "base": 0xfff56000_u64, "size": 0x1000,
+                "idle": [[0, 1]], "frames": frames,
+                "live_view_image": {"lines": 480, "ycbcr": [73, 114, 138]}}})
+        };
+        let frames = json!({"start": [0xc8, 0x10000000], "stopped": [0xd8, 0x100],
+                            "irq": 108, "period_ticks": 880000});
+        let built = build_nodes(json!([
+            gpio,
+            gates,
+            {"name": "serial3", "model": {"kind": "serial-port", "base": 0xfff2b000_u64,
+                                          "peer": {"kind": "idle"}}},
+            {"name": "statistics", "model": {"kind": "statistics", "base": 0xfff54000_u64,
+                                             "irq": 106, "period_ticks": 880000,
+                                             "scene": [144736, 383321, 33695],
+                                             "buffers": [[0x1d0, [1, 2, 3]]]}},
+            unit(frames),
+            keys
+        ]))
+        .unwrap();
+        assert_eq!(
+            built.nodes.keys().map(String::as_str).collect::<Vec<_>>(),
+            [
+                "gpio",
+                "keys",
+                "live-view",
+                "resets",
+                "serial3",
+                "statistics"
+            ]
+        );
+        // Key lines take the GPIO pins and the reset/gate bank's lines.
+        let error = |nodes| build_nodes(nodes).err().unwrap();
+        assert_eq!(
+            error(json!([gpio, keys])),
+            "Key lines follow the reset gates"
+        );
+        assert_eq!(
+            error(json!([gates, keys])),
+            "Key lines follow the GPIO bank"
+        );
+        // A live-view image needs the unit's frame law.
+        assert_eq!(
+            error(json!([unit(Value::Null)])),
+            "Invalid X-Processor Pro live-view image"
+        );
+    }
 }
