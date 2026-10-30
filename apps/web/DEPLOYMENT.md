@@ -42,10 +42,12 @@ Use `--prepare-only` to stage assets without building or deploying. The generate
 A mod release never triggers or supplies a website deployment. The Worker
 selects the newest published GitHub release with `patches.json`, including
 prereleases, through unauthenticated API requests. `/releases/current` returns
-`{tag, name, published_at, prerelease}` with a five-minute edge cache. Each
-successful lookup is saved in the `RELEASES` KV namespace (`fujimod-releases`);
-when GitHub refuses (its unauthenticated limit is shared by every Worker on an
-egress address), the Worker serves that saved release uncached.
+`{tag, name, published_at, prerelease}` with a five-minute edge cache. The
+`RELEASES` KV namespace (`fujimod-releases`) holds the current release and
+every release file served. `/releases/current` answers from KV and refreshes it
+from GitHub in the background; release files fall back to KV when GitHub fails.
+GitHub's unauthenticated limit is shared by every Worker on an egress address,
+so only the first lookup after creating the namespace waits on GitHub.
 `/releases/<tag>/<file>` proxies GitHub asset bytes with a one-year edge cache.
 Only successful responses are cached; browser consumers still verify file sizes
 and SHA-256. Development and preview servers expose the same routes from

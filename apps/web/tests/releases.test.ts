@@ -1,11 +1,11 @@
 import { test, expect, vi } from 'vite-plus/test';
 import worker, { serveRelease, type ReleaseCache, type ReleaseStore } from '../worker.ts';
-function harness(fetcher: typeof fetch, known = new Map<string, string>()) {
+function harness(fetcher: typeof fetch, known = new Map<string, Uint8Array>()) {
   const stored = new Map<string, Response>();
   const store: ReleaseStore = {
-    get: async (key) => known.get(key) ?? null,
+    get: async (key) => known.get(key)?.slice().buffer ?? null,
     put: async (key, value) => {
-      known.set(key, value);
+      known.set(key, value.slice());
     },
   };
   const cache: ReleaseCache = {
@@ -118,17 +118,29 @@ test('upstream errors and missing releases are never cached', async () => {
   expect((await h.request('/releases/current')).status).toBe(404);
   expect(h.pending).toHaveLength(0);
 });
-test('current serves the last known release uncached when GitHub refuses', async () => {
-  const known = { tag: 'v1', name: 'Release v1', published_at: '2026-10-20', prerelease: true };
-  const ok = harness(async () => Response.json([release('v1', '2026-10-20', { prerelease: true })]));
+test('stored copies answer while GitHub refuses, and refreshes replace changed releases', async () => {
+  const v1 = { tag: 'v1', name: 'Release v1', published_at: '2026-10-20', prerelease: true };
+  const ok = harness(async (input) =>
+    (input instanceof Request ? input.url : input.toString()).startsWith('https://api.github.com')
+      ? Response.json([release('v1', '2026-10-20', { prerelease: true })])
+      : new Response('{"notes":1}'),
+  );
   await ok.request('/releases/current');
-  expect(JSON.parse(ok.known.get('current')!)).toEqual(known);
-  const limited = harness(async () => new Response(null, { status: 403 }), ok.known),
-    response = await limited.request('/releases/current');
-  expect(response.status).toBe(200);
-  expect(await response.json()).toEqual(known);
-  expect(response.headers.get('cache-control')).toBe('no-store');
-  expect(limited.pending).toHaveLength(0);
+  await ok.request('/releases/v1/patches.json');
+  expect(JSON.parse(new TextDecoder().decode(ok.known.get('current')))).toEqual(v1);
+  const limited = harness(async () => new Response(null, { status: 403 }), ok.known);
+  const current = await limited.request('/releases/current');
+  expect(current.status).toBe(200);
+  expect(await current.json()).toEqual(v1);
+  const asset = await limited.request('/releases/v1/patches.json');
+  expect(asset.status).toBe(200);
+  expect(await asset.text()).toBe('{"notes":1}');
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json([release('v2', '2026-10-21'), release('v1', '2026-10-20')]),
+  );
+  const refreshed = harness(fetcher, ok.known);
+  expect(await (await refreshed.request('/releases/current')).json()).toEqual(v1);
+  expect(JSON.parse(new TextDecoder().decode(ok.known.get('current'))).tag).toBe('v2');
 });
 test('malformed and traversing paths and non-read methods never reach GitHub', async () => {
   const fetcher = vi.fn<typeof fetch>(),

@@ -22,13 +22,14 @@ export interface ReleaseCache {
   match(request: Request): Promise<Response | undefined>;
   put(request: Request, response: Response): Promise<unknown>;
 }
-/** Global last-known current release, read when GitHub's API refuses (its
- * unauthenticated limit is shared by every Worker on an egress address). */
+/** Global copies of the current release and its files. Requests answer from
+ * here, so GitHub's shared unauthenticated limit or an outage never reaches a
+ * visitor once a release has been seen. */
 export interface ReleaseStore {
-  get(key: string): Promise<string | null>;
-  put(key: string, value: string): Promise<unknown>;
+  get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
+  put(key: string, value: Uint8Array): Promise<unknown>;
 }
-const lastCurrent = 'current';
+const currentKey = 'current';
 class UpstreamError extends Error {
   readonly status: number;
   constructor(status: number) {
@@ -67,13 +68,21 @@ async function currentRelease(fetcher: typeof fetch): Promise<ReleaseInfo | unde
       }
     : undefined;
 }
+async function saveChanged(store: ReleaseStore, key: string, value: Uint8Array) {
+  const known = await store.get(key, 'arrayBuffer');
+  if (known && equalBytes(new Uint8Array(known), value)) return;
+  await store.put(key, value);
+}
+function equalBytes(a: Uint8Array, b: Uint8Array) {
+  return a.length === b.length && a.every((byte, index) => byte === b[index]);
+}
 function failure(status: number, message: string) {
   return new Response(message, {
     status,
     headers: { ...runtimeHeaders, 'Cache-Control': 'no-store' },
   });
 }
-/** Only successful release responses enter the edge cache; credentials are never forwarded. */
+/** Only successful release responses enter the edge cache or the store; credentials are never forwarded. */
 export async function serveRelease(
   request: Request,
   cache: ReleaseCache,
@@ -98,45 +107,49 @@ export async function serveRelease(
   const cached = await cache.match(key);
   if (cached) return head(cached);
   try {
-    let response: Response;
+    let body: Uint8Array<ArrayBuffer>;
     if (route.kind === 'current') {
-      let release: ReleaseInfo | undefined;
-      try {
-        release = await currentRelease(fetcher);
-      } catch (error) {
-        const known = await store.get(lastCurrent);
-        if (!known) throw error;
-        return head(
-          new Response(known, {
-            headers: {
-              ...runtimeHeaders,
-              'Content-Type': 'application/json',
-              'X-Content-Type-Options': 'nosniff',
-              'Cache-Control': 'no-store',
-            },
-          }),
-        );
+      // Answer from the stored copy and refresh it in the background; only the
+      // first lookup after a deployment waits on GitHub.
+      const refresh = async () => {
+        const release = await currentRelease(fetcher);
+        if (!release) return;
+        const text = new TextEncoder().encode(JSON.stringify(release));
+        await saveChanged(store, currentKey, text);
+        return text;
+      };
+      const known = await store.get(currentKey, 'arrayBuffer');
+      if (known) {
+        context.waitUntil(refresh().catch(() => undefined));
+        body = new Uint8Array(known);
+      } else {
+        const fetched = await refresh();
+        if (!fetched) return head(failure(404, 'No patch release has been published.'));
+        body = fetched;
       }
-      if (!release) return head(failure(404, 'No patch release has been published.'));
-      const text = JSON.stringify(release);
-      context.waitUntil(
-        store.get(lastCurrent).then((known) => known === text || store.put(lastCurrent, text)),
-      );
-      response = new Response(text, { headers: { 'Content-Type': 'application/json' } });
     } else {
+      const assetKey = `asset/${route.tag}/${route.file}`;
       const upstream = await fetcher(
         `https://github.com/${repository}/releases/download/${encodeURIComponent(route.tag)}/${encodeURIComponent(route.file)}`,
         { headers: { 'User-Agent': 'fujimod-web' }, redirect: 'follow' },
-      );
-      if (!upstream.ok)
-        return head(failure(upstream.status === 404 ? 404 : 502, 'Release asset unavailable.'));
-      const contentType = route.file.endsWith('.json')
+      ).catch(() => undefined);
+      if (upstream?.ok) {
+        body = new Uint8Array(await upstream.arrayBuffer());
+        context.waitUntil(saveChanged(store, assetKey, body));
+      } else {
+        const known = await store.get(assetKey, 'arrayBuffer');
+        if (!known)
+          return head(failure(upstream?.status === 404 ? 404 : 502, 'Release asset unavailable.'));
+        body = new Uint8Array(known);
+      }
+    }
+    const contentType =
+      route.kind === 'current' || route.file.endsWith('.json')
         ? 'application/json'
         : route.file.endsWith('.md')
           ? 'text/markdown; charset=utf-8'
           : 'application/octet-stream';
-      response = new Response(upstream.body, { headers: { 'Content-Type': contentType } });
-    }
+    const response = new Response(body, { headers: { 'Content-Type': contentType } });
     for (const [name, value] of Object.entries(runtimeHeaders)) response.headers.set(name, value);
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set(
