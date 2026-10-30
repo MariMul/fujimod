@@ -10,6 +10,11 @@ description = "Asynchronous Fujifilm service and debug USB protocols"
 [lib]
 doctest = false
 
+[[bin]]
+name = "fujimod-share-owner"
+path = "src/bin/share_owner.rs"
+test = false
+
 [features]
 
 [dependencies]

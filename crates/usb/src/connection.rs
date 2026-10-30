@@ -102,7 +102,12 @@ pub async fn discover(filter: DeviceFilter) -> Result<Vec<Device>> {
                 fujimod_usb_proxy::Error("FUJIMOD_USB_PROXY_TOKEN is required".into())
             })?
         };
-        return discover_proxy(&url, &token, filter).await;
+        // A persistent share whose owner is away is a camera that is not
+        // connected yet, not a failure; tools wait as for an unplugged camera.
+        return match discover_proxy(&url, &token, filter).await {
+            Err(error) if error.to_string().contains("Camera share offline") => Ok(Vec::new()),
+            result => result,
+        };
     }
     Ok(nusb::list_devices()
         .await?

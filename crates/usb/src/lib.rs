@@ -14,6 +14,8 @@ pub mod owner;
 pub mod owner_log;
 mod proxy;
 pub mod remote;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod share_owner;
 pub mod trace;
 
 pub use error::{Error, Result};
