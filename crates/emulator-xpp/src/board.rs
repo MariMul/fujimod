@@ -91,7 +91,9 @@ pub struct LiveViewImage {
 #[serde(deny_unknown_fields)]
 pub struct BlockJob {
     pub start: (u64, u32),
-    pub status: (u64, u32),
+    /// Absent: the interrupt is pulsed and no status bit is set.
+    #[serde(default)]
+    pub status: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
 }
@@ -210,6 +212,9 @@ pub enum Model {
     ImagingControl {
         base: u64,
         hole: Option<u64>,
+        /// A sensor readout unit at one of the channel offsets.
+        #[serde(default)]
+        readout: Option<imaging::Readout>,
     },
     FrameSync {
         base: u64,
@@ -682,7 +687,11 @@ pub fn build(
             Model::DisplayFrames { irqs, period_ticks } => {
                 devices.attach(Box::new(display::FrameClock::new(irqs, period_ticks)?))
             }
-            Model::ImagingControl { base, hole } => {
+            Model::ImagingControl {
+                base,
+                hole,
+                readout,
+            } => {
                 let end = base + imaging::WINDOW;
                 let windows = match hole {
                     None => vec![(base, end)],
@@ -701,7 +710,10 @@ pub fn build(
                             size: hi - lo,
                         })
                         .collect(),
-                    Box::new(imaging::Control::new(base)?),
+                    Box::new(match readout {
+                        Some(r) => imaging::Control::new(base)?.with_readout(r)?,
+                        None => imaging::Control::new(base)?,
+                    }),
                 )?
             }
             Model::FrameSync {

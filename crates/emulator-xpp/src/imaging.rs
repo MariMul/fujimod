@@ -22,6 +22,15 @@
 //! itself. Leaving SETUP for REC takes that path with channel 0 running. The
 //! other words read back their last write; no data moves.
 //!
+//! A sensor readout unit may be declared at one of the channel offsets
+//! +0x80/+0xc0/+0x180 (X-T20 2.11: unit 2 at +0xc0, section 5 driver
+//! 0xc34fcc/0xc35460, interrupt 98, handler 0xc32520). For a still the
+//! firmware programs +0x04..+0x14 (line count +0x08, destination +0x0c,
+//! line stride +0x10), the interrupt enable +0x1c bit 0 and starts it with
+//! bit 0 of +0x00. The unit finishes after the declared ticks: status +0x20
+//! bit 0 sets (write 1 to clear) and, when enabled, the level interrupt is
+//! high until the status is cleared. No sensor data is written.
+//!
 //! +0x000 bit 0 is a run bit that reads set: 0xc33ec8 clears it and waits
 //! for it to read set again (stopped). Other words read back their last
 //! write. With a frame sync ([`crate::sync`]) on the board, the frame
@@ -44,6 +53,19 @@ const CHANNEL: u64 = 0x40;
 const RUN: u64 = 0x04;
 const MAX_FRAME: u32 = 16;
 const WRITE: u8 = 0x81;
+const READOUT_ENABLE: u64 = 0x1c;
+const READOUT_STATUS: u64 = 0x20;
+const READOUT_DONE: u32 = 1;
+
+/// A sensor readout unit: its channel offset, level interrupt and the ticks
+/// a readout takes.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Readout {
+    pub offset: u64,
+    pub irq: u32,
+    pub ticks: u64,
+}
 const READ: u8 = 0x82;
 
 #[derive(Default, Serialize, Deserialize)]
@@ -53,12 +75,22 @@ struct State {
     /// (select, register) -> value.
     chip: Vec<((u8, u16), u8)>,
     received: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    readout_due: Option<u64>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    readout_status: u32,
+}
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 pub struct Control {
     base: u64,
     words: BTreeMap<u64, u32>,
     chip: BTreeMap<(u8, u16), u8>,
     received: u8,
+    readout: Option<Readout>,
+    readout_due: Option<u64>,
+    readout_status: u32,
 }
 impl Control {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -70,7 +102,21 @@ impl Control {
             words: BTreeMap::new(),
             chip: BTreeMap::new(),
             received: 0,
+            readout: None,
+            readout_due: None,
+            readout_status: 0,
         })
+    }
+    /// A sensor readout unit at a channel offset.
+    pub fn with_readout(mut self, readout: Readout) -> Result<Self, String> {
+        if ![0x80, 0xc0, 0x180].contains(&readout.offset)
+            || !(32..512).contains(&readout.irq)
+            || readout.ticks == 0
+        {
+            return Err("Invalid X-Processor Pro sensor readout unit".into());
+        }
+        self.readout = Some(readout);
+        Ok(self)
     }
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
@@ -106,6 +152,9 @@ impl Device for Control {
         }
         u64::from(match offset {
             0 => self.word(0) | 1,
+            o if self.readout.is_some_and(|r| o == r.offset + READOUT_STATUS) => {
+                self.readout_status
+            }
             o if RECEIVE.contains(&o) => u32::from(self.received) * 0x101,
             o => self.word(o),
         })
@@ -117,6 +166,21 @@ impl Device for Control {
         };
         if size != 4 || offset & 3 != 0 || offset >= WINDOW {
             return cx.unmodeled();
+        }
+        if let Some(r) = self.readout {
+            if offset == r.offset + READOUT_STATUS {
+                self.readout_status &= !value;
+                if self.readout_status == 0 {
+                    cx.set_irq(r.irq, false);
+                }
+                return;
+            }
+            if offset == r.offset && value & 1 != 0 && self.readout_due.is_none() {
+                self.readout_due = cx.now().checked_add(r.ticks);
+                if self.readout_due.is_none() {
+                    return cx.fail("Sensor readout deadline overflow");
+                }
+            }
         }
         match offset {
             o if RECEIVE.contains(&o) => return cx.unmodeled(),
@@ -139,11 +203,26 @@ impl Device for Control {
             self.words.insert(offset, value);
         }
     }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        let Some(r) = self.readout else { return };
+        if self.readout_due.is_some_and(|at| at <= cx.now()) {
+            self.readout_due = None;
+            self.readout_status |= READOUT_DONE;
+            if self.word(r.offset + READOUT_ENABLE) & 1 != 0 {
+                cx.set_irq(r.irq, true);
+            }
+        }
+    }
+    fn next_deadline(&self, _now: u64) -> Option<u64> {
+        self.readout_due
+    }
     fn save(&self) -> Value {
         serde_json::to_value(State {
             words: self.words.clone(),
             chip: self.chip.iter().map(|(k, v)| (*k, *v)).collect(),
             received: self.received,
+            readout_due: self.readout_due,
+            readout_status: self.readout_status,
         })
         .unwrap_or(Value::Null)
     }
@@ -154,12 +233,16 @@ impl Device for Control {
             .iter()
             .any(|(o, v)| o & 3 != 0 || *o >= WINDOW || *v == 0)
             || state.chip.iter().any(|((select, _), _)| *select > 0x1f)
+            || self.readout.is_none() && (state.readout_due.is_some() || state.readout_status != 0)
+            || state.readout_status & !READOUT_DONE != 0
         {
             return Err("Invalid imaging control checkpoint".into());
         }
         self.words = state.words;
         self.chip = state.chip.into_iter().collect();
         self.received = state.received;
+        self.readout_due = state.readout_due;
+        self.readout_status = state.readout_status;
         Ok(())
     }
 }
@@ -168,7 +251,7 @@ impl Device for Control {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::Host;
-    use fujimod_emulator_devices::test_host::{TestHost, read, write};
+    use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
 
     const BASE: u64 = 0xfff39000;
 
@@ -247,5 +330,41 @@ mod tests {
         write(&mut control, &mut h, channel + 0x44, 1);
         write(&mut control, &mut h, channel, 1);
         assert_eq!(read(&mut control, &mut h, channel + 0x44), 1);
+    }
+
+    #[test]
+    fn a_started_readout_finishes_once_and_its_status_clears_on_write() {
+        let readout = Readout {
+            offset: 0xc0,
+            irq: 98,
+            ticks: 10,
+        };
+        assert!(
+            Control::new(BASE)
+                .unwrap()
+                .with_readout(Readout {
+                    offset: 0x100,
+                    ..readout
+                })
+                .is_err()
+        );
+        let mut control = Control::new(BASE).unwrap().with_readout(readout).unwrap();
+        let mut h = TestHost::new();
+        let unit = BASE + 0xc0;
+        write(&mut control, &mut h, unit + 0x1c, 1);
+        write(&mut control, &mut h, unit, 1);
+        assert_eq!(control.next_deadline(0), Some(10));
+        advance(&mut control, &mut h, 9);
+        assert_eq!(read(&mut control, &mut h, unit + 0x20), 0);
+        advance(&mut control, &mut h, 10);
+        assert_eq!(read(&mut control, &mut h, unit + 0x20), 1);
+        assert_eq!(control.next_deadline(10), None);
+        let saved = control.save();
+        write(&mut control, &mut h, unit + 0x20, 1);
+        assert_eq!(read(&mut control, &mut h, unit + 0x20), 0);
+        let mut other = Control::new(BASE).unwrap().with_readout(readout).unwrap();
+        other.restore(&saved).unwrap();
+        assert_eq!(read(&mut other, &mut h, unit + 0x20), 1);
+        assert!(Control::new(BASE).unwrap().restore(&saved).is_err());
     }
 }
