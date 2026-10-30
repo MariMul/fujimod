@@ -27,6 +27,11 @@ export interface CameraSharing {
   peers: ReadonlyMap<string, string>;
 }
 
+export interface RemoteConnectionOptions {
+  signal?: AbortSignal;
+  onWaiting?: (waiting: boolean) => void;
+}
+
 export interface Camera {
   /** Stable for the page's lifetime; the same camera plugged back in keeps it. */
   id: string;
@@ -159,7 +164,7 @@ export interface CameraModel {
   /** Show the browser's USB picker and add the chosen camera. */
   connectUsb(): Promise<void>;
   /** Add the camera another host shares at `link`. */
-  connectRemote(link: string): Promise<void>;
+  connectRemote(link: string, options?: RemoteConnectionOptions): Promise<void>;
   /**
    * Start the saved camera `savedCamera` (an id from the emulator's camera
    * store) as a simulated camera over simulated USB. Absent while this build

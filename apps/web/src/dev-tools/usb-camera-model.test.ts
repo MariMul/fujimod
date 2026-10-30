@@ -449,6 +449,54 @@ test('remote model uses binding events and never calls USB-only sharing on remov
     f.model.dispose();
   }
 });
+test('remote connection retries offline joins every five seconds and stops when the room ends', async () => {
+  const discoverProxy = vi
+    .fn<UsbCameraServices['discoverProxy']>()
+    .mockRejectedValueOnce(Error('Camera share offline'))
+    .mockRejectedValueOnce(Error('Camera sharing ended'));
+  const f = fixture([], { discoverProxy });
+  const onWaiting = vi.fn();
+  try {
+    await expect(f.model.connectRemote('https://example.com/share', { onWaiting })).rejects.toThrow(
+      'Camera sharing ended',
+    );
+    expect(discoverProxy).toHaveBeenCalledTimes(2);
+    expect(f.pause).toHaveBeenCalledExactlyOnceWith(5000);
+    expect(onWaiting.mock.calls).toEqual([[true], [false]]);
+    expect(f.model.cameras()).toHaveLength(0);
+  } finally {
+    f.model.dispose();
+  }
+});
+test('remote connection stops retrying when the viewer leaves', async () => {
+  let finishPause!: () => void;
+  const pause = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finishPause = resolve;
+      }),
+  );
+  const discoverProxy = vi
+    .fn<UsbCameraServices['discoverProxy']>()
+    .mockRejectedValue(Error('Camera share offline'));
+  const f = fixture([], { discoverProxy, pause });
+  const abort = new AbortController();
+  const onWaiting = vi.fn();
+  try {
+    const connecting = f.model.connectRemote('https://example.com/share', {
+      signal: abort.signal,
+      onWaiting,
+    });
+    await vi.waitFor(() => expect(pause).toHaveBeenCalledOnce());
+    abort.abort();
+    await connecting;
+    expect(discoverProxy).toHaveBeenCalledOnce();
+    expect(onWaiting.mock.calls).toEqual([[true], [false]]);
+  } finally {
+    finishPause?.();
+    f.model.dispose();
+  }
+});
 test('production WebUSB owner keeps one open/claim through sharing and sessions', async () => {
   const wire = installWebUsb();
   wire.state.interfaceDelay = 20;

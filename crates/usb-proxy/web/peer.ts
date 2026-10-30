@@ -129,8 +129,13 @@ function signaling(
         ended(error);
         socket.close();
       } else if (frame.type === 'ended') {
+        const error = Error('Camera sharing ended');
+        clearTimeout(timer);
+        reject(error);
         socket.close();
-        ended(Error('Camera sharing ended'));
+        ended(error);
+      } else if (frame.type === 'host_offline') {
+        // The signaling owner can leave while an established WebRTC peer stays up.
       } else Promise.resolve(message(frame)).catch(ended);
     };
     socket.onerror = () => {

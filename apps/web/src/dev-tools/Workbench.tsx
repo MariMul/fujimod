@@ -40,6 +40,7 @@ export function Workbench(props: {
   model: CameraModel;
   usbSupported: boolean;
   initialWizard?: Wizard;
+  remoteStatus?: string;
 }) {
   const [selected, setSelected] = createSignal<string>();
   const [wizard, showWizard] = createSignal<Wizard | undefined>(props.initialWizard);
@@ -173,16 +174,25 @@ export function Workbench(props: {
       <Show
         when={cameras().length || wizard()}
         fallback={
-          <ToolDeck
-            busy={connecting()}
-            usbSupported={props.usbSupported}
-            onServiceMode={() => setWizard(Wizard.Service)}
-            onConnect={() => void connect()}
-            savedCameras={savedCameras()}
-            simulationAvailable={Boolean(props.model.connectSimulated)}
-            error={connectError()}
-            onSimulated={(savedCamera) => void connectSimulated(savedCamera)}
-          />
+          <>
+            <Show when={props.remoteStatus}>
+              {(status) => (
+                <p class="wb-status" role="status">
+                  {status()}
+                </p>
+              )}
+            </Show>
+            <ToolDeck
+              busy={connecting()}
+              usbSupported={props.usbSupported}
+              onServiceMode={() => setWizard(Wizard.Service)}
+              onConnect={() => void connect()}
+              savedCameras={savedCameras()}
+              simulationAvailable={Boolean(props.model.connectSimulated)}
+              error={connectError()}
+              onSimulated={(savedCamera) => void connectSimulated(savedCamera)}
+            />
+          </>
         }
       >
         <Show when={cameras().length}>

@@ -62,6 +62,7 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
   // Server renders have no navigator, so decide once mounted; hydration keeps the
   // server's initial value otherwise.
   const [usbSupported, setUsbSupported] = createSignal(untrack(() => props.supported) ?? false);
+  const [remoteStatus, setRemoteStatus] = createSignal<string>();
   const reports = new LocalReports(
     'dev-tools',
     () => ({
@@ -78,18 +79,41 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
     if (untrack(() => props.supported) === undefined)
       setUsbSupported(isSecureContext && 'usb' in navigator);
     const unlisten = reports.listen();
+    const remoteConnection = new AbortController();
     // A share link opens the shared camera as a remote camera.
     if (
       remoteControlUrl(location.href) &&
       !model.cameras().some((camera) => camera.transport === 'remote')
     )
-      void model.connectRemote(location.href).catch((error: unknown) => reports.crash(error));
-    return unlisten;
+      void model
+        .connectRemote(location.href, {
+          signal: remoteConnection.signal,
+          onWaiting: (waiting) =>
+            setRemoteStatus(waiting ? 'Waiting for shared camera' : undefined),
+        })
+        .catch((error: unknown) => {
+          if (remoteConnection.signal.aborted) return;
+          const message = error instanceof Error ? error.message : String(error);
+          if (message === 'Camera sharing ended') {
+            setRemoteStatus(message);
+            return;
+          }
+          reports.crash(error);
+        });
+    return () => {
+      remoteConnection.abort();
+      unlisten();
+    };
   });
   return (
     <div class="shell dev-tools">
       <SiteHeader root="../" current="dev-tools" />
-      <Workbench model={model} usbSupported={usbSupported()} initialWizard={initialWizard()} />
+      <Workbench
+        model={model}
+        usbSupported={usbSupported()}
+        initialWizard={initialWizard()}
+        remoteStatus={remoteStatus()}
+      />
     </div>
   );
 }

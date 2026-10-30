@@ -15,6 +15,7 @@ import type {
   CameraIdentity,
   CameraLogEntry,
   CameraModel,
+  RemoteConnectionOptions,
   SessionHolder,
   ToolMemory,
   ToolSession,
@@ -122,6 +123,24 @@ const defaults: UsbCameraServices = {
   now: () => Date.now(),
   pause: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
+async function pauseOrAbort(
+  pause: UsbCameraServices['pause'],
+  milliseconds: number,
+  signal?: AbortSignal,
+) {
+  if (!signal) return pause(milliseconds);
+  if (signal.aborted) return;
+  let abort!: () => void;
+  const aborted = new Promise<void>((resolve) => {
+    abort = resolve;
+    signal.addEventListener('abort', abort, { once: true });
+  });
+  try {
+    await Promise.race([pause(milliseconds), aborted]);
+  } finally {
+    signal.removeEventListener('abort', abort);
+  }
+}
 const selectors = [
   ['Vendor', 'vendor', 0x01],
   ['Manufacturer', 'manufacturer', 0x02],
@@ -920,10 +939,33 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       const device = await services.requestDevice();
       if (device) await add(device, 'usb');
     },
-    async connectRemote(link) {
+    async connectRemote(link, options: RemoteConnectionOptions = {}) {
       await initialized;
-      const devices = await services.discoverProxy(link);
-      for (const device of devices) await add(device, 'remote');
+      const { signal } = options;
+      while (!disposed && !signal?.aborted) {
+        let devices: readonly ModelDevice[];
+        try {
+          devices = await services.discoverProxy(link);
+        } catch (error) {
+          if (disposed || signal?.aborted) break;
+          const message = error instanceof Error ? error.message : String(error);
+          if (message.trim() !== 'Camera share offline') {
+            options.onWaiting?.(false);
+            throw error;
+          }
+          options.onWaiting?.(true);
+          await pauseOrAbort(services.pause, 5000, signal);
+          continue;
+        }
+        if (disposed || signal?.aborted) {
+          for (const device of devices) device.free();
+          break;
+        }
+        options.onWaiting?.(false);
+        for (const device of devices) await add(device, 'remote');
+        return;
+      }
+      options.onWaiting?.(false);
     },
     ...(services.simulate
       ? {

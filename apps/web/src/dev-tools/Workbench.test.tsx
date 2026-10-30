@@ -21,10 +21,13 @@ afterEach(() => {
   document.body.innerHTML = '';
   vi.restoreAllMocks();
 });
-function mount(model: Parameters<typeof Workbench>[0]['model']) {
+function mount(model: Parameters<typeof Workbench>[0]['model'], remoteStatus?: string) {
   const host = document.createElement('div');
   document.body.append(host);
-  const dispose = render(() => <Workbench model={model} usbSupported />, host);
+  const dispose = render(
+    () => <Workbench model={model} usbSupported remoteStatus={remoteStatus} />,
+    host,
+  );
   cleanup = dispose;
   return host;
 }
@@ -74,6 +77,12 @@ test('the splash connects a camera and the workbench selects it', async () => {
   });
   expect(host.querySelector('.wb-cam.selected')!.textContent).toContain('X100V');
   expect(host.querySelector('.wb-state')!.textContent).toBe('Idle');
+});
+
+test('the splash shows the shared camera waiting status', () => {
+  const host = mount(createTestCameraModel({}).model, 'Waiting for shared camera');
+  flush();
+  expect(host.querySelector('.wb-status')?.textContent).toBe('Waiting for shared camera');
 });
 
 test('the camera column appears only once more than one camera is known', () => {
