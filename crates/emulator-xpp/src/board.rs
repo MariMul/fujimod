@@ -201,6 +201,11 @@ pub enum Model {
         irq: u32,
         run_ticks: u64,
     },
+    JpegDecoder {
+        base: u64,
+        irq: u32,
+        run_ticks: u64,
+    },
     Dram {
         base: u64,
         refresh_level: u8,
@@ -668,6 +673,15 @@ pub fn build(
                 base,
                 jpeg::WINDOW,
                 Box::new(jpeg::Encoder::new(base, irq, run_ticks)?),
+            )?,
+            Model::JpegDecoder {
+                base,
+                irq,
+                run_ticks,
+            } => devices.register(
+                base,
+                jpeg::WINDOW,
+                Box::new(jpeg::Decoder::new(base, irq, run_ticks)?),
             )?,
             Model::Hdmi { base } => devices.register(
                 base,

@@ -1,7 +1,8 @@
 //! Baseline 4:2:2 JPEG using integer Chen row/column arithmetic
 //! and T.81 Annex K Huffman tables.
 //! Quantizer rounding is measured for q=1..3; other uploaded nonzero byte
-//! quantizers use the same declared arithmetic. No system image library.
+//! quantizers use the same declared arithmetic. No system image library;
+//! decoding uses the pure Rust zune-jpeg.
 mod tables;
 use tables::*;
 
@@ -375,6 +376,35 @@ impl Codec {
     }
 }
 
+/// Decodes a JPEG stream to interleaved Y, Cb, Cr samples at full
+/// resolution and returns them with the width and height. Pictures larger
+/// than `max_width` x `max_height` are refused.
+pub fn decode(
+    stream: &[u8],
+    max_width: usize,
+    max_height: usize,
+) -> Result<(Vec<u8>, usize, usize), String> {
+    let options = zune_core::options::DecoderOptions::new_safe()
+        .set_use_unsafe(false)
+        .set_max_width(max_width)
+        .set_max_height(max_height)
+        .jpeg_set_out_colorspace(zune_core::colorspace::ColorSpace::YCbCr);
+    let mut decoder = zune_jpeg::JpegDecoder::new_with_options(
+        zune_core::bytestream::ZCursor::new(stream),
+        options,
+    );
+    let samples = decoder
+        .decode()
+        .map_err(|e| format!("JPEG decode: {e:?}"))?;
+    let (width, height) = decoder
+        .dimensions()
+        .ok_or_else(|| "JPEG decode: no dimensions".to_string())?;
+    if samples.len() != width * height * 3 {
+        return Err("JPEG decode: not a three-component picture".into());
+    }
+    Ok((samples, width, height))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,5 +438,12 @@ mod tests {
         assert!(rgb.iter().all(|&v| (127..=129).contains(&v)));
         assert!(c.encode(&vec![0; 256], 16, 8, 0, &mut out, 16).is_err());
         assert!(c.tables(&[0; 128]).is_err());
+        let (ycc, width, height) = decode(&encoded, 80, 8).unwrap();
+        assert_eq!((width, height, ycc.len()), (80, 8, 80 * 8 * 3));
+        assert!(
+            ycc.chunks(3)
+                .all(|p| p.iter().all(|&v| (127..=129).contains(&v)))
+        );
+        assert!(decode(&encoded, 64, 8).is_err());
     }
 }
