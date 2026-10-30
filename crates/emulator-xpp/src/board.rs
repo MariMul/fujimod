@@ -1,8 +1,8 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
-    adc, blocks, boot, clocks, display, dram, face, flash, i2c, imaging, keys, lens, power, resets,
-    sd, serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, face, flash, i2c, imaging, jpeg, keys, lens, power,
+    resets, sd, serial, shutter, statistics, sync, timer,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -91,9 +91,11 @@ pub struct LiveViewImage {
 #[serde(deny_unknown_fields)]
 pub struct BlockJob {
     pub start: (u64, u32),
-    /// Absent: the interrupt is pulsed and no status bit is set.
+    /// Absent: `stop` names the bit a write clears to acknowledge.
     #[serde(default)]
     pub status: Option<(u64, u32)>,
+    #[serde(default)]
+    pub stop: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
 }
@@ -152,6 +154,9 @@ pub enum Model {
         /// A uniform live-view image written before each frame interrupt.
         #[serde(default)]
         live_view_image: Option<LiveViewImage>,
+        /// (offset, value) of words that read a fixed value.
+        #[serde(default)]
+        fixed: Vec<(u64, u32)>,
     },
     Statistics {
         base: u64,
@@ -177,6 +182,11 @@ pub enum Model {
     },
     Hdmi {
         base: u64,
+    },
+    Jpeg {
+        base: u64,
+        irq: u32,
+        run_ticks: u64,
     },
     Dram {
         base: u64,
@@ -562,6 +572,7 @@ pub fn build(
                 frames,
                 job,
                 live_view_image,
+                fixed,
             } => {
                 let frames = frames.map(|f| blocks::Frames {
                     start: f.start,
@@ -574,12 +585,16 @@ pub fn build(
                     model = model.with_job(blocks::Job {
                         start: j.start,
                         status: j.status,
+                        stop: j.stop,
                         irq: j.irq,
                         ticks: j.ticks,
                     })?;
                 }
                 if let Some(image) = live_view_image {
                     model = model.with_live_view_image(image.lines, image.ycbcr)?;
+                }
+                if !fixed.is_empty() {
+                    model = model.with_fixed(fixed)?;
                 }
                 devices.register(base, model.window(), Box::new(model))?
             }
@@ -616,6 +631,15 @@ pub fn build(
                 base,
                 face::WINDOW,
                 Box::new(face::Engine::new(base, irq, run_ticks)?),
+            )?,
+            Model::Jpeg {
+                base,
+                irq,
+                run_ticks,
+            } => devices.register(
+                base,
+                jpeg::WINDOW,
+                Box::new(jpeg::Encoder::new(base, irq, run_ticks)?),
             )?,
             Model::Hdmi { base } => devices.register(
                 base,

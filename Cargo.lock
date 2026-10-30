@@ -2474,6 +2474,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
