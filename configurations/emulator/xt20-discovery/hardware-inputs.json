@@ -153,6 +153,10 @@
       "lines": [[0, 0, 0], [1, 0, 1]],
       "poll_ticks": 48000
     },
+    "imaging_frames": {
+      "basis": "Measured: the imaging frame period of X-T20 2.11 in REC live view is 880000 ticks (18.333 ms). The count at 0x1c51068 advances once per frame sync frame (on the XP4 board it follows the frame sync period alone), and the statistics engine paces the live-view markers: one 0x02010400 per four statistics completions. In the camera's marker logs (evf-2026-10-22, lens-2026-10-29 and the REC and menu captures of 2026-10-29) the base 0x02010400 spacing is 73.33 ms (medians 73.325 to 73.345 ms over 300 to 1100 gaps), and between RAM captures of one boot the count at 0x1c51068 advances 4.01 and 4.02 per marker, so the frames themselves last 18.333 ms (4 x 880000 ticks = 73.33 ms). The camera also runs phases of 3 and 6 times the base period (220.0 ms and 440.0 ms between markers, the count still advancing 4 per marker); what selects them is not modeled. The display frame interrupts keep their own period.",
+      "period_ticks": 880000
+    },
     "kernel_unit": "kernel",
     "loader_handoff": {
       "address": 9437184,

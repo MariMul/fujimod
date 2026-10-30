@@ -714,6 +714,19 @@ pub struct KeyLinesInput {
     pub poll_ticks: u64,
 }
 
+/// Frame period of the imaging pipeline: the frame sync, the statistics
+/// engine and the frame laws of the imaging register blocks.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetImagingFrames"))]
+pub struct ImagingFramesInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Frame period in device ticks.
+    pub period_ticks: u64,
+}
+
 /// Instruction throughput of each core against the tick clock.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1329,6 +1342,9 @@ pub struct HardwareReset {
     /// Declared keys on external interrupt lines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_lines: Option<KeyLinesInput>,
+    /// Declared frame period of the imaging pipeline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imaging_frames: Option<ImagingFramesInput>,
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,
