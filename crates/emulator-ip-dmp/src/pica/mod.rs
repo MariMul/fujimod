@@ -9,4 +9,6 @@ pub mod texture;
 mod glsl;
 mod shader;
 
-pub use glsl::{VERTEX_OUTPUT_SEMANTICS, translate_vertex_to_wgsl};
+pub use glsl::{
+    VERTEX_OUTPUT_SEMANTICS, translate_vertex_to_wgsl, translate_vertex_to_wgsl_for_draw,
+};

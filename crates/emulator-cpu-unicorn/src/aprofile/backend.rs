@@ -45,6 +45,9 @@ impl Cpu for Core {
             ..Features::default()
         }
     }
+    fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
+        self.execution.cpu.set_execution_policy(policy)
+    }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let e = &self.execution;
         e.memory.prepare_external_write()?;

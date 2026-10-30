@@ -201,9 +201,6 @@ test('every button blocked by missing bulk support shows the published failure i
     const control = button(p.host, name)!;
     expect(control.disabled).toBe(true);
     const warning = control.closest('.gs-stack')!.querySelector('.wb-bulk-error')!;
-    expect(warning.querySelector('strong')?.textContent).toContain(
-      'Bulk support is not available for this camera.',
-    );
     expect(warning.textContent).toContain(
       'Bulk reader located, but no catalog firmware and body record is published',
     );

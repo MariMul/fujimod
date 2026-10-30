@@ -78,7 +78,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       }
       if (
         prefix === '/runtime/' &&
-        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|service-workflow\.generated\.json|flash-reader\.(?:json|bin)|document\.json|boot-rom\.bin|nand-[a-z0-9-]+\.bin\.zst|browser-nand\.bin\.gz|mcu-settings\.bin|(?:bundle\/)?camera\.mjs|(?:bundle\/)?camera\.wasm|runtime-NOTICES\.txt)|wasm-(proof(?:-fault)?|session-proof)\/program\.dat)$/.test(
+        !/^(catalog\.json|[a-zA-Z0-9_-]+\/(wasm\.json|service-workflow\.generated\.json|flash-reader\.(?:json|bin)|document\.json|boot-rom\.bin|nand-[a-z0-9-]+\.bin\.zst|browser-nand\.bin\.gz|mcu-settings\.bin|(?:bundle\/)?camera\.mjs|(?:bundle\/)?camera\.wasm|dmp_webgpu\.js|dmp_webgpu_bg\.wasm|runtime-NOTICES\.txt)|wasm-(proof(?:-fault)?|session-proof)\/program\.dat)$/.test(
           relative,
         )
       ) {

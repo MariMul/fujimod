@@ -5,16 +5,27 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 mod capture;
 mod draw_state;
-#[cfg(not(target_arch = "wasm32"))]
-mod gpu;
-#[cfg(not(target_arch = "wasm32"))]
-pub(super) mod gpu_fragment;
+#[cfg(not(target_os = "emscripten"))]
+mod gpu_draw;
+#[cfg(all(test, not(target_os = "emscripten")))]
+mod gpu_fragment;
+#[cfg(not(target_os = "emscripten"))]
+mod gpu_vertex;
 mod raster;
 mod shader;
+mod webgpu_wire;
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+mod wasm_gpu;
 use draw_state::DrawState;
 use shader::Vector;
 pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
+pub use webgpu_wire::{WebGpuRequest, decode_webgpu_request, encode_webgpu_result};
+pub struct HostGpuExecution {
+    pub snapshots: Snapshots,
+    pub draws: usize,
+    pub queue_submissions: u8,
+}
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 type Uniform = [u32; 4];
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -23,8 +34,12 @@ pub struct Engine {
     written_ranges: Vec<(u64, usize)>,
     vertices_executed: u64,
     primitive_index: u64,
+    #[cfg(not(target_os = "emscripten"))]
     #[serde(skip)]
-    cpu_only: bool,
+    gpu_primitives: Option<Vec<gpu_draw::Draw>>,
+    #[cfg(not(target_os = "emscripten"))]
+    #[serde(skip)]
+    gpu_immediate: Option<(DrawState, Vec<[Vector; 16]>)>,
     last_output: Option<[Vector; 16]>,
     regs: BTreeMap<u16, u32>,
     code: Vec<u32>,
@@ -39,6 +54,8 @@ pub struct Engine {
     attributes: [Vector; 16],
     immediate: Vec<Vector>,
     vertices: Vec<[Vector; 16]>,
+    #[serde(default)]
+    pending_inputs: Vec<[Vector; 16]>,
     fog: Vec<u32>,
     fog_cursor: usize,
 }
@@ -48,7 +65,10 @@ impl Default for Engine {
             written_ranges: Vec::new(),
             vertices_executed: 0,
             primitive_index: 0,
-            cpu_only: std::env::var_os("FUJIMOD_DMP_CPU").is_some(),
+            #[cfg(not(target_os = "emscripten"))]
+            gpu_primitives: None,
+            #[cfg(not(target_os = "emscripten"))]
+            gpu_immediate: None,
             last_output: None,
             regs: BTreeMap::new(),
             code: vec![],
@@ -63,10 +83,22 @@ impl Default for Engine {
             attributes: [[0., 0., 0., 1.]; 16],
             immediate: vec![],
             vertices: vec![],
+            pending_inputs: vec![],
             fog: vec![0; 128],
             fog_cursor: 0,
         }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn host_gpu_mode_for(cpu_only: bool, verify: bool) -> (bool, bool) {
+    (verify || !cpu_only, verify)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn host_gpu_mode() -> (bool, bool) {
+    let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
+    host_gpu_mode_for(enabled("FUJIMOD_DMP_CPU"), enabled("FUJIMOD_DMP_VERIFY_GPU"))
 }
 pub fn float24(word: u32) -> f32 {
     let sign = (word & 0x800000) << 8;
@@ -104,24 +136,22 @@ fn upload(bank: &mut Vec<u32>, cursor: &mut usize, value: u32, limit: usize) -> 
     *cursor += 1;
     Ok(())
 }
+
+fn read_guest_draw_memory(
+    read: &mut Reader<'_>,
+    cache: &mut BTreeMap<(u64, usize), Vec<u8>>,
+    address: u64,
+    length: usize,
+) -> Result<Vec<u8>, String> {
+    let key = (address, length);
+    let bytes = read(address, length)?;
+    cache.insert(key, bytes.clone());
+    Ok(bytes)
+}
+
 impl Engine {
-    /// Allow host acceleration when a suitable adapter is available.
-    pub fn set_host_acceleration(&mut self, enabled: bool) {
-        self.cpu_only = !enabled;
-    }
-    pub fn host_acceleration_enabled(&self) -> bool {
-        !self.cpu_only
-    }
     pub fn diagnostics(&self) -> serde_json::Value {
-        #[cfg(not(target_arch = "wasm32"))]
-        let accelerator = if self.cpu_only {
-            None
-        } else {
-            gpu::backend_name()
-        };
-        #[cfg(target_arch = "wasm32")]
-        let accelerator: Option<String> = None;
-        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":accelerator.unwrap_or_else(||"CPU".into())})
+        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":"CPU"})
     }
     pub fn reg(&self, index: u16) -> u32 {
         self.regs.get(&index).copied().unwrap_or(0)
@@ -134,6 +164,28 @@ impl Engine {
             return self.execute_captured(words, read, &directory);
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (gpu_requested, verify_gpu) = host_gpu_mode();
+            if gpu_requested {
+                return if verify_gpu {
+                    self.execute_host_gpu_verified(words, read)
+                } else {
+                    self.execute_host_gpu(words, read)
+                };
+            }
+        }
+
+        self.execute_cpu(words, read)
+    }
+
+    /// Execute one list with the CPU interpreter and rasterizer, independently
+    /// of host renderer environment settings, retaining diagnostic vertex outputs.
+    pub fn execute_cpu(
+        &mut self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+    ) -> Result<Snapshots, String> {
         let mut next = self.clone();
         let mut output = raster::Targets::default();
         next.packets(words, read, &mut output, 0)?;
@@ -141,6 +193,100 @@ impl Engine {
         let snapshots = output.into_snapshots();
         *self = next;
         Ok(snapshots)
+    }
+    /// Execute one list through the host GPU vertex and fragment paths.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn execute_host_gpu(
+        &mut self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+    ) -> Result<Snapshots, String> {
+        let (next, rendered) = self.render_host_gpu(words, read, None)?;
+        *self = next;
+        Ok(rendered.snapshots)
+    }
+
+    /// Render through the host GPU and refuse results that differ from the
+    /// CPU reference snapshots or write ranges.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn execute_host_gpu_verified(
+        &mut self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+    ) -> Result<Snapshots, String> {
+        let mut reference = self.clone();
+        reference.gpu_primitives = None;
+        reference.gpu_immediate = None;
+        let mut cpu_output = raster::Targets::default();
+        reference.packets(words, read, &mut cpu_output, 0)?;
+        let cpu_written_ranges = cpu_output.written_ranges();
+        let cpu_snapshots = cpu_output.into_snapshots();
+
+        let (next, rendered) = self.render_host_gpu(words, read, Some(&cpu_snapshots))?;
+        if rendered.snapshots != cpu_snapshots {
+            return Err(gpu_draw::snapshot_mismatch(
+                &rendered.snapshots,
+                &cpu_snapshots,
+            ));
+        }
+        if rendered.written_ranges != cpu_written_ranges {
+            return Err(format!(
+                "DMP host GPU write ranges differ: GPU {:?}, CPU {:?}",
+                rendered.written_ranges, cpu_written_ranges
+            ));
+        }
+        *self = next;
+        Ok(rendered.snapshots)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn render_host_gpu(
+        &self,
+        words: &[u32],
+        read: &mut Reader<'_>,
+        expected_snapshots: Option<&Snapshots>,
+    ) -> Result<(Self, gpu_draw::RenderedList), String> {
+        let mut next = self.clone();
+        next.gpu_primitives = Some(Vec::new());
+        next.gpu_immediate = None;
+        if !next.vertices.is_empty() {
+            if next.vertices.len() != next.pending_inputs.len() {
+                return Err("DMP checkpoint lost pending immediate vertex inputs".into());
+            }
+            let mut inputs = next.pending_inputs.clone();
+            if next.draw_state().raster.primitive_mode == draw_state::PrimitiveMode::TriangleStrip
+                && next.primitive_index & 1 != 0
+                && inputs.len() >= 2
+            {
+                inputs.swap(0, 1);
+            }
+            next.gpu_immediate = Some((next.draw_state(), inputs));
+            next.vertices.clear();
+            next.pending_inputs.clear();
+        }
+        let mut unused_output = raster::Targets::default();
+        let mut recorded_reads = Vec::new();
+        {
+            let mut recording_reader = |address, length| {
+                let bytes = read(address, length)?;
+                recorded_reads.push((address, bytes.clone()));
+                Ok(bytes)
+            };
+            next.packets(words, &mut recording_reader, &mut unused_output, 0)?;
+        }
+        next.flush_gpu_immediate()?;
+        let draws = next.gpu_primitives.take().unwrap_or_default();
+        let rendered = gpu_draw::render(&draws, &recorded_reads, expected_snapshots, read)?;
+        if rendered.queue_submissions > 3 {
+            return Err(format!(
+                "DMP host GPU submitted {} command buffers for one list (limit 3)",
+                rendered.queue_submissions
+            ));
+        }
+        next.gpu_primitives = None;
+        next.gpu_immediate = None;
+        next.written_ranges = rendered.written_ranges.clone();
+        Ok((next, rendered))
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn execute_captured(
@@ -249,6 +395,10 @@ impl Engine {
         {
             return Err(format!("DMP unsupported 3D register {index:#x}"));
         }
+        #[cfg(not(target_os = "emscripten"))]
+        if self.gpu_immediate.is_some() && !matches!(index, 0x432..=0x435) {
+            self.flush_gpu_immediate()?;
+        }
         let value = self.reg(index) & !mask | value & mask;
         self.regs.insert(index, value);
         match index {
@@ -312,6 +462,7 @@ impl Engine {
                         }
                         if self.immediate.len() == n {
                             let mut inputs = self.attributes;
+                            let state = self.draw_state();
                             for (i, v) in self.immediate.iter().enumerate() {
                                 inputs[state.vertex.input_map[i] as usize] = *v;
                             }
@@ -335,34 +486,19 @@ impl Engine {
                 if count > 1_048_576 {
                     return Err("DMP vertex count exceeds bound".into());
                 }
-                let index_addr = self.reg(0x427);
-                let indices = if index == 0x42f {
-                    Some(read(
-                        (self.reg(0x400) as u64 * 8) + (index_addr as u64 & 0x7fffffff),
-                        count * if index_addr >> 31 != 0 { 2 } else { 1 },
-                    )?)
-                } else {
-                    None
-                };
-                if indices.as_ref().is_some_and(|bytes| {
-                    bytes.len() != count * if index_addr >> 31 != 0 { 2 } else { 1 }
-                }) {
-                    return Err("DMP short index DMA".into());
-                }
                 let state = self.draw_state();
-                for n in 0..count {
-                    let vertex = if let Some(ref bytes) = indices {
-                        if index_addr >> 31 != 0 {
-                            u16::from_le_bytes(bytes[n * 2..n * 2 + 2].try_into().unwrap()) as usize
-                        } else {
-                            bytes[n] as usize
-                        }
-                    } else {
-                        n + self.reg(0x42a) as usize
-                    };
-                    let inputs = self.fetch(vertex, &state, read)?;
-                    self.vertex(&inputs, &state, read, out)?;
+                #[cfg(not(target_os = "emscripten"))]
+                if self.gpu_primitives.is_some() {
+                    let vertex =
+                        gpu_vertex::prepare_draw(self, &state, count, index == 0x42f, read)?;
+                    self.vertices_executed += count as u64;
+                    self.last_output = None;
+                    self.record_gpu_draw(state, vertex);
+                } else {
+                    self.draw_interpreted(index, count, &state, read, out)?;
                 }
+                #[cfg(target_os = "emscripten")]
+                self.draw_interpreted(index, count, &state, read, out)?;
             }
             0x45f | 0x431 if value == 1 => {
                 self.vertices.clear();
@@ -380,6 +516,49 @@ impl Engine {
                 self.fog_cursor += 1;
             }
             _ => {}
+        }
+        Ok(())
+    }
+    fn draw_interpreted(
+        &mut self,
+        index: u16,
+        count: usize,
+        state: &DrawState,
+        read: &mut Reader<'_>,
+        out: &mut raster::Targets,
+    ) -> Result<(), String> {
+        let mut draw_dma = BTreeMap::new();
+        let index_addr = self.reg(0x427);
+        let indices = if index == 0x42f {
+            Some(read_guest_draw_memory(
+                read,
+                &mut draw_dma,
+                (self.reg(0x400) as u64 * 8) + (index_addr as u64 & 0x7fff_ffff),
+                count * if index_addr >> 31 != 0 { 2 } else { 1 },
+            )?)
+        } else {
+            None
+        };
+        if indices
+            .as_ref()
+            .is_some_and(|bytes| bytes.len() != count * if index_addr >> 31 != 0 { 2 } else { 1 })
+        {
+            return Err("DMP short index DMA".into());
+        }
+        for n in 0..count {
+            let vertex = if let Some(bytes) = &indices {
+                if index_addr >> 31 != 0 {
+                    u16::from_le_bytes(bytes[n * 2..n * 2 + 2].try_into().unwrap()) as usize
+                } else {
+                    bytes[n] as usize
+                }
+            } else {
+                n + self.reg(0x42a) as usize
+            };
+            let inputs = self.fetch(vertex, state, &mut |address, length| {
+                read_guest_draw_memory(read, &mut draw_dma, address, length)
+            })?;
+            self.vertex(&inputs, state, read, out)?;
         }
         Ok(())
     }
@@ -459,27 +638,44 @@ impl Engine {
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
+        #[cfg(not(target_os = "emscripten"))]
+        if self.gpu_primitives.is_some() {
+            self.vertices_executed += 1;
+            self.last_output = None;
+            let pending = self
+                .gpu_immediate
+                .get_or_insert_with(|| (state.clone(), Vec::new()));
+            pending.1.push(*inputs);
+            return Ok(());
+        }
         let vertex = shader::execute(self, inputs)?;
+        self.vertex_output(vertex, inputs, state, read, out)
+    }
+    fn vertex_output(
+        &mut self,
+        vertex: [Vector; 16],
+        inputs: &[Vector; 16],
+        state: &DrawState,
+        read: &mut Reader<'_>,
+        out: &mut raster::Targets,
+    ) -> Result<(), String> {
         self.vertices_executed += 1;
         self.last_output = Some(vertex);
-        let mode = state.raster.primitive_mode.code();
-        if mode == 8 {
+        let mode = state.raster.primitive_mode;
+        if mode == draw_state::PrimitiveMode::Points {
             return raster::point(state, &vertex, read, out);
         }
         self.vertices.push(vertex);
+        self.pending_inputs.push(*inputs);
         let n = self.vertices.len();
         match mode {
-            0 | 3 if n == 3 => {
-                raster::triangle(
-                    state,
-                    self.host_acceleration_enabled(),
-                    [self.vertices[0], self.vertices[1], self.vertices[2]],
-                    read,
-                    out,
-                )?;
+            draw_state::PrimitiveMode::Triangles if n == 3 => {
+                let triangle = [self.vertices[0], self.vertices[1], self.vertices[2]];
+                raster::triangle(state, triangle, read, out)?;
                 self.vertices.clear();
+                self.pending_inputs.clear();
             }
-            1 if n >= 3 => {
+            draw_state::PrimitiveMode::TriangleStrip if n >= 3 => {
                 let t = if self.primitive_index & 1 != 0 {
                     [
                         self.vertices[n - 2],
@@ -493,40 +689,79 @@ impl Engine {
                         self.vertices[n - 1],
                     ]
                 };
-                raster::triangle(state, self.host_acceleration_enabled(), t, read, out)?;
+                raster::triangle(state, t, read, out)?;
                 self.primitive_index += 1;
                 if n > 3 {
                     self.vertices.remove(0);
+                    self.pending_inputs.remove(0);
                 }
             }
-            2 if n >= 3 => {
-                raster::triangle(
-                    state,
-                    self.host_acceleration_enabled(),
-                    [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]],
-                    read,
-                    out,
-                )?;
+            draw_state::PrimitiveMode::TriangleFan if n >= 3 => {
+                let triangle = [self.vertices[0], self.vertices[n - 2], self.vertices[n - 1]];
+                raster::triangle(state, triangle, read, out)?;
                 self.vertices.remove(1);
+                self.pending_inputs.remove(1);
             }
-            4 | 5 if n == 2 => {
+            draw_state::PrimitiveMode::Lines | draw_state::PrimitiveMode::LineStrip if n == 2 => {
                 raster::line(state, [self.vertices[0], self.vertices[1]], read, out)?;
-                if mode == 4 {
+                if mode == draw_state::PrimitiveMode::Lines {
                     self.vertices.clear();
+                    self.pending_inputs.clear();
                 } else {
                     self.vertices.remove(0);
+                    self.pending_inputs.remove(0);
                 }
             }
-            0..=5 => {}
-            _ => return Err(format!("DMP unsupported primitive mode {mode}")),
+            draw_state::PrimitiveMode::Triangles
+            | draw_state::PrimitiveMode::TriangleStrip
+            | draw_state::PrimitiveMode::TriangleFan
+            | draw_state::PrimitiveMode::Lines
+            | draw_state::PrimitiveMode::LineStrip => {}
+            draw_state::PrimitiveMode::Other(code) => {
+                return Err(format!("DMP unsupported primitive mode {code}"));
+            }
+            draw_state::PrimitiveMode::Points => unreachable!(),
         }
         Ok(())
+    }
+    #[cfg(not(target_os = "emscripten"))]
+    fn flush_gpu_immediate(&mut self) -> Result<(), String> {
+        let Some((state, vertices)) = self.gpu_immediate.take() else {
+            return Ok(());
+        };
+        if vertices.len() < 3 {
+            return Ok(());
+        }
+        let vertex = gpu_vertex::prepare_immediate_draw(self, &state, &vertices)?;
+        self.record_gpu_draw(state, vertex);
+        Ok(())
+    }
+    #[cfg(not(target_os = "emscripten"))]
+    fn record_gpu_draw(&mut self, state: DrawState, vertex: gpu_vertex::PreparedDraw) {
+        if let Some(draws) = &mut self.gpu_primitives {
+            draws.push(gpu_draw::Draw::new(state, vertex, &self.regs));
+        }
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn replay_captures(directory: &std::path::Path) -> Result<usize, String> {
-    capture::replay_directory(directory)
+    let translations_before = gpu_vertex::translation_count();
+    let (vertex_modules_before, fragment_modules_before, pipelines_before) =
+        gpu_draw::shader_cache_creation_counts();
+    let count = capture::replay_directory(directory)?;
+    if std::env::var("FUJIMOD_DMP_SHADER_CACHE_STATS").is_ok_and(|value| value == "1") {
+        let translations = gpu_vertex::translation_count() - translations_before;
+        let (vertex_modules, fragment_modules, pipelines) =
+            gpu_draw::shader_cache_creation_counts();
+        eprintln!(
+            "DMP shader cache for replay: {translations} Naga vertex translations, {} vertex modules, {} fragment modules, {} pipelines",
+            vertex_modules - vertex_modules_before,
+            fragment_modules - fragment_modules_before,
+            pipelines - pipelines_before,
+        );
+    }
+    Ok(count)
 }
 
 #[cfg(test)]

@@ -2,7 +2,10 @@
 //! output publication are supplied by the application, outside these models.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_devices::parts::controls::Controls;
-use fujimod_emulator_xp5_io::{adc, gates, gpio, i2c, mailbox, timer};
+use fujimod_emulator_xp5_io::{
+    adc, discarded_read, gates, gpio, i2c, mailbox, memory_configuration, reset_handshake, timer,
+    usb_connection_status, write_only_registers,
+};
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{flash_storage, flash_storage_controller, flash_storage_dma};
 use fujimod_emulator_xp5_imaging::serial_sink;
@@ -82,10 +85,36 @@ fn register_with_resources(
             if window.size != 0x1000 {
                 return Err("invalid input-capture window size".into());
             }
+            if window.options.keys().any(|key| key != "dma_transmit") {
+                return Err("invalid input-capture option".into());
+            }
             bus.register(
                 window.base,
                 window.size,
                 Box::new(fujimod_emulator_xp5_io::input_capture::InputCapture::new(window.base)?),
+            )?;
+        }
+        "discarded-read" => {
+            if !window.options.is_empty() {
+                return Err("discarded-read takes no options".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(discarded_read::DiscardedRead::new(window.base, window.size)?),
+            )?;
+        }
+        "usb-connection-status" => {
+            if !window.options.is_empty() {
+                return Err("USB connection-status takes no options".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(usb_connection_status::UsbConnectionStatus::new(
+                    window.base,
+                    window.size,
+                )?),
             )?;
         }
         "battery-i2c" => {
@@ -116,6 +145,67 @@ fn register_with_resources(
                 window.base,
                 window.size,
                 Box::new(fujimod_emulator_xp5_io::output_link::Link::default()),
+            )?;
+        }
+        "reset-handshake" => {
+            if window.options.keys().any(|key| key != "trigger_offset") {
+                return Err("unknown reset-handshake option".into());
+            }
+            let trigger_offset = window
+                .options
+                .get("trigger_offset")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u64::try_from(value).ok())
+                .ok_or("reset-handshake requires an unsigned trigger_offset")?;
+            if trigger_offset & 3 != 0
+                || trigger_offset
+                    .checked_add(4)
+                    .is_none_or(|end| end > window.size)
+            {
+                return Err("invalid reset-handshake trigger offset".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(reset_handshake::ResetHandshake::new(
+                    window.base,
+                    trigger_offset,
+                )?),
+            )?;
+        }
+        "memory-configuration" => {
+            if window.size != 0x1000
+                || window.options.keys().any(|key| key != "commit_ticks")
+            {
+                return Err("invalid memory-configuration window or options".into());
+            }
+            let commit_ticks = window
+                .options
+                .get("commit_ticks")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u64::try_from(value).ok())
+                .filter(|value| *value > 0)
+                .ok_or("memory-configuration requires positive commit_ticks")?;
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(memory_configuration::MemoryConfiguration::new(
+                    window.base,
+                    commit_ticks,
+                )?),
+            )?;
+        }
+        "write-only-registers" => {
+            if !window.options.is_empty() {
+                return Err("write-only-registers takes no options".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(write_only_registers::WriteOnlyRegisters::new(
+                    window.base,
+                    window.size,
+                )?),
             )?;
         }
         "audio-spi-sink" => {

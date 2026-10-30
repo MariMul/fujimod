@@ -53,7 +53,7 @@ def options(terminal: int) -> dict[str, object]:
                 rca=1,
                 ram_bytes=RAM,
             ),
-            format=dict(
+            card=dict(
                 sectors=0x800000,
                 max_dirty_sectors=524288,
                 partition_start=2048,

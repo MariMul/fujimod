@@ -155,6 +155,30 @@ impl Core {
             .ok_or("CPU backend has no block-entry exit control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
     }
+    pub(crate) fn set_instruction_counter(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+    pub(crate) fn reset_instruction_counter(&self) -> Result<(), String> {
+        let reset = self
+            .api
+            .extensions
+            .reset_instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        check(&self.api, unsafe { reset(self.raw) })
+    }
+    pub(crate) fn instruction_counter(&self) -> Result<u64, String> {
+        let read = self
+            .api
+            .extensions
+            .instruction_counter
+            .ok_or("CPU backend has no translated instruction counter")?;
+        Ok(unsafe { read(self.raw) })
+    }
 }
 #[derive(Default)]
 struct Inspection {
@@ -498,6 +522,11 @@ impl Cpu for Core {
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
         }
+    }
+    fn set_execution_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
+        // Unicorn keeps exact instruction limits for both policies. The board
+        // decides whether to serialize this synchronous backend with peers.
+        Ok(())
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
         let mut size = out.len();
@@ -1358,6 +1387,22 @@ mod tests {
         assert_eq!(reg(&cpu, Register::Sp), 0x2ff0);
         assert_eq!(reg(&cpu, Register::Pstate), reg(&cpu, arm::CPSR));
         assert_eq!(reg(&cpu, psp), 0x2f00);
+    }
+    #[test]
+    fn m4_accepts_interactive_policy_while_preserving_exact_instruction_limits() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.write_memory(0x1000, &[0x07, 0x20, 0x08, 0x22]).unwrap();
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(1),
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::PC), 0x1002);
+        assert_eq!(reg(&cpu, arm::CORE[0]), 7);
     }
     #[test]
     fn a7_page_tables_translate_and_read_across_virtual_sections() {

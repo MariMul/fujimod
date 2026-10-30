@@ -165,13 +165,7 @@ try {
       ...(values.policy ? { executionPolicy: values.policy } : {}),
       ...(bootTicks === undefined ? {} : { bootTicks }),
     };
-    for (const key of [
-      'construction',
-      'executionPolicy',
-      'ticksPerSecond',
-      'bootTicks',
-      'bootInstructions',
-    ])
+    for (const key of ['construction', 'executionPolicy', 'ticksPerSecond', 'bootTicks'])
       runtime[key] = Reflect.get(selected, key);
     await route.fulfill({ response, json: selected });
   });

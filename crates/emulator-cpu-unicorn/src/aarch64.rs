@@ -26,6 +26,21 @@ fn ordinary(register: Register) -> Result<(i32, usize), String> {
     })
 }
 
+fn selected_stack(pstate: u64) -> arm::SystemRegister {
+    let el = (pstate >> 2) & 3;
+    let encoding = if el == 0 || pstate & 1 == 0 {
+        0xc208
+    } else {
+        match el {
+            1 => 0xe208,
+            2 => 0xe210,
+            3 => 0xe218,
+            _ => unreachable!(),
+        }
+    };
+    arm::SystemRegister::from_encoding(encoding)
+}
+
 impl Core {
     fn aarch64_system(
         &self,
@@ -113,6 +128,37 @@ impl Core {
             return self
                 .check(unsafe { (self.api.uc_reg_write)(self.raw, id, bytes.as_ptr().cast()) });
         }
+        if register == Register::Pstate {
+            let mut current = [0; 8];
+            self.read_aarch64(Register::Pstate, &mut current)?;
+            let current_pstate = u32::from_le_bytes(current[..4].try_into().unwrap()) as u64;
+            let requested_pstate = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as u64;
+            let old_stack = selected_stack(current_pstate);
+            let new_stack = selected_stack(requested_pstate);
+            if old_stack.encoding()? != new_stack.encoding()? {
+                // Unicorn's direct PSTATE write changes the selected bank
+                // without performing the hardware SP save and restore.
+                let mut stack = [0; 8];
+                self.read_aarch64(Register::Sp, &mut stack)?;
+                self.aarch64_system(old_stack, Some(u64::from_le_bytes(stack)))?;
+                let mut pstate_size = width;
+                self.check(unsafe {
+                    (self.api.uc_reg_write2)(self.raw, id, bytes.as_ptr().cast(), &mut pstate_size)
+                })?;
+                let next_stack = self.aarch64_system(new_stack, None)?;
+                let (sp_id, sp_width) = ordinary(Register::Sp)?;
+                let mut sp_size = sp_width;
+                self.check(unsafe {
+                    (self.api.uc_reg_write2)(
+                        self.raw,
+                        sp_id,
+                        (&next_stack as *const u64).cast(),
+                        &mut sp_size,
+                    )
+                })?;
+                return Ok(());
+            }
+        }
         let mut size = width;
         self.check(unsafe {
             (self.api.uc_reg_write2)(self.raw, id, bytes.as_ptr().cast(), &mut size)
@@ -191,6 +237,35 @@ mod tests {
             .unwrap();
             assert_eq!(value(&cpu, Register::X(0)), expected);
         }
+    }
+    #[test]
+    fn pstate_write_switches_and_restores_the_selected_stack_pointer_bank() {
+        let cpu = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        let sp_el0 = Register::Arm64System(arm::SystemRegister::from_encoding(0xc208));
+        let sp_el1 = Register::Arm64System(arm::SystemRegister::from_encoding(0xe208));
+        let el1t = 0x3c4u64;
+        let el1h = 0x3c5u64;
+        let stack_el0 = 0xaaaa0000u64;
+        let stack_el1 = 0xbbbb0000u64;
+
+        cpu.write_register(Register::Pstate, &el1t.to_le_bytes())
+            .unwrap();
+        cpu.write_register(Register::Sp, &stack_el0.to_le_bytes())
+            .unwrap();
+        cpu.write_register(sp_el1, &stack_el1.to_le_bytes())
+            .unwrap();
+
+        cpu.write_register(Register::Pstate, &el1h.to_le_bytes())
+            .unwrap();
+        assert_eq!(value(&cpu, Register::Sp), stack_el1);
+        assert_eq!(value(&cpu, sp_el0), stack_el0);
+
+        cpu.write_register(Register::Pstate, &el1t.to_le_bytes())
+            .unwrap();
+        assert_eq!(value(&cpu, Register::Sp), stack_el0);
+        assert_eq!(value(&cpu, sp_el1), stack_el1);
     }
     #[test]
     fn a53_executes_el3_system_registers_and_eret_to_el1() {

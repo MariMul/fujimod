@@ -52,6 +52,13 @@ fn morton_pixel_offset(x: u32, y: u32) -> u32 {
     return tile_index * 64u + morton_interleave(x, y);
 }
 
+fn guest_pixel_offset(x: u32, y: u32) -> u32 {
+    if params.reserved == 0u {
+        return y * params.width + x;
+    }
+    return morton_pixel_offset(x, y);
+}
+
 @group(0) @binding(1) var<storage, read> guest: GuestBytes;
 @group(0) @binding(2) var surface_out: texture_storage_2d<r32uint, write>;
 
@@ -66,7 +73,7 @@ fn upload_morton(@builtin(global_invocation_id) invocation: vec3<u32>) {
     if (position.x >= params.storage_width || position.y >= params.storage_height) {
         return;
     }
-    let pixel_offset = morton_pixel_offset(position.x, position.y);
+    let pixel_offset = guest_pixel_offset(position.x, position.y);
     let base_byte = pixel_offset * params.bytes_per_pixel;
     var pixel = 0u;
     for (var lane = 0u; lane < params.bytes_per_pixel; lane += 1u) {
@@ -103,6 +110,22 @@ fn record_write_masks(@builtin(global_invocation_id) invocation: vec3<u32>) {
     atomicOr(&write_masks.values[linear_offset], write.byte_mask);
 }
 
+@group(0) @binding(12) var draw_mask_in: texture_2d<u32>;
+@group(0) @binding(13) var<storage, read_write> draw_write_masks: PixelWriteMasks;
+
+@compute @workgroup_size(8, 8)
+fn accumulate_draw_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
+    let position = invocation.xy;
+    if (position.x >= params.storage_width || position.y >= params.storage_height) {
+        return;
+    }
+    let byte_mask = textureLoad(draw_mask_in, vec2<i32>(position), 0).x;
+    if (byte_mask != 0u) {
+        let linear_offset = position.y * params.width + position.x;
+        atomicOr(&draw_write_masks.values[linear_offset], byte_mask);
+    }
+}
+
 @group(0) @binding(7) var<storage, read_write> resolved_masks: PixelWriteMasks;
 @group(0) @binding(8) var resolved_mask_out: texture_storage_2d<r32uint, write>;
 
@@ -131,8 +154,8 @@ fn readback_morton(@builtin(global_invocation_id) invocation: vec3<u32>) {
     if (position.x >= params.storage_width || position.y >= params.storage_height) {
         return;
     }
-    let morton_offset = morton_pixel_offset(position.x, position.y);
+    let guest_offset = guest_pixel_offset(position.x, position.y);
     let pixel = textureLoad(surface_in, vec2<i32>(position), 0).x;
     let byte_mask = textureLoad(mask_in, vec2<i32>(position), 0).x;
-    readback.values[morton_offset] = ReadbackPixel(pixel, byte_mask);
+    readback.values[guest_offset] = ReadbackPixel(pixel, byte_mask);
 }

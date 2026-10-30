@@ -71,10 +71,7 @@ try {
       const control = page.getByRole('button', { name, exact: true });
       assert.ok(await control.isDisabled());
       const warning = control.locator('xpath=ancestor::li').locator('.wb-bulk-error');
-      assert.match(
-        await warning.innerText(),
-        /Bulk reader located, but no catalog firmware and body record is published/,
-      );
+      assert.match(await warning.innerText(), /No service-workflow locator for X-Processor 4/);
       const style = await warning.evaluate((element) => {
         const style = getComputedStyle(element);
         return {
@@ -86,6 +83,25 @@ try {
       assert.ok(Number(style.weight) >= 700);
       assert.notEqual(style.color, 'rgb(185, 185, 191)');
     }
+    await page.goto(new URL('dev-tools/state-captures/', base).href);
+    await page.evaluate(async () => {
+      const fixture = (await import(
+        '/__test__/' + 'console.mjs'
+      )) as typeof import('./usb-fixture.ts');
+      fixture.installConsoleFixture({
+        1: 'FUJIFILM',
+        2: 'FUJIFILM',
+        4: 'X-E4',
+        8: '1.43',
+        16: 'CAMERA',
+        64: '1.00',
+      });
+    });
+    await page.getByRole('button', { name: 'Connect camera', exact: true }).first().click();
+    await page.getByText('X-E4 2.01', { exact: false }).first().waitFor();
+    assert.ok(
+      await page.locator('.cap-row').first().getByRole('button', { name: 'Capture' }).isEnabled(),
+    );
     await page.screenshot({
       path: new URL(mobile ? 'xe4-mobile.png' : 'xe4-desktop.png', output).pathname,
       fullPage: true,
@@ -93,9 +109,7 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
   }
-  console.log(
-    'PASS: X-E4 generation errors appear below all blocked buttons on desktop and mobile',
-  );
+  console.log('PASS: X-E4 bulk capture is available while missing service setup stays blocked');
 } finally {
   await browser.close();
 }

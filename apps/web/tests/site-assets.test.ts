@@ -175,6 +175,21 @@ test('local preparation gates qualification and stages complete runtime bundles'
 });
 
 test('prepared runtime staging follows declared cold input filenames and refuses traversal', () => {
+  assert.deepEqual(
+    runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: false }),
+    [
+      'camera.wasm',
+      'camera.mjs',
+      'wasm.json',
+      'runtime-NOTICES.txt',
+      'dmp_webgpu.js',
+      'dmp_webgpu_bg.wasm',
+    ],
+  );
+  assert.throws(
+    () => runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: 'webgpu' }),
+    /invalid DMP renderer selection/,
+  );
   const prepared = {
     document: 'document.json',
     bootRom: 'boot-rom.bin',

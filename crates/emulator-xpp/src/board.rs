@@ -102,15 +102,6 @@ impl pl330::Source for Source {
     fn read(&self, address: u64, len: usize) -> Result<Vec<u8>, String> {
         self.0.read(address, len)
     }
-    fn writable(&self) -> bool {
-        self.0.writable()
-    }
-    fn store(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        self.0.program(address, bytes)
-    }
-    fn stored(&self, cx: &mut Cx<'_>) {
-        self.0.program_complete(cx)
-    }
 }
 struct Timers {
     base: u64,
@@ -312,6 +303,8 @@ pub fn build(
                     flash::Options {
                         base: controller,
                         transfer_ticks,
+                        irq: None,
+                        array: None,
                     },
                     source.clone(),
                     ports,

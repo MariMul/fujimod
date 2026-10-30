@@ -156,7 +156,10 @@ fn unpack_texel(address: u32, format: u32) -> vec4<f32> {
         let luminance = f32(b0) / 255.0;
         return vec4<f32>(luminance, luminance, luminance, 1.0);
     }
-    return vec4<f32>(1.0, 1.0, 1.0, f32(b0) / 255.0);
+    if format == 8u {
+        return vec4<f32>(1.0, 1.0, 1.0, f32(b0) / 255.0);
+    }
+    return vec4<f32>(0.0);
 }
 
 fn texture_texel(
@@ -506,10 +509,20 @@ fn process_fragment(case_index: u32) {
     var texture1 = vec4<f32>(0.0);
     let texture_enable = reg(case_index, 0x280u);
     if (texture_enable & 1u) != 0u {
+        let format = reg(case_index, 0x28eu) & 15u;
+        if format > 5u && format != 7u && format != 8u {
+            status.words[case_index] = 0x10000u | format;
+            return;
+        }
         let uv = vec2<f32>(bitcast<f32>(input_word(case_index, 8u)), bitcast<f32>(input_word(case_index, 9u)));
         texture0 = sample_texture(case_index, 0u, uv, lod0);
     }
     if (texture_enable & 2u) != 0u {
+        let format = reg(case_index, 0x296u) & 15u;
+        if format > 5u && format != 7u && format != 8u {
+            status.words[case_index] = 0x10000u | format;
+            return;
+        }
         let uv = vec2<f32>(bitcast<f32>(input_word(case_index, 10u)), bitcast<f32>(input_word(case_index, 11u)));
         texture1 = sample_texture(case_index, 1u, uv, lod1);
     }
@@ -690,18 +703,18 @@ fn process_fragment(case_index: u32) {
         let packed = clamp(color, vec4<f32>(0.0), vec4<f32>(1.0));
         var word = 0u;
         if format == 1u {
-            word = u32(packed.x * 31.0) << 11u
-                | u32(packed.y * 63.0) << 5u
+            word = (u32(packed.x * 31.0) << 11u)
+                | (u32(packed.y * 63.0) << 5u)
                 | u32(packed.z * 31.0);
         } else if format == 2u {
-            word = u32(packed.x * 31.0) << 11u
-                | u32(packed.y * 31.0) << 6u
-                | u32(packed.z * 31.0) << 1u
+            word = (u32(packed.x * 31.0) << 11u)
+                | (u32(packed.y * 31.0) << 6u)
+                | (u32(packed.z * 31.0) << 1u)
                 | u32(packed.w);
         } else {
-            word = u32(packed.x * 15.0) << 12u
-                | u32(packed.y * 15.0) << 8u
-                | u32(packed.z * 15.0) << 4u
+            word = (u32(packed.x * 15.0) << 12u)
+                | (u32(packed.y * 15.0) << 8u)
+                | (u32(packed.z * 15.0) << 4u)
                 | u32(packed.w * 15.0);
         }
         var bits = 0u;

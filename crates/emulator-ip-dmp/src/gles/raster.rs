@@ -1,6 +1,8 @@
 //! Ordered single-sample rasterization over Morton color/depth surfaces.
+#[cfg(test)]
+use super::Engine;
 use super::{
-    Engine, MAX_BYTES, Reader, Snapshots,
+    MAX_BYTES, Reader, Snapshots,
     draw_state::{ColorTargetFormat, CullMode, DrawState, TextureUnit},
     shader::Vector,
 };
@@ -77,12 +79,12 @@ fn morton(x: usize, y: usize, width: usize) -> usize {
         + ((y & 4) << 3)
 }
 #[derive(Clone, Copy)]
-struct Vertex {
-    position: Vector,
-    color: Vector,
-    uv: [[f32; 2]; 2],
+pub(super) struct RasterVertex {
+    pub(super) position: Vector,
+    pub(super) color: Vector,
+    pub(super) uv: [[f32; 2]; 2],
 }
-fn vertex(state: &DrawState, v: &[Vector; 16]) -> Vertex {
+fn vertex(state: &DrawState, v: &[Vector; 16]) -> RasterVertex {
     let mut values = [0.; 32];
     for (slot, vector) in v.iter().enumerate().take(state.vertex.output_map.0.len()) {
         for (i, value) in vector.iter().enumerate() {
@@ -92,14 +94,14 @@ fn vertex(state: &DrawState, v: &[Vector; 16]) -> Vertex {
             }
         }
     }
-    Vertex {
+    RasterVertex {
         position: values[..4].try_into().unwrap(),
         color: values[8..12].try_into().unwrap(),
         uv: [[values[12], values[13]], [values[14], values[15]]],
     }
 }
-fn mix(a: Vertex, b: Vertex, t: f32) -> Vertex {
-    Vertex {
+fn mix(a: RasterVertex, b: RasterVertex, t: f32) -> RasterVertex {
+    RasterVertex {
         position: std::array::from_fn(|i| a.position[i] + (b.position[i] - a.position[i]) * t),
         color: std::array::from_fn(|i| a.color[i] + (b.color[i] - a.color[i]) * t),
         uv: std::array::from_fn(|u| {
@@ -107,7 +109,7 @@ fn mix(a: Vertex, b: Vertex, t: f32) -> Vertex {
         }),
     }
 }
-fn plane(v: Vertex, i: usize) -> f32 {
+fn plane(v: RasterVertex, i: usize) -> f32 {
     let [x, y, z, w] = v.position;
     match i {
         0 => x + w,
@@ -118,18 +120,30 @@ fn plane(v: Vertex, i: usize) -> f32 {
         _ => -z,
     }
 }
-fn project(state: &DrawState, v: Vertex, point: bool) -> Vertex {
+fn project(state: &DrawState, v: RasterVertex, point: bool) -> RasterVertex {
     let mut v = v;
     v.position = state.viewport.project(v.position, point);
     v
 }
 pub(super) fn triangle(
     state: &DrawState,
-    host_acceleration: bool,
     vertices: [[Vector; 16]; 3],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
+    for v in clipped_triangles(state, vertices)? {
+        raster_triangle(state, v, read, out)?;
+    }
+    Ok(())
+}
+
+/// Clip one DMP triangle and return the screen-space triangles that survive.
+/// Positions are snapped to the DMP 1/16-pixel grid before either renderer
+/// consumes them, so host rasterization sees the same primitive edges.
+pub(super) fn clipped_triangles(
+    state: &DrawState,
+    vertices: [[Vector; 16]; 3],
+) -> Result<Vec<[RasterVertex; 3]>, String> {
     let mut polygon: Vec<_> = vertices.iter().map(|v| vertex(state, v)).collect();
     if state.raster.flat_shading {
         let provoking = polygon[2].color;
@@ -141,7 +155,7 @@ pub(super) fn triangle(
         .iter()
         .any(|v| v.position.iter().any(|x| !x.is_finite()))
     {
-        return Ok(());
+        return Ok(Vec::new());
     }
     for p in 0..6 {
         let mut clipped = Vec::new();
@@ -159,18 +173,41 @@ pub(super) fn triangle(
         }
         polygon = clipped;
         if polygon.len() < 3 {
-            return Ok(());
+            return Ok(Vec::new());
         }
     }
+    let (width, height) = extent(state)?;
+    let mut result = Vec::new();
     for i in 1..polygon.len() - 1 {
-        let v = [
+        let mut v = [
             project(state, polygon[0], false),
             project(state, polygon[i], false),
             project(state, polygon[i + 1], false),
         ];
-        raster_triangle(state, host_acceleration, v, read, out)?;
+        let q = v.map(|vertex| {
+            [
+                (vertex.position[0] * 16.).round() as i64,
+                (vertex.position[1] * 16.).round() as i64,
+            ]
+        });
+        let area = edge(q[0], q[1], q[2]);
+        if area == 0
+            || state.raster.cull_mode == CullMode::Front && area > 0
+            || state.raster.cull_mode == CullMode::Back && area < 0
+        {
+            continue;
+        }
+        for index in 0..3 {
+            v[index].position[0] = q[index][0] as f32 / 16.;
+            v[index].position[1] = q[index][1] as f32 / 16.;
+        }
+        // Preserve the CPU bounds check before handing geometry to the host.
+        if width == 0 || height == 0 {
+            continue;
+        }
+        result.push(v);
     }
-    Ok(())
+    Ok(result)
 }
 fn extent(state: &DrawState) -> Result<(usize, usize), String> {
     state.targets.extent.dimensions()
@@ -180,8 +217,7 @@ fn edge(a: [i64; 2], b: [i64; 2], p: [i64; 2]) -> i64 {
 }
 fn raster_triangle(
     state: &DrawState,
-    host_acceleration: bool,
-    mut v: [Vertex; 3],
+    mut v: [RasterVertex; 3],
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
@@ -214,22 +250,8 @@ fn raster_triangle(
         as usize;
     let edges = [(q[1], q[2]), (q[2], q[0]), (q[0], q[1])];
     let inclusive = edges.map(|(a, b)| b[1] < a[1] || (b[1] == a[1] && b[0] > a[0]));
-    #[cfg(not(target_arch = "wasm32"))]
-    let accelerated = if !host_acceleration {
-        None
-    } else {
-        super::gpu::coverage(q, [x0, y0, x1, y1], inclusive)?
-    };
-    #[cfg(target_arch = "wasm32")]
-    let accelerated: Option<Vec<u32>> = None;
     for y in y0..y1 {
         for x in x0..x1 {
-            if accelerated
-                .as_ref()
-                .is_some_and(|mask| mask[(y - y0) * (x1 - x0) + x - x0] == 0)
-            {
-                continue;
-            }
             let p = [x as i64 * 16 + 8, y as i64 * 16 + 8];
             let weights = edges.map(|(a, b)| edge(a, b, p));
             if weights
@@ -681,6 +703,7 @@ fn fragment(
 ) -> Result<(), String> {
     fragment_coverage_state(state, (x, y, z, 1.), primary, uv, lod, read, out)
 }
+#[cfg(test)]
 pub(super) fn fragment_coverage(
     engine: &Engine,
     position: (usize, usize, f32, f32),

@@ -2983,13 +2983,8 @@
       "internal_version": "1.43",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: Bulk reader located, but no catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -4675,13 +4670,8 @@
       "internal_version": "1.72",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: Bulk reader located, but no catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -6018,13 +6008,8 @@
       "internal_version": "1.64",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: Bulk reader located, but no catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
@@ -6159,13 +6144,8 @@
       "internal_version": "1.46",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: Bulk reader located, but no catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",

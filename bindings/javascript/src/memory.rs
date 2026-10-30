@@ -109,8 +109,9 @@ impl Session {
     /// and writes of any size. Close it to restore any bulk source override.
     #[wasm_bindgen(unchecked_return_type = "Promise<Memory>")]
     pub fn memory(&self, firmware_id: &str) -> Result<js_sys::Promise, JsValue> {
-        let facts = crate::reference::resolve(firmware_id)?
-            .bulk
+        let facts = crate::reference::bundled()?
+            .bulk(firmware_id)
+            .cloned()
             .ok_or_else(|| {
                 crate::workflows::workflow_error(fujimod_catalog::generation::missing_table_reason(
                     firmware_id,

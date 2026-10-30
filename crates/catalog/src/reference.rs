@@ -517,6 +517,8 @@ pub enum SocBlockKind {
     ResetController,
     /// Clock controller.
     ClockController,
+    /// Memory controller.
+    MemoryController,
     /// Addressable register window with no assigned functional category.
     AddressWindow,
 }
@@ -2686,6 +2688,16 @@ impl ReferenceCatalog {
         &self.firmware_versions
     }
 
+    /// Located bulk profiles, independent of a body or execution profile.
+    pub fn bulk_profiles(&self) -> impl Iterator<Item = &fujimod_catalog_bulk::FirmwareBulk> {
+        self.bulk.values()
+    }
+
+    /// Return the bulk profile for a firmware release.
+    pub fn bulk(&self, firmware_id: &str) -> Option<&fujimod_catalog_bulk::FirmwareBulk> {
+        self.bulk.get(firmware_id)
+    }
+
     fn insert_document(
         &mut self,
         kind: ReferenceKind,
@@ -2766,7 +2778,12 @@ impl ReferenceCatalog {
             }
         }
         for firmware_id in self.bulk.keys() {
-            if !self.firmwares.contains_key(firmware_id) {
+            if !self.firmwares.contains_key(firmware_id)
+                && !self
+                    .firmware_versions
+                    .iter()
+                    .any(|release| &release.firmware_id == firmware_id)
+            {
                 return Err(format!(
                     "bulk facts refer to missing firmware {firmware_id}"
                 ));

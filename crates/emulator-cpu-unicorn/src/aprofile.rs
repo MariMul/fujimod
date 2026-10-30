@@ -58,6 +58,13 @@ impl Core {
         if cpu.model() != Model::ArmV8A || !cpu.features().translation_filter {
             return Err("counted A-profile requires the AArch64 translation frontend".into());
         }
+        for (encoding, mask) in [(0xf088, 1 << 10), (0xe088, 1 << 31)] {
+            let register = Register::Arm64System(arm::SystemRegister::from_encoding(encoding));
+            let mut bytes = [0; 8];
+            cpu.read_register(register, &mut bytes)?;
+            let value = u64::from_le_bytes(bytes);
+            cpu.write_register(register, &(value | mask).to_le_bytes())?;
+        }
         let record = cpu
             .accounting()
             .ok_or("counted A-profile requires block accounting")?;

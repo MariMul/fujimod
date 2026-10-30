@@ -6,7 +6,7 @@ export function BulkSupportError(props: { reason?: string }) {
   return (
     <Show when={props.reason}>
       <p class="wb-bulk-error" role="status">
-        <strong>Bulk support is not available for this camera. {props.reason}</strong>
+        <strong>{props.reason}</strong>
       </p>
     </Show>
   );
