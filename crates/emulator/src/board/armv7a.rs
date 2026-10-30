@@ -9,6 +9,23 @@ pub struct Config {
     pub mpidr: u32,
     pub configuration_base: u32,
     pub cycles_per_tick: u64,
+    /// Declared L1 data, L1 instruction and L2 capacities in bytes; CCSIDR
+    /// reads report them. Absent, the processor model's own values apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_sizes: Option<(u32, u32, u32)>,
+}
+impl Config {
+    /// CCSIDR for CSSELR 0 (L1 data), 1 (L1 instruction) and 2 (L2):
+    /// 64-byte lines; 4-way L1 data, 2-way L1 instruction, 8-way L2.
+    fn cache_ids(&self) -> Option<[u32; 3]> {
+        self.cache_sizes.map(|(data, instruction, l2)| {
+            [
+                0x7000001a | ((data / 256 - 1) << 13),
+                0x20000009 | ((instruction / 64 - 1) << 13),
+                0x7000003a | ((l2 / 512 - 1) << 13),
+            ]
+        })
+    }
 }
 pub(super) enum Entry {
     Execute,
@@ -95,9 +112,26 @@ impl Profile {
                 return Ok(Entry::Completed);
             }
         }
+        let cp = |opc1, crn, crm, opc2| arm::Coprocessor {
+            cp: 15,
+            opc1,
+            crn,
+            crm,
+            opc2,
+            secure: 0,
+            wide: false,
+        };
         let identity = match body & !0xf000 {
             0x0e10_0fb0 => Some(self.config.mpidr),
             0x0e9f_0f10 => Some(self.config.configuration_base),
+            0x0e30_0f10 => Some(match self.config.cache_ids() {
+                Some(ids) => {
+                    let selector = cpu.coprocessor(cp(2, 0, 0, 0), None)? as usize;
+                    *ids.get(selector)
+                        .ok_or("Reserved Cortex-A7 cache selector")?
+                }
+                None => cpu.coprocessor(cp(1, 0, 0, 0), None)? as u32,
+            }),
             _ => None,
         };
         let entry = if let Some(value) = identity {
@@ -120,43 +154,36 @@ impl Profile {
         Ok(entry)
     }
     pub(super) fn enter_irq(&self, cpu: &dyn Cpu) -> Result<bool, String> {
-        let cpsr = scalar(cpu, arm::CPSR)? as u32;
-        if cpsr & 0x80 != 0 {
+        if !fujimod_emulator_cpu::armv7a::enter_irq(cpu)? {
             return Ok(false);
         }
-        let cp = |crn| arm::Coprocessor {
-            cp: 15,
-            opc1: 0,
-            crn,
-            crm: 0,
-            opc2: 0,
-            secure: 0,
-            wide: false,
-        };
-        let sctlr = cpu.coprocessor(cp(1), None)? as u32;
-        if sctlr & ((1 << 30) | (1 << 25)) != 0 {
-            return Err("Thumb/big-endian IRQ entry is unsupported".into());
-        }
-        let base = if sctlr & (1 << 13) != 0 {
-            0xffff0000
-        } else {
-            cpu.coprocessor(cp(12), None)? as u32 & !31
-        };
-        let pc = scalar(cpu, Register::Pc)? as u32;
-        let next = (cpsr & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x12 | 0x80 | 0x100;
-        set(cpu, arm::CPSR, next.into())?;
-        set(cpu, arm::SPSR, cpsr.into())?;
-        set(cpu, arm::CORE[14], pc.wrapping_add(4).into())?;
-        set(cpu, Register::Pc, base.wrapping_add(0x18).into())?;
         cpu.stop()?;
         Ok(true)
     }
 }
 impl Board {
+    /// ARMv7-A exception entries on `core` from the board and its backend.
+    pub fn armv7a_exception_entries(
+        &self,
+        core: usize,
+    ) -> Result<fujimod_emulator_cpu::armv7a::Entries, String> {
+        let board = *self
+            .state
+            .borrow()
+            .armv7a_entries
+            .get(core)
+            .ok_or("unknown core")?;
+        Ok(board.plus(self.cpu(core)?.exception_entries().unwrap_or_default()))
+    }
     pub fn configure_armv7a(&mut self, core: usize, config: Config) -> Result<(), String> {
         if self.cpu(core)?.model() != Model::CortexA7
             || config.configuration_base & 0x7fff != 0
             || config.cycles_per_tick == 0
+            || config.cache_sizes.is_some_and(|(data, instruction, l2)| {
+                ![8192, 16384, 32768, 65536].contains(&data)
+                    || ![8192, 16384, 32768, 65536].contains(&instruction)
+                    || ![131072, 262144, 524288, 1048576].contains(&l2)
+            })
         {
             return Err("ARMv7-A configuration requires an A7 and aligned peripheral base".into());
         }
@@ -179,7 +206,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn relocated_a7_code_observes_each_core_identity_and_guest_time_then_waits() {
+    fn relocated_a7_code_observes_each_core_identity_cache_ids_and_guest_time_then_waits() {
         let processors: Vec<_> = (0..2)
             .map(|core| {
                 json!({
@@ -210,13 +237,17 @@ mod tests {
                         mpidr: 0x80000000 | core as u32,
                         configuration_base: 0xffff0000,
                         cycles_per_tick: 1,
+                        // Core 1 keeps the processor model's own cache IDs.
+                        cache_sizes: (core == 0).then_some((32768, 32768, 1048576)),
                     },
                 )
                 .unwrap();
         }
-        let words: [u32; 11] = [
+        // MPIDR, CBAR, PMU cycle counter, then CSSELR = L2 and its CCSIDR.
+        let words: [u32; 15] = [
             0xee100fb0, 0xe5810000, 0xee9f0f10, 0xe5810004, 0xe3a00007, 0xee090f1c, 0xe3a00102,
-            0xee090f3c, 0xee192f1d, 0xe5812008, 0xe320f003,
+            0xee090f3c, 0xee192f1d, 0xe5812008, 0xe3a00002, 0xee400f10, 0xee303f10, 0xe581300c,
+            0xe320f003,
         ];
         board
             .write_physical(
@@ -242,7 +273,12 @@ mod tests {
             assert_eq!(w(4), 0xffff0000);
             assert!(w(8) > 0);
         }
-        assert_eq!(board.instruction_counts(), [11, 11]);
+        let l2 = |core: usize| {
+            u32::from_le_bytes(bytes[core * 16 + 12..core * 16 + 16].try_into().unwrap())
+        };
+        assert_eq!(l2(0), 0x70ffe03a);
+        assert!(l2(1) != 0 && l2(1) != l2(0));
+        assert_eq!(board.instruction_counts(), [15, 15]);
         assert!(
             board
                 .configure_armv7a(
@@ -250,10 +286,69 @@ mod tests {
                     Config {
                         mpidr: 0,
                         configuration_base: 0,
-                        cycles_per_tick: 1
+                        cycles_per_tick: 1,
+                        cache_sizes: None,
                     }
                 )
                 .is_err()
+        );
+    }
+    #[test]
+    fn disabled_vfp_enters_the_undefined_vector_and_the_handler_retries_it() {
+        let graph: factory::Graph = serde_json::from_value(json!({
+            "processors":[{"model":"cortex-a7","released":true,"mprofile":null,"rprofile":null,
+                "registers":[["Pc",0x1000],["Pstate",0xd3]]}],
+            "ram":[{"base":0,"size":0x2000}],
+            "mappings":[{"core":0,"address":0,"physical":0,"size":0x2000,"permissions":7}],
+            "dma_mappings":[{"address":0,"physical":0,"size":0x2000,"permissions":3}],
+            "peripherals":[],"decoders":[],"instructions_per_tick":[1,1]
+        }))
+        .unwrap();
+        let mut b = graph
+            .build(
+                factory::Options::new(factory::Engine::Unicorn)
+                    .with_translation_cache_size_bytes(1 << 20),
+                Bus::new(Mode::Strict),
+                None,
+            )
+            .unwrap();
+        b.configure_armv7a(
+            0,
+            Config {
+                mpidr: 0,
+                configuration_base: 0xffff0000,
+                cycles_per_tick: 1,
+                cache_sizes: None,
+            },
+        )
+        .unwrap();
+        let words = |words: &[u32]| {
+            words
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<_>>()
+        };
+        // Undefined vector: b 0x100.
+        b.write_physical(4, &words(&[0xea00003d])).unwrap();
+        // Enable CP10/CP11 in CPACR and FPEXC.EN, count, then retry the
+        // faulting instruction: subs pc, lr, #4.
+        b.write_physical(
+            0x100,
+            &words(&[
+                0xe3a0060f, 0xee010f50, 0xf57ff06f, 0xe3a00101, 0xeee80a10, 0xe2833001, 0xe25ef004,
+            ]),
+        )
+        .unwrap();
+        // vmov s0, r0; mov r2, #2; wfi.
+        b.write_physical(0x1000, &words(&[0xee000a10, 0xe3a02002, 0xe320f003]))
+            .unwrap();
+        b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(b.read_register(0, arm::CORE[3]).unwrap(), 1);
+        assert_eq!(b.read_register(0, arm::CORE[2]).unwrap(), 2);
+        let entries = b.armv7a_exception_entries(0).unwrap();
+        assert_eq!(
+            (entries.undefined, entries.irq, entries.data_abort),
+            (1, 0, 0)
         );
     }
     #[test]
@@ -281,6 +376,7 @@ mod tests {
                 mpidr: 0,
                 configuration_base: 0xffff0000,
                 cycles_per_tick: 1,
+                cache_sizes: None,
             },
         )
         .unwrap();

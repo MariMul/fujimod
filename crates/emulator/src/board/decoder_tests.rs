@@ -363,6 +363,7 @@ fn a7_remap_changes_both_cpu_aliases_and_dma_at_one_boundary() {
                     mpidr: 0x80000000 | core as u32,
                     configuration_base: 0xffff0000,
                     cycles_per_tick: 1,
+                    cache_sizes: None,
                 },
             )
             .unwrap();
@@ -413,6 +414,7 @@ fn a7_remap_keeps_unrelated_mmu_translation_until_guest_disables_the_mmu() {
                 mpidr: 0x80000000 | core as u32,
                 configuration_base: 0xffff0000,
                 cycles_per_tick: 1,
+                cache_sizes: None,
             },
         )
         .unwrap();

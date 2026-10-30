@@ -1,5 +1,6 @@
-//! Exact AArch64 instruction entries, code coherence, and architectural exits.
-//! Guest clocks, devices, and framework register values remain with the owner.
+//! Exact AArch64 and ARMv7-A (ARM state) instruction entries, code coherence,
+//! and architectural exits. Guest clocks, devices, and framework register
+//! values remain with the owner.
 use crate::{
     Core as RawCore,
     accounting::{Accounting, Span},
@@ -26,6 +27,8 @@ struct Execution {
     // Engine destruction precedes callback data, ring, and owned RAM.
     cpu: Rc<RawCore>,
     memory: Memory,
+    // ARMv7-A in ARM state; otherwise AArch64.
+    a32: bool,
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
     ring: UnsafeCell<Box<[u64; 64]>>,
@@ -43,6 +46,9 @@ struct Execution {
     fiq: Cell<bool>,
     restart: Cell<Option<u64>>,
     exit: Cell<Option<u32>>,
+    // ARMv7-A abort reported by the engine, entered after the run.
+    exception: Cell<Option<arm::Exception>>,
+    entries: Cell<armv7a::Entries>,
     failure: RefCell<Option<String>>,
     observers: RefCell<BTreeMap<usize, Observer>>,
     index: RefCell<observers::Index>,
@@ -55,10 +61,14 @@ pub struct Core {
 }
 impl Core {
     pub fn new(cpu: RawCore, memory: Memory) -> Result<Self, String> {
-        if cpu.model() != Model::ArmV8A || !cpu.features().translation_filter {
-            return Err("counted A-profile requires the AArch64 translation frontend".into());
+        let a32 = cpu.model() == Model::CortexA7;
+        if !(a32 || cpu.model() == Model::ArmV8A) || !cpu.features().translation_filter {
+            return Err("counted A-profile requires an A-profile translation frontend".into());
         }
-        for (encoding, mask) in [(0xf088, 1 << 10), (0xe088, 1 << 31)] {
+        for (encoding, mask) in [(0xf088, 1 << 10), (0xe088, 1 << 31)]
+            .into_iter()
+            .filter(|_| !a32)
+        {
             let register = Register::Arm64System(arm::SystemRegister::from_encoding(encoding));
             let mut bytes = [0; 8];
             cpu.read_register(register, &mut bytes)?;
@@ -71,6 +81,7 @@ impl Core {
         let e = Rc::new(Execution {
             cpu: Rc::new(cpu),
             memory,
+            a32,
             id: Cell::new(usize::MAX),
             record,
             ring: UnsafeCell::new(Box::new([0; 64])),
@@ -88,6 +99,8 @@ impl Core {
             fiq: Cell::new(false),
             restart: Cell::new(None),
             exit: Cell::new(None),
+            exception: Cell::new(None),
+            entries: Cell::default(),
             failure: RefCell::new(None),
             observers: RefCell::new(BTreeMap::new()),
             index: RefCell::new(observers::Index::default()),
@@ -126,6 +139,12 @@ impl Core {
                 data,
             })?;
             e.cpu.hook_watched(hook, true)?;
+            if a32 {
+                e.cpu.install_hook(Hook::Exception {
+                    callback: exception,
+                    data,
+                })?;
+            }
         }
         Ok(Self { execution: e })
     }
@@ -199,11 +218,15 @@ impl Execution {
         let physical = self.cpu.translate(address, Access::Fetch)?;
         self.memory.note_code(self.id.get(), physical, 4)?;
         self.memory.apply_watches()?;
-        let framework = arm64::framework_instruction(word);
-        let boundary = word & 0xfff00000 == 0xd5100000
-            || word & 0xfffff0df == 0xd50340df
-            || word & 0xfffffc1f == 0xd69f0000
-            || word & 0xff000000 == 0xd4000000;
+        let framework = self.framework(word);
+        let boundary = if self.a32 {
+            armv7a::block_boundary(word)
+        } else {
+            word & 0xfff00000 == 0xd5100000
+                || word & 0xfffff0df == 0xd50340df
+                || word & 0xfffffc1f == 0xd69f0000
+                || word & 0xff000000 == 0xd4000000
+        };
         Ok(Translation {
             instruction: if framework {
                 InstructionDisposition::Replace
@@ -219,6 +242,13 @@ impl Execution {
             observe_block: address > u32::MAX as u64
                 || !self.index.borrow().blocks.at(address).is_empty(),
         })
+    }
+    fn framework(&self, word: u32) -> bool {
+        if self.a32 {
+            armv7a::framework_instruction(word)
+        } else {
+            arm64::framework_instruction(word)
+        }
     }
     fn publish(&self) -> Result<(), String> {
         for (access, address, size, value) in std::mem::take(&mut *self.stores.borrow_mut()) {
@@ -267,8 +297,15 @@ impl Execution {
             self.reset();
             return self.cpu.stop();
         }
+        // The translation filter and the 4-byte span ring cover ARM state only.
+        if self.a32
+            && b.thumb
+                .map_or_else(|| Ok::<_, String>(self.scalar(arm::CPSR)? & 0x20 != 0), Ok)?
+        {
+            return Err("Thumb execution is unsupported by the counted ARMv7-A backend".into());
+        }
         if b.bytes == 0 || b.bytes % 4 != 0 {
-            return Err("invalid AArch64 block span".into());
+            return Err("invalid A-profile block span".into());
         }
         let n = u64::from(b.bytes / 4);
         if n > room {
@@ -315,7 +352,7 @@ impl Execution {
             let mut bytes = [0; 4];
             self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
             let word = u32::from_le_bytes(bytes);
-            if arm64::framework_instruction(word) {
+            if self.framework(word) {
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
                 self.cpu.stop()?;
@@ -326,7 +363,20 @@ impl Execution {
         Ok(())
     }
     fn deliver_interrupt(&self) -> Result<bool, String> {
+        if self.a32 {
+            // The ARMv7-A board profile routes IRQ only.
+            let entered = self.irq.get() && armv7a::enter_irq(&*self.cpu)?;
+            if entered {
+                self.count_entry(|n| n.irq += 1);
+            }
+            return Ok(entered);
+        }
         arm64::enter_interrupt(&*self.cpu, self.irq.get(), self.fiq.get())
+    }
+    fn count_entry(&self, add: impl FnOnce(&mut armv7a::Entries)) {
+        let mut entries = self.entries.get();
+        add(&mut entries);
+        self.entries.set(entries);
     }
     fn tighten(&self, total: u64) -> Result<(), String> {
         if !self.active.get() {
@@ -404,6 +454,27 @@ unsafe fn block(b: Block, data: *mut c_void) {
 unsafe fn instruction(address: u64, size: u32, data: *mut c_void) {
     let e = unsafe { &*data.cast::<Execution>() };
     e.guarded(|| e.instruction(address, size))
+}
+/// A data abort retires its instruction's entry; a prefetch abort has none.
+unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
+    let e = unsafe { &*data.cast::<Execution>() };
+    e.guarded(|| {
+        if !matches!(
+            exception,
+            arm::Exception::PrefetchAbort | arm::Exception::DataAbort
+        ) {
+            return Err(format!("unmodeled ARMv7-A exception {exception:?}"));
+        }
+        e.settle(
+            e.tail(
+                e.scalar(Register::Pc)?,
+                exception == arm::Exception::DataAbort,
+            ),
+            true,
+        )?;
+        e.exception.set(Some(exception));
+        e.cpu.stop()
+    })
 }
 unsafe fn device(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
