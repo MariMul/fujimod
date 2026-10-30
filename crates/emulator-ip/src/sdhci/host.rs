@@ -2,8 +2,9 @@
 //! and UHS refuse. Latencies and card identity are declared inputs.
 //! The UHS-II interface enable, its mode select and VDD2 power are stored: the
 //! card is not UHS-II, so present-state bit 31 stays clear (X-T20 2.11 0xc658cc
-//! then 0xc65d90). Commands still run while it is enabled: GFX 50R 3.11 boots
-//! from SD with bit 8 left set.
+//! then 0xc65d90). Selecting UHS-II mode 7 refuses commands. Default-speed
+//! commands still run with only interface-enable bit 8 set, as GFX 50R 3.11
+//! leaves it during SD boot.
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
 use super::{Clocks, registers::Registers};
 use fujimod_emulator_devices::bus::FastReadWord;
@@ -653,6 +654,9 @@ impl SdHost {
             || rom && self.regs.get(0x28) >> 8 & 15 != 15
         {
             return Err("SD command before clock/power setup".into());
+        }
+        if self.regs.get(0x3e) & 0x107 == 0x107 {
+            return Err("SD command with UHS-II mode selected".into());
         }
         let argument = self.regs.word(8);
         let mut r = self.plan(word, argument)?;

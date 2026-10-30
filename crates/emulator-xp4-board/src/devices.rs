@@ -2,10 +2,10 @@
 //! Devices receive physical RAM, guest time and IRQ lines, never CPU state.
 use super::Cluster;
 use fujimod_emulator_devices::graphics::scanout::Frame;
+use fujimod_emulator_devices::{Cx, Device, Host, Record};
 use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
 use fujimod_emulator_xp4_io::adc::Adc;
 use fujimod_emulator_xp4_storage::storage::{self, DmaController, SerialFlashController};
-use fujimod_emulator_devices::{Cx, Device, Host, Record};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
@@ -97,22 +97,14 @@ impl Host for PhysicalHost<'_> {
     fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
         let source = self.cluster.memory_pointer(address, out.len(), 1)?;
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                source,
-                out.as_mut_ptr(),
-                out.len(),
-            );
+            std::ptr::copy_nonoverlapping(source, out.as_mut_ptr(), out.len());
         }
         Ok(())
     }
     fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let target = self.cluster.memory_pointer(address, bytes.len(), 2)?;
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                bytes.as_ptr(),
-                target,
-                bytes.len(),
-            );
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, bytes.len());
             let state = &mut *self.cluster.state.get();
             for monitor in &mut state.exclusive {
                 if monitor.is_some_and(|(a, n)| {
@@ -192,10 +184,9 @@ impl Devices {
         }
         let pins = fujimod_emulator_ip::socionext::gpio::Pins::new(inputs);
         let id = self.models.len();
-        self.models
-            .push(Some(Box::new(fujimod_emulator_ip::socionext::gpio::Gpio::new(
-                base,pins.clone(),
-            )?)));
+        self.models.push(Some(Box::new(
+            fujimod_emulator_ip::socionext::gpio::Gpio::new(base, pins.clone())?,
+        )));
         self.windows.push((base, base + 0x400, id));
         self.pins = Some(pins);
         Ok(())
@@ -276,13 +267,8 @@ impl Devices {
         self.spi_input(base, Box::new(part))
     }
 
-    pub fn adc(
-        &mut self,
-        base: u64,
-        power_down_gate: bool,
-        inputs: [u16; 12],
-        sample_ticks: u64,
-    ) -> Result<(), String> {
+    pub fn adc(&mut self, inputs: [u16; 12], sample_ticks: u64) -> Result<(), String> {
+        let base = fujimod_emulator_xp4_io::adc::BASE;
         if self
             .windows
             .iter()
@@ -290,11 +276,7 @@ impl Devices {
         {
             return Err("Overlapping XP4 ADC window".into());
         }
-        let mut adc = Adc::new(inputs, sample_ticks)?.with_base(base);
-        if power_down_gate {
-            adc = adc.with_power_down_gate();
-        }
-        let model = Arc::new(Mutex::new(adc));
+        let model = Arc::new(Mutex::new(Adc::new(inputs, sample_ticks)?));
         let id = self.models.len();
         self.models.push(Some(Box::new(Connected(model.clone()))));
         self.adc = Some((id, model));
@@ -330,7 +312,10 @@ impl Devices {
         self.usb = Some(model);
         Ok(())
     }
-    pub fn usb_phy(&mut self, config: fujimod_emulator_xp4_io::usb_phy::Config) -> Result<(), String> {
+    pub fn usb_phy(
+        &mut self,
+        config: fujimod_emulator_xp4_io::usb_phy::Config,
+    ) -> Result<(), String> {
         let model = fujimod_emulator_xp4_io::usb_phy::Phy::new(config)?;
         let ranges = [
             (config.base, config.base + 8),
@@ -409,7 +394,9 @@ impl Devices {
         }
         let picture = match layout {
             None => None,
-            Some("bgra8888-straight") => Some(fujimod_emulator_xp4_display::lcdc::Picture::Bgra8888Straight),
+            Some("bgra8888-straight") => {
+                Some(fujimod_emulator_xp4_display::lcdc::Picture::Bgra8888Straight)
+            }
             _ => return Err("Unsupported XP4 LCDC picture layout".into()),
         };
         let video = match video_layout {
@@ -417,51 +404,11 @@ impl Devices {
             Some("yycbcr422") => Some(fujimod_emulator_xp4_display::lcdc::Video::YyCbCr422),
             _ => return Err("Unsupported XP4 LCDC video layout".into()),
         };
-        let model = fujimod_emulator_xp4_display::lcdc::Lcdc::new(base, pixel_ticks, irqs, picture, video)?;
+        let model =
+            fujimod_emulator_xp4_display::lcdc::Lcdc::new(base, pixel_ticks, irqs, picture, video)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x604, id));
-        Ok(())
-    }
-    pub fn xpp_display_control(&mut self, bases: [u64; 2], ticks: u64) -> Result<(), String> {
-        let model = fujimod_emulator_xpp::display::DisplayControl::new(bases, ticks)?;
-        let windows = model.windows();
-        if windows.iter().any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi)) {
-            return Err("Duplicate X-Processor Pro display control window".into());
-        }
-        let id = self.models.len();
-        self.models.push(Some(Box::new(model)));
-        self.windows.extend(windows.map(|(lo, hi)| (lo, hi, id)));
-        Ok(())
-    }
-    pub fn xpp_job(&mut self, base: u64, irq: u32, ticks: u64) -> Result<(), String> {
-        let model = fujimod_emulator_xpp::job::JobEngine::new(base, irq, ticks)?;
-        let (lo, hi) = model.window();
-        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
-            return Err("Duplicate X-Processor Pro job engine window".into());
-        }
-        let id = self.models.len();
-        self.models.push(Some(Box::new(model)));
-        self.windows.push((lo, hi, id));
-        Ok(())
-    }
-    pub fn xpp_display_timing(
-        &mut self,
-        bases: [u64; 2],
-        irqs: [[u8; 3]; 2],
-        frame_ticks: u64,
-        stop_ticks: u64,
-    ) -> Result<(), String> {
-        let model = fujimod_emulator_xp4_display::timing::XppTiming::new(bases, irqs, frame_ticks, stop_ticks)?;
-        let windows = model.windows();
-        if windows.iter().any(|&(base, end)| {
-            self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end)
-        }) {
-            return Err("Duplicate X-Processor Pro display timing window".into());
-        }
-        let id = self.models.len();
-        self.models.push(Some(Box::new(model)));
-        self.windows.extend(windows.map(|(base, end)| (base, end, id)));
         Ok(())
     }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
@@ -496,7 +443,8 @@ impl Devices {
             {
                 return Err("Overlapping XP4 MOVDC window".into());
             }
-            let model = fujimod_emulator_xp4_display::movdc::Movdc::new(base, irq, reset, period, luma)?;
+            let model =
+                fujimod_emulator_xp4_display::movdc::Movdc::new(base, irq, reset, period, luma)?;
             let id = self.models.len();
             self.models.push(Some(Box::new(model)));
             self.windows.push((base, base + 0x10c, id));
@@ -554,7 +502,10 @@ impl Devices {
         )?;
         let mut extra: Vec<(u64, u64, Box<dyn Device>)> = vec![];
         if let Some((base, irq, reset, sram, bank_size, scene)) = ibuf {
-            use fujimod_emulator_sensor_input::{input_buffer::{InputBuffer, Output, Wiring}, statistics::{Planes, Statistics}};
+            use fujimod_emulator_sensor_input::{
+                input_buffer::{InputBuffer, Output, Wiring},
+                statistics::{Planes, Statistics},
+            };
             if base != 0xfff70000
                 || sram != 0xfff10000
                 || bank_size != 0x7000
@@ -634,19 +585,17 @@ impl Devices {
     }
     pub fn io_groups(&mut self, base: u64) {
         let id = self.models.len();
-        self.models
-            .push(Some(Box::new(fujimod_emulator_devices::keyed_io::KeyedIoGroup::new(
-                base,
-            ))));
+        self.models.push(Some(Box::new(
+            fujimod_emulator_devices::keyed_io::KeyedIoGroup::new(base),
+        )));
         self.windows.push((base, base + 0xa0, id));
     }
     pub fn decompressor(&mut self, base: u64, irq: u32) {
         let id = self.models.len();
         let high = std::sync::Arc::new(std::sync::Mutex::new([0; 2]));
-        self.models
-            .push(Some(Box::new(fujimod_emulator_devices::lz_osd::Decompressor::new(
-                base, irq, high, None,
-            ))));
+        self.models.push(Some(Box::new(
+            fujimod_emulator_devices::lz_osd::Decompressor::new(base, irq, high, None),
+        )));
         self.windows.push((base, base + 0x6c, id));
     }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
@@ -812,7 +761,7 @@ impl Devices {
         clock: Option<fujimod_emulator_xpp::serial::Clock>,
         replies: BTreeMap<u32, u32>,
     ) -> Result<(), String> {
-        use fujimod_emulator_xpp::serial::{REGISTERS, DiscoveryPort};
+        use fujimod_emulator_xpp::serial::{DiscoveryPort, REGISTERS};
         if self
             .windows
             .iter()
@@ -833,7 +782,13 @@ impl Devices {
         &mut self,
         options: fujimod_emulator_xpp::boot::Options,
         card_strap: bool,
-    ) -> Result<(), String> {
+    ) -> Result<
+        (
+            Vec<fujimod_emulator_xpp::resets::ResetPulses>,
+            fujimod_emulator_xpp::resets::ExternalLines,
+        ),
+        String,
+    > {
         let bases: Vec<u64> = [
             options.selector_base,
             options.clock_base,
@@ -855,12 +810,16 @@ impl Devices {
             options,
             vec![fujimod_emulator_devices::signals::Level::new(card_strap)],
         )?;
+        let lines = (0..3)
+            .map(|n| model.sd_reset(n))
+            .collect::<Result<Vec<_>, _>>()?;
+        let external = model.external_lines();
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         for base in bases {
             self.windows.push((base, base + 0x1000, id));
         }
-        Ok(())
+        Ok((lines, external))
     }
     /// X-Processor Pro ADC with declared samples.
     pub fn xpp_adc(
@@ -905,6 +864,10 @@ impl Devices {
                 .scanout
                 .map(|(output, period)| fujimod_emulator_xpp::display::Scanout { output, period }),
         )?;
+        let model = match output.handshake_ticks {
+            Some(ticks) => model.with_handshake(ticks)?,
+            None => model,
+        };
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + size, id));
@@ -1057,7 +1020,8 @@ impl Devices {
             sd.options,
             card,
             contacts,
-            sd.irq.map(fujimod_emulator_devices::bus::InterruptLine::Shared),
+            sd.irq
+                .map(fujimod_emulator_devices::bus::InterruptLine::Shared),
         )?;
         if let Some(line) = reset {
             model = model.with_reset(line);
@@ -1239,7 +1203,42 @@ impl Devices {
         Ok(())
     }
     /// X-Processor Pro display frame interrupts; the law has no register window.
-    pub fn xpp_display_frames(&mut self, irqs: Vec<u32>, period: u64) -> Result<(), String> {
+    pub fn xpp_display_frames(
+        &mut self,
+        irqs: Vec<u32>,
+        period: u64,
+        timing: Option<([u64; 2], u64)>,
+    ) -> Result<(), String> {
+        if let Some((bases, stop_ticks)) = timing {
+            let routes: Vec<u8> = irqs
+                .iter()
+                .map(|&n| u8::try_from(n).map_err(|_| "Display phase IRQ exceeds 255"))
+                .collect::<Result<_, _>>()?;
+            let routes: [[u8; 3]; 2] = routes
+                .chunks(3)
+                .map(|r| {
+                    r.try_into()
+                        .map_err(|_| "Display needs three IRQs per bank")
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .try_into()
+                .map_err(|_| "Display needs two timing banks")?;
+            let model = fujimod_emulator_xp4_display::timing::XppTiming::new(
+                bases, routes, period, stop_ticks,
+            )?;
+            let windows = model.windows();
+            if windows.iter().any(|&(base, end)| {
+                self.windows
+                    .iter()
+                    .any(|&(lo, hi, _)| base < hi && lo < end)
+            }) {
+                return Err("Overlapping display timing bank".into());
+            }
+            let id = self.models.len();
+            self.models.push(Some(Box::new(model)));
+            self.windows.extend(windows.map(|(lo, hi)| (lo, hi, id)));
+            return Ok(());
+        }
         let model = fujimod_emulator_xpp::display::FrameClock::new(irqs, period)?;
         self.models.push(Some(Box::new(model)));
         Ok(())
@@ -1391,7 +1390,14 @@ impl Cluster {
             let low = self.memory[index].data.len();
             for cpu in &self.cpus {
                 cpu.unmap(0, low)?;
-                unsafe { cpu.map_backing(0, low, 7, std::ptr::NonNull::new(self.ram.as_ptr()).unwrap()) }?;
+                unsafe {
+                    cpu.map_backing(
+                        0,
+                        low,
+                        7,
+                        std::ptr::NonNull::new(self.ram.as_ptr()).unwrap(),
+                    )
+                }?;
             }
             state.remap_pending = false;
             state.remap_ready = false;

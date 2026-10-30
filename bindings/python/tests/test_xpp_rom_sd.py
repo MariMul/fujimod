@@ -27,6 +27,9 @@ def options(terminal: int) -> dict[str, object]:
         initial_registers=[[[{"Arm32": {"R": 15}}, 0xFFF00000]]] * 2,
         dram_alias=0x40000000,
         pmu_cycles_per_tick=64,
+        xpp_reset_gates=0xFFF0A000,
+        xpp_power=0xFFF10000,
+        xpp_dram=(0xFFF0E000, 0),
         xpp_boot=dict(
             card_strap=True,
             low_alias=0xFFF00000,
@@ -41,6 +44,7 @@ def options(terminal: int) -> dict[str, object]:
                 normal_selector=0x18,
                 card_selector=0,
                 settle_ticks=2,
+                refresh_level=0,
             ),
         ),
         xpp_sd=dict(

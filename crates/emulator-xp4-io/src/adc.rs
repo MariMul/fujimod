@@ -16,9 +16,6 @@ struct State {
     last_edge: Option<u64>,
 }
 pub struct Adc {
-    base: u64,
-    // +8 value that stops conversion: 0 on XP4, 1 where +8 is a power-down bit.
-    gate_off: u32,
     inputs: [u16; 12],
     sample_ticks: u64,
     state: State,
@@ -31,8 +28,6 @@ impl Adc {
             );
         }
         Ok(Self {
-            base: BASE,
-            gate_off: 0,
             inputs,
             sample_ticks,
             state: State {
@@ -46,16 +41,6 @@ impl Adc {
                 last_edge: None,
             },
         })
-    }
-    /// Places the register window at `base`; X-Processor Pro uses 0xfff19000.
-    pub fn with_base(mut self, base: u64) -> Self {
-        self.base = base;
-        self
-    }
-    /// Treats +8 as power-down, as GFX 50R loader 0xc900 writes 0 to enable.
-    pub fn with_power_down_gate(mut self) -> Self {
-        self.gate_off = 1;
-        self
     }
     pub fn set_input(
         &mut self,
@@ -88,7 +73,7 @@ impl Adc {
             self.state.deadline = None;
             self.state.last_edge = None;
         }
-        if self.state.control & 1 == 0 || self.state.gate == self.gate_off || self.mask() == 0 {
+        if self.state.control & 1 == 0 || self.state.gate == 0 || self.mask() == 0 {
             return;
         }
         if self.state.deadline.is_some() {
@@ -112,7 +97,7 @@ impl Device for Adc {
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);
-        let offset = address.wrapping_sub(self.base);
+        let offset = address.wrapping_sub(BASE);
         if size != 4 || offset & 3 != 0 {
             cx.unmodeled();
             return 0;
@@ -132,7 +117,7 @@ impl Device for Adc {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         self.advance(cx);
-        let offset = address.wrapping_sub(self.base);
+        let offset = address.wrapping_sub(BASE);
         if size != 4 || offset & 3 != 0 || value > u64::from(u32::MAX) {
             cx.unmodeled();
             return;
@@ -203,9 +188,7 @@ impl Device for Adc {
             || state.trim > 255
             || state.samples.iter().any(|v| *v > 4095)
             || (state.deadline.is_some()
-                && (state.control & 1 == 0
-                    || state.gate == self.gate_off
-                    || state.control & 0x0fff0000 == 0))
+                && (state.control & 1 == 0 || state.gate == 0 || state.control & 0x0fff0000 == 0))
         {
             return Err("Invalid XP4 ADC checkpoint or conversion clock".into());
         }

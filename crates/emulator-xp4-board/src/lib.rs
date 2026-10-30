@@ -1,9 +1,9 @@
 //! ARM application-profile cluster alongside the shared R-profile runtime.
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
-pub mod memory;
 mod client;
 mod definition;
+pub mod memory;
 pub use definition::Definition;
 pub mod observation;
 use observation::Call;
@@ -583,7 +583,10 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         && let Some(pmu) = state.pmu.get_mut(core).and_then(Option::as_mut)
     {
         use fujimod_emulator::board::armv7a::Entry;
-        if !matches!(pmu.before(&*c.cpus[core], address, state.ticks)?, Entry::Execute) {
+        if !matches!(
+            pmu.before(&*c.cpus[core], address, state.ticks)?,
+            Entry::Execute
+        ) {
             state.redirected = Some(address as u32 + 4);
             return Ok(());
         }
@@ -998,10 +1001,6 @@ impl Session {
             xpp_boot,
             pmu_cycles_per_tick,
             xpp_serial_replies,
-            adc_base,
-            xpp_display_timing,
-            xpp_job,
-            xpp_display_control,
         } = definition;
         let instruction_rate = fujimod_emulator_cpu::timeline::Ratio::new(
             instructions_per_tick.0,
@@ -1063,7 +1062,9 @@ impl Session {
         if let Some(alias) = dram_alias
             && (alias % 4096 != 0
                 || alias < ram_size as u64
-                || !alias.checked_add(ram_size as u64).is_some_and(|end| end <= 1 << 32)
+                || !alias
+                    .checked_add(ram_size as u64)
+                    .is_some_and(|end| end <= 1 << 32)
                 || memory.iter().any(|window| {
                     alias < window.base + window.data.len() as u64
                         && window.base < alias + ram_size as u64
@@ -1140,11 +1141,25 @@ impl Session {
             }
             None
         };
-        if let Some(boot) = xpp_boot {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .xpp_boot(boot.options, boot.card_strap)?;
+        let boot_wiring = xpp_boot.as_ref().map(|b| b.options.clone());
+        if let Some(wiring) = &boot_wiring {
+            if xpp_reset_gates != Some(wiring.selector_base)
+                || xpp_power != Some(wiring.clock_base)
+                || xpp_dram != Some((wiring.ddr_base, wiring.refresh_level))
+            {
+                return Err(
+                    "Cold boot requires matching reset, power and DRAM declarations".into(),
+                );
+            }
         }
+        let boot_lines = match xpp_boot {
+            Some(boot) => Some(
+                devices
+                    .get_or_insert_with(devices::Devices::empty)
+                    .xpp_boot(boot.options, boot.card_strap)?,
+            ),
+            None => None,
+        };
         if xpp_serial_replies
             .iter()
             .any(|(base, _, _)| !xpp_serial.contains(base))
@@ -1199,18 +1214,25 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_frame_sync(sync)?;
         }
-        let mut external_lines = None;
-        let reset_gates = match xpp_reset_gates {
-            Some(base) => Some(
-                devices
-                    .get_or_insert_with(devices::Devices::empty)
-                    .xpp_reset_gates(base)
-                    .map(|(resets, lines)| {
-                        external_lines = Some(lines);
-                        resets
-                    })?,
-            ),
-            None => None,
+        let (mut external_lines, boot_resets) = match boot_lines {
+            Some((resets, external)) => (Some(external), Some(resets)),
+            None => (None, None),
+        };
+        let reset_gates = if boot_wiring.is_some() {
+            boot_resets
+        } else {
+            match xpp_reset_gates {
+                Some(base) => Some(
+                    devices
+                        .get_or_insert_with(devices::Devices::empty)
+                        .xpp_reset_gates(base)
+                        .map(|(resets, lines)| {
+                            external_lines = Some(lines);
+                            resets
+                        })?,
+                ),
+                None => None,
+            }
         };
         if let Some(sd) = xpp_sd {
             let reset = match (sd.reset_channel, &reset_gates) {
@@ -1262,12 +1284,12 @@ impl Session {
                 },
             )?;
         }
-        if let Some(base) = xpp_power {
+        if let Some(base) = xpp_power.filter(|_| boot_wiring.is_none()) {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_power(base)?;
         }
-        if let Some((base, level)) = xpp_dram {
+        if let Some((base, level)) = xpp_dram.filter(|_| boot_wiring.is_none()) {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_dram(base, level)?;
@@ -1285,7 +1307,7 @@ impl Session {
         if let Some(frames) = xpp_display_frames {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .xpp_display_frames(frames.irqs, frames.period_ticks)?;
+                .xpp_display_frames(frames.irqs, frames.period_ticks, frames.timing)?;
         }
         for base in xpp_serial {
             if xpp_lens.as_ref().is_some_and(|lens| lens.port == base) {
@@ -1321,12 +1343,7 @@ impl Session {
         if let Some((inputs, sample_ticks)) = adc {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .adc(
-                    adc_base.unwrap_or(fujimod_emulator_xp4_io::adc::BASE),
-                    adc_base.is_some(),
-                    inputs,
-                    sample_ticks,
-                )?;
+                .adc(inputs, sample_ticks)?;
         }
         if let Some((map, timing, read_gate, ibuf)) = imaging {
             devices
@@ -1351,21 +1368,6 @@ impl Session {
                 layout.as_deref(),
                 video.as_deref(),
             )?;
-        }
-        if let Some((bases, ticks)) = xpp_display_control {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .xpp_display_control(bases, ticks)?;
-        }
-        if let Some((base, irq, ticks)) = xpp_job {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .xpp_job(base, irq, ticks)?;
-        }
-        if let Some((bases, irqs, frame_ticks, stop_ticks)) = xpp_display_timing {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .xpp_display_timing(bases, irqs, frame_ticks, stop_ticks)?;
         }
         if let Some(inputs) = gpio {
             devices
@@ -1480,7 +1482,11 @@ impl Session {
         if let Some((base, irq)) = decompressor {
             // The same engine sits at 0xfff79000 on XP4 and at 0xfff80000 on
             // the X-Processor Pro, whose storage is the flash-controller map.
-            let expected = if has_xpp_storage { 0xfff80000 } else { 0xfff79000 };
+            let expected = if has_xpp_storage {
+                0xfff80000
+            } else {
+                0xfff79000
+            };
             if base != expected || !(32..512).contains(&irq) {
                 return Err("Invalid XP4 decompressor wiring".to_owned());
             }
@@ -1872,11 +1878,7 @@ impl Session {
     pub fn write(&self, address: usize, data: &[u8]) -> Result<(), String> {
         let target = self.inner.memory_pointer(address as u64, data.len(), 0)?;
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                target,
-                data.len(),
-            );
+            std::ptr::copy_nonoverlapping(data.as_ptr(), target, data.len());
         }
         Ok(())
     }
@@ -2133,7 +2135,10 @@ impl Session {
                 .collect(),
             failure: s.failure.clone(),
             cbar_reads: s.cbar_reads,
-            gpio: s.devices.as_ref().and_then(|devices| devices.gpio_registers()),
+            gpio: s
+                .devices
+                .as_ref()
+                .and_then(|devices| devices.gpio_registers()),
             history: observations.then(|| observation::History {
                 recent: s
                     .recent
@@ -2149,7 +2154,10 @@ impl Session {
             }),
         }
     }
-    pub fn frontier(&self, by_count: bool) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
+    pub fn frontier(
+        &self,
+        by_count: bool,
+    ) -> Vec<fujimod_emulator::board::discovery::FrontierEntry> {
         unsafe { (*self.inner.state.get()).discovery.frontier(by_count) }
     }
     pub fn discovery_shadow(&self) -> Vec<(u64, u8)> {

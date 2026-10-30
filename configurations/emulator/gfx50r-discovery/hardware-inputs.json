@@ -30,6 +30,84 @@
         "page_ticks": 512,
         "basis": "Declared discovery input: a Micron NOR on chip select 0 with 256-byte pages and its datasheet configuration reset 0xff. The chip part and all latencies are not measured; the ticks are synthetic."
       }
+    },
+    "adc_input": {
+      "samples": [
+        333,
+        1022,
+        394,
+        77,
+        352,
+        485,
+        540,
+        481,
+        328,
+        418,
+        512,
+        512
+      ],
+      "basis": "Measured GFX 50R 3.11 loader handoff +0x188 channels 0-9, read through the resident service; channels 10-11 are declared 512, not measured."
+    },
+    "gpio_input": {
+      "levels": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "basis": "Declared zero external GPIO levels for discovery; not measured pin levels."
+    },
+    "sd_card": {
+      "basis": "Declared 4 GiB SDHC card for ROM-to-SD execution; size, RCA and FAT32 geometry are synthetic.",
+      "format": {
+        "filesystem": "fat32",
+        "label": "CAMERA",
+        "partition_start": 2048,
+        "sectors_per_cluster": 64
+      },
+      "high_speed": false,
+      "rca": 1,
+      "sectors": 8388608
+    },
+    "dram_refresh": {
+      "level": 0,
+      "basis": "Declared refresh level 0; not measured."
+    },
+    "usb_cable": {
+      "vbus_bank": 1,
+      "vbus_pin": 14,
+      "speed": "high",
+      "basis": "Declared disconnected high-speed USB input; VBUS bank 1 bit 14 is assumed from the shared controller wiring, not measured."
+    },
+    "sub_cpu": {
+      "port": 4294090752,
+      "registers": [
+        {
+          "name": "power-on cause",
+          "register": 96,
+          "value": 16
+        }
+      ],
+      "basis": "Measured GFX 50R 3.11 loader handoff +0x140 value 0x10, read through the resident service; selects boot reason 2. Other peer registers are declared zero."
+    },
+    "pll_input": {
+      "running": [
+        0,
+        3
+      ],
+      "basis": "Declared loader-inherited PLL state for kernel-entry discovery: PLLs 0 and 3 running, like the shared XPP stage-2 configuration. This is an assumed input, not a GFX 50R measurement; ROM execution may reprogram the clock bank."
     }
   }
 }

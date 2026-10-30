@@ -17,23 +17,20 @@ pub struct Options {
     pub normal_selector: u32,
     pub card_selector: u32,
     pub settle_ticks: u64,
+    pub refresh_level: u8,
 }
 #[derive(Serialize, Deserialize)]
 struct State {
-    clocks: [u32; 12],
-    #[serde(with = "fujimod_emulator_devices::checkpoint::array")]
-    ddr: [u32; 512],
-    routing: u32,
-    result: u32,
     remap: u32,
-    clock_due: Option<u64>,
-    ddr_due: Option<u64>,
     io_words: std::collections::BTreeMap<u64, u32>,
 }
 pub struct BootController {
     options: Options,
     contacts: Vec<Level>,
     state: State,
+    gates: crate::resets::Gates,
+    power: crate::power::Control,
+    dram: crate::dram::Controller,
 }
 impl BootController {
     pub fn new(options: Options, contacts: Vec<Level>) -> Result<Self, String> {
@@ -55,20 +52,33 @@ impl BootController {
         {
             return Err("Invalid X-Processor Pro boot wiring".into());
         }
+        let gates = crate::resets::Gates::new(options.selector_base)?.with_selector(
+            contacts.clone(),
+            options.normal_selector,
+            options.card_selector,
+        );
+        let power =
+            crate::power::Control::new(options.clock_base)?.with_startup(options.settle_ticks)?;
+        let dram = crate::dram::Controller::new(options.ddr_base, options.refresh_level)?
+            .with_startup(options.settle_ticks)?;
         Ok(Self {
             options,
             contacts,
+            gates,
+            power,
+            dram,
             state: State {
-                clocks: [0; 12],
-                ddr: [0; 512],
-                routing: 0,
-                result: 0,
                 remap: 0,
-                clock_due: None,
-                ddr_due: None,
                 io_words: Default::default(),
             },
         })
+    }
+    /// Reset signals of the same gate bank used during cold boot.
+    pub fn sd_reset(&self, channel: usize) -> Result<crate::resets::ResetPulses, String> {
+        self.gates.sd_reset(channel)
+    }
+    pub fn external_lines(&self) -> crate::resets::ExternalLines {
+        self.gates.external_lines()
     }
     fn transfer(
         &mut self,
@@ -82,40 +92,24 @@ impl BootController {
         }
         self.advance(cx);
         let o = &self.options;
-        if address == o.selector_base {
-            if value.is_some() {
-                return Err("Boot selector is an external input".into());
-            }
-            return Ok((if self.contacts.iter().all(Level::high) {
-                o.card_selector
+        let device: Option<&mut dyn Device> =
+            if (o.selector_base..o.selector_base + 0x1000).contains(&address) {
+                Some(&mut self.gates)
+            } else if (o.clock_base..o.clock_base + 0x1000).contains(&address) {
+                Some(&mut self.power)
+            } else if (o.ddr_base..o.ddr_base + 0x1000).contains(&address) {
+                Some(&mut self.dram)
             } else {
-                o.normal_selector
-            })
-            .into());
-        }
-        if address == o.selector_base + 0xd0 || address == o.selector_base + 0xd4 {
-            let word = if address == o.selector_base + 0xd0 {
-                &mut self.state.routing
-            } else {
-                &mut self.state.result
+                None
             };
-            if let Some(v) = value {
-                *word = v as u32;
-            }
-            return Ok((*word).into());
-        }
-        // Other selector-page words are system control. Every GFX 50R 3.11
-        // access identified (e.g. 0xcb0684 on +0x1c, 0xa9c48c on +0x218) is a
-        // read-modify-write and none is polled, so they retain writes.
-        if address
-            .checked_sub(o.selector_base)
-            .is_some_and(|offset| offset < 0x1000)
-        {
-            let word = self.state.io_words.entry(address).or_default();
-            if let Some(v) = value {
-                *word = v as u32;
-            }
-            return Ok((*word).into());
+        if let Some(device) = device {
+            return Ok(match value {
+                Some(value) => {
+                    device.write(cx, address, size, value);
+                    0
+                }
+                None => device.read(cx, address, size),
+            });
         }
         if o.bus_bases.iter().any(|base| address == base + 0x100) {
             let word = self.state.io_words.entry(address).or_default();
@@ -150,49 +144,6 @@ impl BootController {
             }
             return Ok(self.state.remap.into());
         }
-        if (o.clock_base..o.clock_base + 0x30).contains(&address) {
-            let offset = (address - o.clock_base) as usize;
-            if !matches!(offset, 0 | 4 | 8 | 12 | 16 | 20 | 44) {
-                return Err("Unsupported boot clock register".into());
-            }
-            if let Some(v) = value {
-                if offset == 44 {
-                    return Err("Boot clock status is read-only".into());
-                }
-                self.state.clocks[offset / 4] = v as u32;
-                if offset == 12 {
-                    self.state.clock_due = Some(
-                        cx.now()
-                            .checked_add(o.settle_ticks)
-                            .ok_or("Clock deadline overflow")?,
-                    );
-                    cx.schedule(self.state.clock_due.unwrap(), 0);
-                }
-            }
-            return Ok(self.state.clocks[offset / 4].into());
-        }
-        if (o.ddr_base..o.ddr_base + 0x800).contains(&address) {
-            let offset = (address - o.ddr_base) as usize;
-            if !(offset < 0x2e8 || (0x400..0x718).contains(&offset)) {
-                return Err("Unsupported DDR register".into());
-            }
-            if let Some(v) = value {
-                self.state.ddr[offset / 4] = if offset == 0x14c {
-                    v as u32 & !8 | self.state.ddr[offset / 4] & 8
-                } else {
-                    v as u32
-                };
-                if offset == 0 && v & 1 != 0 {
-                    self.state.ddr_due = Some(
-                        cx.now()
-                            .checked_add(o.settle_ticks)
-                            .ok_or("DDR deadline overflow")?,
-                    );
-                    cx.schedule(self.state.ddr_due.unwrap(), 0);
-                }
-            }
-            return Ok(self.state.ddr[offset / 4].into());
-        }
         Err(format!("Unmapped boot register {address:#x}"))
     }
 }
@@ -215,46 +166,36 @@ impl Device for BootController {
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        if self.state.clock_due.is_some_and(|t| t <= cx.now()) {
-            self.state.clock_due = None;
-            self.state.clocks[11] = 0xc0000000;
-        }
-        if self.state.ddr_due.is_some_and(|t| t <= cx.now()) {
-            self.state.ddr_due = None;
-            self.state.ddr[0x14c / 4] |= 8;
-        }
+        self.power.advance(cx);
+        self.dram.advance(cx);
     }
-    fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
-        self.advance(cx);
-    }
-    fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.state
-            .clock_due
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        [self.power.next_deadline(now), self.dram.next_deadline(now)]
             .into_iter()
-            .chain(self.state.ddr_due)
+            .flatten()
             .min()
     }
     fn save(&self) -> Value {
-        json!({"state":self.state,"contacts":self.contacts.iter().map(Level::high).collect::<Vec<_>>()})
+        json!({"state":self.state,"contacts":self.contacts.iter().map(Level::high).collect::<Vec<_>>(), "gates": self.gates.save(), "power": self.power.save(), "dram": self.dram.save()})
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
-            &(
-                &self.options,
-                &self.state,
-                self.contacts.iter().map(Level::high).collect::<Vec<_>>(),
-            ),
+            &(&self.options, self.save()),
         )
     }
     fn validate_checkpoint(
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let (options, _, contacts): (Options, State, Vec<bool>) = saved.decode(self.name())?;
+        let (options, state): (Options, Value) = saved.decode(self.name())?;
+        let contacts: Vec<bool> =
+            serde_json::from_value(state["contacts"].clone()).map_err(|e| e.to_string())?;
         if options != self.options || contacts.len() != self.contacts.len() {
             return Err("Boot checkpoint wiring differs".into());
         }
+        let mut probe = Self::new(options, contacts.iter().copied().map(Level::new).collect())?;
+        probe.restore(&state)?;
         Ok(())
     }
     fn restore_checkpoint(
@@ -262,15 +203,25 @@ impl Device for BootController {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let (_, state, contacts): (Options, State, Vec<bool>) = saved.decode(self.name())?;
+        let (_, state): (Options, Value) = saved.decode(self.name())?;
+        self.restore(&state)
+    }
+    fn restore(&mut self, value: &Value) -> Result<(), String> {
+        let state: State =
+            serde_json::from_value(value["state"].clone()).map_err(|e| e.to_string())?;
+        let contacts: Vec<bool> =
+            serde_json::from_value(value["contacts"].clone()).map_err(|e| e.to_string())?;
+        if contacts.len() != self.contacts.len() {
+            return Err("Boot checkpoint contacts differ".into());
+        }
+        self.gates.restore(&value["gates"])?;
+        self.power.restore(&value["power"])?;
+        self.dram.restore(&value["dram"])?;
         self.state = state;
         for (contact, high) in self.contacts.iter().zip(contacts) {
             contact.drive(high);
         }
         Ok(())
-    }
-    fn restore(&mut self, _: &Value) -> Result<(), String> {
-        Err("Boot restoration requires its exact checkpoint".into())
     }
 }
 
@@ -292,8 +243,10 @@ mod tests {
             normal_selector: 0x18,
             card_selector: 0,
             settle_ticks: 5,
+            refresh_level: 0,
         };
         let mut d = BootController::new(options, levels.clone()).unwrap();
+        let reset = d.sd_reset(0).unwrap();
         let mut h = TestHost::new();
         assert_eq!(read(&mut d, &mut h, 0x10000), 0x18);
         levels[0].drive(true);
@@ -304,15 +257,22 @@ mod tests {
         assert_eq!(read(&mut d, &mut h, 0x3014c) & 8, 0);
         write(&mut d, &mut h, 0x2000c, 0x1234);
         write(&mut d, &mut h, 0x30000, 1);
+        write(&mut d, &mut h, 0x1001c, 1 << 18);
+        write(&mut d, &mut h, 0x1001c, 0);
+        assert_eq!(reset.count(), 1);
         let saved = d.checkpoint().unwrap();
         advance(&mut d, &mut h, 4);
-        assert_eq!(read(&mut d, &mut h, 0x2002c), 0);
+        assert_eq!(read(&mut d, &mut h, 0x2002c) & 0xc0000000, 0);
         assert_eq!(read(&mut d, &mut h, 0x3014c) & 8, 0);
         advance(&mut d, &mut h, 5);
-        assert_eq!(read(&mut d, &mut h, 0x2002c), 0xc0000000);
+        assert_eq!(read(&mut d, &mut h, 0x2002c), 0xc0001234);
         assert_eq!(read(&mut d, &mut h, 0x3014c) & 8, 8);
         levels[0].drive(false);
+        write(&mut d, &mut h, 0x1001c, 1 << 18);
+        write(&mut d, &mut h, 0x1001c, 0);
+        assert_eq!(reset.count(), 2);
         d.restore_checkpoint(&saved).unwrap();
+        assert_eq!(reset.count(), 1);
         h.now = 0;
         assert!(levels[0].high());
         assert_eq!(d.next_deadline(0), Some(5));

@@ -161,20 +161,6 @@ pub struct Definition {
     /// Declared (port base, send word, receive word) replies.
     #[serde(default)]
     pub xpp_serial_replies: Vec<(u64, u32, u32)>,
-    /// ADC register base; XP4 places it at 0xfff40000. A declared base
-    /// selects the X-Processor Pro law, where +8 is a power-down bit.
-    #[serde(default)]
-    pub adc_base: Option<u64>,
-    /// X-Processor Pro display timing: two bank bases, each bank's phase
-    /// 0/1/2 GIC lines, then frame and stop ticks.
-    #[serde(default)]
-    pub xpp_display_timing: Option<([u64; 2], [[u8; 3]; 2], u64, u64)>,
-    /// X-Processor Pro job engine: base, GIC line, job ticks.
-    #[serde(default)]
-    pub xpp_job: Option<(u64, u32, u64)>,
-    /// X-Processor Pro display control pages: two bank bases, status ticks.
-    #[serde(default)]
-    pub xpp_display_control: Option<([u64; 2], u64)>,
 }
 
 /// Register layout of the interval timer at `timer_base`.
@@ -247,6 +233,8 @@ pub struct XppShutter {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppDisplayFrames {
+    #[serde(default)]
+    pub timing: Option<([u64; 2], u64)>,
     pub irqs: Vec<u32>,
     pub period_ticks: u64,
 }
@@ -257,6 +245,8 @@ pub struct XppDisplayFrames {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppDisplayOutput {
+    #[serde(default)]
+    pub handshake_ticks: Option<u64>,
     pub base: u64,
     pub size: u64,
     pub set_bits: Vec<(u64, u32)>,

@@ -25,11 +25,9 @@
 //! +0x030 buffer) carries the imaging pipeline's output, which is not
 //! modeled, and is not captured.
 //!
-//! [`DisplayControl`] holds the display unit control pages, from GFX 50R 0xcf6adc.
-//! Each bank retains every aligned word. A +0 read returns only bit 16, a
-//! status: a written 1-to-0 change of bit 16 sets it after `ticks`, and a
-//! write with bit 16 set clears it. A camera read of +0 while the display ran
-//! returned 0, so +0 reads no stored bits. The delay is declared, not measured.
+//! A declared handshake clock makes +0 a bit-16 status: a falling request
+//! sets status after that delay; a set request clears it. Other words retain
+//! writes. This is the same output controller with a timed completion law.
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -125,6 +123,12 @@ struct Capture {
     hash: Option<u64>,
 }
 
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Handshake {
+    status: bool,
+    due: Option<u64>,
+}
 pub struct Output {
     base: u64,
     size: u64,
@@ -133,6 +137,8 @@ pub struct Output {
     words: BTreeMap<u64, u32>,
     scanout: Option<Scanout>,
     capture: Capture,
+    handshake_ticks: Option<u64>,
+    handshake: Handshake,
 }
 impl Output {
     /// `set` and `clear` map word offsets to the status bits that read as
@@ -173,11 +179,21 @@ impl Output {
             clear,
             words: BTreeMap::new(),
             scanout,
+            handshake_ticks: None,
+            handshake: Handshake::default(),
             capture: Capture {
                 next: scanout.map_or(0, |s| s.period),
                 ..Capture::default()
             },
         })
+    }
+    /// Use timed bit-16 request completion in place of fixed bits at +0.
+    pub fn with_handshake(mut self, ticks: u64) -> Result<Self, String> {
+        if ticks == 0 || self.set.contains_key(&0) || self.clear.contains_key(&0) {
+            return Err("Invalid display output handshake clock/status".into());
+        }
+        self.handshake_ticks = Some(ticks);
+        Ok(self)
     }
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
@@ -286,6 +302,9 @@ impl Device for Output {
         let Some(offset) = self.offset(cx, address, size) else {
             return 0;
         };
+        if offset == 0 && self.handshake_ticks.is_some() {
+            return if self.handshake.status { 1 << 16 } else { 0 };
+        }
         let word = self.words.get(&offset).copied().unwrap_or(0);
         let set = self.set.get(&offset).copied().unwrap_or(0);
         let clear = self.clear.get(&offset).copied().unwrap_or(0);
@@ -295,6 +314,19 @@ impl Device for Output {
         let Some(offset) = self.offset(cx, address, size) else {
             return;
         };
+        if offset == 0 && value <= u32::MAX.into() {
+            if let Some(ticks) = self.handshake_ticks {
+                if value & (1 << 16) != 0 {
+                    self.handshake.status = false;
+                    self.handshake.due = None;
+                } else if self.word(0) & (1 << 16) != 0 {
+                    self.handshake.due = cx.now().checked_add(ticks);
+                    if self.handshake.due.is_none() {
+                        cx.fail("Display handshake deadline overflow");
+                    }
+                }
+            }
+        }
         match u32::try_from(value) {
             Ok(0) => {
                 self.words.remove(&offset);
@@ -306,6 +338,11 @@ impl Device for Output {
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.handshake.due.is_some_and(|at| at <= cx.now()) {
+            self.handshake.due = None;
+            self.handshake.status = true;
+        }
+
         let Some(scanout) = self.scanout else {
             return;
         };
@@ -324,7 +361,11 @@ impl Device for Output {
         }
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        self.scanout.map(|_| self.capture.next)
+        self.scanout
+            .map(|_| self.capture.next)
+            .into_iter()
+            .chain(self.handshake.due)
+            .min()
     }
     fn save(&self) -> Value {
         let words = self
@@ -332,10 +373,14 @@ impl Device for Output {
             .iter()
             .map(|(o, v)| [*o, u64::from(*v)])
             .collect::<Vec<_>>();
-        match self.scanout {
-            Some(_) => json!({ "words": words, "scanout": self.capture }),
-            None => json!({ "words": words }),
+        let mut value = json!({ "words": words });
+        if self.scanout.is_some() {
+            value["scanout"] = json!(self.capture);
         }
+        if self.handshake_ticks.is_some() {
+            value["handshake"] = json!(self.handshake);
+        }
+        value
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let rows: Vec<(u64, u32)> = serde_json::from_value(value["words"].clone())
@@ -357,106 +402,18 @@ impl Device for Output {
             }
             None => Capture::default(),
         };
+        self.handshake = if self.handshake_ticks.is_some() {
+            let state: Handshake =
+                serde_json::from_value(value["handshake"].clone()).map_err(|e| e.to_string())?;
+            if state.status && state.due.is_some() {
+                return Err("Invalid display handshake checkpoint".into());
+            }
+            state
+        } else {
+            Handshake::default()
+        };
         self.words = rows.into_iter().collect();
         self.capture = capture;
-        Ok(())
-    }
-}
-
-const STATUS: u32 = 1 << 16;
-
-#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
-struct Bank {
-    words: BTreeMap<u64, u32>,
-    status: bool,
-    due: Option<u64>,
-}
-
-pub struct DisplayControl {
-    bases: [u64; 2],
-    ticks: u64,
-    banks: [Bank; 2],
-}
-
-impl DisplayControl {
-    pub fn new(bases: [u64; 2], ticks: u64) -> Result<Self, String> {
-        if bases.iter().any(|b| b & 0xfff != 0 || b.checked_add(0x1000).is_none())
-            || bases[0] == bases[1]
-            || ticks == 0
-        {
-            return Err("Invalid X-Processor Pro display control wiring".into());
-        }
-        Ok(Self { bases, ticks, banks: Default::default() })
-    }
-    pub fn windows(&self) -> [(u64, u64); 2] {
-        self.bases.map(|b| (b, b + 0x1000))
-    }
-    fn locate(&self, address: u64) -> (usize, u64) {
-        let bank = if (self.bases[0]..self.bases[0] + 0x1000).contains(&address) { 0 } else { 1 };
-        (bank, address - self.bases[bank])
-    }
-}
-
-impl Device for DisplayControl {
-    fn name(&self) -> &'static str {
-        "xpp-display-control"
-    }
-    fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        let (bank, offset) = self.locate(address);
-        if size != 4 || offset & 3 != 0 {
-            cx.unmodeled();
-            return 0;
-        }
-        let bank = &self.banks[bank];
-        if offset == 0 {
-            return if bank.status { STATUS.into() } else { 0 };
-        }
-        bank.words.get(&offset).copied().unwrap_or(0).into()
-    }
-    fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        let (index, offset) = self.locate(address);
-        if size != 4 || offset & 3 != 0 {
-            cx.unmodeled();
-            return;
-        }
-        let value = value as u32;
-        let now = cx.now();
-        let bank = &mut self.banks[index];
-        if offset == 0 {
-            let before = bank.words.get(&0).copied().unwrap_or(0);
-            if value & STATUS != 0 {
-                bank.status = false;
-                bank.due = None;
-            } else if before & STATUS != 0 {
-                let Some(due) = now.checked_add(self.ticks) else {
-                    cx.fail("X-Processor Pro display control deadline overflow");
-                    return;
-                };
-                bank.due = Some(due);
-            }
-        }
-        bank.words.insert(offset, value);
-    }
-    fn advance(&mut self, cx: &mut Cx<'_>) {
-        for bank in &mut self.banks {
-            if bank.due.is_some_and(|due| due <= cx.now()) {
-                bank.due = None;
-                bank.status = true;
-            }
-        }
-    }
-    fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.banks.iter().filter_map(|b| b.due).min()
-    }
-    fn save(&self) -> Value {
-        serde_json::to_value(&self.banks).unwrap()
-    }
-    fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let banks: [Bank; 2] = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if banks.iter().any(|b| b.words.keys().any(|o| o & 3 != 0 || *o >= 0x1000)) {
-            return Err("Invalid X-Processor Pro display control checkpoint".into());
-        }
-        self.banks = banks;
         Ok(())
     }
 }
@@ -659,13 +616,24 @@ mod tests {
     fn clearing_bit16_reports_status_after_delay_until_set_again() {
         use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
         let mut h = TestHost::new();
-        let mut d = DisplayControl::new([0xfff59000, 0xfff64000], 8).unwrap();
+        let mut d = Output::new(0xfff64000, 0x1000, &[], &[], None)
+            .unwrap()
+            .with_handshake(8)
+            .unwrap();
         write(&mut d, &mut h, 0xfff64000, 0x10000);
         write(&mut d, &mut h, 0xfff64000, 0);
         assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
+        let pending = d.save();
+        assert_eq!(d.next_deadline(0), Some(8));
+        advance(&mut d, &mut h, 7);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
         advance(&mut d, &mut h, 8);
         assert_eq!(read(&mut d, &mut h, 0xfff64000), 0x10000);
-        assert_eq!(read(&mut d, &mut h, 0xfff59000), 0);
+        d.restore(&pending).unwrap();
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
+        assert_eq!(d.next_deadline(8), Some(8));
+        advance(&mut d, &mut h, 8);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0x10000);
         write(&mut d, &mut h, 0xfff64010, 0x33);
         assert_eq!(read(&mut d, &mut h, 0xfff64010), 0x33);
         write(&mut d, &mut h, 0xfff64000, 0x10020);
