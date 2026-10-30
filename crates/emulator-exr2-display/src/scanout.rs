@@ -91,7 +91,7 @@ impl RectangleComposition {
         }
     }
 }
-pub const MAIN_REQUIRED: [u32; 9] = [0, 0x10, 0x24, 0x28, 0x2c, 0x30, 0xd4, 0xd8, 0xdc];
+pub const MAIN_REQUIRED: [u32; 11] = [0, 0x10, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30, 0xd4, 0xd8, 0xdc];
 pub fn address(address: u64, size: u32) -> Result<(usize, u32)> {
     for (i, b) in BASES.iter().enumerate() {
         if (*b..*b + 0x1000).contains(&address) {
@@ -453,6 +453,20 @@ impl Compositor {
         let canvas = r.get_or_zero(0x10);
         let cw = ((canvas >> 16) & 0xfff) as usize + 1;
         let ch = (canvas & 0xfff) as usize + 1;
+        // Channel 0 bounds the visible video independently of channel 1's
+        // addressed raster. Samples outside this programmed rectangle are
+        // blanked before graphics composition, including untouched DMA padding.
+        let clip_origin = r.get_or_zero(0x1c);
+        let clip_size = r.get_or_zero(0x20);
+        let clip_x = (clip_origin >> 16) as usize;
+        let clip_y = (clip_origin & 0xffff) as usize;
+        let clip_w = ((clip_size >> 16) & 0xfff) as usize + 1;
+        let clip_h = (clip_size & 0xfff) as usize + 1;
+        if (clip_origin | clip_size) & 0xf000f000 != 0
+            || clip_x + clip_w > cw || clip_y + clip_h > ch
+        {
+            return Err("Video clipping rectangle exceeds the display canvas".into());
+        }
         if (w * h) as i64 > self.max_pixels {
             return Err("Display pixel budget exceeded".into());
         }
@@ -495,7 +509,7 @@ impl Compositor {
         let stride = (w + padding as usize) * 2;
         let count = (h - 1) * stride + w * 2;
         let raw = self.plane_bytes(source as i64, count as i64, cpu, pixels, host)?;
-        let rgb = if pixels {
+        let mut rgb = if pixels {
             let window = host.render_rgb(&raw, w, h, stride, &self.packing, &self.matrix)?;
             if placed {
                 let mut canvas = vec![0; cw * ch * 3];
@@ -514,6 +528,17 @@ impl Compositor {
         } else {
             None
         };
+        if let Some(rgb) = &mut rgb {
+            for row in 0..ch {
+                let pixels = &mut rgb[row * cw * 3..(row + 1) * cw * 3];
+                if !(clip_y..clip_y + clip_h).contains(&row) {
+                    pixels.fill(0);
+                } else {
+                    pixels[..clip_x * 3].fill(0);
+                    pixels[(clip_x + clip_w) * 3..].fill(0);
+                }
+            }
+        }
         let png = if let Some(rgb) = &rgb
             && encode
         {
@@ -545,6 +570,10 @@ impl Compositor {
             ("padding_pixels", S::Int(padding as i64)),
             ("packing", S::str(&self.packing)),
             ("matrix", S::str(&self.matrix)),
+            ("clip_rectangle", S::dict(vec![
+                ("x", S::Int(clip_x as i64)), ("y", S::Int(clip_y as i64)),
+                ("width", S::Int(clip_w as i64)), ("height", S::Int(clip_h as i64)),
+            ])),
             ("frame_sha256", frame_hash(host, &raw)),
             (
                 "png_sha256",

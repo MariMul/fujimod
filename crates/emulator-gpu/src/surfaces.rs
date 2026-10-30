@@ -545,7 +545,6 @@ struct Gpu {
     clear_mask_pipeline: wgpu::ComputePipeline,
     record_mask_pipeline: wgpu::ComputePipeline,
     accumulate_draw_mask_pipeline: wgpu::ComputePipeline,
-    resolve_mask_pipeline: wgpu::ComputePipeline,
     readback_pipeline: wgpu::ComputePipeline,
 }
 
@@ -602,7 +601,6 @@ impl Gpu {
             "host GPU rendered write-mask record",
             "accumulate_draw_mask",
         );
-        let resolve_mask_pipeline = pipeline("host GPU write-mask resolve", "resolve_write_mask");
         let readback_pipeline = pipeline("host GPU surface readback", "readback_morton");
         Ok(Self {
             name: format!("{:?}: {} ({:?})", info.backend, info.name, info.device_type),
@@ -614,7 +612,6 @@ impl Gpu {
             clear_mask_pipeline,
             record_mask_pipeline,
             accumulate_draw_mask_pipeline,
-            resolve_mask_pipeline,
             readback_pipeline,
         })
     }
@@ -823,7 +820,6 @@ impl Gpu {
             mapped_at_creation: false,
         });
         let params = self.params(&surface, 0);
-        let resolve_bindings = self.resolve_mask_bindings(&surface, &params);
         let readback_bindings = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("host GPU surface readback bindings"),
             layout: &self.readback_pipeline.get_bind_group_layout(0),
@@ -839,7 +835,11 @@ impl Gpu {
                     ),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 10,
+                    binding: 7,
+                    resource: surface.write_mask_accumulator.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 8,
                     resource: wgpu::BindingResource::TextureView(
                         &surface.write_mask_texture.create_view(&Default::default()),
                     ),
@@ -850,13 +850,6 @@ impl Gpu {
                 },
             ],
         });
-        dispatch_2d(
-            encoder,
-            &self.resolve_mask_pipeline,
-            &resolve_bindings,
-            surface.key.extent,
-            "host GPU write-mask resolve",
-        );
         dispatch_2d(
             encoder,
             &self.readback_pipeline,
@@ -933,27 +926,15 @@ impl Gpu {
                 .slice(..)
                 .get_mapped_range()
                 .map_err(|error| error.to_string())?;
-            let mut bytes = Vec::with_capacity(pending.surface.byte_len);
-            let mut byte_flags = Vec::with_capacity(pending.surface.byte_len);
-            let bytes_per_pixel = pending.surface.key.format.bytes_per_pixel() as usize;
-            for record in mapped.chunks_exact(8) {
-                let pixel = u32::from_le_bytes(record[..4].try_into().unwrap());
-                let mask = u32::from_le_bytes(record[4..].try_into().unwrap());
-                for lane in 0..bytes_per_pixel {
-                    bytes.push((pixel >> (lane * 8)) as u8);
-                    byte_flags.push(mask & (1 << lane) != 0);
-                }
-            }
+            let readback = match pending.surface.key.format.bytes_per_pixel() {
+                2 => decode_pixels::<2>(&mapped, pending.surface.key.guest_address),
+                3 => decode_pixels::<3>(&mapped, pending.surface.key.guest_address),
+                4 => decode_pixels::<4>(&mapped, pending.surface.key.guest_address),
+                _ => unreachable!("checked surface format"),
+            };
             drop(mapped);
             pending.download.unmap();
-            let written_ranges = byte_ranges(pending.surface.key.guest_address, &byte_flags);
-            readbacks.push((
-                pending.surface,
-                SurfaceReadback {
-                    bytes,
-                    written_ranges,
-                },
-            ));
+            readbacks.push((pending.surface, readback));
         }
         Ok(readbacks)
     }
@@ -1011,32 +992,46 @@ impl Gpu {
             ],
         })
     }
+}
 
-    fn resolve_mask_bindings(
-        &self,
-        surface: &GpuSurface,
-        params: &wgpu::Buffer,
-    ) -> wgpu::BindGroup {
-        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("host GPU write-mask resolve bindings"),
-            layout: &self.resolve_mask_pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: params.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 7,
-                    resource: surface.write_mask_accumulator.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 8,
-                    resource: wgpu::BindingResource::TextureView(
-                        &surface.write_mask_texture.create_view(&Default::default()),
-                    ),
-                },
-            ],
-        })
+// Readbacks are already in guest pixel order. Coalesce masks as they arrive
+// rather than expanding a second byte-sized bitmap and scanning it again.
+fn decode_pixels<const BYTES: usize>(mapped: &[u8], address: u64) -> SurfaceReadback {
+    let mut bytes = vec![0; mapped.len() / 8 * BYTES];
+    let mut written_ranges = Vec::new();
+    let mut open = None;
+    let full = (1u32 << BYTES) - 1;
+    for (index, (record, pixel)) in mapped
+        .chunks_exact(8)
+        .zip(bytes.chunks_exact_mut(BYTES))
+        .enumerate()
+    {
+        pixel.copy_from_slice(&record[..BYTES]);
+        let mask = u32::from_le_bytes(record[4..8].try_into().unwrap()) & full;
+        let offset = index * BYTES;
+        if mask == full {
+            open.get_or_insert(offset);
+        } else if mask == 0 {
+            if let Some(start) = open.take() {
+                written_ranges.push((address + start as u64, offset - start));
+            }
+        } else {
+            for lane in 0..BYTES {
+                let at = offset + lane;
+                if mask & (1 << lane) != 0 {
+                    open.get_or_insert(at);
+                } else if let Some(start) = open.take() {
+                    written_ranges.push((address + start as u64, at - start));
+                }
+            }
+        }
+    }
+    if let Some(start) = open {
+        written_ranges.push((address + start as u64, bytes.len() - start));
+    }
+    SurfaceReadback {
+        bytes,
+        written_ranges,
     }
 }
 
@@ -1129,6 +1124,7 @@ fn dispatch_2d(
     pass.dispatch_workgroups(extent.width.div_ceil(8), extent.height.div_ceil(8), 1);
 }
 
+#[cfg(test)]
 fn byte_ranges(address: u64, written: &[bool]) -> Vec<(u64, usize)> {
     let mut ranges = Vec::new();
     let mut offset = 0;
@@ -1213,6 +1209,33 @@ mod tests {
         width: 16,
         height: 8,
     };
+
+    #[test]
+    fn packed_readback_masks_match_byte_bitmap_for_all_pixel_sizes() {
+        fn check<const B: usize>() {
+            let mut mapped = Vec::new();
+            let mut expected_bytes = Vec::new();
+            let mut flags = Vec::new();
+            for index in 0..1024u32 {
+                let pixel = index.wrapping_mul(0x1234567).to_le_bytes();
+                let mask = match index % 64 {
+                    0..=15 => 0,
+                    16..=31 => 15,
+                    _ => index & 15,
+                };
+                mapped.extend_from_slice(&pixel);
+                mapped.extend_from_slice(&mask.to_le_bytes());
+                expected_bytes.extend_from_slice(&pixel[..B]);
+                flags.extend((0..B).map(|lane| mask & (1 << lane) != 0));
+            }
+            let actual = decode_pixels::<B>(&mapped, 0x1234);
+            assert_eq!(actual.bytes, expected_bytes);
+            assert_eq!(actual.written_ranges, byte_ranges(0x1234, &flags));
+        }
+        check::<2>();
+        check::<3>();
+        check::<4>();
+    }
 
     fn context_or_skip() -> Option<&'static GpuContext> {
         match context() {

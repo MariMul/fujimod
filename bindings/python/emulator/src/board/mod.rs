@@ -218,9 +218,13 @@ impl Board {
         Ok(self.board()?.execution_policy().name())
     }
     #[staticmethod]
-    #[pyo3(signature=(definition, storage_image=None))]
-    fn from_xp4(definition: &str, storage_image: Option<Vec<u8>>) -> PyResult<Self> {
-        let session = xp4_backend::open(definition, storage_image)?;
+    #[pyo3(signature=(definition, storage_image=None, card_files=Vec::new()))]
+    fn from_xp4(
+        definition: &str,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+    ) -> PyResult<Self> {
+        let session = xp4_backend::open(definition, storage_image, card_files)?;
         Ok(Self {
             driver: None,
             memory_watch: None,

@@ -24,6 +24,10 @@
 //! index order over black. The video layer (+0x000 bits, +0x010 format,
 //! +0x030 buffer) carries the imaging pipeline's output, which is not
 //! modeled, and is not captured.
+//!
+//! A declared handshake clock makes +0 a bit-16 status: a falling request
+//! sets status after that delay; a set request clears it. Other words retain
+//! writes. This is the same output controller with a timed completion law.
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -119,6 +123,12 @@ struct Capture {
     hash: Option<u64>,
 }
 
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Handshake {
+    status: bool,
+    due: Option<u64>,
+}
 pub struct Output {
     base: u64,
     size: u64,
@@ -127,6 +137,8 @@ pub struct Output {
     words: BTreeMap<u64, u32>,
     scanout: Option<Scanout>,
     capture: Capture,
+    handshake_ticks: Option<u64>,
+    handshake: Handshake,
 }
 impl Output {
     /// `set` and `clear` map word offsets to the status bits that read as
@@ -167,11 +179,21 @@ impl Output {
             clear,
             words: BTreeMap::new(),
             scanout,
+            handshake_ticks: None,
+            handshake: Handshake::default(),
             capture: Capture {
                 next: scanout.map_or(0, |s| s.period),
                 ..Capture::default()
             },
         })
+    }
+    /// Use timed bit-16 request completion in place of fixed bits at +0.
+    pub fn with_handshake(mut self, ticks: u64) -> Result<Self, String> {
+        if ticks == 0 || self.set.contains_key(&0) || self.clear.contains_key(&0) {
+            return Err("Invalid display output handshake clock/status".into());
+        }
+        self.handshake_ticks = Some(ticks);
+        Ok(self)
     }
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
@@ -280,6 +302,9 @@ impl Device for Output {
         let Some(offset) = self.offset(cx, address, size) else {
             return 0;
         };
+        if offset == 0 && self.handshake_ticks.is_some() {
+            return if self.handshake.status { 1 << 16 } else { 0 };
+        }
         let word = self.words.get(&offset).copied().unwrap_or(0);
         let set = self.set.get(&offset).copied().unwrap_or(0);
         let clear = self.clear.get(&offset).copied().unwrap_or(0);
@@ -289,6 +314,19 @@ impl Device for Output {
         let Some(offset) = self.offset(cx, address, size) else {
             return;
         };
+        if offset == 0 && value <= u32::MAX.into() {
+            if let Some(ticks) = self.handshake_ticks {
+                if value & (1 << 16) != 0 {
+                    self.handshake.status = false;
+                    self.handshake.due = None;
+                } else if self.word(0) & (1 << 16) != 0 {
+                    self.handshake.due = cx.now().checked_add(ticks);
+                    if self.handshake.due.is_none() {
+                        cx.fail("Display handshake deadline overflow");
+                    }
+                }
+            }
+        }
         match u32::try_from(value) {
             Ok(0) => {
                 self.words.remove(&offset);
@@ -300,6 +338,11 @@ impl Device for Output {
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.handshake.due.is_some_and(|at| at <= cx.now()) {
+            self.handshake.due = None;
+            self.handshake.status = true;
+        }
+
         let Some(scanout) = self.scanout else {
             return;
         };
@@ -318,7 +361,11 @@ impl Device for Output {
         }
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        self.scanout.map(|_| self.capture.next)
+        self.scanout
+            .map(|_| self.capture.next)
+            .into_iter()
+            .chain(self.handshake.due)
+            .min()
     }
     fn save(&self) -> Value {
         let words = self
@@ -326,10 +373,14 @@ impl Device for Output {
             .iter()
             .map(|(o, v)| [*o, u64::from(*v)])
             .collect::<Vec<_>>();
-        match self.scanout {
-            Some(_) => json!({ "words": words, "scanout": self.capture }),
-            None => json!({ "words": words }),
+        let mut value = json!({ "words": words });
+        if self.scanout.is_some() {
+            value["scanout"] = json!(self.capture);
         }
+        if self.handshake_ticks.is_some() {
+            value["handshake"] = json!(self.handshake);
+        }
+        value
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let rows: Vec<(u64, u32)> = serde_json::from_value(value["words"].clone())
@@ -350,6 +401,16 @@ impl Device for Output {
                 capture
             }
             None => Capture::default(),
+        };
+        self.handshake = if self.handshake_ticks.is_some() {
+            let state: Handshake =
+                serde_json::from_value(value["handshake"].clone()).map_err(|e| e.to_string())?;
+            if state.status && state.due.is_some() {
+                return Err("Invalid display handshake checkpoint".into());
+            }
+            state
+        } else {
+            Handshake::default()
         };
         self.words = rows.into_iter().collect();
         self.capture = capture;
@@ -549,5 +610,33 @@ mod tests {
         let mut cx = h.cx();
         out.read(&mut cx, BASE + 2, 2);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn clearing_bit16_reports_status_after_delay_until_set_again() {
+        use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
+        let mut h = TestHost::new();
+        let mut d = Output::new(0xfff64000, 0x1000, &[], &[], None)
+            .unwrap()
+            .with_handshake(8)
+            .unwrap();
+        write(&mut d, &mut h, 0xfff64000, 0x10000);
+        write(&mut d, &mut h, 0xfff64000, 0);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
+        let pending = d.save();
+        assert_eq!(d.next_deadline(0), Some(8));
+        advance(&mut d, &mut h, 7);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
+        advance(&mut d, &mut h, 8);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0x10000);
+        d.restore(&pending).unwrap();
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
+        assert_eq!(d.next_deadline(8), Some(8));
+        advance(&mut d, &mut h, 8);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0x10000);
+        write(&mut d, &mut h, 0xfff64010, 0x33);
+        assert_eq!(read(&mut d, &mut h, 0xfff64010), 0x33);
+        write(&mut d, &mut h, 0xfff64000, 0x10020);
+        assert_eq!(read(&mut d, &mut h, 0xfff64000), 0);
     }
 }

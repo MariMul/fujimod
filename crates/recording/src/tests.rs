@@ -416,3 +416,17 @@ fn touches_mark_both_videos() {
         "the circle is gone after its fade"
     );
 }
+
+#[test]
+fn packed_abgr_retains_color_bytes_independently_of_alpha() {
+    let frame = Frame::abgr(
+        2,
+        2,
+        &[0, 3, 2, 1, 127, 6, 5, 4, 255, 9, 8, 7, 3, 12, 11, 10],
+    )
+    .unwrap();
+    assert_eq!(frame.pixels(), &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    assert!(Frame::abgr(0, 2, &[]).is_err());
+    assert!(Frame::abgr(2, 2, &[0; 15]).is_err());
+    assert!(Frame::abgr(8193, 1, &[]).is_err());
+}

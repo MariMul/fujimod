@@ -90,4 +90,5 @@ class Xp4Definition:
     assets: tuple[Asset, ...] = ()
     images: tuple[Image, ...] = ()
     storage: str | None = None
+    card_files: Mapping[str, str] = field(default_factory=dict)
     quantum: int = 1000

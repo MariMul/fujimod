@@ -36,10 +36,15 @@ const REQUEST: usize = 1;
 #[serde(deny_unknown_fields)]
 struct State {
     words: [u32; WORDS.len()],
+    due: Option<u64>,
+    settled: bool,
+    control: u32,
+    hold: u32,
 }
 pub struct Control {
     base: u64,
     state: State,
+    settle_ticks: Option<u64>,
 }
 impl Control {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -48,11 +53,31 @@ impl Control {
         }
         Ok(Self {
             base,
-            state: State::default(),
+            state: State {
+                control: IDENTITY_VALUE,
+                hold: 1,
+                ..State::default()
+            },
+            settle_ticks: None,
         })
     }
+    /// Cold-start domain settling, in declared guest ticks.
+    pub fn with_startup(mut self, ticks: u64) -> Result<Self, String> {
+        if ticks == 0 {
+            return Err("Power startup clock must be positive".into());
+        }
+        self.settle_ticks = Some(ticks);
+        self.state.control = 0;
+        self.state.hold = 0;
+        Ok(self)
+    }
     fn status(&self) -> u32 {
-        self.state.words[REQUEST] & 0xffff | (self.state.words[ENABLE] & 0x3fff) << 16 | 0xc000_0000
+        let ready = if self.settle_ticks.is_none() || self.state.settled {
+            0xc000_0000
+        } else {
+            0
+        };
+        self.state.words[REQUEST] & 0xffff | (self.state.words[ENABLE] & 0x3fff) << 16 | ready
     }
 }
 impl Device for Control {
@@ -66,8 +91,8 @@ impl Device for Control {
             return 0;
         }
         u64::from(match offset {
-            IDENTITY => IDENTITY_VALUE,
-            HOLD => 1,
+            IDENTITY => self.state.control,
+            HOLD => self.state.hold,
             STATUS => self.status(),
             o => match WORDS.iter().position(|w| *w == o) {
                 Some(n) => self.state.words[n],
@@ -84,16 +109,41 @@ impl Device for Control {
             cx.unmodeled();
             return;
         }
+        if offset == IDENTITY && self.settle_ticks.is_some() {
+            self.state.control = value as u32;
+            return;
+        }
         if offset == HOLD {
-            if value & 1 == 0 {
+            if value & 1 == 0 && self.state.hold & 1 != 0 {
                 cx.fail("supply off: power hold FFF10004 bit 0 released");
             }
+            self.state.hold = value as u32;
             return;
         }
         match WORDS.iter().position(|w| *w == offset) {
-            Some(n) => self.state.words[n] = value as u32,
+            Some(n) => {
+                self.state.words[n] = value as u32;
+                if offset == 0x0c {
+                    if let Some(ticks) = self.settle_ticks {
+                        self.state.settled = false;
+                        self.state.due = cx.now().checked_add(ticks);
+                        if self.state.due.is_none() {
+                            cx.fail("Power startup deadline overflow");
+                        }
+                    }
+                }
+            }
             None => cx.unmodeled(),
         }
+    }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.state.due.is_some_and(|at| at <= cx.now()) {
+            self.state.due = None;
+            self.state.settled = true;
+        }
+    }
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.state.due
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap_or(Value::Null)
@@ -139,6 +189,25 @@ mod tests {
         power.write(&mut cx, BASE + 0x2c, 4, 0);
         assert!(cx.is_unmodeled());
         assert!(Control::new(BASE + 4).is_err());
+    }
+
+    #[test]
+    fn cold_start_settles_domains_and_preserves_supply_hold_edges() {
+        use fujimod_emulator_devices::test_host::advance;
+        let mut power = Control::new(BASE).unwrap().with_startup(2).unwrap();
+        let mut host = TestHost::new();
+        assert_eq!(read(&mut power, &mut host, BASE + 4), 0);
+        write(&mut power, &mut host, BASE + 4, 0);
+        write(&mut power, &mut host, BASE, 6);
+        write(&mut power, &mut host, BASE + 4, 1);
+        write(&mut power, &mut host, BASE + 0xc, 0x100);
+        assert_eq!(power.next_deadline(0), Some(2));
+        assert_eq!(read(&mut power, &mut host, BASE + 0x2c) & 0xc0000000, 0);
+        advance(&mut power, &mut host, 2);
+        assert_eq!(read(&mut power, &mut host, BASE + 0x2c), 0xc0000100);
+        let mut cx = host.cx();
+        power.write(&mut cx, BASE + 4, 4, 0);
+        assert!(cx.refusal().is_some_and(|f| f.contains("supply off")));
     }
 
     #[test]

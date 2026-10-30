@@ -151,7 +151,14 @@ fn read_guest_draw_memory(
 
 impl Engine {
     pub fn diagnostics(&self) -> serde_json::Value {
-        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":"CPU"})
+        #[cfg(not(target_os = "emscripten"))]
+        let host_shader_cache = {
+            let (vertex_modules, fragment_modules, pipelines) = gpu_draw::shader_cache_creation_counts();
+            serde_json::json!({"vertex_modules":vertex_modules,"fragment_modules":fragment_modules,"pipelines":pipelines})
+        };
+        #[cfg(target_os = "emscripten")]
+        let host_shader_cache = serde_json::Value::Null;
+        serde_json::json!({"registers":self.regs,"vertices_executed":self.vertices_executed,"last_output":self.last_output,"code_words":self.code.len(),"host_rasterizer":"CPU","host_shader_cache":host_shader_cache})
     }
     pub fn reg(&self, index: u16) -> u32 {
         self.regs.get(&index).copied().unwrap_or(0)
@@ -462,12 +469,12 @@ impl Engine {
                         }
                         if self.immediate.len() == n {
                             let mut inputs = self.attributes;
-                            let state = self.draw_state();
+                            let input_map = self.reg(0x48b);
                             for (i, v) in self.immediate.iter().enumerate() {
-                                inputs[state.vertex.input_map[i] as usize] = *v;
+                                inputs[(input_map >> (i * 4) & 15) as usize] = *v;
                             }
                             self.immediate.clear();
-                            self.vertex(&inputs, &state, read, out)?;
+                            self.immediate_vertex(&inputs, read, out)?;
                         }
                     } else {
                         *self
@@ -558,7 +565,7 @@ impl Engine {
             let inputs = self.fetch(vertex, state, &mut |address, length| {
                 read_guest_draw_memory(read, &mut draw_dma, address, length)
             })?;
-            self.vertex(&inputs, state, read, out)?;
+            self.interpret_vertex(&inputs, state, read, out)?;
         }
         Ok(())
     }
@@ -631,10 +638,9 @@ impl Engine {
         }
         Ok(inputs)
     }
-    fn vertex(
+    fn immediate_vertex(
         &mut self,
         inputs: &[Vector; 16],
-        state: &DrawState,
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
@@ -642,12 +648,25 @@ impl Engine {
         if self.gpu_primitives.is_some() {
             self.vertices_executed += 1;
             self.last_output = None;
-            let pending = self
-                .gpu_immediate
-                .get_or_insert_with(|| (state.clone(), Vec::new()));
-            pending.1.push(*inputs);
+            // Attribute FIFO writes cannot change draw state. Every other
+            // register write flushes this batch before updating its state.
+            // Decode the register bank once, when its first vertex arrives.
+            if self.gpu_immediate.is_none() {
+                self.gpu_immediate = Some((self.draw_state(), Vec::new()));
+            }
+            self.gpu_immediate.as_mut().unwrap().1.push(*inputs);
             return Ok(());
         }
+        let state = self.draw_state();
+        self.interpret_vertex(inputs, &state, read, out)
+    }
+    fn interpret_vertex(
+        &mut self,
+        inputs: &[Vector; 16],
+        state: &DrawState,
+        read: &mut Reader<'_>,
+        out: &mut raster::Targets,
+    ) -> Result<(), String> {
         let vertex = shader::execute(self, inputs)?;
         self.vertex_output(vertex, inputs, state, read, out)
     }
@@ -766,3 +785,10 @@ pub fn replay_captures(directory: &std::path::Path) -> Result<usize, String> {
 
 #[cfg(test)]
 mod tests;
+
+/// Prepare native host graphics resources without executing a command list.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn prepare_host_gpu() -> Result<(), String> {
+    let context = fujimod_emulator_gpu::context()?;
+    gpu_draw::prepare(context)
+}

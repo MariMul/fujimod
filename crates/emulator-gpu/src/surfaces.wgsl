@@ -129,23 +129,7 @@ fn accumulate_draw_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
 @group(0) @binding(7) var<storage, read_write> resolved_masks: PixelWriteMasks;
 @group(0) @binding(8) var resolved_mask_out: texture_storage_2d<r32uint, write>;
 
-@compute @workgroup_size(8, 8)
-fn resolve_write_mask(@builtin(global_invocation_id) invocation: vec3<u32>) {
-    let position = invocation.xy;
-    if (position.x >= params.storage_width || position.y >= params.storage_height) {
-        return;
-    }
-    let linear_offset = position.y * params.width + position.x;
-    let byte_mask = atomicLoad(&resolved_masks.values[linear_offset]);
-    textureStore(
-        resolved_mask_out,
-        vec2<i32>(position),
-        vec4<u32>(byte_mask, 0u, 0u, 0u),
-    );
-}
-
 @group(0) @binding(9) var surface_in: texture_2d<u32>;
-@group(0) @binding(10) var mask_in: texture_2d<u32>;
 @group(0) @binding(11) var<storage, read_write> readback: ReadbackPixels;
 
 @compute @workgroup_size(8, 8)
@@ -156,6 +140,8 @@ fn readback_morton(@builtin(global_invocation_id) invocation: vec3<u32>) {
     }
     let guest_offset = guest_pixel_offset(position.x, position.y);
     let pixel = textureLoad(surface_in, vec2<i32>(position), 0).x;
-    let byte_mask = textureLoad(mask_in, vec2<i32>(position), 0).x;
+    let linear_offset = position.y * params.width + position.x;
+    let byte_mask = atomicLoad(&resolved_masks.values[linear_offset]);
+    textureStore(resolved_mask_out, vec2<i32>(position), vec4<u32>(byte_mask, 0u, 0u, 0u));
     readback.values[guest_offset] = ReadbackPixel(pixel, byte_mask);
 }

@@ -27,7 +27,8 @@ pub struct Options {
     /// receiver sees no frame edge for them.
     #[serde(default)]
     pub mode_change_frames: u8,
-    /// Full preview field containing command 0B..0E's selected rows.
+    /// Full preview field containing command 0B..0E's selected rows. Register
+    /// 0A selects two-row (2) or four-row (3) window-count units.
     pub preview_field: Option<[usize; 2]>,
 }
 #[derive(Serialize, Deserialize)]
@@ -308,7 +309,12 @@ impl Controls for Sensor {
             .preview_field
             .ok_or("sensor window has no declared preview field")?;
         let y = usize::from(r[0x0b]) | (usize::from(r[0x0c] & 15) << 8);
-        let height = 2 * (usize::from(r[0x0d]) | (usize::from(r[0x0e] & 15) << 8));
+        let rows = match r[0x0a] {
+            2 => 2,
+            3 => 4,
+            _ => return Err("sensor window has an unsupported readout row grouping".into()),
+        };
+        let height = rows * (usize::from(r[0x0d]) | (usize::from(r[0x0e] & 15) << 8));
         fujimod_emulator_imaging::scene::view::View::new(
             field,
             [horizontal[0], y, horizontal[1], height],
@@ -372,6 +378,7 @@ mod tests {
         assert_eq!(sensor.preview_view([0, 2496]).unwrap(), None);
         sensor
             .command(&[
+                0x81, 0x0a, 2, 0, 0, 0, 0, 0,
                 0x81, 1, 1, 0, 0, 0, 0, 0, 0x81, 0x0b, 0xf2, 0, 0, 0, 0, 0, 0x81, 0x0c, 3, 0, 0, 0,
                 0, 0, 0x81, 0x0d, 0xaa, 0, 0, 0, 0, 0, 0x81, 0x0e, 2, 0, 0, 0, 0, 0,
             ])
@@ -385,6 +392,19 @@ mod tests {
         assert_eq!(sensor.preview_view([0, 2496]).unwrap(), None);
         sensor.restore(&saved).unwrap();
         assert_eq!(sensor.preview_view([735, 1002]).unwrap(), Some(view));
+        // A four-row readout retains the same count field's flag bits. Its
+        // nominal window spans the center and bottom of the optical field.
+        for (address, value) in [(0x0a, 3), (0x0b, 0x37), (0x0c, 1), (0x0d, 0xb6), (0x0e, 0x22)] {
+            sensor.command(&[0x81, address, value, 0, 0, 0, 0, 0]).unwrap();
+        }
+        let movie = sensor.preview_view([0, 2496]).unwrap().unwrap();
+        assert_eq!(movie.rectangle, [0, 311, 2496, 2776]);
+        assert!(movie.coordinate(1, 1079, 1080, 3264) > 2900);
+        let saved_movie = sensor.save();
+        sensor.command(&[0x81, 0x0a, 7, 0, 0, 0, 0, 0]).unwrap();
+        assert!(sensor.preview_view([0, 2496]).is_err());
+        sensor.restore(&saved_movie).unwrap();
+        assert_eq!(sensor.preview_view([0, 2496]).unwrap(), Some(movie));
     }
 
     #[test]

@@ -51,8 +51,23 @@ impl Cluster {
         let end = address
             .checked_add(size as u64)
             .ok_or("Physical memory extent overflow")?;
+        let low = unsafe { (*self.state.get()).low_alias }.map(|index| &self.memory[index]);
+        if let Some(window) = low
+            && end <= window.data.len() as u64
+        {
+            if window.permissions & permissions != permissions {
+                return Err("Protected ARM32 physical memory".into());
+            }
+            return Ok(unsafe { window.data.as_ptr().add(address as usize) });
+        }
         if end <= self.ram.len() as u64 {
             return Ok(unsafe { self.ram.as_ptr().add(address as usize) });
+        }
+        if let Some(alias) = self.dram_alias
+            && alias <= address
+            && end <= alias + self.ram.len() as u64
+        {
+            return Ok(unsafe { self.ram.as_ptr().add((address - alias) as usize) });
         }
         for window in &self.memory {
             if window.base <= address && end <= window.base + window.data.len() as u64 {

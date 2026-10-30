@@ -19,11 +19,14 @@ const STATUS: u64 = 0xec;
 #[serde(deny_unknown_fields)]
 struct State {
     refresh: [u32; 2],
+    words: std::collections::BTreeMap<u64, u32>,
+    due: Option<u64>,
 }
 pub struct Controller {
     base: u64,
     refresh_level: u8,
     state: State,
+    settle_ticks: Option<u64>,
 }
 impl Controller {
     pub fn new(base: u64, refresh_level: u8) -> Result<Self, String> {
@@ -34,7 +37,21 @@ impl Controller {
             base,
             refresh_level,
             state: State::default(),
+            settle_ticks: None,
         })
+    }
+    /// Permit the controller's cold initialization sequence.
+    pub fn with_startup(mut self, ticks: u64) -> Result<Self, String> {
+        if ticks == 0 {
+            return Err("DRAM startup clock must be positive".into());
+        }
+        self.settle_ticks = Some(ticks);
+        Ok(self)
+    }
+    fn startup_word(&self, offset: u64) -> bool {
+        self.settle_ticks.is_some()
+            && offset & 3 == 0
+            && (offset < 0x2e8 || (0x400..0x718).contains(&offset))
     }
 }
 impl Device for Controller {
@@ -51,6 +68,7 @@ impl Device for Controller {
             STATUS => u32::from(self.refresh_level) << 8,
             o => match REFRESH.iter().position(|r| *r == o) {
                 Some(n) => self.state.refresh[n],
+                None if self.startup_word(o) => self.state.words.get(&o).copied().unwrap_or(0),
                 None => {
                     cx.unmodeled();
                     0
@@ -64,8 +82,34 @@ impl Device for Controller {
             Some(n) if size == 4 && value <= u32::MAX.into() => {
                 self.state.refresh[n] = value as u32
             }
+            _ if size == 4 && value <= u32::MAX.into() && self.startup_word(offset) => {
+                let before = self.state.words.get(&offset).copied().unwrap_or(0);
+                self.state.words.insert(
+                    offset,
+                    if offset == 0x14c {
+                        value as u32 & !8 | before & 8
+                    } else {
+                        value as u32
+                    },
+                );
+                if offset == 0 && value & 1 != 0 {
+                    self.state.due = cx.now().checked_add(self.settle_ticks.unwrap());
+                    if self.state.due.is_none() {
+                        cx.fail("DRAM startup deadline overflow");
+                    }
+                }
+            }
             _ => cx.unmodeled(),
         }
+    }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.state.due.is_some_and(|at| at <= cx.now()) {
+            self.state.due = None;
+            *self.state.words.entry(0x14c).or_default() |= 8;
+        }
+    }
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.state.due
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap_or(Value::Null)

@@ -24,6 +24,10 @@ fn fail<T>(message: impl Into<String>) -> Result<T> {
     Err(Unsupported(message.into()))
 }
 
+pub(super) fn prepare() -> Result<()> {
+    kernel().map(|_| ())
+}
+
 fn kernel() -> Result<&'static PaintKernel> {
     static KERNEL: OnceLock<std::result::Result<PaintKernel, String>> = OnceLock::new();
     match KERNEL.get_or_init(|| {

@@ -1067,6 +1067,17 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareDisplayTimingBanks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Programmed timing banks; absent for a declared free-running frame source."
         }
       },
       "required": [
@@ -1096,6 +1107,15 @@
             "$ref": "#/$defs/HardwareDisplayStatusBits"
           },
           "type": "array"
+        },
+        "handshake_ticks": {
+          "description": "Delay of the bit-16 request handshake; absent for fixed status bits.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "scanout": {
           "anyOf": [
@@ -1174,6 +1194,34 @@
       "required": [
         "offset",
         "mask"
+      ],
+      "type": "object"
+    },
+    "HardwareDisplayTimingBanks": {
+      "additionalProperties": false,
+      "description": "Register-backed display timing, with phase lines taken from the frame routes.",
+      "properties": {
+        "bases": {
+          "description": "Two timing-register page bases, in output order.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "stop_ticks": {
+          "description": "Stop handshake delay in guest ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bases",
+        "stop_ticks"
       ],
       "type": "object"
     },

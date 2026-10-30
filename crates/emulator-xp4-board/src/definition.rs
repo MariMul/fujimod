@@ -80,7 +80,7 @@ pub struct Definition {
     /// X-Processor Pro DRAM controller base and refresh-rate level.
     #[serde(default)]
     pub xpp_dram: Option<(u64, u8)>,
-    /// Physical base of a read-only alias of the whole DRAM.
+    /// Physical base of a writable alias of the whole DRAM.
     #[serde(default)]
     pub dram_alias: Option<u64>,
     /// X-Processor Pro DWC3: base, interrupt line, command and transaction
@@ -169,6 +169,13 @@ pub struct Definition {
     pub usb: Option<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub usb_phy: Option<(u64, [u8; 32], u32)>,
+    #[serde(default)]
+    pub xpp_boot: Option<XppBoot>,
+    #[serde(default)]
+    pub pmu_cycles_per_tick: Option<u64>,
+    /// Declared (port base, send word, receive word) replies.
+    #[serde(default)]
+    pub xpp_serial_replies: Vec<(u64, u32, u32)>,
 }
 
 /// Register layout of the interval timer at `timer_base`.
@@ -241,6 +248,8 @@ pub struct XppShutter {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppDisplayFrames {
+    #[serde(default)]
+    pub timing: Option<([u64; 2], u64)>,
     pub irqs: Vec<u32>,
     pub period_ticks: u64,
 }
@@ -251,6 +260,8 @@ pub struct XppDisplayFrames {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppDisplayOutput {
+    #[serde(default)]
+    pub handshake_ticks: Option<u64>,
     pub base: u64,
     pub size: u64,
     pub set_bits: Vec<(u64, u32)>,
@@ -326,7 +337,7 @@ pub struct XppAdc {
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppStorage {
     pub flash_controller: u64,
@@ -351,4 +362,15 @@ pub struct XppNor {
     pub chip_select: u8,
     pub registers: fujimod_emulator_devices::parts::micron_nor::Options,
     pub array: fujimod_emulator_xpp::flash::Array,
+}
+
+/// X-Processor Pro cold-reset controller and its boot-selection strap level.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBoot {
+    pub options: fujimod_emulator_xpp::boot::Options,
+    pub card_strap: bool,
+    /// Memory window shown at physical 0 until the guest selects the remap.
+    #[serde(default)]
+    pub low_alias: Option<u64>,
 }

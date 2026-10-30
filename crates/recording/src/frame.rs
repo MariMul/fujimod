@@ -60,6 +60,27 @@ impl Frame {
         }
         Self::rgb(width, height, rgb)
     }
+    /// Packed ABGR8888, retaining RGB bytes and ignoring alpha.
+    pub fn abgr(width: u32, height: u32, data: &[u8]) -> Result<Self> {
+        if width == 0
+            || height == 0
+            || width > 8192
+            || height > 8192
+            || u64::from(width) * u64::from(height) * 4 != data.len() as u64
+        {
+            return Err("Invalid ABGR frame dimensions or extent".into());
+        }
+        let mut rgb = vec![0; width as usize * height as usize * 3];
+        for (destination, source) in rgb
+            .as_chunks_mut::<3>()
+            .0
+            .iter_mut()
+            .zip(data.as_chunks::<4>().0)
+        {
+            *destination = [source[3], source[2], source[1]];
+        }
+        Self::rgb(width, height, rgb)
+    }
     pub fn from_png(data: &[u8]) -> Result<Self> {
         let mut decoder = png::Decoder::new(Cursor::new(data));
         decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);

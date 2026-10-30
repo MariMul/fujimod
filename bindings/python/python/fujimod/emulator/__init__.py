@@ -24,6 +24,7 @@ __all__ = [
     "Session",
     "Xp4Definition",
     "make_board",
+    "prepare_host_gpu",
 ]
 
 
@@ -63,3 +64,10 @@ def __getattr__(name: str) -> object:
             "Xp4Definition": Xp4Definition,
         }[name]
     raise AttributeError(name)
+
+
+def prepare_host_gpu() -> None:
+    """Compile reusable host graphics pipelines without executing guest work."""
+    from fujimod._native import emulator as native
+
+    native.prepare_host_gpu()

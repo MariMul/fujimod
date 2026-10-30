@@ -853,6 +853,9 @@ pub struct Touch {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct BodyProfile {
+    /// Body-declared register behavior overriding the selected processor defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub register_maps: Option<RegisterLayouts>,
     /// Firmware descriptor order of body devices; `sensor` refers to the installed sensor endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control_bus_order: Option<Vec<String>>,
@@ -1071,12 +1074,27 @@ pub struct Dma {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayFrames"))]
 pub struct DisplayFrames {
+    /// Programmed timing banks; absent for a declared free-running frame source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<DisplayTimingBanks>,
     /// Declared basis.
     pub basis: String,
     /// Lines receiving one edge per frame.
     pub irq_routes: Vec<u64>,
     /// Frame period in guest ticks.
     pub period_ticks: u64,
+}
+
+/// Register-backed display timing, with phase lines taken from the frame routes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayTimingBanks"))]
+pub struct DisplayTimingBanks {
+    /// Two timing-register page bases, in output order.
+    pub bases: [u64; 2],
+    /// Stop handshake delay in guest ticks.
+    pub stop_ticks: u64,
 }
 
 /// Status bits of one display output register.
@@ -1097,6 +1115,9 @@ pub struct DisplayStatusBits {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayOutput"))]
 pub struct DisplayOutput {
+    /// Delay of the bit-16 request handshake; absent for fixed status bits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handshake_ticks: Option<u64>,
     /// Declared base.
     pub base: u64,
     /// Declared basis.
