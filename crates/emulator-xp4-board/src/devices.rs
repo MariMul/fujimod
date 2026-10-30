@@ -84,6 +84,16 @@ impl Host for PhysicalHost<'_> {
     fn raise_irq(&mut self, _cpu: usize, _line: u32) -> Result<(), String> {
         Err("Per-core interrupt input is not wired for ARMv7-A".into())
     }
+    // Applied once the MMU is off, as retained TLB entries keep the ROM
+    // page table in the old low window until then.
+    fn select_memory(&mut self, decoder: usize, choice: usize) -> Result<(), String> {
+        let state = unsafe { &mut *self.cluster.state.get() };
+        if (decoder, choice) != (0, 1) || state.low_alias.is_none() || state.remap_pending {
+            return Err("Unsupported ARMv7-A memory decoder selection".into());
+        }
+        state.remap_pending = true;
+        Ok(())
+    }
     fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
         let source = self.cluster.memory_pointer(address, out.len(), 1)?;
         unsafe {
@@ -166,6 +176,10 @@ impl Devices {
             .unwrap()
             .set_input(port, pin, high);
         Ok(())
+    }
+    pub fn gpio_registers(&self) -> Option<Vec<[u32; 8]>> {
+        let pins = self.pins.as_ref()?.lock().unwrap();
+        Some((0..16).map(|port| pins.registers(port)).collect())
     }
     pub fn gpio(&mut self, base: u64, inputs: [u16; 16]) -> Result<(), String> {
         if self.pins.is_some()
@@ -262,8 +276,13 @@ impl Devices {
         self.spi_input(base, Box::new(part))
     }
 
-    pub fn adc(&mut self, inputs: [u16; 12], sample_ticks: u64) -> Result<(), String> {
-        let base = fujimod_emulator_xp4_io::adc::BASE;
+    pub fn adc(
+        &mut self,
+        base: u64,
+        power_down_gate: bool,
+        inputs: [u16; 12],
+        sample_ticks: u64,
+    ) -> Result<(), String> {
         if self
             .windows
             .iter()
@@ -271,7 +290,11 @@ impl Devices {
         {
             return Err("Overlapping XP4 ADC window".into());
         }
-        let model = Arc::new(Mutex::new(Adc::new(inputs, sample_ticks)?));
+        let mut adc = Adc::new(inputs, sample_ticks)?.with_base(base);
+        if power_down_gate {
+            adc = adc.with_power_down_gate();
+        }
+        let model = Arc::new(Mutex::new(adc));
         let id = self.models.len();
         self.models.push(Some(Box::new(Connected(model.clone()))));
         self.adc = Some((id, model));
@@ -398,6 +421,47 @@ impl Devices {
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x604, id));
+        Ok(())
+    }
+    pub fn xpp_display_control(&mut self, bases: [u64; 2], ticks: u64) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::display::DisplayControl::new(bases, ticks)?;
+        let windows = model.windows();
+        if windows.iter().any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi)) {
+            return Err("Duplicate X-Processor Pro display control window".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.extend(windows.map(|(lo, hi)| (lo, hi, id)));
+        Ok(())
+    }
+    pub fn xpp_job(&mut self, base: u64, irq: u32, ticks: u64) -> Result<(), String> {
+        let model = fujimod_emulator_xpp::job::JobEngine::new(base, irq, ticks)?;
+        let (lo, hi) = model.window();
+        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+            return Err("Duplicate X-Processor Pro job engine window".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((lo, hi, id));
+        Ok(())
+    }
+    pub fn xpp_display_timing(
+        &mut self,
+        bases: [u64; 2],
+        irqs: [[u8; 3]; 2],
+        frame_ticks: u64,
+        stop_ticks: u64,
+    ) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_display::timing::XppTiming::new(bases, irqs, frame_ticks, stop_ticks)?;
+        let windows = model.windows();
+        if windows.iter().any(|&(base, end)| {
+            self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end)
+        }) {
+            return Err("Duplicate X-Processor Pro display timing window".into());
+        }
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.extend(windows.map(|(base, end)| (base, end, id)));
         Ok(())
     }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
@@ -746,6 +810,7 @@ impl Devices {
         base: u64,
         peer: fujimod_emulator_xpp::serial::Peer,
         clock: Option<fujimod_emulator_xpp::serial::Clock>,
+        replies: BTreeMap<u32, u32>,
     ) -> Result<(), String> {
         use fujimod_emulator_xpp::serial::{REGISTERS, DiscoveryPort};
         if self
@@ -755,13 +820,46 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro serial port".into());
         }
-        let mut model = DiscoveryPort::attached(base, peer)?;
+        let mut model = DiscoveryPort::attached(base, peer)?.with_replies(replies)?;
         if let Some(clock) = clock {
             model = model.with_clock(clock)?;
         }
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + REGISTERS, id));
+        Ok(())
+    }
+    pub fn xpp_boot(
+        &mut self,
+        options: fujimod_emulator_xpp::boot::Options,
+        card_strap: bool,
+    ) -> Result<(), String> {
+        let bases: Vec<u64> = [
+            options.selector_base,
+            options.clock_base,
+            options.ddr_base,
+            options.remap_base,
+        ]
+        .into_iter()
+        .chain(options.bus_bases.iter().copied())
+        .chain(options.memory_port_bases.iter().copied())
+        .collect();
+        if bases.iter().any(|&base| {
+            self.windows
+                .iter()
+                .any(|&(lo, hi, _)| base < hi && lo < base + 0x1000)
+        }) {
+            return Err("Overlapping X-Processor Pro boot controller".into());
+        }
+        let model = fujimod_emulator_xpp::boot::BootController::new(
+            options,
+            vec![fujimod_emulator_devices::signals::Level::new(card_strap)],
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        for base in bases {
+            self.windows.push((base, base + 0x1000, id));
+        }
         Ok(())
     }
     /// X-Processor Pro ADC with declared samples.
@@ -943,6 +1041,7 @@ impl Devices {
         &mut self,
         sd: crate::definition::XppSd,
         reset: Option<fujimod_emulator_xpp::resets::ResetPulses>,
+        files: &[(String, Vec<u8>)],
     ) -> Result<(), String> {
         let base = sd.options.base;
         if self
@@ -952,7 +1051,7 @@ impl Devices {
         {
             return Err("Overlapping X-Processor Pro SD channel".into());
         }
-        let card = fujimod_emulator_storage::fat::format(&sd.card, &[])?;
+        let card = fujimod_emulator_storage::fat::format(&sd.card, files)?;
         let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
         let mut model = fujimod_emulator_xpp::sd::Controller::new(
             sd.options,
@@ -1285,6 +1384,18 @@ impl Cluster {
         result
     }
     pub fn flush_dma(&self) -> Result<(), String> {
+        let state = unsafe { &mut *self.state.get() };
+        if state.remap_ready
+            && let Some(index) = state.low_alias.take()
+        {
+            let low = self.memory[index].data.len();
+            for cpu in &self.cpus {
+                cpu.unmap(0, low)?;
+                unsafe { cpu.map_backing(0, low, 7, std::ptr::NonNull::new(self.ram.as_ptr()).unwrap()) }?;
+            }
+            state.remap_pending = false;
+            state.remap_ready = false;
+        }
         if unsafe { (*self.state.get()).cache_dirty } {
             for cpu in &self.cpus {
                 cpu.invalidate_code(None)?;

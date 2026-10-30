@@ -76,7 +76,7 @@ pub struct Definition {
     /// X-Processor Pro DRAM controller base and refresh-rate level.
     #[serde(default)]
     pub xpp_dram: Option<(u64, u8)>,
-    /// Physical base of a read-only alias of the whole DRAM.
+    /// Physical base of a writable alias of the whole DRAM.
     #[serde(default)]
     pub dram_alias: Option<u64>,
     /// X-Processor Pro DWC3: base, interrupt line, command and transaction
@@ -154,6 +154,27 @@ pub struct Definition {
     pub usb: Option<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub usb_phy: Option<(u64, [u8; 32], u32)>,
+    #[serde(default)]
+    pub xpp_boot: Option<XppBoot>,
+    #[serde(default)]
+    pub pmu_cycles_per_tick: Option<u64>,
+    /// Declared (port base, send word, receive word) replies.
+    #[serde(default)]
+    pub xpp_serial_replies: Vec<(u64, u32, u32)>,
+    /// ADC register base; XP4 places it at 0xfff40000. A declared base
+    /// selects the X-Processor Pro law, where +8 is a power-down bit.
+    #[serde(default)]
+    pub adc_base: Option<u64>,
+    /// X-Processor Pro display timing: two bank bases, each bank's phase
+    /// 0/1/2 GIC lines, then frame and stop ticks.
+    #[serde(default)]
+    pub xpp_display_timing: Option<([u64; 2], [[u8; 3]; 2], u64, u64)>,
+    /// X-Processor Pro job engine: base, GIC line, job ticks.
+    #[serde(default)]
+    pub xpp_job: Option<(u64, u32, u64)>,
+    /// X-Processor Pro display control pages: two bank bases, status ticks.
+    #[serde(default)]
+    pub xpp_display_control: Option<([u64; 2], u64)>,
 }
 
 /// Register layout of the interval timer at `timer_base`.
@@ -311,7 +332,7 @@ pub struct XppAdc {
 }
 
 /// X-Processor Pro flash controller, read aperture and PL330 wiring.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppStorage {
     pub flash_controller: u64,
@@ -336,4 +357,15 @@ pub struct XppNor {
     pub chip_select: u8,
     pub registers: fujimod_emulator_devices::parts::micron_nor::Options,
     pub array: fujimod_emulator_xpp::flash::Array,
+}
+
+/// X-Processor Pro cold-reset controller and its boot-selection strap level.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBoot {
+    pub options: fujimod_emulator_xpp::boot::Options,
+    pub card_strap: bool,
+    /// Memory window shown at physical 0 until the guest selects the remap.
+    #[serde(default)]
+    pub low_alias: Option<u64>,
 }

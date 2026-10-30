@@ -1,8 +1,9 @@
 //! SDHCI memory-card host with explicit register-base wiring. MMC, erase, tuning,
 //! and UHS refuse. Latencies and card identity are declared inputs.
 //! The UHS-II interface enable, its mode select and VDD2 power are stored: the
-//! card is not UHS-II, so present-state bit 31 stays clear and commands refuse
-//! while the interface is enabled (X-T20 2.11 0xc658cc then 0xc65d90).
+//! card is not UHS-II, so present-state bit 31 stays clear (X-T20 2.11 0xc658cc
+//! then 0xc65d90). Commands still run while it is enabled: GFX 50R 3.11 boots
+//! from SD with bit 8 left set.
 //! SDMA writes bytes before status and IRQ; boundaries require W1C/resume.
 use super::{Clocks, registers::Registers};
 use fujimod_emulator_devices::bus::FastReadWord;
@@ -564,13 +565,16 @@ impl SdHost {
                 bytes[0] = 0x80;
                 bytes[10] = 0x70;
                 request.payload = Payload::Metadata { bytes, len: 64 };
-                argument != 0 || self.bus_width != 4
+                argument != 0 || self.regs.get(4) & 0xfff != 64 || self.bus_width != 4
             }
             51 if app && !rom => {
                 let mut bytes = [0; 64];
                 bytes[..2].copy_from_slice(&[2, 5]);
                 request.payload = Payload::Metadata { bytes, len: 8 };
-                argument != 0
+                // Like the SD status and switch status blocks, the SCR has a
+                // fixed size; SDHC ignores SET_BLOCKLEN, so the host block-size
+                // register sets the transfer.
+                argument != 0 || self.regs.get(4) & 0xfff != 8
             }
             6 if !rom && self.options.high_speed => {
                 let (bytes, selected) = switch_status(argument, self.access_mode);
@@ -581,10 +585,14 @@ impl SdHost {
                 argument & 0x7f000000 != 0
             }
             6 if !rom => {
+                // The card supports only default speed (group 1 function 0).
+                // Checking or switching to high speed reports result 0xF for
+                // group 1, as the SD spec defines for an unsupported function.
                 let mut bytes = [0; 64];
                 bytes[13] = 1;
+                bytes[16] = 0xf;
                 request.payload = Payload::Metadata { bytes, len: 64 };
-                argument != 1
+                ![1, 0x80fffff1].contains(&argument) || self.regs.get(4) & 0xfff != 64
             }
             17 | 18 | 25 => {
                 let count = if command == 17 {
@@ -645,9 +653,6 @@ impl SdHost {
             || rom && self.regs.get(0x28) >> 8 & 15 != 15
         {
             return Err("SD command before clock/power setup".into());
-        }
-        if self.regs.get(0x3e) & 0x100 != 0 {
-            return Err("SD command with the UHS-II interface enabled".into());
         }
         let argument = self.regs.word(8);
         let mut r = self.plan(word, argument)?;
@@ -1083,9 +1088,16 @@ impl SdHost {
         if self.request.is_some() {
             return Err("SD configuration changed during command".into());
         }
+        // Power-control bits 12-15 select SDHCI 4 VDD2, used only by UHS-II
+        // cards; GFX 50R 0xcac8e4 sets them. They are stored with no effect.
         if offset == 0x28 && !rom && value & !0xffff != 0
             || offset == 4 && value & 0x8000 != 0
-            || offset == 0x3e && !matches!(value, 0 | 0x100 | 0x107)
+            // Host-control-2 bit 8 (UHS-II interface enable) and UHS mode 7
+            // (UHS-II) are SDHCI 4 UHS-II selections; GFX 50R 0xcac788 probes
+            // them. A default-speed card has no UHS-II lanes, so they select
+            // nothing; other UHS modes and tuning still refuse.
+            || offset == 0x3e && value & !0x100 != 0 && value & !0x107 != 0
+            || offset == 0x3e && value & 7 != 0 && value & 7 != 7
             || offset == 0x100 && value & !7 != 0
             || offset == 0x104 && value != 0
         {

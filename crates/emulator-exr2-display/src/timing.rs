@@ -51,10 +51,15 @@ pub const MASKS: [(u32, u32); 14] = [
     (0x34, 0x1fff0007),
     (0x38, 0x07ff0fff),
 ];
-const IRQS: [[u8; 3]; 2] = [[0x34, 0x34, 0x35], [0x37, 0x37, 0x38]];
+pub const IRQS: [[u8; 3]; 2] = [[0x34, 0x34, 0x35], [0x37, 0x37, 0x38]];
 
 pub fn address(address: u64, size: u32) -> Result<(usize, u32)> {
-    for (i, base) in BASES.iter().enumerate() {
+    address_in(&BASES, address, size)
+}
+
+/// Bank decode for a board that places the two timing banks elsewhere.
+pub fn address_in(bases: &[u64; 2], address: u64, size: u32) -> Result<(usize, u32)> {
+    for (i, base) in bases.iter().enumerate() {
         if (*base..*base + 0x1000).contains(&address) {
             let o = (address - base) as u32;
             if size != 4
@@ -124,6 +129,17 @@ pub struct Timing {
     pub last_tick: i64,
     pub phase_order: [usize; 3],
     pub offsets: Option<[i64; 3]>,
+    /// Board wiring, not guest state.
+    #[serde(skip, default = "exr2_bases")]
+    pub bases: [u64; 2],
+    #[serde(skip, default = "exr2_irqs")]
+    pub irqs: [[u8; 3]; 2],
+}
+fn exr2_bases() -> [u64; 2] {
+    BASES
+}
+fn exr2_irqs() -> [[u8; 3]; 2] {
+    IRQS
 }
 impl Timing {
     pub fn new(period: Option<i64>, delay: i64, profile: String, now: i64) -> Self {
@@ -136,6 +152,8 @@ impl Timing {
             last_tick: now,
             phase_order: [1, 2, 0],
             offsets: period.map(|p| [p / 2, p * 3 / 4, p]),
+            bases: BASES,
+            irqs: IRQS,
         }
     }
     fn log(
@@ -146,7 +164,7 @@ impl Timing {
         host.record(Record::new(name, fields))
     }
     pub fn targets(&self, i: usize, phase: usize, host: &dyn TimingHost) -> Result<(u8, Vec<u8>)> {
-        let line = IRQS[i][phase];
+        let line = self.irqs[i][phase];
         let targets = host
             .enabled()
             .iter()
@@ -328,7 +346,7 @@ impl Timing {
         Ok(())
     }
     pub fn read(&mut self, a: u64, size: u32, now: i64, host: &mut dyn TimingHost) -> Result<u32> {
-        let (i, o) = address(a, size)?;
+        let (i, o) = address_in(&self.bases, a, size)?;
         if now < self.last_tick {
             return Err("Display virtual time moved backwards".into());
         }
@@ -353,7 +371,7 @@ impl Timing {
         now: i64,
         host: &mut dyn TimingHost,
     ) -> Result<()> {
-        let (i, o) = address(a, size)?;
+        let (i, o) = address_in(&self.bases, a, size)?;
         if o == 0x30 {
             return Err(
                 "Display timing phase status is read-only in the recovered contract".into(),

@@ -104,7 +104,13 @@ impl BootController {
             }
             return Ok((*word).into());
         }
-        if [o.selector_base + 8, o.selector_base + 0x70].contains(&address) {
+        // Other selector-page words are system control. Every GFX 50R 3.11
+        // access identified (e.g. 0xcb0684 on +0x1c, 0xa9c48c on +0x218) is a
+        // read-modify-write and none is polled, so they retain writes.
+        if address
+            .checked_sub(o.selector_base)
+            .is_some_and(|offset| offset < 0x1000)
+        {
             let word = self.state.io_words.entry(address).or_default();
             if let Some(v) = value {
                 *word = v as u32;

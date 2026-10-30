@@ -682,7 +682,7 @@
               }
             ],
             "clock": "one timer cycle per aggregate CPU instruction; synthetic ratio, not measured",
-            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raises interrupt 48+n: the X-T20 2.11 timer library (0xc4bcd0) maps channel n through byte table 0xed3b58 to row n+2 of interrupt descriptor table 0xed4720, whose first word is 0x30+n."
+            "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raises interrupt 48+n: the X-T20 2.11 timer library (0xc4bcd0) maps channel n through byte table 0xed3b58 to row n+2 of interrupt descriptor table 0xed4720, whose first word is 0x30+n; GFX 50R 3.11 table 0xfb8798 holds IRQ index 2+n for channel n, and the enabled lines 56 and 63 fix the offset at 46."
           },
           "flash_controller": {
             "base": 4294000640,

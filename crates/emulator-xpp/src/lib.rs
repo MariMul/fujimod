@@ -12,6 +12,7 @@ pub mod face;
 pub mod flash;
 pub mod i2c;
 pub mod imaging;
+pub mod job;
 pub mod lens;
 pub mod power;
 pub mod resets;
