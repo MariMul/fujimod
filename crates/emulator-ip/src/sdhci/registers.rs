@@ -46,6 +46,8 @@ impl Registers {
                     | 0x36
                     | 0x38
                     | 0x3a
+                    // Auto CMD error status: no Auto CMD12 error is modeled.
+                    | 0x3c
                     | 0x3e
                     | 0x100
                     | 0x104
