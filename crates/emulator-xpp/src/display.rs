@@ -21,15 +21,28 @@
 //! `(width - 1) << 16 | (height - 1)`. The firmware writes no pitch; the
 //! camera's OSD buffers (0x354d000, 0x384d000) are 720 x 480 premultiplied
 //! RGBA words with a 2880-byte pitch, so rows are packed. Layers compose in
-//! index order over black. The video layer (+0x000 bits, +0x010 format,
-//! +0x030 buffer) carries the imaging pipeline's output, which is not
-//! modeled, and is not captured.
+//! index order over the video layer, or over black without it.
+//!
+//! The same routine copies the video layer's words: shadow +0x10 to the
+//! format at +0x010, +0x3c to the size at +0x02c and +0x40 to the buffer at
+//! +0x030. The camera holds format 0x333, size 720 x 480 and the live-view
+//! buffer 0xa7d6000 there in REC, with +0x000 = 0x1010105. The emulated
+//! firmware writes 0x1010101 before REC and the camera's 0x1010105 on
+//! entering REC, while +0x030 cycles through the live-view buffers, so bit 2
+//! of +0x000 is taken as the video enable.
+//! Format 0x333 is packed 4:2:2 `Y0 Y1 Cb Cr` with rows of two bytes per
+//! pixel, as in the camera's live-view buffers. The conversion to RGB
+//! (BT.601, limited range) is the shared raster law, not a measured one.
+//! Frames keep the byte order of the OSD buffers (blue, green, red, alpha:
+//! the camera's red battery icon reads blue as RGBA), so video pixels are
+//! stored in that order too.
 //!
 //! A declared handshake clock makes +0 a bit-16 status: a falling request
 //! sets status after that delay; a set request clears it. Other words retain
 //! writes. This is the same output controller with a timed completion law.
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_graphics::raster::{self, PixelOrder, Plane};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -103,7 +116,13 @@ impl Device for FrameClock {
     }
 }
 
+const CONTROL: u64 = 0x000;
+const VIDEO_ENABLE: u32 = 1 << 2;
+const VIDEO_FORMAT: u64 = 0x010;
+const PACKED_422: u32 = 0x333;
 const OUTPUT_SIZE: u64 = 0x014;
+const VIDEO_SIZE: u64 = 0x02c;
+const VIDEO_BUFFER: u64 = 0x030;
 const LAYER_ENABLE: u64 = 0x200;
 const LAYER_ORIGIN: u64 = 0x210;
 const LAYER_SIZE: u64 = 0x220;
@@ -202,13 +221,15 @@ impl Output {
     fn extent(word: u32) -> Option<(u32, u32)> {
         (word & 0xf000_f000 == 0).then_some(((word >> 16) + 1, (word & 0xfff) + 1))
     }
-    /// Composite the enabled OSD layers; `Ok(None)` when none is enabled.
+    /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
+    /// no layer is enabled.
     fn compose(&self, cx: &mut Cx<'_>) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
         let enable = self.word(LAYER_ENABLE);
+        let video = self.word(CONTROL) & VIDEO_ENABLE != 0;
         if enable & !0xf != 0 {
             return Err(());
         }
-        if enable == 0 {
+        if enable == 0 && !video {
             return Ok(None);
         }
         let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
@@ -217,6 +238,38 @@ impl Output {
             pixel[3] = 255;
         }
         let mut top = 0;
+        if video {
+            let (w, h) = Self::extent(self.word(VIDEO_SIZE)).ok_or(())?;
+            let buffer = u64::from(self.word(VIDEO_BUFFER));
+            if self.word(VIDEO_FORMAT) != PACKED_422
+                || w > width
+                || h > height
+                || w & 1 != 0
+                || buffer & 3 != 0
+            {
+                return Err(());
+            }
+            let plane = Plane {
+                address: buffer,
+                stride: w * 2,
+                source_x: 0,
+                source_y: 0,
+                source_width: w,
+                source_height: h,
+                sampling: None,
+                work_x: 0,
+                work_y: 0,
+                work_width: w,
+                work_height: h,
+                order: PixelOrder::YyCbCr,
+            };
+            raster::composite(|a, n| cx.ram_bytes(a, n), plane, width, height, &mut rgba)
+                .map_err(|_| ())?;
+            for pixel in rgba.chunks_exact_mut(4) {
+                pixel.swap(0, 2);
+            }
+            top = buffer;
+        }
         for layer in (0..4).filter(|n| enable & 1 << n != 0) {
             let at = |offset: u64| offset + 4 * layer as u64;
             let (w, h) = Self::extent(self.word(at(LAYER_SIZE))).ok_or(())?;
@@ -270,7 +323,11 @@ impl Output {
         let status = json!({
             "active": true, "format": "rgba8888-premultiplied", "layers": self.word(LAYER_ENABLE),
             "source": format!("0x{source:x}"), "sequence": sequence, "width": width,
-            "height": height, "tick": cx.now(), "capture": "osd-layers-over-black",
+            "height": height, "tick": cx.now(), "capture": if self.word(CONTROL) & VIDEO_ENABLE != 0 {
+                "osd-layers-over-video"
+            } else {
+                "osd-layers-over-black"
+            },
         });
         let delivered = cx.output_status(scanout.output, status).and_then(|()| {
             cx.scanout(Frame {
@@ -581,6 +638,62 @@ mod tests {
         assert_eq!(out.next_deadline(30), Some(30));
         // A layer origin away from the corner is not modeled.
         write(&mut out, &mut host, LAYER_ORIGIN, 1);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn scanout_composes_osd_layers_over_the_packed_video_layer() {
+        const BASE: u64 = 0xfff64000;
+        let scanout = Some(Scanout {
+            output: 0,
+            period: 10,
+        });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout).unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        // A red 2 x 1 video pixel pair, stored blue first like the OSD, under
+        // one 2 x 1 OSD layer that is clear over pixel 0 and half white over
+        // pixel 1.
+        host.ram[0x20..0x24].copy_from_slice(&[81, 81, 90, 240]);
+        host.ram[0x80..0x88].copy_from_slice(&[0, 0, 0, 0, 128, 128, 128, 128]);
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(
+                &mut Cx::new(host, 0, 0, 0),
+                BASE + offset,
+                4,
+                u64::from(value),
+            );
+        };
+        for (offset, value) in [
+            (CONTROL, VIDEO_ENABLE),
+            (OUTPUT_SIZE, 0x1_0000),
+            (VIDEO_FORMAT, PACKED_422),
+            (VIDEO_SIZE, 0x1_0000),
+            (VIDEO_BUFFER, 0x20),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+        host.now = 10;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(
+            host.frames.last().unwrap().rgba,
+            [0, 0, 255, 255, 0, 0, 255, 255]
+        );
+        write(&mut out, &mut host, LAYER_ENABLE, 1);
+        write(&mut out, &mut host, LAYER_SIZE, 0x1_0000);
+        write(&mut out, &mut host, LAYER_BUFFER, 0x80);
+        host.now = 20;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        let frame = host.frames.last().unwrap();
+        assert_eq!(frame.rgba, [0, 0, 255, 255, 128, 128, 255, 255]);
+        assert_eq!(frame.sequence, 2);
+        // Only the packed 4:2:2 format is modeled.
+        write(&mut out, &mut host, VIDEO_FORMAT, 0x222);
+        host.now = 30;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         out.advance(&mut cx);
         assert!(cx.is_unmodeled());
