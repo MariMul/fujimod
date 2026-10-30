@@ -617,6 +617,7 @@
         "max_copy_bytes": 67108864,
         "max_clear_bytes": 67108864,
         "bytes_per_tick": 16,
+        "tile_copy_bytes_per_tick": 25,
         "max_command_capture_bytes": 524288,
         "copy_profile": "vg-32bpp-untile-unrotated",
         "clear_profile": "declared-vg-ui-primitives-unmeasured"

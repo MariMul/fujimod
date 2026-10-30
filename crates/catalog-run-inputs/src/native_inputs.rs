@@ -906,6 +906,7 @@ pub struct NativeVectorGpuInputs {
     pub max_copy_bytes: u64,
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
+    pub tile_copy_bytes_per_tick: u64,
     pub max_command_capture_bytes: u64,
     pub copy_profile: NativeVectorGpuInputsCopyProfile,
     pub clear_profile: NativeVectorGpuInputsClearProfile,
@@ -1271,6 +1272,7 @@ impl RunNativeDeviceInputs {
             }
             Self::VectorGpu(input) => {
                 if input.bytes_per_tick == 0
+                    || input.tile_copy_bytes_per_tick == 0
                     || input.ram_bytes == 0
                     || input.max_fill_bytes > input.ram_bytes
                     || input.max_copy_bytes > input.ram_bytes

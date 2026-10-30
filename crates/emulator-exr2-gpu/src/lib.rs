@@ -328,6 +328,7 @@ pub struct CommandProcessor {
     pub max_command_capture_bytes: u64,
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
+    pub tile_copy_bytes_per_tick: u64,
     pub copy_profile: Option<Profile>,
     pub clear_profile: Option<Profile>,
     pub completions: BTreeMap<u64, Completion>,
@@ -362,6 +363,7 @@ impl Default for CommandProcessor {
             max_command_capture_bytes: 0x10000,
             max_clear_bytes: 0x04000000,
             bytes_per_tick: 16,
+            tile_copy_bytes_per_tick: 16,
             copy_profile: None,
             clear_profile: None,
             completions: BTreeMap::new(),
@@ -1348,7 +1350,7 @@ impl CommandProcessor {
             let dst = n / chunks[1] * strides[1] + n % chunks[1];
             destination[dst as usize] = source[src as usize];
         }
-        let delay = self.delay(count);
+        let delay = 2.max(count.div_ceil(self.tile_copy_bytes_per_tick));
         let job = self.new_job_with_receipts(record_receipts, || {
             vec![
                 ("operation", Value::constant("tile-copy")),
@@ -2092,6 +2094,7 @@ impl CommandProcessor {
             ("acknowledgments".into(), num(self.acknowledgments)),
             ("last_job".into(), j),
             ("bytes_per_tick".into(), num(self.bytes_per_tick)),
+            ("tile_copy_bytes_per_tick".into(), num(self.tile_copy_bytes_per_tick)),
             (
                 "copy_profile".into(),
                 self.copy_profile.map_or(Value::None, Profile::value),

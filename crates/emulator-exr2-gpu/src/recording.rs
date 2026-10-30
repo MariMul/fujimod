@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 const MAGIC_V1: &[u8; 8] = b"FMVGPU01";
 const MAGIC_V2: &[u8; 8] = b"FMVGPU02";
+const MAGIC_V3: &[u8; 8] = b"FMVGPU03";
 const MAX_RECORD_BYTES: u64 = 2 << 30;
 
 #[derive(Clone, Debug)]
@@ -19,6 +20,7 @@ pub struct Header {
     pub max_command_capture_bytes: u64,
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
+    pub tile_copy_bytes_per_tick: u64,
     pub copy_profile: Option<Profile>,
     pub clear_profile: Option<Profile>,
 }
@@ -32,6 +34,7 @@ impl From<&CommandProcessor> for Header {
             max_command_capture_bytes: state.max_command_capture_bytes,
             max_clear_bytes: state.max_clear_bytes,
             bytes_per_tick: state.bytes_per_tick,
+            tile_copy_bytes_per_tick: state.tile_copy_bytes_per_tick,
             copy_profile: state.copy_profile,
             clear_profile: state.clear_profile,
         }
@@ -106,7 +109,7 @@ impl Recorder {
             writer: BufWriter::new(file),
             finished: false,
         };
-        recorder.writer.write_all(MAGIC_V2)?;
+        recorder.writer.write_all(MAGIC_V3)?;
         recorder.write_header(header)?;
         recorder.writer.flush()?;
         Ok(recorder)
@@ -120,6 +123,7 @@ impl Recorder {
             header.max_command_capture_bytes,
             header.max_clear_bytes,
             header.bytes_per_tick,
+            header.tile_copy_bytes_per_tick,
         ] {
             self.writer.write_all(&value.to_le_bytes())?;
         }
@@ -262,20 +266,35 @@ impl RecordingReader {
         let mut reader = BufReader::new(File::open(path)?);
         let mut magic = [0; 8];
         reader.read_exact(&mut magic)?;
-        let framed = if &magic == MAGIC_V1 {
-            false
+        let (framed, legacy) = if &magic == MAGIC_V1 {
+            (false, true)
         } else if &magic == MAGIC_V2 {
-            true
+            (true, true)
+        } else if &magic == MAGIC_V3 {
+            (true, false)
         } else {
             return Err(invalid_data("not a supported vector GPU recording"));
         };
+        let ram_bytes = read_u64(&mut reader)?;
+        let max_fill_bytes = read_u64(&mut reader)?;
+        let max_copy_bytes = read_u64(&mut reader)?;
+        let max_command_capture_bytes = read_u64(&mut reader)?;
+        let max_clear_bytes = read_u64(&mut reader)?;
+        let bytes_per_tick = read_u64(&mut reader)?;
+        // Legacy recordings priced tile copies at the device byte rate.
+        let tile_copy_bytes_per_tick = if legacy {
+            bytes_per_tick
+        } else {
+            read_u64(&mut reader)?
+        };
         let header = Header {
-            ram_bytes: read_u64(&mut reader)?,
-            max_fill_bytes: read_u64(&mut reader)?,
-            max_copy_bytes: read_u64(&mut reader)?,
-            max_command_capture_bytes: read_u64(&mut reader)?,
-            max_clear_bytes: read_u64(&mut reader)?,
-            bytes_per_tick: read_u64(&mut reader)?,
+            ram_bytes,
+            max_fill_bytes,
+            max_copy_bytes,
+            max_command_capture_bytes,
+            max_clear_bytes,
+            bytes_per_tick,
+            tile_copy_bytes_per_tick,
             copy_profile: read_profile(&mut reader)?,
             clear_profile: read_profile(&mut reader)?,
         };
@@ -613,6 +632,7 @@ mod tests {
             max_command_capture_bytes: 4096,
             max_clear_bytes: 4096,
             bytes_per_tick: 16,
+            tile_copy_bytes_per_tick: 16,
             copy_profile: None,
             clear_profile: None,
         }

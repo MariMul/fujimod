@@ -98,6 +98,7 @@ pub fn run(path: impl AsRef<Path>) -> Result<(), String> {
         max_command_capture_bytes: recording.header.max_command_capture_bytes,
         max_clear_bytes: recording.header.max_clear_bytes,
         bytes_per_tick: recording.header.bytes_per_tick,
+        tile_copy_bytes_per_tick: recording.header.tile_copy_bytes_per_tick,
         copy_profile: recording.header.copy_profile,
         clear_profile: recording.header.clear_profile,
         ..CommandProcessor::default()

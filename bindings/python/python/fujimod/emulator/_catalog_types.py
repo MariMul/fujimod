@@ -4518,6 +4518,7 @@ class RunNativeDeviceInputsVariant33(TypedDict, total=False):
     max_copy_bytes: Required[int]
     max_fill_bytes: Required[int]
     ram_bytes: Required[int]
+    tile_copy_bytes_per_tick: Required[int]
 
 
 class RunNativeDeviceInputsVariant34(TypedDict, total=False):
