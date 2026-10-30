@@ -353,14 +353,83 @@
       "size": 256,
       "kind": "serial-controller",
       "clock_id": null
+    },
+    {
+      "id": "peripheral-window-f0000000",
+      "base": 4026531840,
+      "size": 268435456,
+      "kind": "address-window",
+      "clock_id": null
     }
   ],
   "interrupts": [],
   "clocks": [],
-  "mappings": [],
-  "dma_mappings": [],
+  "mappings": [
+    {
+      "id": "dram-core0",
+      "core": "core0",
+      "address": 0,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 7
+    },
+    {
+      "id": "dram-core1",
+      "core": "core1",
+      "address": 0,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 7
+    },
+    {
+      "id": "uncached-core0",
+      "core": "core0",
+      "address": 1073741824,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 1
+    },
+    {
+      "id": "uncached-core1",
+      "core": "core1",
+      "address": 1073741824,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 1
+    }
+  ],
+  "dma_mappings": [
+    {
+      "id": "dram",
+      "address": 0,
+      "physical": 0,
+      "size": {
+        "kind": "body_dram"
+      },
+      "permissions": 3
+    }
+  ],
   "decoders": [],
-  "peripherals": [],
+  "peripherals": [
+    {
+      "core": "core0",
+      "block_id": "peripheral-window-f0000000",
+      "address": 4026531840
+    },
+    {
+      "core": "core1",
+      "block_id": "peripheral-window-f0000000",
+      "address": 4026531840
+    }
+  ],
   "reset": {
     "release": null,
     "coprocessor_writes": []
