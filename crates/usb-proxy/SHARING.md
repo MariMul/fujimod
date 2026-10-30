@@ -264,3 +264,30 @@ fujimod-share-owner end TICKET.json
 The native owner uses STUN and host candidates only. Browser controllers can
 still reach it through their own TURN relay; a native controller needs a direct
 or STUN-mapped path.
+
+### Code design
+
+- `apps/usb-sharing/worker.ts`: `ShareRoom` stores `owner_hash` and
+  `persistent` in Durable Object storage. `remove()` revokes only ordinary
+  rooms; a persistent owner's removal sends `host_offline` to clients and
+  schedules the idle alarm. An `end` frame from the owner revokes. The Rust
+  development service (`src/signaling.rs`) implements the same rules, keeping
+  persistent rooms in memory.
+- `crates/usb-proxy/src/share.rs`: `OwnerTicket { link, owner_key }` with
+  `create(signal, site)`, `read(path)` and `write(path)` (mode 0600), and
+  `ticket()` giving the link's `Ticket`.
+- `crates/usb-proxy/src/pipeline.rs`: `Pipeline`, the Rust form of
+  `web/pipeline.ts` over `protocol::Message`, with the same tests.
+- `crates/usb-proxy/src/peer/native.rs`: candidate gathering and the
+  str0m/data-channel pump are shared functions used by both the controller
+  (`PeerSocket::connect`, offerer) and the owner (answerer).
+- `crates/usb-proxy/src/peer/host.rs` (native only): `HostRoom::join(&OwnerTicket)`
+  holds the signaling socket and yields `HostEvent::Controller(id, PeerSocket)`
+  and `HostEvent::Left(id)`; each controller has its own `Rtc`, sockets and I/O
+  thread. `HostRoom::end()` sends `end`.
+- `crates/usb/src/share_owner.rs` (native only): `serve(ticket, selector,
+  hooks)` runs `DeviceOwners` hotplug, one `Exporter`, and per controller the
+  protocol loop of `web/peer.ts`'s `ShareHost` (hello with the link key,
+  `Ready`, notices, `Pipeline`, `owner_status`/`owner_attention` through
+  `OwnerHooks`, stop after a USB error, `abandon` on disconnect). It rejoins the
+  room when signaling drops. `src/bin/share_owner.rs` is the CLI.
