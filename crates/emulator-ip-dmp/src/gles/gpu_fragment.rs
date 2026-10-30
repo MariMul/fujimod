@@ -43,7 +43,14 @@ impl Gpu {
         let device = context.device();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("DMP fragment stage"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("gpu_fragment.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                format!(
+                    "{}\n{}",
+                    include_str!("gpu_fragment.wgsl"),
+                    include_str!("gpu_fragment_compute.wgsl")
+                )
+                .into(),
+            ),
         });
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("DMP fragment stage"),

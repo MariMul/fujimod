@@ -9,7 +9,7 @@ use fujimod_emulator_gpu::{
     GpuContext, GpuSurface, SurfaceExtent, SurfaceFormat, SurfaceKey, SurfaceLayout, context,
 };
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicUsize, Ordering},
@@ -20,8 +20,18 @@ mod buffers;
 #[cfg(not(target_arch = "wasm32"))]
 mod compiler;
 mod fragment_program;
+#[cfg(not(target_arch = "wasm32"))]
+mod native_blend;
+
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+enum FragmentTarget {
+    Packed,
+    NormalizedRgba8,
+}
+mod textures;
 use buffers::DrawBuffers;
 use fragment_program::FragmentProgram;
+use textures::TextureUploads;
 
 const REGISTER_WORDS: usize = 0x500;
 const FOG_OFFSET: usize = REGISTER_WORDS;
@@ -34,8 +44,9 @@ static DRAW_PIPELINES: OnceLock<
 > = OnceLock::new();
 static VERTEX_SHADER_MODULES: OnceLock<Mutex<HashMap<[u8; 32], Arc<wgpu::ShaderModule>>>> =
     OnceLock::new();
-static FRAGMENT_SHADER_MODULES: OnceLock<Mutex<HashMap<bool, Arc<wgpu::ShaderModule>>>> =
-    OnceLock::new();
+static FRAGMENT_SHADER_MODULES: OnceLock<
+    Mutex<HashMap<(bool, FragmentTarget), Arc<wgpu::ShaderModule>>>,
+> = OnceLock::new();
 static VERTEX_MODULE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
 static FRAGMENT_MODULE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
 static PIPELINE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
@@ -108,7 +119,7 @@ struct PreparedDraw {
     color_key: SurfaceKey,
     depth_key: SurfaceKey,
     parameters: Vec<u32>,
-    guest_bytes: Vec<u8>,
+    guest_bytes: Arc<Vec<u8>>,
     vertex: gpu_vertex::PreparedDraw,
 }
 
@@ -119,9 +130,10 @@ pub(super) fn render(
     expected_snapshots: Option<&Snapshots>,
     read: &mut Reader<'_>,
 ) -> Result<RenderedList, String> {
+    let timing = std::env::var_os("FUJIMOD_DMP_DRAW_TIMING").map(|_| std::time::Instant::now());
     let mut prepared = Vec::new();
     let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
-    let mut texture_dma = HashMap::new();
+    let mut texture_uploads = TextureUploads::default();
     for draw in draws {
         if draw.vertex.indices.is_empty() {
             continue;
@@ -154,7 +166,7 @@ pub(super) fn render(
         )?;
 
         let (parameters, guest_bytes) =
-            draw_parameters(draw, recorded_reads, read, &mut texture_dma)?;
+            draw_parameters(draw, recorded_reads, read, &mut texture_uploads)?;
         prepared.push(PreparedDraw {
             state: state.clone(),
             extent,
@@ -175,6 +187,7 @@ pub(super) fn render(
     }
     let draw_count = prepared.len();
 
+    let prepared_at = timing.map(|_| std::time::Instant::now());
     let cache = context()?;
     let _submission = cache.acquire()?;
     let mut encoder = cache
@@ -182,23 +195,42 @@ pub(super) fn render(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("DMP command list"),
         });
-    for (key, bytes) in surfaces.values() {
-        cache.get_or_create_target_encoded(&mut encoder, *key, bytes.as_deref())?;
+    let mut needed = HashSet::new();
+    for draw in &prepared {
+        needed.insert(draw.color_key);
+        #[cfg(not(target_arch = "wasm32"))]
+        let needs_depth_attachment = native_blend::mode(&draw.state).is_none();
+        #[cfg(target_arch = "wasm32")]
+        let needs_depth_attachment = true;
+        if needs_depth_attachment {
+            needed.insert(draw.depth_key);
+        }
     }
-    for (key, _) in surfaces.values() {
+    for (key, bytes) in surfaces.values().filter(|(key, _)| needed.contains(key)) {
+        cache.get_or_create_target_encoded(&mut encoder, *key, bytes.as_deref())?;
         cache.encode_clear_write_masks(&mut encoder, *key)?;
     }
     let mut snapshots = HashMap::new();
     let buffers = DrawBuffers::new(cache.device(), &prepared)?;
-    for (index, prepared) in prepared.iter().enumerate() {
-        let pipeline = pipeline_for(
-            cache.device(),
-            &prepared.state,
-            &prepared.vertex,
-            &prepared.parameters,
-        )?;
+    let mut index = 0;
+    while index < prepared.len() {
+        #[cfg(not(target_arch = "wasm32"))]
+        if native_blend::mode(&prepared[index].state).is_some() {
+            let key = prepared[index].color_key;
+            let end = (index + 1..prepared.len())
+                .find(|&next| {
+                    prepared[next].color_key != key
+                        || native_blend::mode(&prepared[next].state).is_none()
+                })
+                .unwrap_or(prepared.len());
+            native_blend::render(&prepared[index..end], index, cache, &buffers, &mut encoder)?;
+            index = end;
+            continue;
+        }
+        let draw = &prepared[index];
+        let pipeline = pipeline_for(cache.device(), &draw.state, &draw.vertex, &draw.parameters)?;
         render_draw(
-            prepared,
+            draw,
             &pipeline,
             cache,
             &mut encoder,
@@ -206,6 +238,7 @@ pub(super) fn render(
             &buffers,
             index,
         )?;
+        index += 1;
     }
     // A disabled depth/stencil stage cannot write this surface. Preserve the
     // resident target, but do not transfer its entire extent back to the host.
@@ -223,9 +256,45 @@ pub(super) fn render(
         })
         .collect::<Vec<_>>();
     let pending = cache.encode_readbacks(&mut encoder, &keys)?;
+    let encoded_at = timing.map(|_| std::time::Instant::now());
     cache.submit(encoder.finish());
     let readbacks = cache.finish_readbacks(pending)?;
 
+    if let (Some(start), Some(prepared_at), Some(encoded_at)) = (timing, prepared_at, encoded_at) {
+        let native = prepared
+            .iter()
+            .filter(|draw| native_blend::mode(&draw.state).is_some())
+            .count();
+        let bytes: usize = prepared.iter().map(|draw| draw.guest_bytes.len()).sum();
+        let mut packed = BTreeMap::<String, usize>::new();
+        for draw in &prepared {
+            if native_blend::mode(&draw.state).is_none() {
+                let s = &draw.state;
+                let key = format!(
+                    "format={:?} mask={:?} depth={} stencil={} fog={} blend={:?}",
+                    s.targets.color_format,
+                    s.color_mask,
+                    s.depth_test.enabled,
+                    s.stencil_test.enabled,
+                    s.fog.enabled,
+                    s.blend
+                );
+                *packed.entry(key).or_default() += 1;
+            }
+        }
+        for (reason, count) in packed {
+            eprintln!("DMP_PACKED count={count} {reason}");
+        }
+        eprintln!(
+            "DMP_DRAW draws={} native={} texture_bytes={} prepare_ms={:.3} encode_ms={:.3} submit_readback_ms={:.3}",
+            prepared.len(),
+            native,
+            bytes,
+            (prepared_at - start).as_secs_f64() * 1000.,
+            (encoded_at - prepared_at).as_secs_f64() * 1000.,
+            encoded_at.elapsed().as_secs_f64() * 1000.
+        );
+    }
     let mut snapshots = Vec::new();
     let mut written_ranges = Vec::new();
     for (key, readback) in readbacks {
@@ -255,7 +324,7 @@ pub(super) async fn render_async(
 ) -> Result<RenderedList, String> {
     let mut prepared = Vec::new();
     let mut surfaces = BTreeMap::<u64, (SurfaceKey, Option<Vec<u8>>)>::new();
-    let mut texture_dma = HashMap::new();
+    let mut texture_uploads = TextureUploads::default();
     for draw in draws {
         if draw.vertex.indices.is_empty() {
             continue;
@@ -285,7 +354,7 @@ pub(super) async fn render_async(
             read,
         )?;
         let (parameters, guest_bytes) =
-            draw_parameters(draw, recorded_reads, read, &mut texture_dma)?;
+            draw_parameters(draw, recorded_reads, read, &mut texture_uploads)?;
         prepared.push(PreparedDraw {
             state: state.clone(),
             extent,
@@ -316,23 +385,42 @@ pub(super) async fn render_async(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("DMP command list"),
         });
-    for (key, bytes) in surfaces.values() {
-        cache.get_or_create_target_encoded(&mut encoder, *key, bytes.as_deref())?;
+    let mut needed = HashSet::new();
+    for draw in &prepared {
+        needed.insert(draw.color_key);
+        #[cfg(not(target_arch = "wasm32"))]
+        let needs_depth_attachment = native_blend::mode(&draw.state).is_none();
+        #[cfg(target_arch = "wasm32")]
+        let needs_depth_attachment = true;
+        if needs_depth_attachment {
+            needed.insert(draw.depth_key);
+        }
     }
-    for (key, _) in surfaces.values() {
+    for (key, bytes) in surfaces.values().filter(|(key, _)| needed.contains(key)) {
+        cache.get_or_create_target_encoded(&mut encoder, *key, bytes.as_deref())?;
         cache.encode_clear_write_masks(&mut encoder, *key)?;
     }
     let mut snapshots = HashMap::new();
     let buffers = DrawBuffers::new(cache.device(), &prepared)?;
-    for (index, prepared) in prepared.iter().enumerate() {
-        let pipeline = pipeline_for(
-            cache.device(),
-            &prepared.state,
-            &prepared.vertex,
-            &prepared.parameters,
-        )?;
+    let mut index = 0;
+    while index < prepared.len() {
+        #[cfg(not(target_arch = "wasm32"))]
+        if native_blend::mode(&prepared[index].state).is_some() {
+            let key = prepared[index].color_key;
+            let end = (index + 1..prepared.len())
+                .find(|&next| {
+                    prepared[next].color_key != key
+                        || native_blend::mode(&prepared[next].state).is_none()
+                })
+                .unwrap_or(prepared.len());
+            native_blend::render(&prepared[index..end], index, cache, &buffers, &mut encoder)?;
+            index = end;
+            continue;
+        }
+        let draw = &prepared[index];
+        let pipeline = pipeline_for(cache.device(), &draw.state, &draw.vertex, &draw.parameters)?;
         render_draw(
-            prepared,
+            draw,
             &pipeline,
             cache,
             &mut encoder,
@@ -340,6 +428,7 @@ pub(super) async fn render_async(
             &buffers,
             index,
         )?;
+        index += 1;
     }
     // A disabled depth/stencil stage cannot write this surface. Preserve the
     // resident target, but do not transfer its entire extent back to the host.
@@ -651,7 +740,8 @@ fn cached_pipeline(
 
     drop(pipelines);
     let vertex_shader = vertex_shader_module(device, vertex)?;
-    let fragment_shader = fragment_shader_module(device, state.raster.flat_shading)?;
+    let fragment_shader =
+        fragment_shader_module(device, state.raster.flat_shading, FragmentTarget::Packed)?;
     let pipeline = Arc::new(create_pipeline(
         device,
         &vertex_shader,
@@ -693,20 +783,30 @@ fn vertex_shader_module(
 fn fragment_shader_module(
     device: &wgpu::Device,
     flat_shading: bool,
+    target: FragmentTarget,
 ) -> Result<Arc<wgpu::ShaderModule>, String> {
     let modules = FRAGMENT_SHADER_MODULES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut modules = modules
         .lock()
         .map_err(|_| "DMP host GPU fragment shader module cache lock poisoned")?;
-    if let Some(module) = modules.get(&flat_shading) {
+    if let Some(module) = modules.get(&(flat_shading, target)) {
         return Ok(Arc::clone(module));
     }
+    let entry = match target {
+        FragmentTarget::Packed => include_str!("gpu_draw.wgsl"),
+        FragmentTarget::NormalizedRgba8 => include_str!("gpu_draw/native_fragment.wgsl"),
+    };
     let fragment_source = format!(
-        "{}\n{}",
+        "{}\n{}\n{}",
         include_str!("gpu_fragment.wgsl"),
-        include_str!("gpu_draw.wgsl")
+        include_str!("draw_fragment.wgsl"),
+        entry
     );
-    let fragment_source = FragmentProgram::shader(fragment_source);
+    let fragment_source = if target == FragmentTarget::Packed {
+        FragmentProgram::shader(fragment_source)
+    } else {
+        fragment_source
+    };
     let fragment_source = if flat_shading {
         fragment_source.replace(
             "@location(0) primary: vec4<f32>",
@@ -719,7 +819,7 @@ fn fragment_shader_module(
         label: Some("DMP fragment program"),
         source: wgpu::ShaderSource::Wgsl(fragment_source.into()),
     }));
-    modules.insert(flat_shading, Arc::clone(&module));
+    modules.insert((flat_shading, target), Arc::clone(&module));
     FRAGMENT_MODULE_CREATIONS.fetch_add(1, Ordering::Relaxed);
     Ok(module)
 }
@@ -837,19 +937,13 @@ fn draw_parameters(
     primitive: &Draw,
     recorded_reads: &[(u64, Vec<u8>)],
     read: &mut Reader<'_>,
-    texture_dma: &mut HashMap<(u64, usize), Vec<u8>>,
-) -> Result<(Vec<u32>, Vec<u8>), String> {
+    textures: &mut TextureUploads,
+) -> Result<(Vec<u32>, Arc<Vec<u8>>), String> {
     let mut registers = vec![0u32; REGISTER_WORDS];
     for &(index, value) in &primitive.registers {
         registers[index as usize] = value;
     }
-    let guest = texture_bytes(
-        &primitive.state,
-        &mut registers,
-        recorded_reads,
-        read,
-        texture_dma,
-    )?;
+    let guest = textures.prepare(&primitive.state, &mut registers, recorded_reads, read)?;
     validate_blend(&primitive.state)?;
     let mut parameters = vec![0u32; CASE_WORDS];
     parameters[..REGISTER_WORDS].copy_from_slice(&registers);
@@ -891,124 +985,14 @@ fn validate_blend(state: &DrawState) -> Result<(), String> {
     Ok(())
 }
 
-fn texture_bytes(
-    state: &DrawState,
-    registers: &mut [u32],
-    recorded_reads: &[(u64, Vec<u8>)],
-    read: &mut Reader<'_>,
-    texture_dma: &mut HashMap<(u64, usize), Vec<u8>>,
-) -> Result<Vec<u8>, String> {
-    let mut bytes = Vec::new();
-    for (unit, texture) in state.textures.iter().enumerate() {
-        if !texture.enabled {
-            continue;
-        }
-        let bytes_per_pixel = texture.format.bytes_per_pixel()?;
-        if texture.width == 0
-            || texture.height == 0
-            || !texture.width.is_multiple_of(8)
-            || !texture.height.is_multiple_of(8)
-        {
-            return Err("DMP draw texture extent is invalid".into());
-        }
-        let (base_register, mip_register) = if unit == 0 {
-            (0x285, 0x289)
-        } else {
-            (0x295, 0x299)
-        };
-        let base_offset = align_four(bytes.len());
-        bytes.resize(base_offset, 0);
-        registers[base_register] = u32::try_from(base_offset)
-            .map_err(|_| "DMP draw texture buffer address exceeds u32")?;
-        append_mip_level(
-            &mut bytes,
-            texture.base_address,
-            texture.width,
-            texture.height,
-            bytes_per_pixel,
-            recorded_reads,
-            read,
-            texture_dma,
-        )?;
-
-        let mip_offset = align_four(bytes.len());
-        bytes.resize(mip_offset, 0);
-        registers[mip_register] =
-            u32::try_from(mip_offset).map_err(|_| "DMP draw mip buffer address exceeds u32")?;
-        let mut maximum_level = 0u8;
-        for level in 1..=texture.max_level {
-            let width = texture.width >> level;
-            let height = texture.height >> level;
-            if width == 0 || height == 0 || !width.is_multiple_of(8) || !height.is_multiple_of(8) {
-                break;
-            }
-            let mut address_offset = 0usize;
-            for previous in 1..level {
-                address_offset +=
-                    (texture.width >> previous) * (texture.height >> previous) * bytes_per_pixel;
-            }
-            append_mip_level(
-                &mut bytes,
-                texture.mip_address + address_offset as u64,
-                width,
-                height,
-                bytes_per_pixel,
-                recorded_reads,
-                read,
-                texture_dma,
-            )?;
-            maximum_level = level;
-        }
-        let levels_register = if unit == 0 { 0x284 } else { 0x294 };
-        registers[levels_register] =
-            (registers[levels_register] & !0x000f_0000) | (u32::from(maximum_level) << 16);
-    }
-    if bytes.is_empty() {
-        bytes.extend_from_slice(&[0; 4]);
-    } else {
-        bytes.resize(align_four(bytes.len()), 0);
-    }
-    Ok(bytes)
-}
-
-fn append_mip_level(
-    bytes: &mut Vec<u8>,
-    address: u64,
-    width: usize,
-    height: usize,
-    bytes_per_pixel: usize,
-    recorded_reads: &[(u64, Vec<u8>)],
-    read: &mut Reader<'_>,
-    texture_dma: &mut HashMap<(u64, usize), Vec<u8>>,
-) -> Result<(), String> {
-    let size = width
-        .checked_mul(height)
-        .and_then(|pixels| pixels.checked_mul(bytes_per_pixel))
-        .ok_or("DMP draw texture size overflow")?;
-    // A list samples guest memory before any output commits. Identical DMA
-    // ranges are immutable throughout preparation, including target aliases.
-    let level = match texture_dma.entry((address, size)) {
-        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
-            recorded_range(recorded_reads, address, size)
-                .map(Ok)
-                .unwrap_or_else(|| read(address, size))?,
-        ),
-    };
-    if level.len() != size {
-        return Err(format!(
-            "DMP draw texture at {address:#x} has {} bytes, expected {size}",
-            level.len()
-        ));
-    }
-    bytes.extend_from_slice(level);
-    Ok(())
-}
-
-fn align_four(length: usize) -> usize {
-    (length + 3) & !3
-}
-
 fn encode_words(words: &[u32]) -> Vec<u8> {
     words.iter().flat_map(|word| word.to_le_bytes()).collect()
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod native_blend_tests;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn prepare(context: &GpuContext) -> Result<(), String> {
+    native_blend::prepare(context)
 }

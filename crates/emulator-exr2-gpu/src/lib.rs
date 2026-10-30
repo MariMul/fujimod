@@ -2202,3 +2202,17 @@ mod send_tests {
         require_send::<fujimod_emulator_devices::Action>();
     }
 }
+
+/// Compile reusable native graphics pipelines before interactive execution.
+pub fn prepare_host_gpu() -> std::result::Result<(), String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        fujimod_emulator_ip_dmp::gles::prepare_host_gpu()?;
+        coverage_kernel().map_err(|error| error.0)?;
+        ui_paint::prepare().map_err(|error| error.0)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        Err("Native host GPU preparation requires a desktop target".into())
+    }
+}

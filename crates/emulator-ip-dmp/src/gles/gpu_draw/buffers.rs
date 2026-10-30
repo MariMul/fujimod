@@ -1,13 +1,14 @@
 //! Immutable per-list upload arenas. Draws bind aligned slices; identical
 //! texture snapshots and vertex uniforms share bytes without another upload.
 use super::{PreparedDraw, encode_words};
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap, ops::Range, sync::Arc};
 use wgpu::util::DeviceExt;
 
 #[derive(Default)]
 struct Arena<'a> {
     bytes: Vec<u8>,
     shared: HashMap<&'a [u8], Range<u64>>,
+    textures: HashMap<usize, Range<u64>>,
 }
 impl<'a> Arena<'a> {
     fn append(&mut self, bytes: &[u8], alignment: u32) -> Range<u64> {
@@ -22,6 +23,18 @@ impl<'a> Arena<'a> {
         }
         let range = self.append(bytes, alignment);
         self.shared.insert(bytes, range.clone());
+        range
+    }
+    fn texture(&mut self, bytes: &Arc<Vec<u8>>, alignment: u32) -> Range<u64> {
+        // Prepared draws retain every interned upload for this list. Identity
+        // is stable until all arenas are uploaded, so repeated atlases need
+        // neither another copy nor a full-content hash for every draw.
+        let identity = Arc::as_ptr(bytes) as usize;
+        if let Some(range) = self.textures.get(&identity) {
+            return range.clone();
+        }
+        let range = self.append(bytes, alignment);
+        self.textures.insert(identity, range.clone());
         range
     }
     fn upload(
@@ -75,7 +88,7 @@ impl DrawBuffers {
         for draw in draws {
             ranges.push(Ranges {
                 parameters: parameters.append(&encode_words(&draw.parameters), storage),
-                guest: guest.shared(&draw.guest_bytes, storage),
+                guest: guest.texture(&draw.guest_bytes, storage),
                 uniforms: uniforms.shared(&draw.vertex.shading_bytes, uniform),
                 inputs: inputs.append(&draw.vertex.input_bytes, storage),
                 indices: indices.append(&encode_words(&draw.vertex.indices), 4),

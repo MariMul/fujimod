@@ -692,3 +692,15 @@ fn ordered_draw_uploads_preserve_overlapping_byte_masks_and_depth_transitions() 
     }
     let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn native_source_over_batches_preserve_order_around_masked_draws() {
+    let mut words = Vec::new();
+    for mask in [0xf00, 0xf00, 0x100, 0xf00, 0xf00] {
+        words.extend(triangle_list(&[
+            (0x300, 0x100), (0x301, 0x71760000), (0x307, mask),
+        ]));
+    }
+    let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);
+}
