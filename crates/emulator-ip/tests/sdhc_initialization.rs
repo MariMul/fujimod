@@ -310,3 +310,14 @@ fn uhs2_interface_attempt_finds_no_uhs2_card_and_falls_back_after_reset() {
     setup(&mut host, &mut ram, Protocol::Sdhc);
     enumerate(&mut host, &mut ram);
 }
+
+#[test]
+fn interface_enable_without_uhs2_mode_keeps_default_speed_commands_available() {
+    let (mut host, _, mut ram) = host(Protocol::Sdhc, InitializationFault::None);
+    setup(&mut host, &mut ram, Protocol::Sdhc);
+    // GFX 50R 3.11 leaves interface enable set with mode select 0.
+    write(&mut host, &mut ram, 0x3e, 2, 0x100);
+    enumerate(&mut host, &mut ram);
+    assert_eq!(read(&mut host, &mut ram, 0x3e, 2), 0x100);
+    assert_eq!(read(&mut host, &mut ram, 0x24, 4) >> 31, 0);
+}

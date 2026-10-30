@@ -22,6 +22,7 @@ pub(super) fn state<'py>(
     out.set_item("eligible_irqs", saved.eligible_irqs)?;
     out.set_item("failure", saved.failure)?;
     out.set_item("cbar_reads", saved.cbar_reads)?;
+    out.set_item("gpio", saved.gpio)?;
     if let Some(history) = saved.history {
         out.set_item("recent", history.recent)?;
         out.set_item("milestones", history.milestones)?;

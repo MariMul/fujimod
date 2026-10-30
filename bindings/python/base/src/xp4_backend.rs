@@ -95,8 +95,9 @@ pub trait Xp4Backend {
     fn interventions(&self) -> Vec<Intervention>;
 }
 
-/// Builds an XP4 session from its definition JSON and optional storage image.
-pub type Xp4Factory = fn(&str, Option<Vec<u8>>) -> PyResult<Box<dyn Xp4Backend>>;
+/// Builds an XP4 session from its definition JSON, optional storage image and card files.
+pub type Xp4Factory =
+    fn(&str, Option<Vec<u8>>, Vec<(String, Vec<u8>)>) -> PyResult<Box<dyn Xp4Backend>>;
 static FACTORY: OnceLock<Xp4Factory> = OnceLock::new();
 
 /// Set the factory `Board.from_xp4` uses; later calls are ignored.
@@ -107,9 +108,10 @@ pub fn set_xp4_factory(factory: Xp4Factory) {
 pub fn open(
     definition: &str,
     storage_image: Option<Vec<u8>>,
+    card_files: Vec<(String, Vec<u8>)>,
 ) -> PyResult<Box<dyn Xp4Backend>> {
     let open = FACTORY.get().ok_or_else(|| {
         pyo3::exceptions::PyRuntimeError::new_err("XP4 boards need the fujimod-python-xp4 bindings")
     })?;
-    open(definition, storage_image)
+    open(definition, storage_image, card_files)
 }

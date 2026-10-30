@@ -342,6 +342,7 @@ class BodyProfile(TypedDict, total=False):
     panel_notes: NotRequired[str | None]
     pin_interrupts: NotRequired[list[HardwarePinInterrupt] | None]
     preview_activity: NotRequired[HardwarePreviewActivity | None]
+    register_maps: NotRequired[HardwareRegisterLayouts | None]
     touch: NotRequired[HardwareTouch | None]
 
 
@@ -2302,12 +2303,14 @@ class HardwareDisplayFrames(TypedDict, total=False):
     basis: Required[str]
     irq_routes: Required[list[int]]
     period_ticks: Required[int]
+    timing: NotRequired[HardwareDisplayTimingBanks | None]
 
 
 class HardwareDisplayOutput(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
     clear_bits: Required[list[HardwareDisplayStatusBits]]
+    handshake_ticks: NotRequired[int | None]
     scanout: NotRequired[HardwareDisplayScanout | None]
     set_bits: Required[list[HardwareDisplayStatusBits]]
     size: Required[int]
@@ -2328,6 +2331,11 @@ class HardwareDisplayTiming(TypedDict, total=False):
     frame_period_ticks: Required[int]
     phase_profile: Required[str]
     stop_delay_ticks: Required[int]
+
+
+class HardwareDisplayTimingBanks(TypedDict, total=False):
+    bases: Required[list[int]]
+    stop_ticks: Required[int]
 
 
 class HardwareDma(TypedDict, total=False):

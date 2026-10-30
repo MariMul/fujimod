@@ -142,11 +142,17 @@ class Board:
                 raise ValueError(
                     "Storage names an undeclared asset: " + definition.storage
                 )
+            if any(asset not in loaded for asset in definition.card_files.values()):
+                raise ValueError("Card file names an undeclared asset")
             self._native = _native.Board.from_xp4(
                 json.dumps(dict(definition.options)),
                 storage_image=None
                 if definition.storage is None
                 else loaded[definition.storage],
+                card_files=[
+                    (name, loaded[asset])
+                    for name, asset in definition.card_files.items()
+                ],
             )
         else:
             self._native = _native.Board(

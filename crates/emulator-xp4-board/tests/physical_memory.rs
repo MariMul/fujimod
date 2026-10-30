@@ -13,7 +13,7 @@ fn definition() -> Value {
 #[test]
 fn reset_executes_read_only_rom_and_writes_separate_sram() {
     let definition: Definition = serde_json::from_value(definition()).unwrap();
-    let session = Session::new(definition, None).unwrap();
+    let session = Session::new(definition, None, vec![]).unwrap();
     let code = [0xe3a0102au32, 0xe5801000, 0xe320f003];
     let code: Vec<u8> = code.into_iter().flat_map(u32::to_le_bytes).collect();
     session.write(0xfff00000, &code).unwrap();
@@ -30,11 +30,11 @@ fn physical_windows_and_reset_registers_refuse_ambiguous_extents() {
     let mut input = definition();
     input["memory_regions"][1]["base"] = json!(0xfff00000u32);
     let definition: Definition = serde_json::from_value(input).unwrap();
-    assert!(Session::new(definition, None).is_err());
+    assert!(Session::new(definition, None, vec![]).is_err());
     let mut input = self::definition();
     input["initial_registers"] = json!([[], []]);
     let definition: Definition = serde_json::from_value(input).unwrap();
-    assert!(Session::new(definition, None).is_err());
+    assert!(Session::new(definition, None, vec![]).is_err());
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn cpu_cannot_write_read_only_rom() {
     let mut input = definition();
     input["initial_registers"][0][1][1] = json!(0xfff00000u32);
     let definition: Definition = serde_json::from_value(input).unwrap();
-    let session = Session::new(definition, None).unwrap();
+    let session = Session::new(definition, None, vec![]).unwrap();
     let code = [0xe3a0102au32, 0xe5801000, 0xe320f003];
     let code: Vec<u8> = code.into_iter().flat_map(u32::to_le_bytes).collect();
     session.write(0xfff00000, &code).unwrap();
