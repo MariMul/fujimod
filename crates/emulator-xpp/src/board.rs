@@ -99,6 +99,16 @@ pub struct BlockJob {
     pub irq: u32,
     pub ticks: u64,
 }
+/// Writing `value` to `word` sets the bits `mask` of `status` to `state`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BlockCommand {
+    pub word: u64,
+    pub value: u32,
+    pub status: u64,
+    pub mask: u32,
+    pub state: u32,
+}
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Model {
@@ -157,6 +167,9 @@ pub enum Model {
         /// (offset, value) of words that read a fixed value.
         #[serde(default)]
         fixed: Vec<(u64, u32)>,
+        /// Commands that set a field of a status word.
+        #[serde(default)]
+        commands: Vec<BlockCommand>,
     },
     Statistics {
         base: u64,
@@ -573,6 +586,7 @@ pub fn build(
                 job,
                 live_view_image,
                 fixed,
+                commands,
             } => {
                 let frames = frames.map(|f| blocks::Frames {
                     start: f.start,
@@ -595,6 +609,20 @@ pub fn build(
                 }
                 if !fixed.is_empty() {
                     model = model.with_fixed(fixed)?;
+                }
+                if !commands.is_empty() {
+                    model = model.with_commands(
+                        commands
+                            .into_iter()
+                            .map(|c| blocks::Command {
+                                word: c.word,
+                                value: c.value,
+                                status: c.status,
+                                mask: c.mask,
+                                state: c.state,
+                            })
+                            .collect(),
+                    )?;
                 }
                 devices.register(base, model.window(), Box::new(model))?
             }
