@@ -1,6 +1,11 @@
 import { afterEach, expect, test, vi } from 'vite-plus/test';
-import { serviceWorkflow } from './service-artifacts';
+import { flashReader, serviceWorkflow } from './service-artifacts';
 import { debugModeOperations, type DebugModeSession } from './debug-mode/operations';
+
+const { generationResults } = vi.hoisted(() => ({
+  generationResults: vi.fn(() => [] as import('fujimod').FirmwareGeneration[]),
+}));
+vi.mock('fujimod', () => ({ catalog: { generationResults } }));
 
 const firmware = {
   id: 'xt1-552',
@@ -26,7 +31,11 @@ function catalog(
     ),
   );
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  generationResults.mockReset();
+  generationResults.mockReturnValue([]);
+});
 
 test('physical-camera workflow resolves without an emulator bundle', async () => {
   catalog();
@@ -37,10 +46,37 @@ test('physical-camera workflow resolves without an emulator bundle', async () =>
   ]);
 });
 
-test('an unavailable workflow reports the selected model and release', async () => {
+test('unavailable service and flash artifacts retain the published generation errors', async () => {
+  catalog({ ...firmware, service_workflow: undefined });
+  generationResults.mockReturnValue([
+    {
+      firmware_id: 'xt1-552',
+      product: 'X-T1',
+      version: '5.52',
+      internal_version: '1.00',
+      tables: {
+        service: {
+          status: 'unavailable',
+          errors: [{ locator: 'service-workflow', reason: 'Setup pointer is ambiguous' }],
+        },
+        flash: {
+          status: 'unavailable',
+          errors: [{ locator: 'flash', reason: 'Flash geometry is ambiguous' }],
+        },
+      },
+    },
+  ]);
+  await expect(serviceWorkflow('xt1-552')).rejects.toThrow(
+    'service-workflow: Setup pointer is ambiguous',
+  );
+  await expect(flashReader('xt1-552')).rejects.toThrow('flash: Flash geometry is ambiguous');
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+test('an absent generation result names the missing table and firmware', async () => {
   catalog({ ...firmware, service_workflow: undefined });
   await expect(serviceWorkflow('xt1-552')).rejects.toThrow(
-    'Service setup is not supported for X-T1 5.52.',
+    'No service generation result was published for xt1-552.',
   );
   expect(fetch).toHaveBeenCalledTimes(1);
 });
@@ -91,7 +127,7 @@ test('setup remains available when persistence cannot be located', async () => {
   );
   const run = vi.fn();
   await expect(debugModeOperations(run).enter('xt1-552', vi.fn())).rejects.toThrow(
-    'Persistent debug mode is not supported for X-T1 5.52.',
+    'Persistent debug mode facts are missing from the workflow for X-T1 5.52.',
   );
   expect(run).not.toHaveBeenCalled();
 });
