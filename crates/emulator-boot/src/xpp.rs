@@ -9,6 +9,7 @@
 use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
     profiles::{RegisterIdleBits, RegisterLayouts, SocProfile},
+    reference::{MemoryKind, MemoryRegion, RegionSize},
     soc::ApplicationHardware,
 };
 use fujimod_catalog_configuration::RunInstructionRate;
@@ -190,6 +191,7 @@ fn nodes(
     maps: &RegisterLayouts,
     reset: &HardwareReset,
     ram_bytes: u64,
+    ram_banks: &[(u64, u64)],
     inputs: &Inputs<'_>,
 ) -> Result<Vec<Value>, String> {
     let paired = |map: bool, input: bool, label: &str| {
@@ -329,9 +331,23 @@ fn nodes(
             })),
         });
         model["job"] = json!(block.job.as_ref().map(|job| json!({
-            "start": bits(&job.start), "status": bits(&job.status),
-            "irq": job.irq_route, "ticks": job.ticks,
+            "start": bits(&job.start), "status": job.status.as_ref().map(bits),
+            "stop": job.stop.as_ref().map(bits), "irq": job.irq_route, "ticks": job.ticks,
         })));
+        model["fixed"] = json!(
+            block
+                .fixed_words
+                .iter()
+                .map(|w| json!([w.offset, w.value]))
+                .collect::<Vec<_>>()
+        );
+        model["commands"] = json!(block
+            .commands
+            .iter()
+            .map(|c| json!({
+                "word": c.word, "value": c.value, "status": c.status, "mask": c.mask, "state": c.state,
+            }))
+            .collect::<Vec<_>>());
         if let Some(image) = image.filter(|image| image.unit == block.base) {
             model["live_view_image"] = json!({ "lines": image.lines, "ycbcr": image.ycbcr });
         }
@@ -367,6 +383,20 @@ fn nodes(
                 "kind": "face", "base": face.base, "irq": face.irq_route, "run_ticks": face.run_ticks,
             }),
         );
+    }
+    for (name, kind, codec) in [
+        ("jpeg-encoder", "jpeg", &maps.jpeg_encoder),
+        ("jpeg-decoder", "jpeg-decoder", &maps.jpeg_decoder),
+    ] {
+        if let Some(codec) = codec {
+            node(
+                name.into(),
+                json!({
+                    "kind": kind, "base": codec.base, "irq": codec.irq_route,
+                    "run_ticks": codec.run_ticks,
+                }),
+            );
+        }
     }
     if let Some(hdmi) = &maps.hdmi_tx {
         node("hdmi".into(), json!({ "kind": "hdmi", "base": hdmi.base }));
@@ -463,6 +493,9 @@ fn nodes(
             json!({
                 "kind": "imaging-control", "base": control.base,
                 "hole": maps.frame_sync.as_ref().map(|sync| sync.interrupts),
+                "readout": control.readout.as_ref().map(|r| json!({
+                    "offset": r.offset, "irq": r.irq_route, "ticks": r.ticks,
+                })),
             }),
         );
     }
@@ -489,7 +522,7 @@ fn nodes(
                     "base": sd.base, "register_offset": sd.register_offset,
                     "transfer_ticks": sd.transfer_ticks, "clock_ticks": sd.clock_ticks,
                     "reset_ticks": sd.reset_ticks, "rca": card.rca, "ram_bytes": ram_bytes,
-                    "high_speed": card.high_speed,
+                    "high_speed": card.high_speed, "ram_banks": ram_banks,
                 },
                 "format": {
                     "sectors": card.sectors, "max_dirty_sectors": 1 << 21,
@@ -550,6 +583,20 @@ fn nodes(
 }
 
 /// Assemble the X-Processor Pro execution and device graphs of a resolved run.
+/// DRAM regions of fixed size beside the body DRAM at 0, which DMA
+/// engines such as the SD host reach.
+fn ram_banks(regions: &[MemoryRegion]) -> Vec<(u64, u64)> {
+    regions
+        .iter()
+        .filter_map(|region| match region.size {
+            RegionSize::Bytes { bytes } if region.base != 0 && region.kind == MemoryKind::Dram => {
+                Some((region.base, bytes))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result<Assembly, String> {
     let selection = &resolved.reference;
     let profile = soc_profile(resolved)?;
@@ -605,7 +652,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
             "cache_sizes": [caches.l1_data_bytes, caches.l1_instruction_bytes, caches.l2_bytes],
         })).collect::<Vec<_>>(),
         "gic": { "distributor": gic.distributor, "cpu_interface": gic.cpu_interface, "lines": gic.lines },
-        "nodes": nodes(maps, &reset, selection.body.dram_bytes, inputs)?,
+        "nodes": nodes(maps, &reset, selection.body.dram_bytes, &ram_banks(&selection.soc.memory_regions), inputs)?,
     });
     Ok(Assembly {
         execution,
@@ -753,7 +800,29 @@ mod tests {
             .unwrap();
         assert_eq!(
             job["job"],
-            json!({"start": [4, 1], "status": [0x44, 1], "irq": 128, "ticks": 880000})
+            json!({"start": [4, 1], "status": [0x44, 1], "stop": null, "irq": 128, "ticks": 880000})
+        );
+        // Still capture: development engines, the second DRAM controller's
+        // commands, the read-out unit, the JPEG codecs and the second DRAM bank.
+        let engine = |base: u64| blocks.clone().find(|m| m["base"] == base).unwrap();
+        assert_eq!(
+            engine(0xfff9_8000)["job"],
+            json!({"start": [4, 1], "status": null, "stop": [0, 1], "irq": 130, "ticks": 144000})
+        );
+        assert_eq!(engine(0xfff7_e000)["fixed"], json!([[0x1c, 0x0100_0100]]));
+        assert_eq!(
+            engine(0xfff0_f000)["commands"][0],
+            json!({"word": 0xb8, "value": 0x6a02_0202, "status": 0xbc, "mask": 0x3f, "state": 0x27})
+        );
+        assert_eq!(
+            node(devices, "imaging")["readout"],
+            json!({"offset": 0xc0, "irq": 98, "ticks": 2_880_000})
+        );
+        assert_eq!(node(devices, "jpeg-encoder")["kind"], "jpeg");
+        assert_eq!(node(devices, "jpeg-decoder")["irq"], 135);
+        assert_eq!(
+            node(devices, "sd")["options"]["ram_banks"],
+            json!([[0x8000_0000_u64, 0x4000_0000_u64]])
         );
         // The imaging frame period replaces each imaging law's period; display frames keep theirs.
         assert_eq!(node(devices, "frame-sync")["period_ticks"], 880000);

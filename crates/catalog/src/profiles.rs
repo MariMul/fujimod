@@ -1361,8 +1361,45 @@ pub struct RegisterBlock {
     /// One job per start, finished after the declared ticks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub job: Option<RegisterBlockJob>,
+    /// Words that always read a fixed value.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixed_words: Vec<RegisterFixedWord>,
+    /// Command writes that set a field of a status word.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<RegisterBlockCommand>,
     /// Declared size.
     pub size: u64,
+}
+
+/// A register-block word that always reads one value.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterFixedWord"))]
+pub struct RegisterFixedWord {
+    /// Word offset in the block.
+    pub offset: u64,
+    /// Value the word reads.
+    pub value: u32,
+}
+
+/// Command law of a register block: writing exactly `value` to `word` sets
+/// the `mask` field of the `status` word to `state`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlockCommand"))]
+pub struct RegisterBlockCommand {
+    /// Field of the status word.
+    pub mask: u32,
+    /// Value the field takes.
+    pub state: u32,
+    /// Offset of the status word.
+    pub status: u64,
+    /// Command value.
+    pub value: u32,
+    /// Offset of the command word.
+    pub word: u64,
 }
 
 /// Job law of a register block: each start finishes one job after the
@@ -1377,8 +1414,13 @@ pub struct RegisterBlockJob {
     pub irq_route: u32,
     /// Start bit.
     pub start: RegisterIdleBits,
-    /// Status bit the job sets; writing it clears it.
-    pub status: RegisterIdleBits,
+    /// Status bit the job sets; writing it clears it. Without one the job
+    /// ends with an interrupt edge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<RegisterIdleBits>,
+    /// Bit that stops the block; it reads back clear once written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<RegisterIdleBits>,
     /// Device ticks a job takes.
     pub ticks: u64,
 }
@@ -1492,6 +1534,44 @@ pub struct ImagingControl {
     pub base: u64,
     /// Declared basis.
     pub basis: String,
+    /// Sensor read-out unit at one of the channel offsets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub readout: Option<SensorReadout>,
+    /// Declared size.
+    pub size: u64,
+}
+
+/// Sensor read-out unit of the imaging control page: a started read-out
+/// finishes after the declared ticks with its level interrupt.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSensorReadout"))]
+pub struct SensorReadout {
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the read-out status.
+    pub irq_route: u32,
+    /// Channel offset inside the page.
+    pub offset: u64,
+    /// Device ticks a read-out takes.
+    pub ticks: u64,
+}
+
+/// X-Processor Pro JPEG encoder or decoder.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareJpegCodec"))]
+pub struct JpegCodec {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Interrupt line of the completion status.
+    pub irq_route: u32,
+    /// Time from a start to the completion of its run, in device ticks.
+    pub run_ticks: u64,
     /// Declared size.
     pub size: u64,
 }
@@ -1837,6 +1917,12 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro face detection engine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_detection: Option<FaceDetection>,
+    /// Declared X-Processor Pro JPEG encoder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jpeg_encoder: Option<JpegCodec>,
+    /// Declared X-Processor Pro JPEG decoder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jpeg_decoder: Option<JpegCodec>,
     /// Declared HDMI transmitter without a sink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_tx: Option<HdmiTransmitter>,
