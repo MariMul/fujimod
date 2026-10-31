@@ -318,15 +318,37 @@ pub struct XppRegisterBlock {
     pub frames: Option<XppBlockFrames>,
     #[serde(default)]
     pub job: Option<XppBlockJob>,
+    /// (offset, value) of words that read a fixed value.
+    #[serde(default)]
+    pub fixed: Vec<(u64, u32)>,
+    /// Commands that set a field of a status word.
+    #[serde(default)]
+    pub commands: Vec<XppBlockCommand>,
 }
 
-/// Job law of a register block: (offset, mask) of the start and status bits,
-/// the level interrupt line and the ticks a job takes.
+/// Command law of a register block: writing exactly `value` to `word` sets
+/// the `mask` field of the `status` word to `state`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct XppBlockCommand {
+    pub word: u64,
+    pub value: u32,
+    pub status: u64,
+    pub mask: u32,
+    pub state: u32,
+}
+
+/// Job law of a register block: (offset, mask) of the start bit, of the
+/// status bit (none: the job pulses its interrupt) and of a stop bit, the
+/// level interrupt line and the ticks a job takes.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct XppBlockJob {
     pub start: (u64, u32),
-    pub status: (u64, u32),
+    #[serde(default)]
+    pub status: Option<(u64, u32)>,
+    #[serde(default)]
+    pub stop: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
 }
