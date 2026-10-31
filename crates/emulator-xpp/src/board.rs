@@ -86,6 +86,9 @@ pub struct BlockFrames {
 pub struct LiveViewImage {
     pub lines: u32,
     pub ycbcr: [u8; 3],
+    /// Profile of a declared scene that replaces the uniform image.
+    #[serde(default)]
+    pub scene: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -610,7 +613,13 @@ pub fn build(
                     })?;
                 }
                 if let Some(image) = live_view_image {
-                    model = model.with_live_view_image(image.lines, image.ycbcr)?;
+                    model = match image.scene.as_deref() {
+                        None => model.with_live_view_image(image.lines, image.ycbcr)?,
+                        Some(fujimod_virtual_scene::PROFILE) => {
+                            model.with_live_view_scene(image.lines)?
+                        }
+                        Some(other) => return Err(format!("unknown live-view scene {other}")),
+                    };
                 }
                 if !fixed.is_empty() {
                     model = model.with_fixed(fixed)?;

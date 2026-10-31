@@ -1248,6 +1248,11 @@ pub struct LiveViewImage {
     pub lines: u32,
     /// Luma, blue-difference and red-difference value of every pixel.
     pub ycbcr: [u8; 3],
+    /// Profile of a declared scene the unit writes instead of the uniform
+    /// image (the virtual post-ISP scene). Statistics stay with
+    /// `zone_statistics`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<String>,
 }
 
 /// Declared contents of one statistics engine output buffer: an asset
@@ -1395,11 +1400,11 @@ impl HardwareInputs {
             .ok_or_else(|| format!("unsupported hardware-input profile: {id}"))?;
         let inputs: Self = serde_json::from_str(document)
             .map_err(|error| format!("hardware-input profile {id}: {error}"))?;
-        if inputs.schema != 1
-            || inputs.schema_uri != HARDWARE_INPUTS_SCHEMA_URI
-            || inputs.id != id
+        if inputs.schema != 1 || inputs.schema_uri != HARDWARE_INPUTS_SCHEMA_URI || inputs.id != id
         {
-            return Err(format!("hardware-input profile {id} schema or identity differs"));
+            return Err(format!(
+                "hardware-input profile {id} schema or identity differs"
+            ));
         }
         fujimod_catalog_identity::validate_id(&inputs.body_id)?;
         Ok(inputs)
