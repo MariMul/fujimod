@@ -16,7 +16,8 @@
 //!   development output into the main picture 0x80000000 (step 1), 6000x2000
 //!   (every second line, stride 0x2ee0) to 752x250, 752x250 to 320x213 (13
 //!   lines into the 320x240 preview) and 320x240 to 160x120. +0x100 reads
-//!   0x11000002 in all of them.
+//!   0x11000002 in all of them. Playback magnifies the decoded picture to
+//!   the display with 0x11110002, whose two extra bits are not decoded.
 //!
 //! The JPEG encoder then reads the main picture as packed 4:2:2 (Y0 Y1 Cb
 //! Cr). [`PROFILE`] is the declared approximation of both steps, for the
