@@ -354,10 +354,11 @@ fn x70_scroll_frame_list_takes_the_camera_full_list_time() {
             blended_pixels: 135_000,
         }
     );
-    // 57,840 + 75 x 312 + ceil(481,584 x 0.1584 + 135,000 x 0.114)
-    assert_eq!(ticks, 57_840 + 23_400 + 91_673);
-    assert_eq!(ticks, 172_913); // 14.41 ms
-    assert!((169_200..=180_000).contains(&ticks));
+    // 2,544 + 75 x 312 + ceil(481,584 x 0.1584 + 135,000 x 0.114); the
+    // camera's 14.1 to 15.0 ms includes the 55,296-tick copy.
+    assert_eq!(ticks, 2_544 + 23_400 + 91_673);
+    assert_eq!(ticks + 55_296, 172_913); // 14.41 ms
+    assert!((169_200..=180_000).contains(&(ticks + 55_296)));
 }
 #[test]
 fn x70_small_frame_list_takes_the_camera_small_list_time() {
@@ -376,10 +377,10 @@ fn x70_small_frame_list_takes_the_camera_small_list_time() {
             blended_pixels: 300,
         }
     );
-    // 57,840 + 6 x 312 + ceil(1,000 x 0.1584 + 300 x 0.114)
-    assert_eq!(ticks, 57_840 + 1_872 + 193);
-    assert_eq!(ticks, 59_905); // 4.99 ms
-    assert!((56_400..=63_600).contains(&ticks));
+    // 2,544 + 6 x 312 + ceil(1,000 x 0.1584 + 300 x 0.114), plus the copy.
+    assert_eq!(ticks, 2_544 + 1_872 + 193);
+    assert_eq!(ticks + 55_296, 59_905); // 4.99 ms
+    assert!((56_400..=63_600).contains(&(ticks + 55_296)));
 }
 #[test]
 fn gles_list_latency_ignores_byte_rates() {

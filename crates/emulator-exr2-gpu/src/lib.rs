@@ -76,24 +76,27 @@ impl GlesLatency {
             .saturating_add(pixels.div_ceil(1_000_000))
     }
 }
-/// X70 1.10 3D list latency at the 12 MHz tick (12,000 ticks per ms), from
-/// submission to the list-complete interrupt. Camera run of 2026-10-31: 106
-/// GL GUI frames, touch scrolling plus key and tab updates. Least squares over
-/// all frames gave 4.82 ms + 13.2 ns per filled pixel + 9.5 ns per blended
-/// pixel + 0.026 ms per draw call, maximum error 1.9 ms. Filled and blended
-/// pixels are disjoint, as in the camera's counters: covered pixels of opaque
-/// draws and of blending draws. Converted to ticks:
+/// X70 1.10 3D list latency at the 12 MHz tick (12,000 ticks per ms). Camera
+/// run of 2026-10-31: 106 GL GUI frames, touch scrolling plus key and tab
+/// updates. Least squares over all frames, submission to the first completion
+/// interrupt, gave 4.82 ms + 13.2 ns per filled pixel + 9.5 ns per blended
+/// pixel + 0.026 ms per draw call, maximum error 1.9 ms. That interval already
+/// contains the frame copy: completion follows it by only 0.3 to 0.6 ms
+/// (submission to completion is 5.3 ms for small frames, 15.5 ms for scroll
+/// frames). The copy is modeled separately (55,296 ticks, 4.608 ms), so the
+/// list's base is the fitted base less the copy. Filled and blended pixels are
+/// disjoint, as in the camera's counters. Converted to ticks:
 ///
-/// - base: 4.82 ms x 12,000 = 57,840 ticks
+/// - base: (4.82 ms - 4.608 ms) x 12,000 = 2,544 ticks
 /// - draw call: 0.026 ms x 12,000 = 312 ticks
 /// - filled pixel: 13.2 ns x 0.012 ticks/ns = 0.1584 ticks = 158,400 microticks
 /// - blended pixel: 9.5 ns x 0.012 ticks/ns = 0.114 ticks = 114,000 microticks
 ///
-/// Scroll frames (481,584 filled, ~135k blended, ~75 draws) price at ~14.4 ms
-/// against the camera's 14.1 to 15.0 ms; 1.3k-pixel frames at ~5 ms against
-/// 4.7 to 5.3 ms. The 55,296-tick frame copy follows the list separately.
+/// With the 55,296-tick copy after the list, scroll frames (481,584 filled,
+/// ~135k blended, ~75 draws) price at ~14.4 ms against the camera's 14.1 to
+/// 15.0 ms, and 1.3k-pixel frames at ~5 ms against 4.7 to 5.3 ms.
 pub const X70_GLES_LATENCY: GlesLatency = GlesLatency {
-    base_ticks: 57_840,
+    base_ticks: 2_544,
     draw_ticks: 312,
     filled_pixel_microticks: 158_400,
     blended_pixel_microticks: 114_000,

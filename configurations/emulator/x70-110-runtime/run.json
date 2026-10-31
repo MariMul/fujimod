@@ -618,7 +618,7 @@
         "max_clear_bytes": 67108864,
         "bytes_per_tick": 16,
         "copy_bytes_per_tick": 25,
-        "gles_base_ticks": 57840,
+        "gles_base_ticks": 2544,
         "gles_draw_ticks": 312,
         "gles_filled_pixel_microticks": 158400,
         "gles_blended_pixel_microticks": 114000,
