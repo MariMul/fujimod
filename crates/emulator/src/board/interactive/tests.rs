@@ -241,10 +241,13 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
     // a fresh allowance at the expense of the MMIO core.
     board.next_core.set(1);
     let instruction_budget: u64 = if tick_limit { 100_000 } else { 200_000 };
-    let share = if policy == ExecutionPolicy::Exact && tick_limit {
-        50_000
+    // Exact cores advance time in parallel; at a tick limit the peer that did
+    // not reach it lags by up to one quantum.
+    let share = 100_000;
+    let lag = if policy == ExecutionPolicy::Exact && tick_limit {
+        1000
     } else {
-        100_000
+        0
     };
     let mut windows = 0;
     let flag = loop {
@@ -263,7 +266,7 @@ fn check_mmio_progress(policy: ExecutionPolicy, tick_limit: bool) {
             assert!(
                 counts
                     .iter()
-                    .all(|&count| (share..=share + 256).contains(&count)),
+                    .all(|&count| (share - lag..=share + 256).contains(&count)),
                 "{policy:?}: callback restarts must retain each core's share: {counts:?}"
             );
         }

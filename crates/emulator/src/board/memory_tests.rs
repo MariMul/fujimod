@@ -356,6 +356,8 @@ fn guest_dma_flushes_peer_code_hidden_under_another_cores_tcm() {
     board.write_register(0, arm::CORE[0], 0xe3a04002).unwrap();
     board.write_register(0, arm::CORE[1], 0x8000000).unwrap();
     board.write_register(1, Register::Pc, 0x20000).unwrap();
+    // Core 1 lags the frontier by its last slice; order the store first.
+    board.next_core.set(0);
     board.run_until(6, 1).unwrap();
     assert_eq!(board.read_register(1, arm::CORE[4]).unwrap(), 2);
     board.write_register(0, Register::Pc, 0x10000).unwrap();

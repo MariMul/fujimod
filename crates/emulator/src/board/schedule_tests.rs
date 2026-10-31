@@ -137,7 +137,8 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
         let (mut board, writes) = board(counted);
         board.run_until(170, 50).unwrap();
         assert_eq!(*writes.lock().unwrap(), vec![136]);
-        assert_eq!(board.instruction_counts(), vec![150, 20]);
+        // Core 1 is released at tick 136 and runs in parallel to 170.
+        assert_eq!(board.instruction_counts(), vec![150, 34]);
         assert_eq!(
             board
                 .read_register(0, fujimod_emulator_cpu::arm::CORE[3])
@@ -148,7 +149,7 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
             board
                 .read_register(1, fujimod_emulator_cpu::arm::CORE[4])
                 .unwrap(),
-            10
+            17
         );
     }
 }
@@ -252,7 +253,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
             b.run_until(at, 50).unwrap();
         }
         b.run_until(170, 50).unwrap();
-        assert_eq!(b.instruction_counts(), [150, 20]);
+        assert_eq!(b.instruction_counts(), [150, 34]);
         assert_eq!(
             b.read_register(0, fujimod_emulator_cpu::arm::CORE[3])
                 .unwrap(),
@@ -261,7 +262,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
         assert_eq!(
             b.read_register(1, fujimod_emulator_cpu::arm::CORE[4])
                 .unwrap(),
-            10
+            17
         );
         assert_eq!(b.state()["bus"]["devices"][1]["state"]["released"], true);
     }
@@ -311,21 +312,23 @@ fn soft_host_pauses_finish_a_cycle_and_hard_limits_preserve_its_phase() {
         let (mut board, _) = board(counted);
         board.run_with_limits(500, 50, Some(171), None).unwrap();
         assert_eq!(board.instruction_counts(), vec![150, 50]);
-        assert_eq!(board.now(), 200);
+        // Core 1, released at tick 136, catches up 14 entries in parallel.
+        assert_eq!(board.now(), 186);
         // A reused threshold still completes a cycle with both peers ready.
         board.run_with_limits(500, 50, Some(171), None).unwrap();
         assert_eq!(board.instruction_counts(), vec![200, 100]);
+        assert_eq!(board.now(), 236);
         // Tick caps are hard, including in the middle of a processor slice.
         board
-            .run_with_limits(100, 50, Some(900), Some(323))
+            .run_with_limits(200, 50, Some(900), Some(323))
             .unwrap();
         assert_eq!(board.now(), 323);
-        assert_eq!(board.instruction_counts(), vec![223, 100]);
+        assert_eq!(board.instruction_counts(), vec![300, 187]);
         board.run_with_limits(8, 50, Some(900), None).unwrap();
-        assert_eq!(board.instruction_counts(), vec![231, 100]);
+        assert_eq!(board.instruction_counts(), vec![300, 195]);
         // Resuming at a partial slice must match uninterrupted execution.
         let (mut whole, _) = self::board(counted);
-        whole.run_for_instructions(331, 50).unwrap();
+        whole.run_for_instructions(495, 50).unwrap();
         assert_eq!(board.state(), whole.state());
         for core in 0..2 {
             for register in [
@@ -448,5 +451,92 @@ fn progress_reporting_preserves_guest_scheduling_and_state() {
         let count = progress.borrow().len();
         observed.run_until(300_000, 50).unwrap();
         assert_eq!(progress.borrow().len(), count);
+    }
+}
+
+/// Both cores spin in `add r4, r4, #1; b` at 24 instructions per tick.
+fn busy_board(counted: bool, released: Vec<bool>) -> Board {
+    let library = Library::linked().unwrap();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
+    let cpus = (0..2)
+        .map(|core| {
+            let raw = library.open(Model::CortexR5F, 1024 * 1024).unwrap();
+            let cpu: Box<dyn Cpu> = if counted {
+                Box::new(
+                    rprofile::core::Core::new(
+                        raw,
+                        rprofile::core::Options::default(),
+                        rprofile::core::Wiring {
+                            memory: memory.clone(),
+                        },
+                    )
+                    .unwrap(),
+                )
+            } else {
+                Box::new(raw)
+            };
+            unsafe {
+                cpu.map_backing(
+                    0,
+                    0x4000,
+                    7,
+                    std::ptr::NonNull::new(backing.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            }
+            set(&*cpu, Register::Pc, 0x1000 + core * 0x1000).unwrap();
+            set(&*cpu, Register::Pstate, 0xd3).unwrap();
+            cpu
+        })
+        .collect();
+    let board = Board::new(
+        cpus,
+        Bus::new(bus::Mode::Strict),
+        Ratio::new(24, 1).unwrap(),
+        None,
+        released,
+        memory::Memory::new(vec![(0, backing)], vec![memory::BusMapping::ram(0, 0x4000)]).unwrap(),
+    )
+    .unwrap();
+    for address in [0x1000, 0x2000] {
+        board
+            .write_memory(
+                0,
+                address,
+                &[0xe2844001u32, 0xeafffffd]
+                    .into_iter()
+                    .flat_map(u32::to_le_bytes)
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+    }
+    board
+}
+
+#[test]
+fn two_busy_cores_advance_guest_time_in_parallel_and_one_times_as_before() {
+    const N: u64 = 48_000;
+    for counted in [false, true] {
+        // Two busy cores executing N entries each take N/24 ticks, not 2N/24.
+        let mut both = busy_board(counted, vec![true, true]);
+        both.run_for_instructions(2 * N, 1000).unwrap();
+        assert_eq!(both.instruction_counts(), [N, N]);
+        assert_eq!(both.now(), N / 24);
+        // Over a span of T ticks, each busy core may execute T * 24 entries.
+        let mut timed = busy_board(counted, vec![true, true]);
+        timed.run_until(N / 24, 1000).unwrap();
+        assert_eq!(timed.now(), N / 24);
+        let counts = timed.instruction_counts();
+        assert_eq!(counts[0], N);
+        assert!((N - 1000..=N).contains(&counts[1]), "{counts:?}");
+        // One busy core with a parked peer is unchanged: N entries, N/24 ticks.
+        let mut one = busy_board(counted, vec![true, false]);
+        one.run_for_instructions(N, 1000).unwrap();
+        assert_eq!(one.instruction_counts(), [N, 0]);
+        assert_eq!(one.now(), N / 24);
+        let mut one = busy_board(counted, vec![true, false]);
+        one.run_until(N / 24, 1000).unwrap();
+        assert_eq!(one.instruction_counts(), [N, 0]);
     }
 }

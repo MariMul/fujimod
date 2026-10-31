@@ -331,7 +331,7 @@ impl Board {
             clock_limit: None,
             memory: memory.clone(),
             bus,
-            timeline: Timeline::new(ratio)?,
+            timeline: Timeline::new(ratio, n)?,
             interrupts,
             core_interrupts: (0..n).map(|_| None).collect(),
             interrupt_changed: vec![false; n],
@@ -860,16 +860,16 @@ impl Board {
             let mut s = self.state.borrow_mut();
             s.apply_memory(&self.cpus)?;
             s.refresh_processors()?;
+            s.park();
             s.due(&self.cpus)?;
             s.push_pins(&self.cpus)?;
-            // Clock inputs advance with execution/idle time, including for
-            // parked peers. Host counter inspection never drives an update.
-            for cpu in self.cpus.iter().filter(|cpu| cpu.features().guest_clock) {
-                cpu.set_guest_clock(fujimod_emulator_cpu::Clock {
-                    now: s.timeline.now(),
-                    phase: s.timeline.phase(),
-                    ratio: s.timeline.ratio(),
-                })?;
+            // Clock inputs advance with each processor's own execution and
+            // idle time, including for parked peers. Host counter inspection
+            // never drives an update.
+            for (core, cpu) in self.cpus.iter().enumerate() {
+                if cpu.features().guest_clock {
+                    cpu.set_guest_clock(s.timeline.processor_clock(core)?)?;
+                }
             }
             if let Some(error) = s.error.take() {
                 return Err(error);
@@ -954,11 +954,6 @@ impl Board {
             self.next_core.set(core);
             let slice =
                 schedule::Slice::new(core, s.instructions[core], self.slice_left.get(), quantum)?;
-            let cap = s.timeline.ratio().budget(
-                s.timeline.now(),
-                s.timeline.phase(),
-                until.unwrap_or(u64::MAX),
-            )?;
             // Concurrent Interactive processors already took the window above.
             // A serialized backend still owes runnable peers a bounded turn.
             let peer = s.runnable_peer(core);
@@ -976,15 +971,16 @@ impl Board {
             } else {
                 u64::MAX
             };
-            let budget = s.timeline.budget(
+            let budget = s.timeline.processor_budget(
+                core,
                 if peer {
                     self.slice_left.get() as u64
                 } else {
                     solo_pause
                 }
-                .min(cap)
                 .min(remaining)
                 .min(usize::MAX as u64),
+                until,
             )? as usize;
             if budget == 0 {
                 return Err("scheduler made no progress at a device deadline".into());
@@ -1204,7 +1200,8 @@ impl State {
                         self.aarch64_instruction(cpu, core, pc, word)?;
                     }
                     fujimod_emulator_cpu::Model::CortexA7 => {
-                        let now = self.timeline.now();
+                        // Architectural counters follow the core's own position.
+                        let now = self.timeline.processor_clock(core)?.now;
                         let profile = self.armv7a[core]
                             .as_mut()
                             .ok_or("ARMv7-A framework instruction without a profile")?;
@@ -1217,7 +1214,7 @@ impl State {
                     }
                     _ => return Err("unsupported framework instruction exit".into()),
                 }
-                self.timeline.advance_instructions(1)?;
+                self.account(core, 1)?;
                 self.instructions[core] = self.instructions[core]
                     .checked_add(1).ok_or("instruction counter overflow")?;
             }
@@ -1313,21 +1310,27 @@ impl State {
                 format!("CPU{core} entry count moved backward: {progress} < {} (policy {}, parallel {})",
                     self.accounted[core], self.execution_policy.name(), self.parallel.is_some())
             })?;
-            let elapsed = match self.parallel.as_mut() {
-                Some(epoch) => epoch.advance(core, delta)?,
-                None => delta,
-            };
-            let elapsed = if self.execution_policy == ExecutionPolicy::Interactive {
-                let boundary = self.timeline.ratio().budget(
-                    self.timeline.now(),
-                    self.timeline.phase(),
-                    self.clock_limit.unwrap_or(u64::MAX),
-                )?;
-                self.timeline.budget(elapsed.min(boundary))?
-            } else {
-                elapsed
-            };
-            self.timeline.advance_instructions(elapsed)?;
+            match self.parallel.as_mut() {
+                Some(epoch) => {
+                    let elapsed = epoch.advance(core, delta)?;
+                    let boundary = self.timeline.ratio().budget(
+                        self.timeline.now(),
+                        self.timeline.phase(),
+                        self.clock_limit.unwrap_or(u64::MAX),
+                    )?;
+                    let elapsed = self.timeline.budget(elapsed.min(boundary))?;
+                    self.timeline.advance_instructions(elapsed)?;
+                }
+                None if self.execution_policy == ExecutionPolicy::Interactive => {
+                    // Interactive runs may overshoot by a block; the frontier
+                    // stops at the next deadline or run boundary.
+                    let room =
+                        self.timeline
+                            .processor_budget(core, u64::MAX, self.clock_limit)?;
+                    self.account(core, delta.min(room))?;
+                }
+                None => self.account(core, delta)?,
+            }
             self.instructions[core] = self.instructions[core]
                 .checked_add(delta)
                 .ok_or("instruction counter overflow")?;
@@ -1336,6 +1339,18 @@ impl State {
             return Err("processor entry count is unavailable".into());
         }
         Ok(())
+    }
+    /// Account one processor's entries on its own position; runnable peers
+    /// fall behind the frontier it advances.
+    fn account(&mut self, core: usize, entries: u64) -> Result<(), String> {
+        let (released, waiting) = (&self.released, &self.waiting);
+        self.timeline
+            .advance_processor(core, entries, |c| released[c] && !waiting[c])
+    }
+    /// Stopped and waiting processors idle at the frontier.
+    fn park(&mut self) {
+        let (released, waiting) = (&self.released, &self.waiting);
+        self.timeline.park(|c| released[c] && !waiting[c]);
     }
     fn refresh_deadlines(&mut self) -> Result<(), String> {
         for (id, at) in self.bus.changed_deadlines(self.timeline.now()) {
@@ -1582,7 +1597,11 @@ impl State {
                 .ok_or("active entry count is unavailable")?;
             let remaining = match self.parallel.as_ref() {
                 Some(epoch) => epoch.room(core),
-                None => self.timeline.budget(self.scheduler_room(core))?,
+                None => self.timeline.processor_budget(
+                    core,
+                    self.scheduler_room(core),
+                    self.clock_limit,
+                )?,
             };
             cpu.tighten_instruction_limit(entered.saturating_add(remaining))?;
         }
@@ -1927,7 +1946,8 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             return Ok(());
         }
         if s.observe_entry(b.core,pc,cpu)? {return Ok(());}
-        let now = s.timeline.now();
+        // Architectural counters follow the core's own position.
+        let now = s.timeline.processor_clock(b.core)?.now;
         if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
         if let Some(p) = &mut s.armv7a[b.core] {
             let entry = p.before(cpu, pc, now)?;
@@ -1947,7 +1967,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             s.refresh_processors()?;
         }
         if !cpu.features().instruction_progress {
-            s.timeline.advance_instructions(1)?;
+            s.account(b.core, 1)?;
             s.instructions[b.core] = s.instructions[b.core]
                 .checked_add(1)
                 .ok_or("instruction counter overflow")?;

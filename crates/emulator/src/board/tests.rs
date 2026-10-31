@@ -813,7 +813,9 @@ fn counted_rprofile_runs_both_controllers_through_the_shared_scheduler() {
                 .unwrap(),
             1
         );
-        assert_eq!(board.instruction_counts().iter().sum::<u64>(), 150);
+        // Both cores execute in parallel to tick 150; the peer that did not
+        // reach it lags by its unfinished slice.
+        assert_eq!(board.instruction_counts(), [150, 150 - quantum as u64]);
         (
             board.state(),
             [
@@ -850,7 +852,9 @@ fn per_core_interrupt_device_routes_the_due_edge_and_executes_guest_acknowledge_
                 .unwrap(),
             1
         );
-        assert_eq!(board.instruction_counts().iter().sum::<u64>(), 150);
+        // Both cores execute in parallel to tick 150; the peer that did not
+        // reach it lags by its unfinished slice.
+        assert_eq!(board.instruction_counts(), [150, 150 - quantum as u64]);
         assert_eq!(board.now(), 150);
     }
     let run = |pause| {

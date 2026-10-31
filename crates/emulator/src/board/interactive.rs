@@ -77,6 +77,8 @@ impl Board {
         let started = Instant::now();
         {
             let mut state = self.state.borrow_mut();
+            // Window processors start together at the frontier.
+            state.timeline.park(|_| false);
             state.parallel = Some(Epoch::new(
                 self.cpus.len(),
                 Clock {

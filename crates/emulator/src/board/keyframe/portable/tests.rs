@@ -131,7 +131,7 @@ fn invalid_topology_scheduler_or_mode_is_refused_without_mutating_the_receiver()
                 .schedule(Target::DeviceEvent(999), header.runtime.timeline.now(), 1)
                 .unwrap(),
             4 => header.controllers[0] = Some(999),
-            5 => header.runtime.timeline = Timeline::new(Ratio::new(4, 3).unwrap()).unwrap(),
+            5 => header.runtime.timeline = Timeline::new(Ratio::new(4, 3).unwrap(), 2).unwrap(),
             _ => header.observations.clear(),
         }
         let bad = Encoded::encode(KIND, &header)
