@@ -345,6 +345,7 @@ fn nodes(
     if let Some(development) = development
         && [development.developer, development.resizer]
             .iter()
+            .chain(&development.colour)
             .any(|&unit| !maps.register_blocks.iter().any(|block| block.base == unit))
     {
         return Err("still development units must be register blocks with jobs".into());
@@ -378,8 +379,12 @@ fn nodes(
             .collect::<Vec<_>>());
         if let Some(development) = development {
             let law = if block.base == development.developer {
-                Some(json!({ "law": "develop", "profile": development.profile,
-                             "phase": development.source_phase }))
+                let mut law = json!({ "law": "develop", "profile": development.profile,
+                                      "phase": development.source_phase });
+                if let Some(colour) = development.colour {
+                    law["colour"] = json!(colour);
+                }
+                Some(law)
             } else if block.base == development.resizer {
                 Some(json!({ "law": "resize", "profile": development.profile }))
             } else {
@@ -1072,6 +1077,7 @@ mod tests {
             developer: 0xfff9_8000,
             resizer: 0xfffc_3000,
             source_phase: (2, 2),
+            colour: None,
         });
         let (starts, assets) = (starts(), assets());
         let inputs = Inputs {
@@ -1097,6 +1103,16 @@ mod tests {
             json!({ "law": "resize", "profile": "declared" })
         );
         assert!(block(0xfff7_e000)["model"].get("work").is_none());
+        reset.still_development.as_mut().unwrap().colour = Some(0xfff4_7000);
+        let nodes = super::nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let developer = nodes
+            .iter()
+            .find(|node| node["model"]["base"] == 0xfff9_8000u64)
+            .unwrap();
+        assert_eq!(developer["model"]["work"]["colour"], 0xfff4_7000u64);
+        reset.still_development.as_mut().unwrap().colour = Some(0xfff4_8000);
+        assert!(super::nodes(maps, &reset, 0, &banks, &inputs).is_err());
+        reset.still_development.as_mut().unwrap().colour = None;
         reset.still_development.as_mut().unwrap().resizer = 0xfff7_f004;
         assert_eq!(
             super::nodes(maps, &reset, 0, &banks, &inputs)

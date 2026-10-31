@@ -30,9 +30,58 @@
 //! corrections, noise reduction, sharpening, film simulation, the camera's
 //! white balance and tone curve, and the analysis passes (0xfff7e000,
 //! 0xfffc4000) are not modeled.
+//!
+//! With [`FILM_PROFILE`] the development engine instead takes its colour
+//! from the words the firmware programmed into the colour unit 0xfff47000.
+//! A film-simulation diff of two shots (PROVIA and Velvia) changes only
+//! that unit (and a copy at 0xfffac204), and its words carry the encodings
+//! of the X70 film stage ([`fujimod_emulator_imaging::film`]) at the X70
+//! offset minus 0x100: the brightness gain table at +0x204, the Q10 matrix
+//! at +0x300, the curve points at +0x400, the chroma pair at +0x504, the
+//! luma band bounds and bands at +0x540. The unit holds three copies of the
+//! curve (+0x400, +0x43c, +0x478); a shot programs them equal, and unequal
+//! copies are refused. No curve width word sits beside them: the declared
+//! widths are those of the curve at +0xa60 (+0xa58/+0xa5c), which agree
+//! with the slope joints of the PROVIA curve. Each output pixel takes the
+//! nearest site of each colour as before, its black-subtracted level is
+//! scaled to 14 bits with unity white balance, and the film law develops it
+//! to Y, Cb and Cr. White balance, the order against the other units and the
+//! film unit's remaining words are not modeled.
+
+use fujimod_emulator_imaging::film::{Film, FilmPixels};
+use std::collections::BTreeMap;
 
 /// Declared development and scaling approximation (see the module notes).
 pub const PROFILE: &str = "xpp-declared-xtrans-nearest-srgb-jfif-422-v1";
+/// The same, with the colour of the programmed colour unit.
+pub const FILM_PROFILE: &str = "xpp-declared-xtrans-nearest-fff47-film-422-v1";
+
+/// Colour-unit word of each X70 film-stage word the film law reads.
+fn colour_offset(x70: u64) -> Option<u64> {
+    match x70 {
+        0x304..=0x32c | 0x400..=0x414 | 0x604 | 0x608 | 0x640..=0x654 => Some(x70 - 0x100),
+        0x500 => Some(0xa58),
+        0x504 => Some(0xa5c),
+        0x508..=0x53c => Some(x70 - 0x108),
+        _ => None,
+    }
+}
+
+/// The film law of the colour unit's programmed words.
+pub fn film(words: &BTreeMap<u64, u32>) -> Result<Film, String> {
+    let word = |o: u64| words.get(&o).copied().unwrap_or(0);
+    if (0x300..0x318).step_by(4).all(|o| word(o) == 0) {
+        return Err("Still development before the colour unit was programmed".into());
+    }
+    if (0..15).any(|i| {
+        word(0x400 + 4 * i) != word(0x43c + 4 * i) || word(0x400 + 4 * i) != word(0x478 + 4 * i)
+    }) {
+        return Err("Unmodeled per-channel film curves".into());
+    }
+    let mut film = Film::default();
+    film.update(|o| colour_offset(o as u64).map_or(0, word))?;
+    Ok(film)
+}
 
 /// X-Trans 6×6 colour sites: 0 red, 1 green, 2 blue.
 pub const XTRANS: [[u8; 6]; 6] = [
@@ -114,13 +163,15 @@ fn byte(v: i32) -> u8 {
 
 /// Packed 4:2:2 lines (Y0 Y1 Cb Cr, `2 * width` bytes rounded up to a pair)
 /// developed from `lines` lines of little-endian u16 X-Trans samples, `stride`
-/// bytes apart, whose first sample is the tile site `phase` (line, sample).
+/// bytes apart, whose first sample is the tile site `phase` (line, sample),
+/// with the declared sRGB colour or, given one, the film law.
 pub fn develop(
     raw: &[u8],
     stride: usize,
     lines: usize,
     width: usize,
     phase: (usize, usize),
+    film: Option<&Film>,
 ) -> Result<Vec<Vec<u8>>, String> {
     if lines < 6 || width < 6 || stride < 2 * width || raw.len() < stride * (lines - 1) + 2 * width
     {
@@ -144,8 +195,16 @@ pub fn develop(
             x
         } as usize;
         let i = y * stride + 2 * x;
-        response[usize::from(u16::from_le_bytes([raw[i], raw[i + 1]]))]
+        u16::from_le_bytes([raw[i], raw[i + 1]])
     };
+    let (black, white) = (
+        u32::from(crate::imaging::BLACK),
+        u32::from(crate::imaging::WHITE),
+    );
+    // 14-bit linear level with unity white balance.
+    let level =
+        |s: u16| (u32::from(s).saturating_sub(black) * 16383 / (white - black)).min(16383) as u16;
+    let mut pixels = film.map(FilmPixels::new);
     let pairs = width.div_ceil(2);
     Ok((0..lines)
         .map(|y| {
@@ -157,7 +216,15 @@ pub fn develop(
                     let x = (2 * pair + i).min(width - 1);
                     let site = &row[(x + phase.1) % 6];
                     let rgb = [0, 1, 2].map(|c| sample(y as i64 + site[c].0, x as i64 + site[c].1));
-                    *pixel = ycbcr(rgb);
+                    *pixel = match pixels.as_mut() {
+                        Some(pixels) => pixels.develop(rgb.map(level)).map(i32::from),
+                        None => ycbcr(rgb.map(|s| response[usize::from(s)])),
+                    };
+                }
+                if pixels.is_some() {
+                    let [a, b] = out.map(|p| p.map(|v| v as u8));
+                    line.extend_from_slice(&Film::pack(a, b));
+                    continue;
                 }
                 line.extend_from_slice(&[
                     byte(out[0][0]),
@@ -275,7 +342,7 @@ mod tests {
                 raw[y * stride + 2 * x..][..2].copy_from_slice(&v.to_le_bytes());
             }
         }
-        let out = develop(&raw, stride, lines, width, (2, 2)).unwrap();
+        let out = develop(&raw, stride, lines, width, (2, 2), None).unwrap();
         assert_eq!((out.len(), out[0].len()), (12, 24));
         let [y, cb, cr] = ycbcr([255, 188, 0]);
         for line in &out {
@@ -283,7 +350,7 @@ mod tests {
                 assert_eq!(p, [y as u8, y as u8, cb as u8, cr as u8]);
             }
         }
-        assert!(develop(&raw, stride, lines, width + 8, (2, 2)).is_err());
+        assert!(develop(&raw, stride, lines, width + 8, (2, 2), None).is_err());
     }
 
     #[test]
@@ -300,9 +367,9 @@ mod tests {
                 raw[y * stride + 2 * x..][..2].copy_from_slice(&v.to_le_bytes());
             }
         }
-        let red = develop(&raw, stride, lines, width, (0, 0)).unwrap();
+        let red = develop(&raw, stride, lines, width, (0, 0), None).unwrap();
         assert!(red.iter().flatten().skip(3).step_by(4).all(|&cr| cr == 255));
-        let shifted = develop(&raw, stride, lines, width, (0, 1)).unwrap();
+        let shifted = develop(&raw, stride, lines, width, (0, 1), None).unwrap();
         assert!(
             shifted
                 .iter()
@@ -343,5 +410,101 @@ mod tests {
         // Y: (10 + 20 + 50 + 60) / 4 and (30 + 40 + 70 + 80) / 4; chroma of all four pixels each.
         assert_eq!(half, vec![vec![35, 55, 115, 215]]);
         assert!(resample(&source, Scale { stride: 4, ..s }).is_err());
+    }
+
+    /// Colour-unit words of an emulated X-T20 2.11 PROVIA shot (bootemu).
+    fn provia() -> BTreeMap<u64, u32> {
+        let mut words = BTreeMap::new();
+        let groups: [(u64, &[u32]); 6] = [
+            (
+                0x204,
+                &[
+                    0x2fe026c, 0x362033e, 0x37c0374, 0x37e037e, 0x36a0372, 0x34e0356, 0x3240340,
+                    0x3000312, 0x2d602dc, 0x2a002c8, 0x200022e,
+                ],
+            ),
+            (
+                0x300,
+                &[0x1fa90409, 0x4e, 0x4831fb8, 0x1fc5, 0x1eed004c, 0x4c7],
+            ),
+            (
+                0x400,
+                &[
+                    0xc50000, 0x47203bb, 0x66b056d, 0x99c076d, 0xdf50be8, 0x15971291, 0x1dc2185f,
+                    0x253f21c8, 0x2b6528a9, 0x30092daf, 0x336b31c2, 0x38da36a2, 0x3cd83ade,
+                    0x3fff3e9a, 0x3fff0000,
+                ],
+            ),
+            (0x504, &[0x1fd60434, 0x6f0577]),
+            (
+                0x540,
+                &[
+                    0xe6c08040, 0xd00080, 0xe00040, 0x1000000, 0x13007c0, 0x1dc0700,
+                ],
+            ),
+            (0xa58, &[0x65554322, 6]),
+        ];
+        for (start, group) in groups {
+            for (i, &w) in group.iter().enumerate() {
+                words.insert(start + 4 * i as u64, w);
+            }
+        }
+        for copy in [0x43c, 0x478] {
+            for i in 0..15 {
+                words.insert(copy + 4 * i, words[&(0x400 + 4 * i)]);
+            }
+        }
+        words
+    }
+
+    #[test]
+    fn the_colour_unit_decodes_as_the_x70_film_stage() {
+        let words = provia();
+        assert_eq!(colour_offset(0x400), Some(0x300));
+        assert_eq!(colour_offset(0x508), Some(0x400));
+        assert_eq!(colour_offset(0x500), Some(0xa58));
+        assert_eq!(colour_offset(0x700), None);
+        let film = film(&words).unwrap();
+        // Grey stays neutral, white is white and black is black.
+        let grey = film.develop([4096; 3]);
+        assert!(
+            grey[1].abs_diff(128) <= 1 && grey[2].abs_diff(128) <= 1,
+            "{grey:?}"
+        );
+        assert!(film.develop([16383; 3])[0] >= 250);
+        assert!(film.develop([0; 3])[0] <= 5);
+        // Red has red chroma.
+        let red = film.develop([16383, 0, 0]);
+        assert!(red[2] > 200 && red[1] < 128, "{red:?}");
+        let mut unequal = words.clone();
+        unequal.insert(0x440, 0);
+        assert!(super::film(&unequal).is_err());
+        assert!(super::film(&BTreeMap::new()).is_err());
+    }
+
+    #[test]
+    fn the_film_law_develops_a_uniform_colour() {
+        let words = provia();
+        let film = film(&words).unwrap();
+        let (lines, width, stride) = (12, 12, 32);
+        let mut raw = vec![0; stride * lines];
+        for y in 0..lines {
+            for x in 0..width {
+                let v = if XTRANS[(y + 2) % 6][(x + 2) % 6] == 1 {
+                    crate::imaging::WHITE
+                } else {
+                    crate::imaging::BLACK
+                };
+                raw[y * stride + 2 * x..][..2].copy_from_slice(&v.to_le_bytes());
+            }
+        }
+        let out = develop(&raw, stride, lines, width, (2, 2), Some(&film)).unwrap();
+        let [y, cb, cr] = film.develop([0, 16383, 0]);
+        for line in &out {
+            for p in line.chunks_exact(4) {
+                assert_eq!(p, [y, y, cb, cr]);
+            }
+        }
+        assert!(cb < 128 && cr < 128);
     }
 }

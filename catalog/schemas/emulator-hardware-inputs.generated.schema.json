@@ -3168,6 +3168,15 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "colour": {
+          "description": "Base of the colour unit's register block, whose programmed film words\nthe development engine applies.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "developer": {
           "description": "Base of the development engine's register block.",
           "format": "uint64",

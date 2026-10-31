@@ -53,10 +53,19 @@
 //! A job may declare [`Work`]: when it finishes, before its interrupt rises,
 //! the block develops or scales a still from the registers the firmware
 //! programmed, with the declared approximation of [`crate::development`].
+//! A block may publish its words for another block to read: the development
+//! engine reads the colour unit 0xfff47000 this way when its film law is
+//! declared ([`crate::development::FILM_PROFILE`]).
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
+
+/// Words a block publishes: its current register file.
+pub type Published = Arc<Mutex<BTreeMap<u64, u32>>>;
 
 /// Frame law of a block: (offset, mask) of the start and stopped bits, the
 /// interrupt line and the frame period in ticks.
@@ -175,6 +184,10 @@ pub struct Block {
     /// (offset, value) of words that read a fixed value whatever is written.
     fixed: Vec<(u64, u32)>,
     commands: Vec<Command>,
+    /// Where this block publishes its words.
+    published: Option<Published>,
+    /// The colour unit's words, for the film law of a development job.
+    colour: Option<Published>,
     state: State,
 }
 impl Block {
@@ -210,6 +223,8 @@ impl Block {
             image: None,
             fixed: Vec::new(),
             commands: Vec::new(),
+            published: None,
+            colour: None,
             state: State::default(),
         })
     }
@@ -249,6 +264,25 @@ impl Block {
         self.work = Some(work);
         Ok(self)
     }
+    /// Publish this block's words to `words`.
+    pub fn with_published(mut self, words: Published) -> Self {
+        *words.lock().unwrap() = self.state.words.clone();
+        self.published = Some(words);
+        self
+    }
+    /// Develop with the film law of the colour unit's published words.
+    pub fn with_colour(mut self, words: Published) -> Result<Self, String> {
+        if !matches!(self.work, Some(Work::Develop { .. })) {
+            return Err("Only a development job reads a colour unit".into());
+        }
+        self.colour = Some(words);
+        Ok(self)
+    }
+    fn publish(&self) {
+        if let Some(words) = &self.published {
+            *words.lock().unwrap() = self.state.words.clone();
+        }
+    }
     fn run_work(&self, cx: &mut Cx<'_>, work: Work) -> Result<(), String> {
         let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
         let address = |o| u64::from(word(o));
@@ -262,7 +296,18 @@ impl Block {
                     source_stride * (lines - 1) + 2 * width,
                 )?;
                 let phase = (usize::from(phase.0), usize::from(phase.1));
-                let rows = crate::development::develop(&raw, source_stride, lines, width, phase)?;
+                let film = match &self.colour {
+                    Some(words) => Some(crate::development::film(&words.lock().unwrap())?),
+                    None => None,
+                };
+                let rows = crate::development::develop(
+                    &raw,
+                    source_stride,
+                    lines,
+                    width,
+                    phase,
+                    film.as_ref(),
+                )?;
                 (
                     rows,
                     address(DEVELOP_DESTINATION),
@@ -551,6 +596,7 @@ impl Device for Block {
                 self.state.words.insert(c.status, word);
             }
         }
+        self.publish();
         if let Some(frames) = self.frames {
             self.state.due = match (self.started(&frames), self.state.due) {
                 (false, _) => None,
@@ -625,6 +671,7 @@ impl Device for Block {
             return Err("Invalid register block checkpoint".into());
         }
         self.state = state;
+        self.publish();
         Ok(())
     }
 }
