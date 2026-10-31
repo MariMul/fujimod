@@ -17,6 +17,7 @@ import type {
   CameraModel,
   RemoteConnectionOptions,
   SessionHolder,
+  ShareOffline,
   ToolMemory,
   ToolSession,
 } from './camera-model';
@@ -167,6 +168,10 @@ interface Entry {
   readingDebugMode: boolean;
   presenceGeneration: number;
   host?: ModelShare;
+  /** Back while shared; it is shared again once its identity read matches. */
+  returning: boolean;
+  /** The identity of the camera the link was made for. */
+  sharedIdentity?: CameraIdentity;
   sharing?: Promise<void>;
   shareAttempt: number;
   peers: Map<string, string>;
@@ -174,10 +179,12 @@ interface Entry {
     string,
     { title?: string; progress?: { label: string; done: number; total: number } }
   >;
-  problemKind?: 'presence' | 'session' | 'sharing' | 'attention';
+  problemKind?: 'session' | 'sharing' | 'attention';
   shareStatus?: ReturnType<NonNullable<DevShareOptions['status']>>;
 }
 const hex = (value: number) => `0x${value.toString(16)}`;
+/** Firmware battery levels at which the battery counts as exhausted. */
+const EXHAUSTED = new Set(['PREEND', 'END']);
 /** Format only complete, successful identity replies; execution validates them in Rust. */
 function identityText(data: Uint8Array | undefined): string | undefined {
   if (!data || data.length < 16) return;
@@ -325,6 +332,23 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     entry.camera.problem = message;
     entry.problemKind = kind;
     connection(entry, message, Level.Error);
+    publish();
+  };
+  /** Keep the link while its camera is away; controllers see it offline. */
+  const shareLost = (entry: Entry, reason: ShareOffline) => {
+    entry.returning = false;
+    entry.sharedIdentity ??= entry.camera.identity;
+    if (entry.camera.sharing) entry.camera.sharing = { ...entry.camera.sharing, offline: reason };
+    entry.host?.cameraLost(reason);
+    publish();
+  };
+  const shareReturned = (entry: Entry) => {
+    entry.returning = false;
+    if (!entry.host || !entry.camera.sharing) return;
+    entry.host.cameraReturned(entry.device.share());
+    const { offline: _, ...sharing } = entry.camera.sharing;
+    entry.camera.sharing = sharing;
+    connection(entry, 'Camera shared again on the same link');
     publish();
   };
   const sessionHolder = (entry: Entry, holder: Holder | null): SessionHolder | undefined =>
@@ -506,9 +530,31 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
         entry.camera.identity = result;
         entry.camera.name = result.product || entry.device.productName || entry.camera.name;
         publish();
+        const shared = entry.sharedIdentity;
+        if (
+          entry.returning &&
+          shared &&
+          (shared.serial !== result.serial || shared.product !== result.product)
+        ) {
+          shareLost(entry, 'different camera');
+          const other = [result.product, result.serial].filter(Boolean).join(' ') || 'unknown';
+          connection(
+            entry,
+            `A different camera was connected (${other}). Connect the camera that was shared.`,
+            Level.Error,
+          );
+        } else if (entry.returning) shareReturned(entry);
       }
     } catch {
       /* withSession records the connection error and Rust reports fencing. */
+      // USB already matched the device's identity; share it again without FF80's.
+      if (
+        entry.returning &&
+        !entry.removed &&
+        entry.camera.present &&
+        generation === entry.presenceGeneration
+      )
+        shareReturned(entry);
     } finally {
       entry.identifying = false;
       // Selection/open failures never enter the session callback that reads 0xF7.
@@ -539,14 +585,13 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             entry.camera.goneAt = undefined;
             entry.identityNeeded = true;
             connection(entry, 'Camera connected');
-            if (entry.problemKind === 'presence' || entry.problemKind === 'session') {
+            if (entry.problemKind === 'session') {
               entry.camera.problem = undefined;
               entry.problemKind = undefined;
             }
             try {
               await entry.device.open();
-              if (entry.host) entry.host.cameraReturned(entry.device.share());
-              entry.shareStatus = { ...entry.shareStatus, online: true };
+              entry.returning = Boolean(entry.host);
             } catch (error) {
               problem(entry, shownError(error), 'session');
             }
@@ -555,12 +600,11 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             entry.camera.debugMode = 'unknown';
             entry.camera.serviceMode = undefined;
             entry.debugModeNeeded = false;
-            entry.shareStatus = { ...entry.shareStatus, online: false, reason: 'unplugged' };
+            const battery = entry.shareStatus?.battery;
+            const reason = battery && EXHAUSTED.has(battery) ? 'battery' : 'unplugged';
+            entry.shareStatus = { ...entry.shareStatus, online: false, reason };
             connection(entry, 'Camera disconnected');
-            if (entry.host) {
-              entry.host.cameraLost('unplugged');
-              problem(entry, 'Camera disconnected while sharing', 'presence');
-            }
+            if (entry.host) shareLost(entry, reason);
           }
         }
         if (!entry.device.status.sharing && entry.host) {
@@ -721,6 +765,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       debugModeNeeded: false,
       readingDebugMode: false,
       presenceGeneration: 0,
+      returning: false,
       shareAttempt: 0,
       peers: new Map(),
       activities: new Map(),
@@ -753,6 +798,8 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       if (entry.camera.sharing) connection(entry, 'Camera sharing stopped');
       entry.camera.sharing = undefined;
       entry.shareStatus = undefined;
+      entry.returning = false;
+      entry.sharedIdentity = undefined;
       refreshSession(entry);
       publish();
       return;
@@ -857,7 +904,8 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
                 : services.now() - status.battery_age_ms,
           };
           publish();
-          if (!status.online)
+          // A camera that went away has the share alert; this is a camera not answering.
+          if (!status.online && !entry.camera.sharing?.offline)
             problem(entry, `Camera offline: ${status.reason ?? 'unavailable'}`, 'sharing');
           else if (entry.problemKind === 'sharing') {
             entry.camera.problem = undefined;
@@ -871,13 +919,11 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
         return;
       }
       entry.host = shared.host;
-      if (!entry.camera.present) {
-        entry.host.cameraLost('unplugged');
-        problem(entry, 'Camera disconnected while sharing', 'presence');
-      }
+      entry.sharedIdentity = entry.camera.identity;
       entry.camera.sharing = { link: shared.link, peers: new Map(entry.peers) };
       connection(entry, 'Camera sharing started');
       publish();
+      if (!entry.camera.present) shareLost(entry, 'unplugged');
     })();
     try {
       await entry.sharing;

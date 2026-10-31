@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { initialize } from 'fujimod';
 import { Workbench } from './Workbench';
+import { ownerChime } from './ShareAlert';
 import { createTestCameraModel, testCamera } from './test-camera-model';
 import { Direction, Layer, Level } from './log';
 
@@ -160,6 +161,59 @@ test('sharing is an Off/On control on the camera card and never disables the too
   });
   expect(test.sharingCalls).toEqual([['X100V', true]]);
   expect(button(host, 'Dump configuration').disabled).toBe(false);
+});
+
+test('a shared camera that goes away keeps its link, chimes and reconnects from the alert', async () => {
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+    this.open = false;
+  };
+  const play = vi.spyOn(ownerChime, 'play');
+  const link = 'https://share.test/X70';
+  const test = createTestCameraModel({});
+  test.add(testCamera('X70', { sharing: { link, peers: new Map() } }));
+  const connect = vi.spyOn(test.model, 'connectUsb').mockResolvedValue();
+  const host = mount(test.model);
+  flush();
+  const dialog = host.querySelector<HTMLDialogElement>('dialog.wb-share-alert')!;
+  expect(dialog.open).toBe(false);
+  test.update('X70', (camera) => ({
+    ...camera,
+    present: false,
+    goneAt: Date.now(),
+    sharing: { link, peers: new Map(), offline: 'unplugged' },
+  }));
+  flush();
+  expect(dialog.open).toBe(true);
+  expect(dialog.textContent).toContain('X70 disconnected');
+  expect(play).toHaveBeenCalledOnce();
+  expect(host.querySelector('.wb-share-link')!.textContent).toBe(link);
+  button(host, 'Reconnect camera').click();
+  expect(connect).toHaveBeenCalledOnce();
+  test.update('X70', (camera) => ({
+    ...camera,
+    present: true,
+    goneAt: undefined,
+    sharing: { link, peers: new Map() },
+  }));
+  flush();
+  expect(dialog.open).toBe(false);
+
+  // Close dismisses one disconnect; the next one alerts again.
+  const away = { link, peers: new Map(), offline: 'unplugged' as const };
+  test.update('X70', (camera) => ({ ...camera, present: false, sharing: away }));
+  flush();
+  button(host, 'Close').click();
+  flush();
+  expect(dialog.open).toBe(false);
+  test.update('X70', (camera) => ({ ...camera, present: true, sharing: { link, peers: new Map() } }));
+  flush();
+  test.update('X70', (camera) => ({ ...camera, present: false, sharing: away }));
+  flush();
+  expect(dialog.open).toBe(true);
+  expect(play).toHaveBeenCalledTimes(3);
 });
 
 test('Dump configuration adds configuration.bin to the Files pane', async () => {

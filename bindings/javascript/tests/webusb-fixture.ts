@@ -344,7 +344,8 @@ export function installWebUsb() {
     get device() {
       return current;
     },
-    presence(present: boolean) {
+    /** `announce: false` returns a camera whose permission the browser forgot: only the picker finds it. */
+    presence(present: boolean, announce = true) {
       if (present) {
         const replugged = { ...current };
         Reflect.deleteProperty(replugged, 'nusbUniqueId');
@@ -354,6 +355,7 @@ export function installWebUsb() {
         current.configuration = null;
         iface.claimed = false;
       }
+      if (!announce) return;
       const event = new Event(present ? 'connect' : 'disconnect');
       Object.defineProperty(event, 'device', { value: current });
       usbEvents.dispatchEvent(event);

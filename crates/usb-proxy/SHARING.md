@@ -156,13 +156,16 @@ Agreed design, 2026-10-18.
 - **A share outlives its camera.** The share link (room and key) lasts as long
   as the owner's tab. When the camera disconnects, the owner stays in the room
   and reports the device offline with a reason (`battery`, `unplugged`,
-  `not responding`). When a previously approved camera reconnects, the page
+  `not responding`). The camera card keeps the link and its Copy button while
+  the camera is away. When a previously approved camera reconnects, the page
   opens it without a picker if the browser allows, otherwise one click on
-  **Reconnect camera**. Before re-exporting, with no controller attached, it
-  reads the camera's identity (FF80 product name and firmware version, plus a
-  per-body identifier from firmware-specific configuration where one is
-  known) and re-shares on the same link only if it matches. Local-dev
-  registrations stay, marked offline, so the queue keeps the same link.
+  **Reconnect camera** opens the picker. Either way the camera returns to its
+  existing device owner, matched by USB vendor, product and serial, never as a
+  new camera. Before re-exporting, with no controller attached, the page reads
+  the camera's FF80 identity and re-shares on the same link only if its product
+  and serial match the shared camera's; a failed read re-shares on the USB
+  match alone. Local-dev registrations stay, marked offline, so the queue keeps
+  the same link.
 - **Battery is read by controllers, not by the sharing page.** FF80 has no
   battery command; battery comes from firmware-specific RAM (X70 1.10:
   `tools/x70_battery.py`). Controller tools read it when a session opens,
@@ -178,8 +181,10 @@ Agreed design, 2026-10-18.
   attention message for what only it sees (camera present but not
   answering). The alert is a modal that shakes on arrival with a chime, says
   what happened and what to do, updates instead of stacking, and closes itself
-  when the problem is fixed; Close dismisses it early. The chime is unlocked by
-  the owner's click on Share or Connect camera. No system notifications.
+  when the problem is fixed; Close dismisses it until the next disconnect. The
+  chime is unlocked by the owner's click on Sharing On, Connect camera or
+  Reconnect camera. An exhausted battery shows the alert without the chime or
+  shake. No system notifications.
 
 ### Tool progress and owner countdowns
 

@@ -681,3 +681,43 @@
     display: none;
   }
 }
+
+/* Shared camera disconnected */
+.wb-share-alert {
+  max-width: 420px;
+  padding: 16px;
+  border: 1px solid rgba(232, 162, 60, 0.55);
+  border-radius: 8px;
+  background: var(--wb-panel);
+  color: inherit;
+  font: 13px/1.45 var(--wb-sans);
+}
+.wb-share-alert::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+.wb-share-alert p {
+  margin: 0 0 14px;
+}
+.wb-share-alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.wb-share-alert.shake {
+  animation: wb-share-shake 0.5s ease-in-out;
+}
+@keyframes wb-share-shake {
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-share-alert.shake {
+    animation: none;
+  }
+}

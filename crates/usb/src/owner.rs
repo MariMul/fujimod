@@ -862,22 +862,26 @@ impl DeviceOwners {
         let mut devices = self.devices.lock().await;
         let owner = match devices.1.get(&info.id()) {
             Some(owner) => owner.clone(),
-            None => {
-                let Some((previous, owner)) = devices
-                    .1
-                    .iter()
-                    .find(|(_, owner)| !owner.status().present && owner.identifies(&info))
-                    .map(|(id, owner)| (*id, owner.clone()))
-                else {
-                    return;
-                };
-                devices.1.remove(&previous);
-                devices.1.insert(info.id(), owner.clone());
-                *owner.attached.lock().unwrap() = Some(info);
-                owner
-            }
+            None => match Self::returning(&mut devices.1, info) {
+                Some(owner) => owner,
+                None => return,
+            },
         };
         owner.set_present(true);
+    }
+    /// Move the absent owner that identifies `info` to its new host id.
+    fn returning(
+        devices: &mut HashMap<nusb::DeviceId, Arc<DeviceOwner>>,
+        info: nusb::DeviceInfo,
+    ) -> Option<Arc<DeviceOwner>> {
+        let (previous, owner) = devices
+            .iter()
+            .find(|(_, owner)| !owner.status().present && owner.identifies(&info))
+            .map(|(id, owner)| (*id, owner.clone()))?;
+        devices.remove(&previous);
+        devices.insert(info.id(), owner.clone());
+        *owner.attached.lock().unwrap() = Some(info);
+        Some(owner)
     }
     pub async fn disconnected(&self, id: nusb::DeviceId) {
         if let Some(owner) = self.devices.lock().await.1.get(&id) {
@@ -890,6 +894,13 @@ impl DeviceOwners {
             if !owner.status().open {
                 owner.reopen().await?;
             }
+            return Ok(owner);
+        }
+        // A browser that forgot the device's permission when it went away
+        // returns it only through the picker, before any hotplug event.
+        if let Some(owner) = Self::returning(&mut devices.1, info.clone()) {
+            owner.set_present(true);
+            owner.reopen().await?;
             return Ok(owner);
         }
         devices.0 += 1;

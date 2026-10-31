@@ -209,6 +209,8 @@ function fixture(
   let remote: ModelDevice[] = [];
   let now = 100;
   const pause = vi.fn(async (_ms: number) => {});
+  const lost: string[] = [];
+  const returned = { count: 0 };
   const services: Partial<UsbCameraServices> = {
     initialize: async () => {},
     discover: async () => devices,
@@ -226,8 +228,11 @@ function fixture(
             exporter.stopSharing();
             exporter.free();
           },
-          cameraLost() {},
+          cameraLost(reason) {
+            lost.push(reason);
+          },
           cameraReturned(exporter) {
+            returned.count++;
             exporter.free();
           },
         },
@@ -238,6 +243,10 @@ function fixture(
     model: createUsbCameraModel({ ...services, ...overrides }),
     devices,
     callbacks,
+    lost,
+    get returned() {
+      return returned.count;
+    },
     pause,
     picker(device: ModelDevice) {
       picker = device;
@@ -325,13 +334,54 @@ test('replug preserves id, rereads identity, and resolves unplugged problem', as
     f.now(500);
     d.update({ present: false });
     await vi.waitFor(() => expect(f.model.cameras()[0].goneAt).toBe(500));
-    expect(f.model.cameras()[0].problem).toMatch(/disconnected/);
+    expect(f.model.cameras()[0].sharing).toMatchObject({
+      link: `https://example.com/#${d.id}`,
+      offline: 'unplugged',
+    });
+    expect(f.model.cameras()[0].problem).toBeUndefined();
     d.update({ present: true });
     await vi.waitFor(() => expect(d.acquire).toHaveBeenCalledTimes(2));
     await idle(f.model);
     expect(f.model.cameras()[0].id).toBe(d.id);
     expect(f.model.cameras()[0].goneAt).toBeUndefined();
     expect(f.model.cameras()[0].problem).toBeUndefined();
+    await vi.waitFor(() => expect(f.model.cameras()[0].sharing?.offline).toBeUndefined());
+    expect(f.model.cameras()[0].sharing?.link).toBe(`https://example.com/#${d.id}`);
+    expect(f.lost).toEqual(['unplugged']);
+    expect(f.returned).toBe(1);
+  } finally {
+    f.model.dispose();
+  }
+});
+test('a different camera on the same USB identity is not shared on the link', async () => {
+  const f = fixture();
+  try {
+    await idle(f.model);
+    const d = f.devices[0];
+    await f.model.setSharing(d.id, true);
+    d.update({ present: false });
+    await vi.waitFor(() => expect(f.model.cameras()[0].sharing?.offline).toBe('unplugged'));
+    const original = d.acquireSession.bind(d);
+    d.acquireSession = async (...args) => {
+      const session = await original(...args);
+      return {
+        ...session,
+        deviceInfo: async (selector) =>
+          selector === usb.InfoSelector.Serial
+            ? { text: 'other', raw: new Uint8Array(), free() {} }
+            : session.deviceInfo(selector),
+      };
+    };
+    d.update({ present: true });
+    await vi.waitFor(() =>
+      expect(f.model.cameras()[0].sharing?.offline).toBe('different camera'),
+    );
+    expect(f.returned).toBe(0);
+    d.acquireSession = original;
+    d.update({ present: false });
+    d.update({ present: true });
+    await vi.waitFor(() => expect(f.model.cameras()[0].sharing?.offline).toBeUndefined());
+    expect(f.returned).toBe(1);
   } finally {
     f.model.dispose();
   }

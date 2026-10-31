@@ -25,7 +25,13 @@ export interface CameraSharing {
   link: string;
   /** Connected remote controllers, by id, with the reason each gave. */
   peers: ReadonlyMap<string, string>;
+  /**
+   * Why the link is not serving the camera. The link stays valid and the same
+   * camera is shared on it again when it reconnects.
+   */
+  offline?: ShareOffline;
 }
+export type ShareOffline = 'unplugged' | 'battery' | 'different camera';
 
 export interface RemoteConnectionOptions {
   signal?: AbortSignal;

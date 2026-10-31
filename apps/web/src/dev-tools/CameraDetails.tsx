@@ -5,6 +5,7 @@ import type { Camera, CameraModel } from './camera-model';
 import { cameraState } from './CameraStrip';
 import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 import { firmwareVersion } from './firmware-version';
+import { ownerChime } from './ShareAlert';
 
 export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
   const [copied, setCopied] = createSignal(false);
@@ -27,6 +28,7 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
   };
   async function setSharing(on: boolean) {
     if (on === Boolean(props.camera.sharing)) return;
+    if (on) ownerChime.unlock();
     setSharingBusy(true);
     setSharingError('');
     try {
@@ -123,7 +125,11 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
           </div>
         )}
       </Show>
-      <Show when={props.camera.transport === 'usb' && props.camera.present}>
+      <Show
+        when={
+          props.camera.transport === 'usb' && (props.camera.present || props.camera.sharing)
+        }
+      >
         <div class="wb-camera-row">
           <span class="wb-row-label">Sharing</span>
           <SegmentedControl

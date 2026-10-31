@@ -31,7 +31,9 @@ blocked state.
 - While a remote holds the session, tools show who is using the camera. While a
   local tool holds it, that tool shows it is running.
 - A share link names one camera. Stopping a share removes its peers and changes
-  nothing else.
+  nothing else. The link outlives the camera's disconnects: while it is away the
+  share records why, and the page alerts with **Reconnect camera**
+  ([camera disconnects](../../../../crates/usb-proxy/SHARING.md#camera-disconnects-and-battery)).
 
 ## Log
 

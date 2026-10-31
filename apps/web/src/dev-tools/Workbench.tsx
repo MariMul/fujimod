@@ -26,6 +26,7 @@ import { executionSelection, bulkSupportError } from './captures/capture';
 import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
+import { ShareAlert, ownerChime } from './ShareAlert';
 import { StateCaptures } from './captures/StateCaptures';
 import { MapControls } from './captures/MapControls';
 import type { CaptureSet } from './captures/capture';
@@ -92,6 +93,7 @@ export function Workbench(props: {
 
   async function connect() {
     if (connecting()) return;
+    ownerChime.unlock();
     setConnecting(true);
     setConnectError('');
     const known = new Set(cameras().map((entry) => entry.id));
@@ -163,6 +165,12 @@ export function Workbench(props: {
 
   return (
     <div class="wb">
+      <ShareAlert
+        cameras={cameras()}
+        chime={ownerChime}
+        connecting={connecting()}
+        onReconnect={() => void connect()}
+      />
       <Show when={countdown()}>
         {(state) => (
           <div class="wb-countdown" role="status" aria-live="polite">

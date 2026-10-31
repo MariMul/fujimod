@@ -283,6 +283,48 @@ try {
     .filter({ hasText: 'Remote controller connected' })
     .first()
     .waitFor();
+
+  // The camera powers off while shared; the link stays and the page alerts.
+  const alert = owner.getByRole('dialog', { name: 'Shared camera disconnected' });
+  const sharedLink = owner.locator('.wb-share-link');
+  const away = async () => {
+    await owner.evaluate(() => window.sharingFixture.presence(false));
+    await alert.waitFor();
+    assert.match(await alert.innerText(), /disconnected\. Turn it on and reconnect it/);
+    assert.equal(await sharedLink.innerText(), link);
+  };
+  const sharedAgain = async () => {
+    await alert.waitFor({ state: 'hidden' });
+    await ready(owner);
+    assert.equal(await sharedLink.innerText(), link);
+    await owner
+      .getByRole('region', { name: 'Connection log' })
+      .locator('.cl-row')
+      .filter({ hasText: 'Camera shared again on the same link' })
+      .last()
+      .waitFor();
+    const viewer = await remoteContext.newPage();
+    viewer.setDefaultTimeout(30000);
+    viewer.on('pageerror', (error) => errors.push(`viewer: ${error.message}`));
+    await viewer.goto(link);
+    await ready(viewer);
+    await viewer.close();
+  };
+  await away();
+  await owner.screenshot({
+    path: new URL('shared-camera-disconnected.png', output).pathname,
+    fullPage: true,
+  });
+  // A browser that kept its permission hands the camera back by itself.
+  await owner.evaluate(() => window.sharingFixture.presence(true));
+  await sharedAgain();
+  // One that forgot it returns the camera through Reconnect camera's picker.
+  await away();
+  await owner.evaluate(() => window.sharingFixture.presence(true, false));
+  await alert.getByRole('button', { name: 'Reconnect camera', exact: true }).click();
+  await sharedAgain();
+  assert.equal(await owner.locator('.wb-cam').count(), 1);
+
   await owner
     .locator('.wb-camera')
     .getByRole('group', { name: 'Sharing' })
@@ -295,7 +337,8 @@ try {
     closing: window.sharingFixture.log.filter((e) => ['release', 'close', 'refused'].includes(e[0]))
       .length,
   }));
-  assert.deepEqual(usb, { open: 1, claim: 1, closing: 0 });
+  // One open and claim, then a reopen for each return, releasing the dead handle first.
+  assert.deepEqual(usb, { open: 3, claim: 3, closing: 2 });
   assert.deepEqual(errors, []);
   await owner.screenshot({
     path: new URL('stopped-local-camera.png', output).pathname,
@@ -319,7 +362,7 @@ try {
     ),
   );
   console.log(
-    'PASS: sharing switch, clipboard, remote identity/read, host reads while shared and stopped, activity/progress, awaited countdown, one USB owner',
+    'PASS: sharing switch, clipboard, remote identity/read, host reads while shared and stopped, activity/progress, awaited countdown, reconnect on the same link, one USB owner',
   );
 } catch (error) {
   for (const [i, page] of browser
