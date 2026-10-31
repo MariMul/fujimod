@@ -1291,6 +1291,27 @@ pub struct SensorFrame {
     pub profile: String,
 }
 
+/// Declared still development: the register blocks that develop the
+/// read-out and scale the picture, acting on the registers the firmware
+/// programs, with a declared approximation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetStillDevelopment"))]
+pub struct StillDevelopment {
+    /// Declared basis.
+    pub basis: String,
+    /// Profile of the declared development and scaling.
+    pub profile: String,
+    /// Base of the development engine's register block.
+    pub developer: u64,
+    /// Base of the resizer's register block.
+    pub resizer: u64,
+    /// X-Trans site (line, sample) of the development engine's first source
+    /// sample.
+    pub source_phase: (u8, u8),
+}
+
 /// Declared contents of one statistics engine output buffer: an asset
 /// holding the little-endian u32 words written each frame.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1356,6 +1377,9 @@ pub struct HardwareReset {
     /// Declared sensor frame the still read-out writes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensor_frame: Option<SensorFrame>,
+    /// Declared still development of the read-out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub still_development: Option<StillDevelopment>,
     /// Declared register-file parts on the I2C buses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_parts: Vec<I2cPartInput>,

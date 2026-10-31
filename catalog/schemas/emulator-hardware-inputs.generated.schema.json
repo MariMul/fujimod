@@ -273,6 +273,17 @@
             "null"
           ]
         },
+        "still_development": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetStillDevelopment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared still development of the read-out."
+        },
         "sub_cpu": {
           "anyOf": [
             {
@@ -3087,6 +3098,60 @@
         "name",
         "samples_per_cell",
         "signal_shift"
+      ],
+      "type": "object"
+    },
+    "ResetStillDevelopment": {
+      "additionalProperties": false,
+      "description": "Declared still development: the register blocks that develop the\nread-out and scale the picture, acting on the registers the firmware\nprograms, with a declared approximation.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "developer": {
+          "description": "Base of the development engine's register block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "profile": {
+          "description": "Profile of the declared development and scaling.",
+          "type": "string"
+        },
+        "resizer": {
+          "description": "Base of the resizer's register block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_phase": {
+          "description": "X-Trans site (line, sample) of the development engine's first source\nsample.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "profile",
+        "developer",
+        "resizer",
+        "source_phase"
       ],
       "type": "object"
     },
