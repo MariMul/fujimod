@@ -88,6 +88,17 @@
           ],
           "description": "Declared flash aperture contents."
         },
+        "flash_calibration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetFlashCalibration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared calibration records in the body's flash."
+        },
         "gpio_input": {
           "anyOf": [
             {
@@ -1170,6 +1181,54 @@
         "page_bytes",
         "page_ticks",
         "register_write_ticks"
+      ],
+      "type": "object"
+    },
+    "ResetFlashCalibration": {
+      "additionalProperties": false,
+      "description": "Declared body calibration records in flash: bytes the firmware reads\nfrom its factory calibration stores, placed past the installed update.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "records": {
+          "description": "Records in ascending flash order.",
+          "items": {
+            "$ref": "#/$defs/ResetFlashCalibrationRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "records"
+      ],
+      "type": "object"
+    },
+    "ResetFlashCalibrationRecord": {
+      "additionalProperties": false,
+      "description": "One declared calibration record.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "data": {
+          "description": "The bytes, as hexadecimal.",
+          "type": "string"
+        },
+        "flash": {
+          "description": "Flash offset of the first byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "flash",
+        "data"
       ],
       "type": "object"
     },

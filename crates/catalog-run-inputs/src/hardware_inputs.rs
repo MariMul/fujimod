@@ -1312,6 +1312,33 @@ pub struct StillDevelopment {
     pub source_phase: (u8, u8),
 }
 
+/// Declared body calibration records in flash: bytes the firmware reads
+/// from its factory calibration stores, placed past the installed update.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashCalibration"))]
+pub struct FlashCalibration {
+    /// Declared basis.
+    pub basis: String,
+    /// Records in ascending flash order.
+    pub records: Vec<FlashCalibrationRecord>,
+}
+
+/// One declared calibration record.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetFlashCalibrationRecord"))]
+pub struct FlashCalibrationRecord {
+    /// Declared basis.
+    pub basis: String,
+    /// Flash offset of the first byte.
+    pub flash: u64,
+    /// The bytes, as hexadecimal.
+    pub data: String,
+}
+
 /// Declared contents of one statistics engine output buffer: an asset
 /// holding the little-endian u32 words written each frame.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1380,6 +1407,9 @@ pub struct HardwareReset {
     /// Declared still development of the read-out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub still_development: Option<StillDevelopment>,
+    /// Declared calibration records in the body's flash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flash_calibration: Option<FlashCalibration>,
     /// Declared register-file parts on the I2C buses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_parts: Vec<I2cPartInput>,
