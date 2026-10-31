@@ -219,6 +219,17 @@
           ],
           "description": "Declared SD card in the slot at power-on."
         },
+        "sensor_frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetSensorFrame"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared sensor frame the still read-out writes."
+        },
         "sensor_input": {
           "anyOf": [
             {
@@ -2642,6 +2653,25 @@
         "active_high",
         "pin",
         "port"
+      ],
+      "type": "object"
+    },
+    "ResetSensorFrame": {
+      "additionalProperties": false,
+      "description": "Declared sensor data of the still read-out: a profile the read-out unit\nwrites into the line count, destination and stride the firmware programmed.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "Profile of the declared sensor response.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis",
+        "profile"
       ],
       "type": "object"
     },

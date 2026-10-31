@@ -257,6 +257,9 @@ pub enum Model {
         /// A sensor readout unit at one of the channel offsets.
         #[serde(default)]
         readout: Option<imaging::Readout>,
+        /// Profile of the declared sensor frame the readout writes.
+        #[serde(default)]
+        sensor_frame: Option<String>,
     },
     FrameSync {
         base: u64,
@@ -803,6 +806,7 @@ pub fn build(
                 base,
                 hole,
                 readout,
+                sensor_frame,
             } => {
                 let end = base + imaging::WINDOW;
                 let windows = match hole {
@@ -822,9 +826,15 @@ pub fn build(
                             size: hi - lo,
                         })
                         .collect(),
-                    Box::new(match readout {
-                        Some(r) => imaging::Control::new(base)?.with_readout(r)?,
-                        None => imaging::Control::new(base)?,
+                    Box::new({
+                        let mut control = imaging::Control::new(base)?;
+                        if let Some(r) = readout {
+                            control = control.with_readout(r)?;
+                        }
+                        match sensor_frame {
+                            Some(profile) => control.with_sensor_frame(&profile)?,
+                            None => control,
+                        }
                     }),
                 )?
             }

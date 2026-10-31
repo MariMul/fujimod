@@ -1278,6 +1278,19 @@ pub struct LiveViewHostImage {
     pub width: u32,
 }
 
+/// Declared sensor data of the still read-out: a profile the read-out unit
+/// writes into the line count, destination and stride the firmware programmed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSensorFrame"))]
+pub struct SensorFrame {
+    /// Declared basis.
+    pub basis: String,
+    /// Profile of the declared sensor response.
+    pub profile: String,
+}
+
 /// Declared contents of one statistics engine output buffer: an asset
 /// holding the little-endian u32 words written each frame.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1340,6 +1353,9 @@ pub struct HardwareReset {
     /// Declared live-view image of the same scene.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_view_image: Option<LiveViewImage>,
+    /// Declared sensor frame the still read-out writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sensor_frame: Option<SensorFrame>,
     /// Declared register-file parts on the I2C buses.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub i2c_parts: Vec<I2cPartInput>,
