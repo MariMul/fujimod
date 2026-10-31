@@ -5677,10 +5677,6 @@
             {
               "locator": "service_exit.jig_deinit_link",
               "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
-            },
-            {
-              "locator": "framebuffer",
-              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
             }
           ]
         },
@@ -5689,7 +5685,7 @@
           "errors": [
             {
               "locator": "first-start",
-              "reason": "ValueError: UI_MENU_KIND_SETUP_LANG_INIT: 0 verified enum chains"
+              "reason": "ValueError: ui_frame_write_triplet_113d8: 0 candidates, 0 verified results"
             }
           ]
         },

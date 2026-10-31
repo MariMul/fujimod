@@ -5,7 +5,7 @@
   "model": "X-T20",
   "version": "2.11",
   "facts": {
-    "located": 23,
+    "located": 24,
     "total": 24
   },
   "boot_rom": null,
