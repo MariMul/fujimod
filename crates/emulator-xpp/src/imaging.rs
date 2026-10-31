@@ -35,8 +35,12 @@
 //! samples per line at the programmed destination and stride (X-T20 2.11 shot:
 //! 4072 lines, stride 0x3020 = 6160 samples, 0x147da100): the virtual scene's
 //! first frame over the whole raster, linear sRGB through a declared X-Trans
-//! response with its tile at the buffer origin. sRGB black reads [`BLACK`],
-//! white [`WHITE`]; no optical or spectral calibration is claimed.
+//! response. sRGB black reads [`BLACK`], white [`WHITE`]; no optical or
+//! spectral calibration is claimed. The tile phase at the buffer origin is
+//! [`TILE_PHASE`] (line, sample): the 2.11 RAF writer stores 4032 lines of
+//! 6160 samples from buffer + 0x723c0, 38 lines down and 128 samples back
+//! (checked on an emulated RAF: the scene's edges move by exactly that), so
+//! this phase gives the file the standard X-Trans pattern its header names.
 //!
 //! +0x000 bit 0 is a run bit that reads set: 0xc33ec8 clears it and waits
 //! for it to read set again (stopped). Other words read back their last
@@ -73,6 +77,8 @@ pub const SENSOR_PROFILE: &str = "xpp-declared-virtual-scene-linear-srgb-xtrans-
 pub const BLACK: u16 = 1024;
 /// Declared sample of sRGB white.
 pub const WHITE: u16 = 16383;
+/// X-Trans tile (line, sample) at the readout buffer origin.
+pub const TILE_PHASE: (u64, u64) = (4, 2);
 /// X-Trans 6×6 colour sites: 0 red, 1 green, 2 blue.
 const XTRANS: [[u8; 6]; 6] = [
     [0, 2, 1, 2, 0, 1],
@@ -182,9 +188,9 @@ impl Control {
             .collect();
         let mut line = vec![0; stride as usize];
         for y in 0..lines {
-            let sites = &XTRANS[(y % 6) as usize];
+            let sites = &XTRANS[((y + TILE_PHASE.0) % 6) as usize];
             for (x, sample) in line.chunks_exact_mut(2).enumerate() {
-                let colour = sites[x % 6] as usize;
+                let colour = sites[(x + TILE_PHASE.1 as usize) % 6] as usize;
                 let rgb = fujimod_virtual_scene::rgb(scene, x as u64, y);
                 sample.copy_from_slice(&response[usize::from(rgb[colour])].to_le_bytes());
             }
@@ -478,12 +484,13 @@ mod tests {
                 h.ram[0x1001 + 16 * y + 2 * x],
             ])
         };
-        // One bar per sample on the first line, X-Trans row 0 (R B G B R G R B):
+        // One bar per sample on the first line, X-Trans row 4 from site 2
+        // (B G G R G G B G):
         // white, yellow, cyan, green, magenta, red, blue, black.
         let row: Vec<u16> = (0..8).map(|x| sample(0, x)).collect();
         assert_eq!(
             row,
-            [WHITE, BLACK, WHITE, BLACK, WHITE, BLACK, BLACK, BLACK]
+            [WHITE, WHITE, WHITE, BLACK, BLACK, BLACK, WHITE, BLACK]
         );
         assert_eq!(h.ram[0x1000 + 16 * 6], 0);
     }
