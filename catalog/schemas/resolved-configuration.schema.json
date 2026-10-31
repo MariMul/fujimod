@@ -11966,6 +11966,17 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "readout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareSensorReadout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Sensor read-out unit at one of the channel offsets."
+        },
         "size": {
           "description": "Declared size.",
           "format": "uint64",
@@ -12342,6 +12353,48 @@
       "required": [
         "output",
         "positions"
+      ],
+      "type": "object"
+    },
+    "HardwareJpegCodec": {
+      "additionalProperties": false,
+      "description": "X-Processor Pro JPEG encoder or decoder.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the completion status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "run_ticks": {
+          "description": "Time from a start to the completion of its run, in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "irq_route",
+        "run_ticks",
+        "size"
       ],
       "type": "object"
     },
@@ -12949,6 +13002,20 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "commands": {
+          "description": "Command writes that set a field of a status word.",
+          "items": {
+            "$ref": "#/$defs/HardwareRegisterBlockCommand"
+          },
+          "type": "array"
+        },
+        "fixed_words": {
+          "description": "Words that always read a fixed value.",
+          "items": {
+            "$ref": "#/$defs/HardwareRegisterFixedWord"
+          },
+          "type": "array"
+        },
         "frames": {
           "anyOf": [
             {
@@ -12990,6 +13057,50 @@
         "basis",
         "idle_bits",
         "size"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterBlockCommand": {
+      "additionalProperties": false,
+      "description": "Command law of a register block: writing exactly `value` to `word` sets\nthe `mask` field of the `status` word to `state`.",
+      "properties": {
+        "mask": {
+          "description": "Field of the status word.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "description": "Value the field takes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "Offset of the status word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Command value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "word": {
+          "description": "Offset of the command word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mask",
+        "state",
+        "status",
+        "value",
+        "word"
       ],
       "type": "object"
     },
@@ -13041,8 +13152,26 @@
           "description": "Start bit."
         },
         "status": {
-          "$ref": "#/$defs/HardwareRegisterIdleBits",
-          "description": "Status bit the job sets; writing it clears it."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterIdleBits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Status bit the job sets; writing it clears it. Without one the job\nends with an interrupt edge."
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterIdleBits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bit that stops the block; it reads back clear once written."
         },
         "ticks": {
           "description": "Device ticks a job takes.",
@@ -13054,8 +13183,30 @@
       "required": [
         "irq_route",
         "start",
-        "status",
         "ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareRegisterFixedWord": {
+      "additionalProperties": false,
+      "description": "A register-block word that always reads one value.",
+      "properties": {
+        "offset": {
+          "description": "Word offset in the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Value the word reads.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
       ],
       "type": "object"
     },
@@ -13337,6 +13488,28 @@
             }
           ],
           "description": "Declared io groups."
+        },
+        "jpeg_decoder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareJpegCodec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro JPEG decoder."
+        },
+        "jpeg_encoder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareJpegCodec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared X-Processor Pro JPEG encoder."
         },
         "lcdc": {
           "description": "Declared lcdc.",
@@ -13995,6 +14168,41 @@
         "height",
         "period_ticks",
         "width"
+      ],
+      "type": "object"
+    },
+    "HardwareSensorReadout": {
+      "additionalProperties": false,
+      "description": "Sensor read-out unit of the imaging control page: a started read-out\nfinishes after the declared ticks with its level interrupt.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the read-out status.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Channel offset inside the page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks": {
+          "description": "Device ticks a read-out takes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "irq_route",
+        "offset",
+        "ticks"
       ],
       "type": "object"
     },
