@@ -11,6 +11,7 @@ import {
   type UsbCameraServices,
 } from './usb-camera-model';
 import { Layer, Level } from './log';
+import { memoryShareLinks, type OwnedShare } from './share-links';
 beforeAll(async () => {
   await initialize({
     module_or_path: await readFile(
@@ -211,6 +212,9 @@ function fixture(
   const pause = vi.fn(async (_ms: number) => {});
   const lost: string[] = [];
   const returned = { count: 0 };
+  const ended: string[] = [];
+  const shares: (OwnedShare | undefined)[] = [];
+  const links = memoryShareLinks();
   const services: Partial<UsbCameraServices> = {
     initialize: async () => {},
     discover: async () => devices,
@@ -218,15 +222,24 @@ function fixture(
     discoverProxy: async () => remote,
     now: () => now,
     pause,
-    share: async (device, cb) => {
+    links,
+    share: async (device, cb, owned) => {
       callbacks.set(device.id, cb);
       const exporter = device.share();
+      shares.push(owned);
       return {
-        link: `https://example.com/#${device.id}`,
+        owned: owned ?? {
+          link: `https://example.com/#${device.id}`,
+          owner_key: `key-${device.id}`,
+        },
         host: {
           stop() {
             exporter.stopSharing();
             exporter.free();
+          },
+          async end() {
+            ended.push(device.id);
+            this.stop();
           },
           cameraLost(reason) {
             lost.push(reason);
@@ -244,6 +257,9 @@ function fixture(
     devices,
     callbacks,
     lost,
+    ended,
+    shares,
+    links,
     get returned() {
       return returned.count;
     },
@@ -373,15 +389,54 @@ test('a different camera on the same USB identity is not shared on the link', as
       };
     };
     d.update({ present: true });
-    await vi.waitFor(() =>
-      expect(f.model.cameras()[0].sharing?.offline).toBe('different camera'),
-    );
+    await vi.waitFor(() => expect(f.model.cameras()[0].sharing?.offline).toBe('different camera'));
     expect(f.returned).toBe(0);
     d.acquireSession = original;
     d.update({ present: false });
     d.update({ present: true });
     await vi.waitFor(() => expect(f.model.cameras()[0].sharing?.offline).toBeUndefined());
     expect(f.returned).toBe(1);
+  } finally {
+    f.model.dispose();
+  }
+});
+test('a shared camera keeps its link across a reload; Off revokes and forgets it', async () => {
+  const first = fixture();
+  let owned: OwnedShare | undefined;
+  try {
+    await idle(first.model);
+    await first.model.setSharing('one', true);
+    owned = first.links.find('Identity Identity');
+    expect(owned).toEqual({ link: 'https://example.com/#one', owner_key: 'key-one' });
+  } finally {
+    // Closing the page leaves the room without ending it.
+    first.model.dispose();
+  }
+  expect(first.ended).toEqual([]);
+
+  const reloaded = fixture([new CameraDevice('one')], { links: first.links });
+  try {
+    await vi.waitFor(() =>
+      expect(reloaded.model.cameras()[0]?.sharing?.link).toBe('https://example.com/#one'),
+    );
+    expect(reloaded.shares).toEqual([owned]);
+    await reloaded.model.setSharing('one', false);
+    expect(reloaded.ended).toEqual(['one']);
+    expect(reloaded.links.find('Identity Identity')).toBeUndefined();
+    await reloaded.model.setSharing('one', true);
+    expect(reloaded.shares.at(-1)).toBeUndefined();
+  } finally {
+    reloaded.model.dispose();
+  }
+});
+test('a link the sharing service revokes is forgotten', async () => {
+  const f = fixture();
+  try {
+    await idle(f.model);
+    await f.model.setSharing('one', true);
+    expect(f.links.find('Identity Identity')).toBeDefined();
+    f.callbacks.get('one')!.revoked!();
+    expect(f.links.find('Identity Identity')).toBeUndefined();
   } finally {
     f.model.dispose();
   }
@@ -575,11 +630,14 @@ test('production WebUSB owner keeps one open/claim through sharing and sessions'
     share: async (device) => {
       const exporter = device.share();
       return {
-        link: 'https://example.com/share',
+        owned: { link: 'https://example.com/share', owner_key: 'owner' },
         host: {
           stop() {
             exporter.stopSharing();
             exporter.free();
+          },
+          async end() {
+            this.stop();
           },
           cameraLost() {},
           cameraReturned(exporter) {
@@ -624,12 +682,15 @@ test('stopping a pending share and then restarting creates only the current atta
       const exporter = device.share();
       await new Promise<void>((resolve) => ready.push(resolve));
       return {
-        link: 'https://example.com/share',
+        owned: { link: 'https://example.com/share', owner_key: 'owner' },
         host: {
           stop() {
             stopped();
             exporter.stopSharing();
             exporter.free();
+          },
+          async end() {
+            this.stop();
           },
           cameraLost() {},
           cameraReturned(exporter) {

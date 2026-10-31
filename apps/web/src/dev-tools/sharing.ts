@@ -1,10 +1,11 @@
 import {
   ShareHost,
+  newOwnerKey,
   newTicket,
   shareUrl,
   parseShare,
 } from '../../../../crates/usb-proxy/web/peer.ts';
-export { ShareHost, newTicket, shareUrl };
+export { ShareHost, newTicket, newOwnerKey, parseShare, shareUrl };
 export function sharingConfigured(): boolean {
   return (
     Boolean(__FUJIMOD_SIGNAL_URL__) ||

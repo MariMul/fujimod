@@ -35,6 +35,8 @@ const random = () => encodeUrl(crypto.getRandomValues(new Uint8Array(32)));
 export function newTicket(signal: string, stun = ['stun:stun.cloudflare.com:3478']): Ticket {
   return { v: 1, signal, room: random(), key: random(), stun };
 }
+/** The owner's secret for a persistent room; never part of the link. */
+export const newOwnerKey = random;
 export function parseShare(url: string): Ticket {
   const values = new URLSearchParams(new URL(url).hash.slice(1).replace(/^\?/, '')).getAll(
     'remotecontrol',
@@ -107,6 +109,7 @@ function signaling(
   role: string,
   message: (frame: SignalFrame) => void | Promise<void>,
   ended: (error: Error) => void,
+  ownerKey?: string,
 ) {
   const url = new URL(ticket.signal);
   url.searchParams.set('room', ticket.room);
@@ -116,7 +119,15 @@ function signaling(
       socket.close();
       reject(Error('Signaling connection timed out'));
     }, 10000);
-    socket.onopen = () => socket.send(JSON.stringify({ type: 'join', room: ticket.room, role }));
+    socket.onopen = () =>
+      socket.send(
+        JSON.stringify({
+          type: 'join',
+          room: ticket.room,
+          role,
+          ...(ownerKey && { owner_key: ownerKey }),
+        }),
+      );
     socket.onmessage = ({ data }) => {
       const frame: SignalFrame = JSON.parse(data);
       if (frame.type === 'ready') {
@@ -154,6 +165,19 @@ function signaling(
     close: () => socket.close(),
   };
 }
+/** Refusals a persistent owner cannot fix by joining again. */
+const PERMANENT = new Set([
+  'Camera sharing ended',
+  'Invalid owner key',
+  'Owner key required',
+  'Owner key is not valid for this room',
+  // The development signaling service's wording.
+  'Owner key does not match room',
+  'Owner key not valid for this room',
+]);
+/** How long a persistent owner waits before joining its room again. */
+export const REJOIN_MS = 5000;
+const shown = (error: unknown) => (error instanceof Error ? error.message : String(error));
 // Connect and disconnect reasons are display text from the controller.
 function reason(value: unknown) {
   return typeof value === 'string' ? value.slice(0, 512) : '';
@@ -362,19 +386,34 @@ export class ShareHost {
   peers: Map<string, { close(): void }>;
   closed: boolean;
   iceServers: RTCIceServer[] = [];
-  signal: ReturnType<typeof signaling>;
-  static async create(ticket: Ticket, device: UsbExporter, callbacks: Callbacks = {}) {
-    const host = new ShareHost(ticket, device, callbacks);
+  signal: ReturnType<typeof signaling> | undefined;
+  /** The signaling connection reached `ready` and has not ended. */
+  live = false;
+  /**
+   * With an owner key the room is persistent: leaving (`stop`, closing the
+   * page, a dropped connection) keeps the link, and only `end` revokes it.
+   */
+  ownerKey: string | undefined;
+  wake: (() => void) | undefined;
+  /** Resolves once joined; a persistent owner keeps joining through transient refusals. */
+  static async create(
+    ticket: Ticket,
+    device: UsbExporter,
+    callbacks: Callbacks = {},
+    ownerKey?: string,
+    abort?: AbortSignal,
+  ) {
+    const host = new ShareHost(ticket, device, callbacks, ownerKey);
+    abort?.addEventListener('abort', () => host.stop(), { once: true });
     try {
-      const ready = await host.signal.ready;
-      host.iceServers = ready.ice_servers || configuration(ticket.stun || []).iceServers;
+      await host.join();
       return host;
     } catch (error) {
       host.stop();
       throw error;
     }
   }
-  constructor(ticket: Ticket, device: UsbExporter, callbacks: Callbacks) {
+  constructor(ticket: Ticket, device: UsbExporter, callbacks: Callbacks, ownerKey?: string) {
     this.ticket = ticket;
     this.device = device;
     // The link outlives the camera: while it is away, controllers see it offline.
@@ -384,8 +423,59 @@ export class ShareHost {
     this.callbacks = callbacks;
     this.peers = new Map();
     this.closed = false;
-    this.signal = signaling(
-      ticket,
+    this.ownerKey = ownerKey;
+  }
+  async join(): Promise<void> {
+    for (;;) {
+      if (this.closed) throw Error('Camera sharing stopped');
+      const signal = this.connect();
+      this.signal = signal;
+      try {
+        const ready = await signal.ready;
+        if (this.closed) throw Error('Camera sharing stopped');
+        this.iceServers = ready.ice_servers || configuration(this.ticket.stun || []).iceServers;
+        this.live = true;
+        return;
+      } catch (error) {
+        signal.close();
+        if (!this.closed && PERMANENT.has(shown(error))) this.callbacks.revoked?.();
+        if (this.closed || !this.ownerKey || PERMANENT.has(shown(error))) throw error;
+        this.callbacks.signaling?.(false, shown(error));
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, REJOIN_MS);
+          this.wake = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        });
+        this.wake = undefined;
+      }
+    }
+  }
+  /** The room's signaling connection ended after joining. */
+  signalingEnded(signal: ReturnType<typeof signaling>, error: Error) {
+    if (this.closed || signal !== this.signal || !this.live) return;
+    this.live = false;
+    if (this.ownerKey && !PERMANENT.has(error.message)) {
+      this.callbacks.signaling?.(false, error.message);
+      this.join().then(
+        () => this.callbacks.signaling?.(true),
+        (reason: unknown) => {
+          if (this.closed) return;
+          this.callbacks.error?.(reason instanceof Error ? reason : Error(shown(reason)));
+          if (PERMANENT.has(shown(reason))) this.callbacks.revoked?.();
+          this.stop();
+        },
+      );
+      return;
+    }
+    this.callbacks.error?.(error);
+    if (PERMANENT.has(error.message)) this.callbacks.revoked?.();
+    this.stop();
+  }
+  connect(): ReturnType<typeof signaling> {
+    const signal: ReturnType<typeof signaling> = signaling(
+      this.ticket,
       'host',
       (frame) =>
         this.message(frame).catch(async (error) => {
@@ -398,7 +488,7 @@ export class ShareHost {
             this.callbacks.error?.(Error(`Remote controller could not connect: ${reason}`));
           if (frame.type !== 'signal' || this.closed) return;
           try {
-            this.signal.send({
+            signal.send({
               type: 'signal',
               to: frame.from,
               data: await seal(this.ticket, frame.from, { type: 'error', message: reason }),
@@ -407,13 +497,10 @@ export class ShareHost {
             /* The controller still reports the last step it reached. */
           }
         }),
-      (error) => {
-        if (!this.closed) {
-          this.callbacks.error?.(error);
-          this.stop();
-        }
-      },
+      (error) => this.signalingEnded(signal, error),
+      this.ownerKey,
     );
+    return signal;
   }
   /** Online state and last controller battery report, as controllers see it. */
   status() {
@@ -599,16 +686,36 @@ export class ShareHost {
     await pc.setRemoteDescription(offer);
     await pc.setLocalDescription(await pc.createAnswer());
     await gather(pc);
-    this.signal.send({
+    this.signal?.send({
       type: 'signal',
       to: frame.from,
       data: await seal(this.ticket, frame.from, pc.localDescription!.toJSON()),
     });
   }
+  /** Revoke the link. An owner that is away joins once to do it. */
+  async end() {
+    if (this.closed) return;
+    if (this.ownerKey && !this.live) {
+      this.stop(); // Ends the rejoin loop first, so only this connection joins.
+      const signal = signaling(this.ticket, 'host', () => {}, () => {}, this.ownerKey);
+      try {
+        await signal.ready;
+        signal.send({ type: 'end' });
+      } finally {
+        signal.close();
+      }
+      return;
+    }
+    this.signal?.send({ type: 'end' });
+    this.stop();
+  }
+  /** Leave the room. A persistent room stays, offline, until its owner joins again. */
   stop() {
     if (this.closed) return;
     this.closed = true;
-    this.signal.close();
+    this.live = false;
+    this.wake?.();
+    this.signal?.close();
     this.device?.stopSharing();
     for (const peer of this.peers.values()) peer.close();
     this.peers.clear();

@@ -41,9 +41,9 @@ Messages are postcard values with inline payload bytes, pipelined as described i
 WebSockets provide rendezvous, not NAT traversal. The signaling endpoint is
 `/usb-proxy/signal` on the Rust development service or the production
 [Cloudflare Worker](../../apps/usb-sharing/README.md). It routes encrypted SDP between
-an ephemeral owner room and its clients. It never receives USB requests or
-payloads. A room disappears when its owner disconnects; links are not persistent
-camera identities. Stop sharing or close the owner's page to revoke the link.
+an owner room and its clients. It never receives USB requests or payloads.
+Rooms are [persistent](#persistent-links-and-the-native-owner): turning sharing
+off revokes the link; the owner leaving keeps it.
 
 Production remains static JavaScript on GitHub Pages. The Worker provides
 rendezvous and temporary TURN credentials independently of the static host;
@@ -147,16 +147,17 @@ Sharing is displayed independently of the device connection state.
   amber on return and says when the connection was interrupted.
 - **Wake lock:** held only while a remote controller is connected; re-acquired
   when the tab becomes visible again; released when the last controller leaves.
-- **Clean shutdown:** on page freeze or unload, stop sharing (controllers get a
-  clean disconnect) and close the camera session. Switching tabs alone does not
-  stop sharing.
+- **Leaving the page:** closing or reloading the page leaves the room without
+  ending it and closes the camera session. Controllers see the camera offline.
+  When the page next finds the same camera (FF80 product and serial), it shares
+  it again on the same link without being asked.
 
 ## Camera disconnects and battery
 
 Agreed design, 2026-10-18.
 
-- **A share outlives its camera.** The share link (room and key) lasts as long
-  as the owner's tab. When the camera disconnects, the owner stays in the room
+- **A share outlives its camera.** The share link (room and key) lasts until
+  sharing is turned off. When the camera disconnects, the owner stays in the room
   and reports the device offline with a reason (`battery`, `unplugged`,
   `not responding`). The camera card keeps the link and its Copy button while
   the camera is away. When a previously approved camera reconnects, the page
@@ -230,7 +231,13 @@ restarts and owner restarts.
 - **Creating a link.** Creating a ticket joins once as owner and leaves, so the
   room exists, offline, before any camera is shared. Opening the link then
   shows the camera as offline rather than missing.
-- Browser shares are unchanged: no owner key, and the room ends with its tab.
+- **Browser owners.** Dev Tools shares on persistent links too. The page keeps
+  each camera's link and owner key in local storage, keyed by the camera's FF80
+  product and serial, and joins again with them after a reload or a dropped
+  signaling connection, every 5 seconds until it succeeds or the room refuses
+  it for good (ended, wrong owner key). Sharing **Off** sends `end` (joining once
+  first if the owner is away) and forgets the stored link; the next **On** makes
+  a new link.
 
 ### Controllers
 

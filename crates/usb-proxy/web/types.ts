@@ -81,6 +81,10 @@ export interface Callbacks {
   countdown?(this: void, id: string, message: string): Promise<void>;
   /** Online state or battery changed. */
   state?(status: ShareStatus): void;
+  /** A persistent owner lost (`reason`) or regained its room's signaling connection. */
+  signaling?(connected: boolean, reason?: string): void;
+  /** The room was revoked or refused this owner for good; its link no longer works. */
+  revoked?(): void;
   error?(error: Error): void;
 }
 export interface ShareStatus {

@@ -324,13 +324,6 @@ try {
   await alert.getByRole('button', { name: 'Reconnect camera', exact: true }).click();
   await sharedAgain();
   assert.equal(await owner.locator('.wb-cam').count(), 1);
-
-  await owner
-    .locator('.wb-camera')
-    .getByRole('group', { name: 'Sharing' })
-    .getByRole('button', { name: 'Off', exact: true })
-    .click();
-  await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
   const usb = await owner.evaluate(() => ({
     open: window.sharingFixture.log.filter((e) => e[0] === 'open').length,
     claim: window.sharingFixture.log.filter((e) => e[0] === 'claim').length,
@@ -339,6 +332,38 @@ try {
   }));
   // One open and claim, then a reopen for each return, releasing the dead handle first.
   assert.deepEqual(usb, { open: 3, claim: 3, closing: 2 });
+  // Reloading leaves the room; the same camera is shared again on the same link.
+  await owner.reload();
+  await owner.evaluate(async () => {
+    window.sharingFixture = (
+      (await import('/__test__/' + 'fixture.mjs')) as typeof import('./usb-fixture.ts')
+    ).installConsoleFixture();
+    window.sharingFixture.state.interfaceDelay = 20;
+    window.releaseSharingDiscovery();
+  });
+  await ready(owner);
+  await sharedLink.waitFor();
+  assert.equal(await sharedLink.innerText(), link);
+
+  await owner
+    .locator('.wb-camera')
+    .getByRole('group', { name: 'Sharing' })
+    .getByRole('button', { name: 'Off', exact: true })
+    .click();
+  await owner.getByRole('button', { name: 'Copy link', exact: true }).waitFor({ state: 'hidden' });
+  // Off revoked the link.
+  const revoked = await remoteContext.newPage();
+  // The production service says the share ended; the development relay forgets the room.
+  const refused = new Promise<void>((resolve) =>
+    revoked.on('websocket', (socket) =>
+      socket.on('framereceived', ({ payload }) => {
+        if (/Camera sharing ended|Camera share unavailable/.test(String(payload))) resolve();
+      }),
+    ),
+  );
+  await revoked.goto(link);
+  await refused;
+  await revoked.close();
   assert.deepEqual(errors, []);
   await owner.screenshot({
     path: new URL('stopped-local-camera.png', output).pathname,
@@ -362,7 +387,7 @@ try {
     ),
   );
   console.log(
-    'PASS: sharing switch, clipboard, remote identity/read, host reads while shared and stopped, activity/progress, awaited countdown, reconnect on the same link, one USB owner',
+    'PASS: sharing switch, clipboard, remote identity/read, host reads while shared and stopped, activity/progress, awaited countdown, reconnect and reload on the same link, Off revokes, one USB owner',
   );
 } catch (error) {
   for (const [i, page] of browser

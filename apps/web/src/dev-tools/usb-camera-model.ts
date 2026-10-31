@@ -23,7 +23,8 @@ import type {
 } from './camera-model';
 import { serviceWorkflow, flashReader } from './service-artifacts';
 import { Direction, Layer, Level, hex as dumpBytes } from './log';
-import { ShareHost, newTicket, shareUrl, signalUrl } from './sharing';
+import { ShareHost, newOwnerKey, newTicket, parseShare, shareUrl, signalUrl } from './sharing';
+import { browserShareLinks, shareCamera, type OwnedShare, type ShareLinks } from './share-links';
 
 export interface ModelStream<T> {
   next(): Promise<T | undefined>;
@@ -86,7 +87,10 @@ export interface ModelDevice extends Pick<
   ): Promise<ModelSession>;
 }
 export interface ModelShare {
+  /** Leave the room; a persistent link stays, offline. */
   stop(): void;
+  /** Revoke the link. */
+  end(): Promise<void>;
   cameraLost(reason: string): void;
   cameraReturned(exporter: UsbExporter): void;
 }
@@ -101,7 +105,14 @@ export interface UsbCameraServices {
   discover(): Promise<readonly ModelDevice[]>;
   requestDevice(): Promise<ModelDevice | undefined>;
   discoverProxy(link: string): Promise<readonly ModelDevice[]>;
-  share(device: ModelDevice, callbacks: Callbacks): Promise<{ host: ModelShare; link: string }>;
+  /** Share on `owned`'s link when given, otherwise on a new persistent link. */
+  share(
+    device: ModelDevice,
+    callbacks: Callbacks,
+    owned: OwnedShare | undefined,
+    abort: AbortSignal,
+  ): Promise<{ host: ModelShare; owned: OwnedShare }>;
+  links: ShareLinks;
   now(): number;
   pause(milliseconds: number): Promise<void>;
 }
@@ -110,13 +121,18 @@ const defaults: UsbCameraServices = {
   discover: () => usb.discover(usb.DeviceFilter.Diagnostic),
   requestDevice: () => usb.requestDevice(usb.DeviceFilter.Diagnostic),
   discoverProxy: (link) => usb.discoverProxy(link, '', usb.DeviceFilter.Diagnostic),
-  async share(device, callbacks) {
-    const ticket = newTicket(signalUrl(location.href));
+  async share(device, callbacks, owned, abort) {
+    const signal = signalUrl(location.href);
+    // A link for another sharing service (another build's configuration) is not reused.
+    const reuse = owned && parseShare(owned.link).signal === signal ? owned : undefined;
+    const ticket = reuse ? parseShare(reuse.link) : newTicket(signal);
+    const next = reuse ?? { link: shareUrl(location.href, ticket), owner_key: newOwnerKey() };
     return {
-      host: await ShareHost.create(ticket, device.share(), callbacks),
-      link: shareUrl(location.href, ticket),
+      host: await ShareHost.create(ticket, device.share(), callbacks, next.owner_key, abort),
+      owned: next,
     };
   },
+  links: browserShareLinks(),
   simulate:
     typeof __FUJIMOD_SIMULATED_USB__ !== 'undefined' && __FUJIMOD_SIMULATED_USB__
       ? async (id) => (await import('./simulated-camera')).startSimulatedCamera(id)
@@ -164,6 +180,8 @@ interface Entry {
   disposeSimulation?: () => void;
   identityNeeded: boolean;
   identifying: boolean;
+  /** Waiting for the identity read to finish (or the camera to leave). */
+  identified: (() => void)[];
   debugModeNeeded: boolean;
   readingDebugMode: boolean;
   presenceGeneration: number;
@@ -172,7 +190,10 @@ interface Entry {
   returning: boolean;
   /** The identity of the camera the link was made for. */
   sharedIdentity?: CameraIdentity;
+  /** The persistent link and owner key this camera is shared on. */
+  owned?: OwnedShare;
   sharing?: Promise<void>;
+  shareAbort?: AbortController;
   shareAttempt: number;
   peers: Map<string, string>;
   activities: Map<
@@ -333,6 +354,16 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     entry.problemKind = kind;
     connection(entry, message, Level.Error);
     publish();
+  };
+  /** Store the link once the shared camera's identity is known. */
+  const remember = (entry: Entry) => {
+    const camera = shareCamera(entry.sharedIdentity ?? entry.camera.identity);
+    if (entry.owned && camera) services.links.save(camera, entry.owned);
+  };
+  const forget = (entry: Entry) => {
+    const camera = shareCamera(entry.sharedIdentity ?? entry.camera.identity);
+    if (camera) services.links.forget(camera);
+    entry.owned = undefined;
   };
   /** Keep the link while its camera is away; controllers see it offline. */
   const shareLost = (entry: Entry, reason: ShareOffline) => {
@@ -544,6 +575,19 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             Level.Error,
           );
         } else if (entry.returning) shareReturned(entry);
+        remember(entry);
+        // A camera this browser shared before (even before a reload) goes back on its link.
+        const camera = shareCamera(result);
+        if (
+          entry.camera.transport === 'usb' &&
+          !entry.host &&
+          !entry.sharing &&
+          camera &&
+          services.links.find(camera)
+        )
+          void setSharing(entry.camera.id, true).catch(() => {
+            /* setSharing records the problem. */
+          });
       }
     } catch {
       /* withSession records the connection error and Rust reports fencing. */
@@ -568,7 +612,10 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
         publish();
       }
       if (entry.identityNeeded) void identity(entry);
-      else void refreshDebugMode(entry);
+      else {
+        for (const done of entry.identified.splice(0)) done();
+        void refreshDebugMode(entry);
+      }
     }
   };
   async function watchState(entry: Entry) {
@@ -597,6 +644,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             }
           } else {
             entry.camera.goneAt = services.now();
+            for (const done of entry.identified.splice(0)) done();
             entry.camera.debugMode = 'unknown';
             entry.camera.serviceMode = undefined;
             entry.debugModeNeeded = false;
@@ -762,6 +810,7 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       removed: false,
       identityNeeded: state.present,
       identifying: false,
+      identified: [],
       debugModeNeeded: false,
       readingDebugMode: false,
       presenceGeneration: 0,
@@ -789,7 +838,15 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
     }
     if (!on) {
       ++entry.shareAttempt;
-      entry.host?.stop();
+      const host = entry.host;
+      // Cancels only a share still joining; a joined one is ended below.
+      if (!host) entry.shareAbort?.abort();
+      entry.shareAbort = undefined;
+      // Off revokes the link; leaving the page or forgetting the camera keeps it.
+      host?.end().catch((error: unknown) => {
+        connection(entry, `Share link not revoked: ${shownError(error)}`, Level.Error);
+      });
+      forget(entry);
       entry.host = undefined;
       entry.device.stopSharing();
       entry.peers.clear();
@@ -829,8 +886,17 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       refreshSession(entry);
       publish();
     };
+    const abort = new AbortController();
+    entry.shareAbort = abort;
     entry.sharing = (async () => {
-      const shared = await services.share(entry.device, {
+      // The saved link is found by the camera's identity, read when it connects.
+      if (!entry.camera.identity && (entry.identityNeeded || entry.identifying))
+        await new Promise<void>((done) => entry.identified.push(done));
+      if (!active()) throw Error('Camera sharing stopped');
+      const camera = shareCamera(entry.camera.identity);
+      const shared = await services.share(
+        entry.device,
+        {
         connected(controller, reason) {
           if (!active()) return;
           entry.peers.set(controller, reason);
@@ -892,6 +958,19 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
         error: (error) => {
           if (active()) problem(entry, shownError(error), 'sharing');
         },
+        signaling(connected, reason) {
+          if (!active()) return;
+          if (connected) connection(entry, 'Sharing service reconnected');
+          else
+            connection(
+              entry,
+              `Sharing service unavailable${reason ? `: ${reason}` : ''}. Joining again.`,
+              Level.Error,
+            );
+        },
+        revoked() {
+          if (active()) forget(entry);
+        },
         state(status) {
           if (!active()) return;
           entry.shareStatus = {
@@ -913,14 +992,25 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
             publish();
           }
         },
-      });
-      if (entry.removed || disposed || attempt !== entry.shareAttempt) {
+        },
+        camera ? services.links.find(camera) : undefined,
+        abort.signal,
+      );
+      if (entry.removed || disposed) {
         shared.host.stop();
         return;
       }
+      if (attempt !== entry.shareAttempt) {
+        // Turned off while joining.
+        void shared.host.end().catch(() => {});
+        return;
+      }
       entry.host = shared.host;
+      entry.shareAbort = undefined;
       entry.sharedIdentity = entry.camera.identity;
-      entry.camera.sharing = { link: shared.link, peers: new Map(entry.peers) };
+      entry.owned = shared.owned;
+      remember(entry);
+      entry.camera.sharing = { link: shared.owned.link, peers: new Map(entry.peers) };
       connection(entry, 'Camera sharing started');
       publish();
       if (!entry.camera.present) shareLost(entry, 'unplugged');
@@ -940,10 +1030,12 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
   async function remove(id: string) {
     const entry = requireEntry(id);
     entry.shareAttempt++;
+    entry.shareAbort?.abort();
     entry.host?.stop();
     if (entry.camera.transport !== 'remote') entry.device.stopSharing();
     entry.host = undefined;
     entry.removed = true;
+    for (const done of entry.identified.splice(0)) done();
     entry.states.close();
     entry.logs.close();
     entry.session?.abandon();
