@@ -113,6 +113,17 @@ pub struct BlockJob {
     pub irq: u32,
     pub ticks: u64,
 }
+/// Data a register block's job moves when it finishes, with the declared
+/// approximation [`crate::development::PROFILE`].
+#[derive(Deserialize)]
+#[serde(tag = "law", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum BlockWork {
+    /// The development engine; the X-Trans site (line, sample) of its first
+    /// source sample.
+    Develop { profile: String, phase: (u8, u8) },
+    /// The resizer.
+    Resize { profile: String },
+}
 /// Writing `value` to `word` sets the bits `mask` of `status` to `state`.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -175,6 +186,9 @@ pub enum Model {
         frames: Option<BlockFrames>,
         #[serde(default)]
         job: Option<BlockJob>,
+        /// Data the job moves when it finishes.
+        #[serde(default)]
+        work: Option<BlockWork>,
         /// A uniform live-view image written before each frame interrupt.
         #[serde(default)]
         live_view_image: Option<LiveViewImage>,
@@ -621,6 +635,7 @@ pub fn build(
                 idle,
                 frames,
                 job,
+                work,
                 live_view_image,
                 fixed,
                 commands,
@@ -640,6 +655,18 @@ pub fn build(
                         irq: j.irq,
                         ticks: j.ticks,
                     })?;
+                }
+                if let Some(work) = work {
+                    let (profile, work) = match work {
+                        BlockWork::Develop { profile, phase } => {
+                            (profile, blocks::Work::Develop { phase })
+                        }
+                        BlockWork::Resize { profile } => (profile, blocks::Work::Resize),
+                    };
+                    if profile != crate::development::PROFILE {
+                        return Err(format!("unknown still development profile {profile}"));
+                    }
+                    model = model.with_work(work)?;
                 }
                 if let Some(image) = live_view_image {
                     model = match (image.scene.as_deref(), image.host_image) {
