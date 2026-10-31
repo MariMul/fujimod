@@ -1253,6 +1253,29 @@ pub struct LiveViewImage {
     /// `zone_statistics`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene: Option<String>,
+    /// Host RGB image the unit writes instead of the uniform image (a
+    /// post-ISP display source). Statistics stay with `zone_statistics`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_image: Option<LiveViewHostImage>,
+}
+
+/// Host RGB image of a live-view output unit: an asset holding rows of red,
+/// green and blue bytes, sampled into the programmed buffer at each frame.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewHostImage"))]
+pub struct LiveViewHostImage {
+    /// Asset identity in the configuration assets.
+    pub asset: String,
+    /// Declared basis.
+    pub basis: String,
+    /// Image height in pixels.
+    pub height: u32,
+    /// SHA-256 of the asset.
+    pub sha256: String,
+    /// Image width in pixels.
+    pub width: u32,
 }
 
 /// Declared contents of one statistics engine output buffer: an asset
