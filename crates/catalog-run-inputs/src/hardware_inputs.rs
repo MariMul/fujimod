@@ -1310,6 +1310,10 @@ pub struct StillDevelopment {
     /// X-Trans site (line, sample) of the development engine's first source
     /// sample.
     pub source_phase: (u8, u8),
+    /// Base of the colour unit's register block, whose programmed film words
+    /// the development engine applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<u64>,
 }
 
 /// Declared body calibration records in flash: bytes the firmware reads

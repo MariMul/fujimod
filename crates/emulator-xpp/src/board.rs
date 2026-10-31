@@ -114,13 +114,19 @@ pub struct BlockJob {
     pub ticks: u64,
 }
 /// Data a register block's job moves when it finishes, with the declared
-/// approximation [`crate::development::PROFILE`].
+/// approximation [`crate::development::PROFILE`], or
+/// [`crate::development::FILM_PROFILE`] with the colour unit's register block.
 #[derive(Deserialize)]
 #[serde(tag = "law", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum BlockWork {
     /// The development engine; the X-Trans site (line, sample) of its first
     /// source sample.
-    Develop { profile: String, phase: (u8, u8) },
+    Develop {
+        profile: String,
+        phase: (u8, u8),
+        #[serde(default)]
+        colour: Option<u64>,
+    },
     /// The resizer.
     Resize { profile: String },
 }
@@ -472,6 +478,17 @@ pub fn build(
             _ => None,
         })
         .transpose()?;
+    // The colour unit a development engine reads, published by its block.
+    let colour = spec.nodes.iter().find_map(|n| match &n.model {
+        Model::RegisterBlock {
+            work: Some(BlockWork::Develop {
+                colour: Some(base), ..
+            }),
+            ..
+        } => Some((*base, blocks::Published::default())),
+        _ => None,
+    });
+    let mut colour_published = false;
     for node in spec.nodes {
         if nodes.contains_key(&node.name) {
             return Err("Repeated X-Processor Pro node".into());
@@ -657,16 +674,31 @@ pub fn build(
                     })?;
                 }
                 if let Some(work) = work {
-                    let (profile, work) = match work {
-                        BlockWork::Develop { profile, phase } => {
-                            (profile, blocks::Work::Develop { phase })
-                        }
-                        BlockWork::Resize { profile } => (profile, blocks::Work::Resize),
+                    let film = colour.is_some();
+                    let (profile, law, reads_colour) = match work {
+                        BlockWork::Develop {
+                            profile,
+                            phase,
+                            colour,
+                        } => (profile, blocks::Work::Develop { phase }, colour.is_some()),
+                        BlockWork::Resize { profile } => (profile, blocks::Work::Resize, film),
                     };
-                    if profile != crate::development::PROFILE {
+                    let expected = if reads_colour {
+                        crate::development::FILM_PROFILE
+                    } else {
+                        crate::development::PROFILE
+                    };
+                    if profile != expected {
                         return Err(format!("unknown still development profile {profile}"));
                     }
-                    model = model.with_work(work)?;
+                    model = model.with_work(law)?;
+                    if let (blocks::Work::Develop { .. }, Some((_, words))) = (law, &colour) {
+                        model = model.with_colour(words.clone())?;
+                    }
+                }
+                if let Some((_, words)) = colour.as_ref().filter(|(unit, _)| *unit == base) {
+                    model = model.with_published(words.clone());
+                    colour_published = true;
                 }
                 if let Some(image) = live_view_image {
                     model = match (image.scene.as_deref(), image.host_image) {
@@ -1040,6 +1072,9 @@ pub fn build(
             }
         };
         nodes.insert(node.name, id);
+    }
+    if colour.is_some() && !colour_published {
+        return Err("the still colour unit must be a register block".into());
     }
     let interrupts = InterruptMap {
         gic: Box::new(gicv2::Gic::new(cores, spec.gic.lines)),
