@@ -1,4 +1,4 @@
 {
   "extends": "../../scripts/ci/tsconfig.json",
-  "include": ["build-web.ts"]
+  "include": ["build-web.ts", "assets.test.ts"]
 }

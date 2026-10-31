@@ -8,7 +8,7 @@ export enum Tone {
   Gone = 'gone',
 }
 
-function since(time: number) {
+export function since(time: number) {
   const minutes = Math.floor((Date.now() - time) / 60000);
   return minutes < 1 ? 'just now' : `${minutes} min ago`;
 }
@@ -67,8 +67,7 @@ export function CameraStrip(props: {
                 </Show>
               </span>
               <span class="wb-cam-meta">
-                {transportLabel[camera.transport]} ·{' '}
-                {camera.serviceMode ? 'Service mode · ' : ''}
+                {transportLabel[camera.transport]} · {camera.serviceMode ? 'Service mode · ' : ''}
                 {state().label}
               </span>
             </button>

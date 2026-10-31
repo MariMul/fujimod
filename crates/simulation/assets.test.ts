@@ -5,16 +5,13 @@ interface Gltf {
   bufferViews: { byteOffset?: number; byteLength: number }[];
   nodes: { name: string }[];
 }
-import { test } from 'vite-plus/test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 test('the installed station has matching provenance and bounded geometry and texture costs', async () => {
-  const root = new URL(
-    '../../../crates/simulation/environments/crouch-end-station/',
-    import.meta.url,
-  );
+  const root = new URL('environments/crouch-end-station/', import.meta.url);
   const manifest = JSON.parse(await readFile(new URL('environment.json', root), 'utf8'));
   const bytes = await readFile(new URL('assets/scene.glb', root));
   assert.equal(bytes.readUInt32LE(0), 0x46546c67, 'Pull the curated GLB through Git LFS');
@@ -55,12 +52,12 @@ test('the installed station has matching provenance and bounded geometry and tex
 
 test('the camera fits its geometry budget and retains every authored control and dial face', async () => {
   const bytes = await readFile(
-    new URL('../../../crates/simulation/assets/x70.glb', import.meta.url),
+    new URL('assets/x70.glb', import.meta.url),
   );
   assert.ok(bytes.length < 5 * 1024 * 1024);
   const gltf: Gltf = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
   const parts = JSON.parse(
-    await readFile(new URL('../devices/x70/parts.json', import.meta.url), 'utf8'),
+    await readFile(new URL('../../apps/web/devices/x70/parts.json', import.meta.url), 'utf8'),
   );
   const names = new Set(gltf.nodes.map((node) => node.name));
   const required = [

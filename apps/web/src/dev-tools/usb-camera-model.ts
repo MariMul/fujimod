@@ -897,101 +897,106 @@ export function createUsbCameraModel(overrides: Partial<UsbCameraServices> = {})
       const shared = await services.share(
         entry.device,
         {
-        connected(controller, reason) {
-          if (!active()) return;
-          entry.peers.set(controller, reason);
-          if (entry.camera.sharing)
-            entry.camera.sharing = { ...entry.camera.sharing, peers: new Map(entry.peers) };
-          refreshSession(entry);
-          connection(
-            entry,
-            `Remote controller connected${reason ? `: ${reason}` : ''}`,
-            Level.Info,
-            { kind: 'remote', controller, reason },
-          );
-          publish();
-        },
-        disconnected(controller, reason) {
-          if (!active()) return;
-          const holder: SessionHolder = {
-            kind: 'remote',
-            controller,
-            reason: entry.peers.get(controller) ?? '',
-          };
-          entry.peers.delete(controller);
-          entry.activities.delete(controller);
-          if (entry.camera.sharing)
-            entry.camera.sharing = { ...entry.camera.sharing, peers: new Map(entry.peers) };
-          refreshSession(entry);
-          connection(entry, `Remote controller disconnected: ${reason}`, Level.Info, holder);
-          publish();
-        },
-        toolStatus(controller, message) {
-          if (active())
-            connection(entry, message, Level.Info, {
+          connected(controller, reason) {
+            if (!active()) return;
+            entry.peers.set(controller, reason);
+            if (entry.camera.sharing)
+              entry.camera.sharing = { ...entry.camera.sharing, peers: new Map(entry.peers) };
+            refreshSession(entry);
+            connection(
+              entry,
+              `Remote controller connected${reason ? `: ${reason}` : ''}`,
+              Level.Info,
+              { kind: 'remote', controller, reason },
+            );
+            publish();
+          },
+          disconnected(controller, reason) {
+            if (!active()) return;
+            const holder: SessionHolder = {
               kind: 'remote',
               controller,
               reason: entry.peers.get(controller) ?? '',
-            });
-        },
-        activity: (controller, title) =>
-          activity(controller, (value) => {
-            value.title = title || undefined;
-          }),
-        progress: (controller, progress) =>
-          activity(controller, (value) => {
-            value.progress = progress;
-          }),
-        countdown: async (_controller, message) => {
-          if (!active()) throw Error('Camera sharing stopped');
-          if (!countdown) throw Error('Owner countdown is unavailable');
-          connection(entry, message, Level.Info, {
-            kind: 'remote',
-            controller: _controller,
-            reason: entry.peers.get(_controller) ?? '',
-          });
-          await countdown(id, message);
-        },
-        attention: (_controller, message) => {
-          if (active()) problem(entry, message, 'attention');
-        },
-        error: (error) => {
-          if (active()) problem(entry, shownError(error), 'sharing');
-        },
-        signaling(connected, reason) {
-          if (!active()) return;
-          if (connected) connection(entry, 'Sharing service reconnected');
-          else
-            connection(
-              entry,
-              `Sharing service unavailable${reason ? `: ${reason}` : ''}. Joining again.`,
-              Level.Error,
-            );
-        },
-        revoked() {
-          if (active()) forget(entry);
-        },
-        state(status) {
-          if (!active()) return;
-          entry.shareStatus = {
-            online: status.online,
-            reason: status.reason,
-            battery: status.battery,
-            battery_at_ms:
-              status.battery_age_ms === undefined
-                ? undefined
-                : services.now() - status.battery_age_ms,
-          };
-          publish();
-          // A camera that went away has the share alert; this is a camera not answering.
-          if (!status.online && !entry.camera.sharing?.offline)
-            problem(entry, `Camera offline: ${status.reason ?? 'unavailable'}`, 'sharing');
-          else if (entry.problemKind === 'sharing') {
-            entry.camera.problem = undefined;
-            entry.problemKind = undefined;
+            };
+            entry.peers.delete(controller);
+            entry.activities.delete(controller);
+            if (entry.camera.sharing)
+              entry.camera.sharing = { ...entry.camera.sharing, peers: new Map(entry.peers) };
+            refreshSession(entry);
+            connection(entry, `Remote controller disconnected: ${reason}`, Level.Info, holder);
             publish();
-          }
-        },
+          },
+          toolStatus(controller, message) {
+            if (active())
+              connection(entry, message, Level.Info, {
+                kind: 'remote',
+                controller,
+                reason: entry.peers.get(controller) ?? '',
+              });
+          },
+          activity: (controller, title) =>
+            activity(controller, (value) => {
+              value.title = title || undefined;
+            }),
+          progress: (controller, progress) =>
+            activity(controller, (value) => {
+              value.progress = progress;
+            }),
+          countdown: async (_controller, message) => {
+            if (!active()) throw Error('Camera sharing stopped');
+            if (!countdown) throw Error('Owner countdown is unavailable');
+            connection(entry, message, Level.Info, {
+              kind: 'remote',
+              controller: _controller,
+              reason: entry.peers.get(_controller) ?? '',
+            });
+            await countdown(id, message);
+          },
+          attention: (_controller, message) => {
+            if (active()) problem(entry, message, 'attention');
+          },
+          error: (error) => {
+            if (active()) problem(entry, shownError(error), 'sharing');
+          },
+          signaling(connected, reason) {
+            if (!active()) return;
+            if (connected) connection(entry, 'Sharing service reconnected');
+            else
+              connection(
+                entry,
+                `Sharing service unavailable${reason ? `: ${reason}` : ''}. Joining again.`,
+                Level.Error,
+              );
+          },
+          revoked() {
+            if (active()) forget(entry);
+          },
+          state(status) {
+            if (!active()) return;
+            entry.shareStatus = {
+              online: status.online,
+              reason: status.reason,
+              battery: status.battery,
+              battery_at_ms:
+                status.battery_age_ms === undefined
+                  ? undefined
+                  : services.now() - status.battery_age_ms,
+            };
+            if (status.battery && entry.camera.sharing)
+              entry.camera.sharing = {
+                ...entry.camera.sharing,
+                battery: { level: status.battery, at: entry.shareStatus.battery_at_ms! },
+              };
+            publish();
+            // A camera that went away has the share alert; this is a camera not answering.
+            if (!status.online && !entry.camera.sharing?.offline)
+              problem(entry, `Camera offline: ${status.reason ?? 'unavailable'}`, 'sharing');
+            else if (entry.problemKind === 'sharing') {
+              entry.camera.problem = undefined;
+              entry.problemKind = undefined;
+              publish();
+            }
+          },
         },
         camera ? services.links.find(camera) : undefined,
         abort.signal,

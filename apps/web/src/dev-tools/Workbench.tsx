@@ -176,6 +176,16 @@ export function Workbench(props: {
         connecting={connecting()}
         onReconnect={() => void connect()}
       />
+      <Show
+        when={cameras().some(
+          (camera) => camera.transport !== 'remote' && camera.sharing?.peers.size,
+        )}
+      >
+        <div class="wb-remote-use" role="status">
+          Your camera is being used remotely. Keep this tab in front and your computer on to stay
+          connected.
+        </div>
+      </Show>
       <Show when={countdown()}>
         {(state) => (
           <div class="wb-countdown" role="status" aria-live="polite">

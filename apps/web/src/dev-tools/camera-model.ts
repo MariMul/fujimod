@@ -30,6 +30,8 @@ export interface CameraSharing {
    * camera is shared on it again when it reconnects.
    */
   offline?: ShareOffline;
+  /** The latest battery level a controller read from the camera, and when. */
+  battery?: { level: string; at: number };
 }
 export type ShareOffline = 'unplugged' | 'battery' | 'different camera';
 

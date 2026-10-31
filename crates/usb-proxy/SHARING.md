@@ -1,8 +1,9 @@
 # Share links and direct WebRTC
 
-Dev Tools' **Share** button lists the connected camera. Selecting it creates a
-capability URL with `#?remotecontrol=<ticket>`. Touch devices invoke the native
-share sheet; desktop browsers copy the URL and show a toast. The popup displays:
+Each USB camera's card in Dev Tools has a **Sharing** Off/On switch. On creates
+a capability URL with `#?remotecontrol=<ticket>`. **Copy link** copies it; on
+touch devices **Share link** opens the native share sheet. While shared the card
+displays:
 
 **Anyone with a share link will be able to control your USB device.**
 
@@ -133,18 +134,16 @@ account credentials are separate from those offline checks.
 
 Sharing is displayed independently of the device connection state.
 
-- **Top bar:** while the camera is shared, the status and Share button become
-  one accent **Sharing** chip, with "· N connected" while remote controllers
-  are attached. It opens the share dialog, which lists connected controllers
-  with their connect reasons. **Stop sharing** beside it revokes the link and
-  ends remote sessions but keeps the local camera connection; in local dev,
-  auto-share then stays off until the camera reconnects or Share is pressed.
-  **Disconnect** still ends everything.
+- **Camera card:** while shared, the card shows the link with its copy or share
+  button, the warning above, the latest battery level a controller reported
+  with its age, and each connected controller with its connect reason. The
+  camera strip tags the camera **Shared · N**. Sharing **Off** revokes the link
+  and ends remote sessions but keeps the local camera connection; in local dev,
+  auto-share then stays off until the camera reconnects.
 - **Strip:** only while at least one remote controller is connected, one slim
-  strip under the top bar, with no dialog, toast or dismiss button: "Your camera
-  is being used remotely. Keep this tab in front and your computer on to stay
-  connected." If the page was hidden during a remote session, the strip turns
-  amber on return and says when the connection was interrupted.
+  strip at the top of the page, with no dialog, toast or dismiss button: "Your
+  camera is being used remotely. Keep this tab in front and your computer on to
+  stay connected."
 - **Wake lock:** held while any camera on this page is shared, so viewers can
   reach it; re-acquired when the tab becomes visible again (browsers drop it
   while the tab is hidden); released when sharing stops.

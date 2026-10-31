@@ -1,11 +1,12 @@
-import { Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal } from 'solid-js';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { catalog } from 'fujimod';
 import type { Camera, CameraModel } from './camera-model';
-import { cameraState } from './CameraStrip';
+import { cameraState, since } from './CameraStrip';
 import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 import { firmwareVersion } from './firmware-version';
 import { ownerChime } from './ShareAlert';
+import { useShareSheet } from './sharing';
 
 export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
   const [copied, setCopied] = createSignal(false);
@@ -39,9 +40,15 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
       setSharingBusy(false);
     }
   }
+  const sheet = useShareSheet();
   async function copyLink() {
     const link = props.camera.sharing?.link;
     if (!link) return;
+    // Phones and tablets hand the link to the system share sheet.
+    if (sheet) {
+      await navigator.share({ title: 'FujiMod camera', url: link }).catch(() => {});
+      return;
+    }
     await navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -126,9 +133,7 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
         )}
       </Show>
       <Show
-        when={
-          props.camera.transport === 'usb' && (props.camera.present || props.camera.sharing)
-        }
+        when={props.camera.transport === 'usb' && (props.camera.present || props.camera.sharing)}
       >
         <div class="wb-camera-row">
           <span class="wb-row-label">Sharing</span>
@@ -146,17 +151,28 @@ export function CameraDetails(props: { camera: Camera; model: CameraModel }) {
         <Show when={props.camera.sharing}>
           {(sharing) => (
             <div class="wb-share">
+              <strong class="wb-share-warning">
+                Anyone with a share link will be able to control your USB device.
+              </strong>
               <span class="wb-share-link" title={sharing().link}>
                 {sharing().link}
               </span>
               <button class="wb-btn wb-copy" onClick={() => void copyLink()}>
-                {copied() ? 'Copied' : 'Copy link'}
+                {sheet ? 'Share link' : copied() ? 'Copied' : 'Copy link'}
               </button>
+              <Show when={sharing().battery}>
+                {(battery) => (
+                  <span class="wb-muted wb-share-battery">
+                    Battery {battery().level} · {since(battery().at)}
+                  </span>
+                )}
+              </Show>
               <Show when={sharing().peers.size}>
-                <span class="wb-muted wb-share-peers">
-                  {sharing().peers.size} {sharing().peers.size === 1 ? 'controller' : 'controllers'}{' '}
-                  connected
-                </span>
+                <ul class="wb-share-peers" aria-label="Connected controllers">
+                  <For each={[...sharing().peers.values()]}>
+                    {(reason) => <li>{reason || 'Remote controller'}</li>}
+                  </For>
+                </ul>
               </Show>
             </div>
           )}

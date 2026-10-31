@@ -208,7 +208,11 @@ test('a shared camera that goes away keeps its link, chimes and reconnects from 
   button(host, 'Close').click();
   flush();
   expect(dialog.open).toBe(false);
-  test.update('X70', (camera) => ({ ...camera, present: true, sharing: { link, peers: new Map() } }));
+  test.update('X70', (camera) => ({
+    ...camera,
+    present: true,
+    sharing: { link, peers: new Map() },
+  }));
   flush();
   test.update('X70', (camera) => ({ ...camera, present: false, sharing: away }));
   flush();
@@ -240,6 +244,37 @@ test('the computer is kept awake while a camera is shared', async () => {
   } finally {
     Reflect.deleteProperty(navigator, 'wakeLock');
   }
+});
+
+test('a shared camera shows the warning, its controllers, battery and the remote-use strip', () => {
+  const test = createTestCameraModel({});
+  test.add(
+    testCamera('X70', {
+      sharing: {
+        link: 'https://share.test/X70',
+        peers: new Map([['peer', 'camera queue']]),
+        battery: { level: 'HIGH', at: Date.now() },
+      },
+    }),
+  );
+  const host = mount(test.model);
+  flush();
+  expect(host.querySelector('.wb-share-warning')!.textContent).toBe(
+    'Anyone with a share link will be able to control your USB device.',
+  );
+  expect(host.querySelector('[aria-label="Connected controllers"]')!.textContent).toBe(
+    'camera queue',
+  );
+  expect(host.querySelector('.wb-share-battery')!.textContent).toBe('Battery HIGH · just now');
+  expect(host.querySelector('.wb-remote-use')!.textContent).toContain(
+    'Your camera is being used remotely.',
+  );
+  test.update('X70', (camera) => ({
+    ...camera,
+    sharing: { link: 'https://share.test/X70', peers: new Map() },
+  }));
+  flush();
+  expect(host.querySelector('.wb-remote-use')).toBeNull();
 });
 
 test('Dump configuration adds configuration.bin to the Files pane', async () => {
