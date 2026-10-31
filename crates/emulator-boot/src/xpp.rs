@@ -349,7 +349,8 @@ fn nodes(
             }))
             .collect::<Vec<_>>());
         if let Some(image) = image.filter(|image| image.unit == block.base) {
-            model["live_view_image"] = json!({ "lines": image.lines, "ycbcr": image.ycbcr });
+            model["live_view_image"] =
+                json!({ "lines": image.lines, "ycbcr": image.ycbcr, "scene": image.scene });
         }
         node(format!("block{n}"), model);
     }

@@ -1770,6 +1770,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "scene": {
+          "description": "Profile of a declared scene the unit writes instead of the uniform\nimage (the virtual post-ISP scene). Statistics stay with\n`zone_statistics`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "unit": {
           "description": "Base of the live-view output unit.",
           "format": "uint64",

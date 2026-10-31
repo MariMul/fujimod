@@ -23,7 +23,10 @@
 //! firmware moves +0xc0 through its buffers between frames (unit 1:
 //! 0xa7d6000 + 0x180000*k, 720 pixels) and the display shows the buffer the
 //! unit finished last. Other data the unit or the rest of the pipeline moves
-//! is not modeled.
+//! is not modeled. Instead of the uniform image a unit may declare the
+//! virtual post-ISP scene ([`fujimod_virtual_scene::PROFILE`]: colour bars, a
+//! ramp and a moving square, BT.601 limited 4:2:2), sampled over the whole
+//! scene into the programmed width and `lines`, one phase per frame.
 //!
 //! A block may instead declare a [`Job`]: each write that sets its start bit
 //! while no job is in flight finishes one job after the declared ticks. The
@@ -81,6 +84,18 @@ pub struct Command {
     pub mask: u32,
     pub state: u32,
 }
+/// Picture a live-view output unit writes at each frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Picture {
+    /// One packed pixel pair repeated.
+    Uniform([u8; 4]),
+    /// The declared virtual scene.
+    Scene,
+}
+/// Virtual scene size: its normalized coordinates.
+const SCENE_WIDTH: u64 = 1024;
+const SCENE_HEIGHT: u64 = 768;
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
@@ -110,7 +125,7 @@ pub struct Block {
     frames: Option<Frames>,
     job: Option<Job>,
     /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
-    image: Option<(u32, [u8; 4])>,
+    image: Option<(u32, Picture)>,
     /// (offset, value) of words that read a fixed value whatever is written.
     fixed: Vec<(u64, u32)>,
     commands: Vec<Command>,
@@ -226,12 +241,19 @@ impl Block {
         Ok(self)
     }
     /// A uniform live-view image written at each frame: lines and Y, Cb, Cr.
-    pub fn with_live_view_image(mut self, lines: u32, ycbcr: [u8; 3]) -> Result<Self, String> {
+    pub fn with_live_view_image(self, lines: u32, ycbcr: [u8; 3]) -> Result<Self, String> {
+        let [y, cb, cr] = ycbcr;
+        self.with_picture(lines, Picture::Uniform([y, y, cb, cr]))
+    }
+    /// The declared virtual scene written at each frame, over `lines` lines.
+    pub fn with_live_view_scene(self, lines: u32) -> Result<Self, String> {
+        self.with_picture(lines, Picture::Scene)
+    }
+    fn with_picture(mut self, lines: u32, picture: Picture) -> Result<Self, String> {
         if self.frames.is_none() || self.size <= WIDTH || !(1..=4096).contains(&lines) {
             return Err("Invalid X-Processor Pro live-view image".into());
         }
-        let [y, cb, cr] = ycbcr;
-        self.image = Some((lines, [y, y, cb, cr]));
+        self.image = Some((lines, picture));
         Ok(self)
     }
     fn write_image(&self, cx: &mut Cx<'_>) {
@@ -246,7 +268,26 @@ impl Block {
         if width & 1 != 0 || width > 0x2000 {
             return cx.fail("Unsupported live-view line width");
         }
-        let image = pair.repeat(width as usize / 2 * lines as usize);
+        let image = match pair {
+            Picture::Uniform(pair) => pair.repeat(width as usize / 2 * lines as usize),
+            Picture::Scene => {
+                let scene = fujimod_virtual_scene::Scene {
+                    width: SCENE_WIDTH,
+                    height: SCENE_HEIGHT,
+                    frame: self.state.frames,
+                };
+                let crop = fujimod_virtual_scene::Crop {
+                    x: 0,
+                    y: 0,
+                    width: SCENE_WIDTH,
+                    height: SCENE_HEIGHT,
+                };
+                match fujimod_virtual_scene::output(scene, crop, width.into(), lines.into(), None) {
+                    Ok(image) => image,
+                    Err(_) => return cx.fail("Live-view scene output refused"),
+                }
+            }
+        };
         if cx.ram_write(u64::from(address), &image).is_err() {
             cx.fail("Live-view buffer outside RAM");
         }
@@ -585,6 +626,34 @@ mod tests {
         let mut cx = h.cx();
         unit.advance(&mut cx);
         assert_eq!(cx.refusal(), Some("Unsupported live-view line width"));
+    }
+
+    #[test]
+    fn a_live_view_scene_unit_writes_the_moving_virtual_scene() {
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let mut unit = Block::new(BASE, 0x200, vec![(0, 1)], Some(frames))
+            .unwrap()
+            .with_live_view_scene(4)
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 8);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        advance(&mut unit, &mut h, 10);
+        // The white and yellow bars at the top left (eight pixels sample one
+        // bar each), BT.601 limited, chroma averaged over the pair.
+        assert_eq!(h.ram[0x1000..0x1004], [235, 210, 72, 137]);
+        let first = h.ram[0x1000..0x1040].to_vec();
+        advance(&mut unit, &mut h, 20);
+        // The ramp moves with the frame phase.
+        assert_ne!(h.ram[0x1000..0x1040], first[..]);
+        assert_eq!(h.ram[0x1040], 0);
     }
 
     #[test]
