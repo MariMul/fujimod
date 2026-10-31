@@ -515,6 +515,9 @@ fn nodes(
         );
     }
     if let Some(control) = &maps.imaging_control {
+        if reset.sensor_frame.is_some() && control.readout.is_none() {
+            return Err("a sensor frame requires the sensor read-out unit".into());
+        }
         node(
             "imaging".into(),
             json!({
@@ -523,8 +526,11 @@ fn nodes(
                 "readout": control.readout.as_ref().map(|r| json!({
                     "offset": r.offset, "irq": r.irq_route, "ticks": r.ticks,
                 })),
+                "sensor_frame": reset.sensor_frame.as_ref().map(|frame| &frame.profile),
             }),
         );
+    } else if reset.sensor_frame.is_some() {
+        return Err("a sensor frame requires the imaging control page".into());
     }
     if let Some(sync) = &maps.frame_sync {
         node(
@@ -982,6 +988,47 @@ mod tests {
         assert_eq!(
             block["live_view_image"]["host_image"],
             json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
+        );
+    }
+
+    #[test]
+    fn a_declared_sensor_frame_reaches_the_read_out_unit() {
+        use fujimod_catalog_run_inputs::hardware_inputs::SensorFrame;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        reset.sensor_frame = Some(SensorFrame {
+            basis: "test".into(),
+            profile: "declared".into(),
+        });
+        let (starts, assets) = (starts(), assets());
+        let inputs = Inputs {
+            starts: &starts,
+            sub_cpu_registers: &[],
+            assets: &assets,
+        };
+        let banks = ram_banks(&resolved.reference.soc.memory_regions);
+        let nodes = nodes(
+            maps,
+            &reset,
+            resolved.reference.body.dram_bytes,
+            &banks,
+            &inputs,
+        )
+        .unwrap();
+        let imaging = nodes.iter().find(|node| node["name"] == "imaging").unwrap();
+        assert_eq!(imaging["model"]["sensor_frame"], "declared");
+        let mut maps = maps.clone();
+        maps.imaging_control.as_mut().unwrap().readout = None;
+        assert_eq!(
+            super::nodes(&maps, &reset, 0, &banks, &inputs)
+                .err()
+                .unwrap(),
+            "a sensor frame requires the sensor read-out unit"
         );
     }
 
