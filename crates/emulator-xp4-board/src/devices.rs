@@ -1062,11 +1062,29 @@ impl Devices {
         if let Some(j) = block.job {
             model = model.with_job(fujimod_emulator_xpp::blocks::Job {
                 start: j.start,
-                status: Some(j.status),
-                stop: None,
+                status: j.status,
+                stop: j.stop,
                 irq: j.irq,
                 ticks: j.ticks,
             })?;
+        }
+        if !block.fixed.is_empty() {
+            model = model.with_fixed(block.fixed)?;
+        }
+        if !block.commands.is_empty() {
+            model = model.with_commands(
+                block
+                    .commands
+                    .iter()
+                    .map(|c| fujimod_emulator_xpp::blocks::Command {
+                        word: c.word,
+                        value: c.value,
+                        status: c.status,
+                        mask: c.mask,
+                        state: c.state,
+                    })
+                    .collect(),
+            )?;
         }
         if let Some((lines, ycbcr)) = image {
             model = model.with_live_view_image(lines, ycbcr)?;
