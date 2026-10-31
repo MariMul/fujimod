@@ -79,15 +79,7 @@ pub const BLACK: u16 = 1024;
 pub const WHITE: u16 = 16383;
 /// X-Trans tile (line, sample) at the readout buffer origin.
 pub const TILE_PHASE: (u64, u64) = (4, 2);
-/// X-Trans 6×6 colour sites: 0 red, 1 green, 2 blue.
-const XTRANS: [[u8; 6]; 6] = [
-    [0, 2, 1, 2, 0, 1],
-    [1, 1, 0, 1, 1, 2],
-    [1, 1, 2, 1, 1, 0],
-    [2, 0, 1, 0, 2, 1],
-    [1, 1, 2, 1, 1, 0],
-    [1, 1, 0, 1, 1, 2],
-];
+use crate::development::XTRANS;
 
 /// A sensor readout unit: its channel offset, level interrupt and the ticks
 /// a readout takes.

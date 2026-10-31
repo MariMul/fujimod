@@ -49,6 +49,10 @@
 //! 0xfff0f000 through 0xc6c64c (+0xb8 = 0x6a020202, then waits for +0xbc bits
 //! 5..0 = 0x27) and back through 0xc6c700 (0x01020202, waits for 0x20); these
 //! are its only +0xb8 commands. What the states mean is not known.
+//!
+//! A job may declare [`Work`]: when it finishes, before its interrupt rises,
+//! the block develops or scales a still from the registers the firmware
+//! programmed, with the declared approximation of [`crate::development`].
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -84,6 +88,31 @@ pub struct Command {
     pub mask: u32,
     pub state: u32,
 }
+/// Data a job moves when it finishes (see [`crate::development`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Work {
+    /// The development engine; the X-Trans site (line, sample) of the first
+    /// source sample.
+    Develop { phase: (u8, u8) },
+    /// The resizer.
+    Resize,
+}
+const DEVELOP_SOURCE: u64 = 0x08;
+const DEVELOP_SOURCE_STRIDE: u64 = 0x0c;
+const DEVELOP_SIZE: u64 = 0x14;
+const DEVELOP_DESTINATION: u64 = 0x1c;
+const DEVELOP_DESTINATION_STRIDE: u64 = 0x20;
+const RESIZE_INPUT: u64 = 0x08;
+const RESIZE_OUTPUT: u64 = 0x14;
+const RESIZE_STEP_X: u64 = 0x18;
+const RESIZE_STEP_Y: u64 = 0x1c;
+const RESIZE_SOURCE: u64 = 0xc0;
+const RESIZE_SOURCE_STRIDE: u64 = 0xc4;
+const RESIZE_DESTINATION: u64 = 0xc8;
+const RESIZE_DESTINATION_STRIDE: u64 = 0xcc;
+const RESIZE_FORMAT: u64 = 0x100;
+/// The only resizer format seen: packed 4:2:2 in and out.
+const RESIZE_PACKED_422: u32 = 0x1100_0002;
 /// Picture a live-view output unit writes at each frame.
 #[derive(Clone, Debug, PartialEq)]
 enum Picture {
@@ -135,6 +164,7 @@ pub struct Block {
     idle: Vec<(u64, u32)>,
     frames: Option<Frames>,
     job: Option<Job>,
+    work: Option<Work>,
     /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
     image: Option<(u32, Picture)>,
     /// (offset, value) of words that read a fixed value whatever is written.
@@ -171,6 +201,7 @@ impl Block {
             idle,
             frames,
             job: None,
+            work: None,
             image: None,
             fixed: Vec::new(),
             commands: Vec::new(),
@@ -199,6 +230,87 @@ impl Block {
         }
         self.job = Some(job);
         Ok(self)
+    }
+    /// Data the job moves when it finishes.
+    pub fn with_work(mut self, work: Work) -> Result<Self, String> {
+        let words = match work {
+            Work::Develop { phase } if phase.0 < 6 && phase.1 < 6 => DEVELOP_DESTINATION_STRIDE,
+            Work::Resize => RESIZE_FORMAT,
+            Work::Develop { .. } => return Err("Invalid X-Trans phase".into()),
+        };
+        if self.job.is_none() || words >= self.size {
+            return Err("Invalid X-Processor Pro register block work".into());
+        }
+        self.work = Some(work);
+        Ok(self)
+    }
+    fn run_work(&self, cx: &mut Cx<'_>, work: Work) -> Result<(), String> {
+        let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
+        let address = |o| u64::from(word(o));
+        let stride = |o| word(o) as usize * 2;
+        let (rows, destination, destination_stride) = match work {
+            Work::Develop { phase } => {
+                let (lines, width) = crate::development::size(word(DEVELOP_SIZE));
+                let source_stride = stride(DEVELOP_SOURCE_STRIDE);
+                let raw = cx.ram_bytes(
+                    address(DEVELOP_SOURCE),
+                    source_stride * (lines - 1) + 2 * width,
+                )?;
+                let phase = (usize::from(phase.0), usize::from(phase.1));
+                let rows = crate::development::develop(&raw, source_stride, lines, width, phase)?;
+                (
+                    rows,
+                    address(DEVELOP_DESTINATION),
+                    stride(DEVELOP_DESTINATION_STRIDE),
+                )
+            }
+            Work::Resize => {
+                if word(RESIZE_FORMAT) != RESIZE_PACKED_422 {
+                    return Err(format!(
+                        "Unmodeled resizer format {:#x}",
+                        word(RESIZE_FORMAT)
+                    ));
+                }
+                let (lines, width) = crate::development::size(word(RESIZE_INPUT));
+                let (out_lines, out_width) = crate::development::size(word(RESIZE_OUTPUT));
+                let (Some(step_x), Some(step_y)) = (
+                    crate::development::step(word(RESIZE_STEP_X)),
+                    crate::development::step(word(RESIZE_STEP_Y)),
+                ) else {
+                    return Err("Unmodeled resizer step".into());
+                };
+                let scale = crate::development::Scale {
+                    stride: stride(RESIZE_SOURCE_STRIDE),
+                    lines,
+                    width,
+                    out_lines,
+                    out_width,
+                    step_x,
+                    step_y,
+                };
+                let source = cx.ram_bytes(
+                    address(RESIZE_SOURCE),
+                    scale.stride * (lines - 1) + 2 * width,
+                )?;
+                let rows = crate::development::resample(&source, scale)?;
+                (
+                    rows,
+                    address(RESIZE_DESTINATION),
+                    stride(RESIZE_DESTINATION_STRIDE),
+                )
+            }
+        };
+        if rows
+            .first()
+            .is_some_and(|row| row.len() > destination_stride)
+        {
+            return Err("Still picture line wider than its destination stride".into());
+        }
+        for (y, row) in rows.iter().enumerate() {
+            cx.ram_write(destination + (y * destination_stride) as u64, row)
+                .map_err(|e| format!("Still picture outside RAM: {e}"))?;
+        }
+        Ok(())
     }
     /// Words that read a fixed value: ready words a driver compares for
     /// equality before a run (0xfffc3000 +0xdc and 0xfff7e000 +0x1c read
@@ -448,6 +560,11 @@ impl Device for Block {
         if let Some(job) = self.job {
             if self.state.due.is_some_and(|at| at <= cx.now()) {
                 self.state.due = None;
+                if let Some(work) = self.work
+                    && let Err(e) = self.run_work(cx, work)
+                {
+                    return cx.fail(e);
+                }
                 self.state.jobs += 1;
                 self.state.status |= job.status.map_or(1, |(_, mask)| mask);
                 cx.set_irq(job.irq, true);
@@ -778,6 +895,85 @@ mod tests {
         assert_eq!(read(&mut engine, &mut h, 0xfff98000), 1);
         engine.restore(&saved).unwrap();
         assert_eq!(engine.state.status, 1);
+    }
+
+    #[test]
+    fn a_development_job_and_a_resizer_job_move_the_programmed_pictures() {
+        use fujimod_emulator_devices::test_host::advance;
+        let mut h = TestHost::new();
+        let job = Job {
+            start: (4, 1),
+            status: None,
+            stop: Some((0, 1)),
+            irq: 130,
+            ticks: 10,
+        };
+        let block = |base| Block::new(base, 0x1000, vec![(0, 1)], None).unwrap();
+        assert!(block(0xfff98000).with_work(Work::Resize).is_err());
+        assert!(
+            block(0xfff98000)
+                .with_job(job)
+                .unwrap()
+                .with_work(Work::Develop { phase: (6, 0) })
+                .is_err()
+        );
+        // A grey X-Trans frame of 12 lines x 12 samples, stride 32 bytes.
+        let grey = crate::imaging::BLACK + (crate::imaging::WHITE - crate::imaging::BLACK) / 5;
+        h.ram[0x1000..0x1000 + 32 * 12].copy_from_slice(&grey.to_le_bytes().repeat(16 * 12));
+        let mut engine = block(0xfff98000)
+            .with_job(job)
+            .unwrap()
+            .with_work(Work::Develop { phase: (2, 2) })
+            .unwrap();
+        for (offset, value) in [
+            (0x08, 0x1000),
+            (0x0c, 16),
+            (0x14, 0xb_000b),
+            (0x1c, 0x4000),
+            (0x20, 16),
+        ] {
+            write(&mut engine, &mut h, 0xfff98000 + offset, value);
+        }
+        write(&mut engine, &mut h, 0xfff98004, 1);
+        advance(&mut engine, &mut h, 10);
+        assert_eq!(engine.state.status, 1);
+        let developed = h.ram[0x4000..0x4000 + 32 * 12].to_vec();
+        let pixel = &developed[..4];
+        assert!(pixel[0] > 100 && pixel[0] == pixel[1] && pixel[2] == 128 && pixel[3] == 128);
+        assert!(
+            developed
+                .chunks(32)
+                .all(|line| line[..24].chunks(4).all(|p| p == pixel))
+        );
+        // The resizer halves it: 12 x 12 to 6 x 6 at 0x8000, stride 12 bytes.
+        let mut resizer = block(0xfffc3000)
+            .with_job(Job { irq: 131, ..job })
+            .unwrap()
+            .with_work(Work::Resize)
+            .unwrap();
+        for (offset, value) in [
+            (0x08, 0xb_000b),
+            (0x14, 0x5_0005),
+            (0x18, 0x1_1000),
+            (0x1c, 0x1_1000),
+            (0xc0, 0x4000),
+            (0xc4, 16),
+            (0xc8, 0x8000),
+            (0xcc, 6),
+        ] {
+            write(&mut resizer, &mut h, 0xfffc3000 + offset, value);
+        }
+        write(&mut resizer, &mut h, 0xfffc3004, 1);
+        h.now = 20;
+        let mut cx = h.cx();
+        resizer.advance(&mut cx);
+        assert!(cx.refusal().is_some_and(|f| f.contains("format")));
+        drop(cx);
+        write(&mut resizer, &mut h, 0xfffc3100, RESIZE_PACKED_422);
+        write(&mut resizer, &mut h, 0xfffc3004, 1);
+        advance(&mut resizer, &mut h, 40);
+        let scaled = &h.ram[0x8000..0x8000 + 12 * 6];
+        assert!(scaled.chunks(4).all(|p| p == pixel));
     }
 
     #[test]

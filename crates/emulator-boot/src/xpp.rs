@@ -341,6 +341,14 @@ fn nodes(
     {
         return Err("the live-view image unit must be a register block with frames".into());
     }
+    let development = reset.still_development.as_ref();
+    if let Some(development) = development
+        && [development.developer, development.resizer]
+            .iter()
+            .any(|&unit| !maps.register_blocks.iter().any(|block| block.base == unit))
+    {
+        return Err("still development units must be register blocks with jobs".into());
+    }
     for (n, block) in maps.register_blocks.iter().enumerate() {
         let mut model = json!({
             "kind": "register-block", "base": block.base, "size": block.size,
@@ -368,6 +376,22 @@ fn nodes(
                 "word": c.word, "value": c.value, "status": c.status, "mask": c.mask, "state": c.state,
             }))
             .collect::<Vec<_>>());
+        if let Some(development) = development {
+            let law = if block.base == development.developer {
+                Some(json!({ "law": "develop", "profile": development.profile,
+                             "phase": development.source_phase }))
+            } else if block.base == development.resizer {
+                Some(json!({ "law": "resize", "profile": development.profile }))
+            } else {
+                None
+            };
+            if let Some(law) = law {
+                if block.job.is_none() {
+                    return Err("still development units must be register blocks with jobs".into());
+                }
+                model["work"] = law;
+            }
+        }
         if let Some(image) = image.filter(|image| image.unit == block.base) {
             model["live_view_image"] =
                 json!({ "lines": image.lines, "ycbcr": image.ycbcr, "scene": image.scene });
@@ -1029,6 +1053,56 @@ mod tests {
                 .err()
                 .unwrap(),
             "a sensor frame requires the sensor read-out unit"
+        );
+    }
+
+    #[test]
+    fn declared_still_development_reaches_the_developer_and_the_resizer() {
+        use fujimod_catalog_run_inputs::hardware_inputs::StillDevelopment;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        reset.still_development = Some(StillDevelopment {
+            basis: "test".into(),
+            profile: "declared".into(),
+            developer: 0xfff9_8000,
+            resizer: 0xfffc_3000,
+            source_phase: (2, 2),
+        });
+        let (starts, assets) = (starts(), assets());
+        let inputs = Inputs {
+            starts: &starts,
+            sub_cpu_registers: &[],
+            assets: &assets,
+        };
+        let banks = ram_banks(&resolved.reference.soc.memory_regions);
+        let nodes = nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let block = |base: u64| {
+            nodes
+                .iter()
+                .find(|node| node["model"]["base"] == base)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(
+            block(0xfff9_8000)["model"]["work"],
+            json!({ "law": "develop", "profile": "declared", "phase": [2, 2] })
+        );
+        assert_eq!(
+            block(0xfffc_3000)["model"]["work"],
+            json!({ "law": "resize", "profile": "declared" })
+        );
+        assert!(block(0xfff7_e000)["model"].get("work").is_none());
+        reset.still_development.as_mut().unwrap().resizer = 0xfff7_f004;
+        assert_eq!(
+            super::nodes(maps, &reset, 0, &banks, &inputs)
+                .err()
+                .unwrap(),
+            "still development units must be register blocks with jobs"
         );
     }
 
