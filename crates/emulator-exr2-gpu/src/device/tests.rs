@@ -47,7 +47,10 @@ fn options() -> Options {
         max_command_capture_bytes: 65536,
         bytes_per_tick: 16,
         copy_bytes_per_tick: 16,
-        gles_job_ticks: super::super::X70_GLES_JOB_TICKS,
+        gles_base_ticks: super::super::X70_GLES_LATENCY.base_ticks,
+        gles_draw_ticks: super::super::X70_GLES_LATENCY.draw_ticks,
+        gles_filled_pixel_microticks: super::super::X70_GLES_LATENCY.filled_pixel_microticks,
+        gles_blended_pixel_microticks: super::super::X70_GLES_LATENCY.blended_pixel_microticks,
         copy_profile: None,
         clear_profile: None,
     }
@@ -223,43 +226,172 @@ fn stock_gles_submit_register_executes_uniform_shader_draw() {
 }
 fn uniform_triangle_job_ticks(mut options: Options) -> u64 {
     options.ram_bytes = 0x20000;
-    let address = 0xfff7c1e0;
     let (mut gpu, mut host, mut controllers) = setup_with_options(options);
     enable(&mut controllers, &mut host, 1);
+    gles_job_ticks(&mut gpu, &mut host, &dmp_uniform_triangle())
+}
+/// A 720 x 480 command list of one-quad draws, `(x0, y0, x1, y1, blended)`
+/// in pixels, each drawn as an immediate triangle strip.
+fn dmp_quads(quads: &[(u32, u32, u32, u32, bool)]) -> Vec<u32> {
+    let mut words = Vec::new();
+    let x_scale = dmp_packed([360., 0., 0., 0.])[2];
+    let y_scale = dmp_packed([240., 0., 0., 0.])[2];
+    for (index, value) in [
+        (0x250, 0x03020100),
+        (0x251, 0x0b0a0908),
+        (0x252, 0x0f0e0d0c),
+        (0x253, 0x1f1f1f1f),
+        (0x254, 0x1f1f1f1f),
+        (0x255, 0x1f1f1f1f),
+        (0x256, 0x1f1f1f1f),
+        (0x241, x_scale),
+        (0x243, y_scale),
+        (0x24d, 0x3f0000),
+        (0x24e, 0x3f0000),
+        (0x267, 719 | 479 << 16),
+        (0x31e, 720 | 480 << 16),
+        (0x31d, 0x100000),
+        (0x307, 0xf00),
+        (0x301, 0x01010000),
+        (0x302, 3),
+        (0x45e, 1 << 8),
+        (0x402, 1 << 28),
+        (0x48b, 0x10),
+        (0x432, 15),
+        (0x49b, 0),
+        (0x4a5, 0),
+        (0x490, 0x80000000),
+    ] {
+        dmp_pair(&mut words, index, value);
+    }
+    dmp_upload(
+        &mut words,
+        0x49c,
+        &[0x4c000000, 0x4c220000, 0x88000000],
+        false,
+    );
+    dmp_upload(&mut words, 0x4a6, &[0x8d86c36f], false);
+    dmp_upload(&mut words, 0x491, &[0x3f800000, 0, 0, 0x3f800000], false);
+    for &(x0, y0, x1, y1, blended) in quads {
+        dmp_pair(&mut words, 0x300, if blended { 0x100 } else { 0 });
+        dmp_pair(&mut words, 0x45f, 1);
+        for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
+            let position = [x as f32 / 360. - 1., y as f32 / 240. - 1., 0., 1.];
+            dmp_upload(&mut words, 0x433, &dmp_packed(position), true);
+            dmp_upload(&mut words, 0x433, &dmp_packed([1., 0., 0., 1.]), true);
+        }
+    }
+    words
+}
+/// Submit a list through logical 0x20f0 and return its completion delay.
+fn gles_job_ticks(gpu: &mut VectorGpu, host: &mut Ram, commands: &[u32]) -> u64 {
     let command_address = 0x800usize;
-    let commands = dmp_uniform_triangle();
     for (index, word) in commands.iter().enumerate() {
         let start = command_address + index * 4;
         host.bytes[start..start + 4].copy_from_slice(&word.to_le_bytes());
     }
     assert_eq!(
-        put(&mut gpu, &mut host, 0x20e0, (commands.len() * 4 / 8) as u64),
+        put(gpu, host, 0x20e0, (commands.len() * 4).div_ceil(8) as u64),
         None
     );
-    assert_eq!(
-        put(&mut gpu, &mut host, 0x20e8, (command_address / 8) as u64),
-        None
-    );
-    let mut cx = Cx::new(&mut host, 0, 0x12345678, 2);
-    gpu.write(&mut cx, address, 4, 1);
+    assert_eq!(put(gpu, host, 0x20e8, (command_address / 8) as u64), None);
+    let mut cx = Cx::new(host, 0, 0x12345678, 2);
+    gpu.write(&mut cx, 0xfff7c1e0, 4, 1);
     assert_eq!(cx.take_refusal(), None);
     gpu.next_deadline(host.now).unwrap() - host.now
 }
+fn x70_frame_job(
+    quads: &[(u32, u32, u32, u32, bool)],
+) -> (u64, fujimod_emulator_ip_dmp::gles::Workload) {
+    let mut options = options();
+    options.ram_bytes = 0x300000;
+    options.max_fill_bytes = 0x300000;
+    options.max_copy_bytes = 0x300000;
+    options.max_clear_bytes = 0x300000;
+    let (mut gpu, mut host, mut controllers) = setup_with_options(options);
+    enable(&mut controllers, &mut host, 1);
+    let mut commands = dmp_quads(quads);
+    if commands.len() % 2 != 0 {
+        commands.push(0);
+    }
+    let ticks = gles_job_ticks(&mut gpu, &mut host, &commands);
+    let workload = gpu.state.gles.workload();
+    let job = gpu.state.last_job.clone().unwrap();
+    for (field, value) in [
+        ("draws", workload.draws),
+        ("filled_pixels", workload.filled_pixels),
+        ("blended_pixels", workload.blended_pixels),
+        ("latency_ticks", ticks),
+    ] {
+        assert_eq!(
+            job.fields
+                .iter()
+                .find(|(name, _)| *name == field)
+                .map(|(_, v)| v.clone()),
+            Some(super::super::num(value)),
+            "{field}"
+        );
+    }
+    (ticks, workload)
+}
 #[test]
-fn gles_draw_job_completes_after_the_x70_interval_whatever_its_byte_rate() {
-    // Measured on hardware: a 3D draw job of a menu frame completes 6.988 ms
-    // after submission, 83,852 ticks at 12 MHz. Byte rates price fill, copy
-    // and clear work, so a draw job's time must not depend on them.
-    assert_eq!(super::super::X70_GLES_JOB_TICKS, 33_884);
-    // The frame copy that follows a draw job costs 720 x 480 x 4 bytes at 25 per tick.
-    assert_eq!((720_u64 * 480 * 4).div_ceil(25), 55_296);
-    assert_eq!(super::super::X70_GLES_JOB_TICKS + 55_296, 89_180);
+fn x70_scroll_frame_list_takes_the_camera_full_list_time() {
+    // Camera run 2026-10-31: touch-scroll frames fill 481,584 pixels with
+    // ~135k blended pixels and ~75 draw calls; their 3D list takes 14.1 to
+    // 15.0 ms (169,200 to 180,000 ticks). Here a full-screen opaque quad, 33
+    // opaque 200 x 20 rows and one 83 x 48 block fill 481,584 pixels, and 40
+    // blended 225 x 15 rows blend 135,000, in 75 draws.
+    let mut quads = vec![(0, 0, 720, 480, false)];
+    quads.extend((0..33).map(|i| (0, i * 14, 200, i * 14 + 20, false)));
+    quads.push((600, 400, 683, 448, false));
+    quads.extend((0..40).map(|i| (300, i * 11, 525, i * 11 + 15, true)));
+    let (ticks, workload) = x70_frame_job(&quads);
+    assert_eq!(
+        workload,
+        fujimod_emulator_ip_dmp::gles::Workload {
+            draws: 75,
+            filled_pixels: 481_584,
+            blended_pixels: 135_000,
+        }
+    );
+    // 57,840 + 75 x 312 + ceil(481,584 x 0.1584 + 135,000 x 0.114)
+    assert_eq!(ticks, 57_840 + 23_400 + 91_673);
+    assert_eq!(ticks, 172_913); // 14.41 ms
+    assert!((169_200..=180_000).contains(&ticks));
+}
+#[test]
+fn x70_small_frame_list_takes_the_camera_small_list_time() {
+    // Camera run 2026-10-31: frames of about 1.3k pixels in 6 draw calls take
+    // 4.7 to 5.3 ms (56,400 to 63,600 ticks) from submission to the list IRQ.
+    let mut quads: Vec<_> = (0..5)
+        .map(|i| (i * 20, 0, i * 20 + 10, 20, false))
+        .collect();
+    quads.push((200, 100, 215, 120, true));
+    let (ticks, workload) = x70_frame_job(&quads);
+    assert_eq!(
+        workload,
+        fujimod_emulator_ip_dmp::gles::Workload {
+            draws: 6,
+            filled_pixels: 1_000,
+            blended_pixels: 300,
+        }
+    );
+    // 57,840 + 6 x 312 + ceil(1,000 x 0.1584 + 300 x 0.114)
+    assert_eq!(ticks, 57_840 + 1_872 + 193);
+    assert_eq!(ticks, 59_905); // 4.99 ms
+    assert!((56_400..=63_600).contains(&ticks));
+}
+#[test]
+fn gles_list_latency_ignores_byte_rates() {
+    // Byte rates price fill, copy and clear work, never a 3D list.
     let mut slow = options();
     slow.bytes_per_tick = 1;
     let mut fast = options();
     fast.bytes_per_tick = 64;
-    assert_eq!(uniform_triangle_job_ticks(slow), 33_884);
-    assert_eq!(uniform_triangle_job_ticks(fast), 33_884);
+    assert_eq!(
+        uniform_triangle_job_ticks(slow),
+        uniform_triangle_job_ticks(fast)
+    );
 }
 fn put(gpu: &mut VectorGpu, host: &mut Ram, logical: u64, value: u64) -> Option<String> {
     let mut cx = Cx::new(host, 0, 0x12345678, 2);
@@ -606,9 +738,9 @@ fn full_frame_copy_costs_the_measured_eglcopybuffers_time() {
         max_clear_bytes: 0x400000,
         bytes_per_tick: 16,
         copy_bytes_per_tick: 25,
-        gles_job_ticks: super::super::X70_GLES_JOB_TICKS,
         copy_profile: Some(Profile::GpuCopyProfile),
         clear_profile: None,
+        ..options()
     });
     enable(&mut controllers, &mut host, 1);
     let dimensions = 720 | 480 << 16;

@@ -69,9 +69,8 @@ fn assert_host_gpu_matches_cpu(
     let expected = cpu
         .execute_cpu(words, &mut |address, length| Ok(read(address, length)))
         .unwrap();
-    let actual = match Engine::default()
-        .execute(words, &mut |address, length| Ok(read(address, length)))
-    {
+    let mut gpu = Engine::default();
+    let actual = match gpu.execute(words, &mut |address, length| Ok(read(address, length))) {
         Ok(actual) => actual,
         Err(error) if error.starts_with("host GPU adapter:") => {
             eprintln!(
@@ -84,6 +83,7 @@ fn assert_host_gpu_matches_cpu(
     if actual != expected {
         panic!("{}", super::gpu_draw::snapshot_mismatch(&actual, &expected));
     }
+    assert_eq!(gpu.workload(), cpu.workload());
     if std::env::var("FUJIMOD_DMP_VERIFY_GPU").is_ok_and(|value| value == "1") {
         let verified = Engine::default()
             .execute_host_gpu_verified(words, &mut |address, length| Ok(read(address, length)))
@@ -488,6 +488,7 @@ fn cpu_scan_conversion_matches_integer_reference_at_shared_edges_and_subpixels()
             .execute_cpu(&words, &mut |_, length| Ok(vec![0; length]))
             .unwrap();
         let pixels = &snapshots[0].1;
+        let mut written = 0;
         let mut oriented = q;
         if edge(oriented[0], oriented[1], oriented[2]) < 0 {
             oriented.swap(1, 2);
@@ -515,9 +516,63 @@ fn cpu_scan_conversion_matches_integer_reference_at_shared_edges_and_subpixels()
                     + ((y & 4) << 3);
                 let actual = pixels[morton * 4..morton * 4 + 4] != [0; 4];
                 assert_eq!(actual, covered, "seed {seed}, pixel ({x}, {y})");
+                written += u64::from(covered);
             }
         }
+        // The setup list enables blending, so every covered sample is blended.
+        assert_eq!(
+            engine.workload(),
+            Workload {
+                draws: 1,
+                filled_pixels: 0,
+                blended_pixels: written
+            },
+            "seed {seed}"
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]);
     }
+}
+
+#[test]
+fn workload_counts_draw_calls_and_scissored_fragments_by_blend_state() {
+    // Two immediate draws: an opaque quad over the left half, clipped by a
+    // 24 x 20 scissor, and a blended triangle strip quad covering 8 x 8.
+    let mut words = setup();
+    let quad = |words: &mut Vec<u32>, [x0, y0, x1, y1]: [f32; 4]| {
+        for [x, y] in [[x0, y0], [x1, y0], [x0, y1], [x1, y1]] {
+            upload(
+                words,
+                0x433,
+                &packed([x / 16. - 1., y / 16. - 1., -0.5, 1.]),
+                true,
+            );
+            upload(words, 0x433, &packed([1.; 4]), true);
+        }
+    };
+    pair(&mut words, 0x45e, 1 << 8); // triangle strip
+    pair(&mut words, 0x267, 23 | 19 << 16);
+    pair(&mut words, 0x300, 0);
+    pair(&mut words, 0x302, 3);
+    pair(&mut words, 0x45f, 1);
+    quad(&mut words, [0., 0., 16., 32.]);
+    pair(&mut words, 0x300, 0x100);
+    pair(&mut words, 0x45f, 1);
+    quad(&mut words, [8., 4., 16., 12.]);
+    let mut engine = Engine::default();
+    engine
+        .execute_cpu(&words, &mut |_, length| Ok(vec![0; length]))
+        .unwrap();
+    assert_eq!(
+        engine.workload(),
+        Workload {
+            draws: 2,
+            filled_pixels: 16 * 20,
+            blended_pixels: 64
+        }
+    );
+    #[cfg(not(target_arch = "wasm32"))]
+    assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]);
 }
 
 fn edge(a: [i64; 2], b: [i64; 2], p: [i64; 2]) -> i64 {
@@ -544,7 +599,11 @@ fn linked_streams_execute_and_cycles_refuse_without_dma_output() {
     // A length-24 link that points to itself never acquires a framebuffer.
     words[0] = 3;
     let raw: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
-    assert!(engine.execute_cpu(&words, &mut |_, _| Ok(raw.clone())).is_err());
+    assert!(
+        engine
+            .execute_cpu(&words, &mut |_, _| Ok(raw.clone()))
+            .is_err()
+    );
 }
 
 #[test]
@@ -573,7 +632,9 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
     let mut last = vec![];
     upload(&mut last, 0x433, &packed(positions[2]), true);
     upload(&mut last, 0x433, &packed([1., 0., 0., 1.]), true);
-    let expected = engine.execute_cpu(&last, &mut |_, n| Ok(vec![0; n])).unwrap();
+    let expected = engine
+        .execute_cpu(&last, &mut |_, n| Ok(vec![0; n]))
+        .unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut gpu_restored = restored.clone();
@@ -590,7 +651,9 @@ fn checkpoint_between_vertices_retains_uploaded_program_and_primitive_assembly()
         assert_eq!(actual, expected);
     }
     assert_eq!(
-        restored.execute_cpu(&last, &mut |_, n| Ok(vec![0; n])).unwrap(),
+        restored
+            .execute_cpu(&last, &mut |_, n| Ok(vec![0; n]))
+            .unwrap(),
         expected
     );
 }
@@ -644,7 +707,9 @@ fn completion_ranges_preserve_concurrent_pixels_and_masked_channels() {
             return;
         }
         let mut engine = Engine::default();
-        let snapshots = engine.execute_cpu(&words, &mut |_, n| Ok(vec![0; n])).unwrap();
+        let snapshots = engine
+            .execute_cpu(&words, &mut |_, n| Ok(vec![0; n]))
+            .unwrap();
         assert_eq!(snapshots.len(), 1);
         assert!(snapshots[0].1.iter().all(|&byte| byte == 0));
         let ranges = engine.written_ranges();
@@ -699,7 +764,9 @@ fn native_source_over_batches_preserve_order_around_masked_draws() {
     let mut words = Vec::new();
     for mask in [0xf00, 0xf00, 0x100, 0xf00, 0xf00] {
         words.extend(triangle_list(&[
-            (0x300, 0x100), (0x301, 0x71760000), (0x307, mask),
+            (0x300, 0x100),
+            (0x301, 0x71760000),
+            (0x307, mask),
         ]));
     }
     let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);

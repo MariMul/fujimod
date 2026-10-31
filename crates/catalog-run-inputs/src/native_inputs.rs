@@ -907,7 +907,12 @@ pub struct NativeVectorGpuInputs {
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
     pub copy_bytes_per_tick: u64,
-    pub gles_job_ticks: u64,
+    /// 3D list latency: base, per draw call, and per filled and blended
+    /// pixel in millionths of a tick.
+    pub gles_base_ticks: u64,
+    pub gles_draw_ticks: u64,
+    pub gles_filled_pixel_microticks: u64,
+    pub gles_blended_pixel_microticks: u64,
     pub max_command_capture_bytes: u64,
     pub copy_profile: NativeVectorGpuInputsCopyProfile,
     pub clear_profile: NativeVectorGpuInputsClearProfile,
@@ -1274,7 +1279,7 @@ impl RunNativeDeviceInputs {
             Self::VectorGpu(input) => {
                 if input.bytes_per_tick == 0
                     || input.copy_bytes_per_tick == 0
-                    || input.gles_job_ticks == 0
+                    || input.gles_base_ticks == 0
                     || input.ram_bytes == 0
                     || input.max_fill_bytes > input.ram_bytes
                     || input.max_copy_bytes > input.ram_bytes

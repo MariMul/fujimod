@@ -215,6 +215,74 @@ fn extent(state: &DrawState) -> Result<(usize, usize), String> {
 fn edge(a: [i64; 2], b: [i64; 2], p: [i64; 2]) -> i64 {
     (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
 }
+/// Fragments one triangle covers inside the scissor, by the rasterizer's
+/// sample-center and top-left rules. Each row's span is solved from the three
+/// edge functions instead of testing every pixel.
+pub(super) fn triangle_coverage(
+    state: &DrawState,
+    vertices: [[Vector; 16]; 3],
+) -> Result<u64, String> {
+    let mut covered = 0;
+    for v in clipped_triangles(state, vertices)? {
+        covered += covered_samples(state, &v)?;
+    }
+    Ok(covered)
+}
+fn covered_samples(state: &DrawState, v: &[RasterVertex; 3]) -> Result<u64, String> {
+    let (width, height) = extent(state)?;
+    let mut q = v.map(|v| {
+        [
+            (v.position[0] * 16.).round() as i64,
+            (v.position[1] * 16.).round() as i64,
+        ]
+    });
+    let area = edge(q[0], q[1], q[2]);
+    let cull = state.raster.cull_mode;
+    if area == 0 || (cull == CullMode::Front && area > 0) || (cull == CullMode::Back && area < 0) {
+        return Ok(0);
+    }
+    if area < 0 {
+        q.swap(1, 2);
+    }
+    let scissor = state.scissor;
+    let x0 = (q.iter().map(|p| p[0]).min().unwrap().div_euclid(16))
+        .clamp(0, width as i64)
+        .max(scissor.left.into());
+    let x1 = ((q.iter().map(|p| p[0]).max().unwrap() + 15).div_euclid(16))
+        .clamp(0, width as i64)
+        .min(i64::from(scissor.right) + 1);
+    let y0 = (q.iter().map(|p| p[1]).min().unwrap().div_euclid(16))
+        .clamp(0, height as i64)
+        .max(scissor.top.into());
+    let y1 = ((q.iter().map(|p| p[1]).max().unwrap() + 15).div_euclid(16))
+        .clamp(0, height as i64)
+        .min(i64::from(scissor.bottom) + 1);
+    let edges = [(q[1], q[2]), (q[2], q[0]), (q[0], q[1])];
+    let mut covered = 0;
+    for y in y0..y1 {
+        let py = y * 16 + 8;
+        let (mut first, mut last) = (x0, x1 - 1);
+        for (a, b) in edges {
+            // edge(a, b, (16x + 8, py)) = k - 16 dy x; a sample is inside
+            // when that is positive, or zero on a top or left edge.
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let inclusive = dy < 0 || (dy == 0 && dx > 0);
+            let k = dx * (py - a[1]) + dy * (a[0] - 8) - i64::from(!inclusive);
+            match dy.signum() {
+                0 if k < 0 => last = first - 1,
+                1 => last = last.min(k.div_euclid(16 * dy)),
+                -1 => first = first.max(-k.div_euclid(-16 * dy)),
+                _ => {}
+            }
+        }
+        covered += (last - first + 1).max(0) as u64;
+    }
+    Ok(covered)
+}
+fn inside_scissor(state: &DrawState, x: usize, y: usize) -> bool {
+    let s = state.scissor;
+    x >= s.left as usize && y >= s.top as usize && x <= s.right as usize && y <= s.bottom as usize
+}
 fn raster_triangle(
     state: &DrawState,
     mut v: [RasterVertex; 3],
@@ -326,6 +394,32 @@ pub(super) fn line(
     read: &mut Reader<'_>,
     out: &mut Targets,
 ) -> Result<(), String> {
+    line_fragments(state, outputs, |x, y, v, coverage| {
+        fragment_coverage_state(
+            state,
+            (x, y, v.position[2], coverage),
+            v.color,
+            v.uv,
+            [0.; 2],
+            read,
+            out,
+        )
+    })
+}
+/// Fragments one line covers inside the scissor.
+pub(super) fn line_coverage(state: &DrawState, outputs: [[Vector; 16]; 2]) -> Result<u64, String> {
+    let mut covered = 0;
+    line_fragments(state, outputs, |x, y, _, _| {
+        covered += u64::from(inside_scissor(state, x, y));
+        Ok(())
+    })?;
+    Ok(covered)
+}
+fn line_fragments(
+    state: &DrawState,
+    outputs: [[Vector; 16]; 2],
+    mut emit: impl FnMut(usize, usize, RasterVertex, f32) -> Result<(), String>,
+) -> Result<(), String> {
     if state.raster.line_stipple {
         return Err("DMP line stipple is unsupported".into());
     }
@@ -389,35 +483,26 @@ pub(super) fn line(
             if state.raster.flat_shading {
                 v.color = b.color;
             }
-            fragment_coverage_state(
-                state,
-                (x, y, v.position[2], coverage),
-                v.color,
-                v.uv,
-                [0.; 2],
-                read,
-                out,
-            )?;
+            emit(x, y, v, coverage)?;
         }
     }
     Ok(())
 }
-pub(super) fn point(
+/// A point's projected vertex, size and pixel rectangle `[x0, y0, x1, y1)`.
+fn point_footprint(
     state: &DrawState,
     output: &[Vector; 16],
-    read: &mut Reader<'_>,
-    out: &mut Targets,
-) -> Result<(), String> {
+) -> Result<Option<(RasterVertex, f32, [usize; 4])>, String> {
     let source = vertex(state, output);
     if source.position.iter().any(|v| !v.is_finite()) {
-        return Ok(());
+        return Ok(None);
     }
     if source.position[0].abs() > 1.
         || source.position[1].abs() > 1.
         || source.position[2] < -1.
         || source.position[2] > 0.
     {
-        return Ok(());
+        return Ok(None);
     }
     let size = source.position[3].clamp(1., 2048.);
     let v = project(state, source, true);
@@ -426,6 +511,31 @@ pub(super) fn point(
     let y0 = (v.position[1] - size * 0.5).ceil().clamp(0., height as f32) as usize;
     let x1 = (v.position[0] + size * 0.5).ceil().clamp(0., width as f32) as usize;
     let y1 = (v.position[1] + size * 0.5).ceil().clamp(0., height as f32) as usize;
+    Ok(Some((v, size, [x0, y0, x1, y1])))
+}
+/// Fragments one point covers inside the scissor.
+pub(super) fn point_coverage(state: &DrawState, output: &[Vector; 16]) -> Result<u64, String> {
+    let Some((_, _, [x0, y0, x1, y1])) = point_footprint(state, output)? else {
+        return Ok(0);
+    };
+    let s = state.scissor;
+    let columns = x1
+        .min(s.right as usize + 1)
+        .saturating_sub(x0.max(s.left as usize));
+    let rows = y1
+        .min(s.bottom as usize + 1)
+        .saturating_sub(y0.max(s.top as usize));
+    Ok((columns * rows) as u64)
+}
+pub(super) fn point(
+    state: &DrawState,
+    output: &[Vector; 16],
+    read: &mut Reader<'_>,
+    out: &mut Targets,
+) -> Result<(), String> {
+    let Some((v, size, [x0, y0, x1, y1])) = point_footprint(state, output)? else {
+        return Ok(());
+    };
     for y in y0..y1 {
         for x in x0..x1 {
             let mut uv = v.uv;

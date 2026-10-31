@@ -21933,7 +21933,23 @@
             "copy_profile": {
               "$ref": "#/$defs/NativeVectorGpuInputsCopyProfile"
             },
-            "gles_job_ticks": {
+            "gles_base_ticks": {
+              "description": "3D list latency: base, per draw call, and per filled and blended\npixel in millionths of a tick.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gles_blended_pixel_microticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gles_draw_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gles_filled_pixel_microticks": {
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
@@ -21976,7 +21992,10 @@
             "max_clear_bytes",
             "bytes_per_tick",
             "copy_bytes_per_tick",
-            "gles_job_ticks",
+            "gles_base_ticks",
+            "gles_draw_ticks",
+            "gles_filled_pixel_microticks",
+            "gles_blended_pixel_microticks",
             "max_command_capture_bytes",
             "copy_profile",
             "clear_profile"

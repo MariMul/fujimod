@@ -51,11 +51,53 @@ pub const FILL_STATUS: u32 = 1 << 26;
 pub const COPY_STATUS: u32 = 1 << 30;
 pub const CLEAR_STATUS: u32 = 1 << 31;
 pub const FILL_CONTROL: u32 = 0x0f100201;
-/// X70 1.10 3D draw job time, in 12 MHz ticks: 2.824 ms from submission to the
-/// draw's completion. The frame copy follows it, so submission to copy completion
-/// is this plus the copy's 55,296 ticks, 7.432 ms, the measured gpu_finish_wait
-/// median. No content-dependent term is modeled.
-pub const X70_GLES_JOB_TICKS: u64 = 33_884;
+/// Completion time of one 3D command list, from its decoded workload:
+/// `base + draws * draw + ceil((filled * f + blended * b) / 1,000,000)` ticks,
+/// with the per-pixel terms in millionths of a tick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlesLatency {
+    pub base_ticks: u64,
+    pub draw_ticks: u64,
+    pub filled_pixel_microticks: u64,
+    pub blended_pixel_microticks: u64,
+}
+impl GlesLatency {
+    pub fn ticks(&self, workload: &fujimod_emulator_ip_dmp::gles::Workload) -> u64 {
+        let pixels = workload
+            .filled_pixels
+            .saturating_mul(self.filled_pixel_microticks)
+            .saturating_add(
+                workload
+                    .blended_pixels
+                    .saturating_mul(self.blended_pixel_microticks),
+            );
+        self.base_ticks
+            .saturating_add(workload.draws.saturating_mul(self.draw_ticks))
+            .saturating_add(pixels.div_ceil(1_000_000))
+    }
+}
+/// X70 1.10 3D list latency at the 12 MHz tick (12,000 ticks per ms), from
+/// submission to the list-complete interrupt. Camera run of 2026-10-31: 106
+/// GL GUI frames, touch scrolling plus key and tab updates. Least squares over
+/// all frames gave 4.82 ms + 13.2 ns per filled pixel + 9.5 ns per blended
+/// pixel + 0.026 ms per draw call, maximum error 1.9 ms. Filled and blended
+/// pixels are disjoint, as in the camera's counters: covered pixels of opaque
+/// draws and of blending draws. Converted to ticks:
+///
+/// - base: 4.82 ms x 12,000 = 57,840 ticks
+/// - draw call: 0.026 ms x 12,000 = 312 ticks
+/// - filled pixel: 13.2 ns x 0.012 ticks/ns = 0.1584 ticks = 158,400 microticks
+/// - blended pixel: 9.5 ns x 0.012 ticks/ns = 0.114 ticks = 114,000 microticks
+///
+/// Scroll frames (481,584 filled, ~135k blended, ~75 draws) price at ~14.4 ms
+/// against the camera's 14.1 to 15.0 ms; 1.3k-pixel frames at ~5 ms against
+/// 4.7 to 5.3 ms. The 55,296-tick frame copy follows the list separately.
+pub const X70_GLES_LATENCY: GlesLatency = GlesLatency {
+    base_ticks: 57_840,
+    draw_ticks: 312,
+    filled_pixel_microticks: 158_400,
+    blended_pixel_microticks: 114_000,
+};
 /// Tile bytes are retained unchanged by the optional untile profile.
 pub const COPY_PROFILE: &str = "vg-32bpp-untile-unrotated";
 pub const CLEAR_PROFILE: &str = "stock-vg-clear-only";
@@ -334,7 +376,7 @@ pub struct CommandProcessor {
     pub max_clear_bytes: u64,
     pub bytes_per_tick: u64,
     pub copy_bytes_per_tick: u64,
-    pub gles_job_ticks: u64,
+    pub gles_latency: GlesLatency,
     /// Sum of the 3D completion delays scheduled so far, in ticks.
     pub gles_latency_ticks: u64,
     /// Ticks the superseded byte rate would have charged for the same 3D jobs.
@@ -375,7 +417,7 @@ impl Default for CommandProcessor {
             max_clear_bytes: 0x04000000,
             bytes_per_tick: 16,
             copy_bytes_per_tick: 16,
-            gles_job_ticks: X70_GLES_JOB_TICKS,
+            gles_latency: X70_GLES_LATENCY,
             gles_latency_ticks: 0,
             gles_byte_rate_ticks: 0,
             copy_profile: None,
@@ -740,23 +782,42 @@ impl CommandProcessor {
                                 *base <= address
                                     && address + length as u64 <= *base + bytes.len() as u64
                             })
-                            .ok_or_else(|| Unsupported("DMP write range outside target snapshot".into()))?;
+                            .ok_or_else(|| {
+                                Unsupported("DMP write range outside target snapshot".into())
+                            })?;
                         let offset = (address - base) as usize;
-                        Ok((address, Arc::new(snapshot[offset..offset + length].to_vec())))
+                        Ok((
+                            address,
+                            Arc::new(snapshot[offset..offset + length].to_vec()),
+                        ))
                     })
                     .collect::<Result<_>>()?;
-                let bytes = output.iter().map(|(_, data)| data.len() as u64).sum::<u64>();
-                let delay = self.gles_job_ticks;
+                let bytes = output
+                    .iter()
+                    .map(|(_, data)| data.len() as u64)
+                    .sum::<u64>();
+                let workload = self.gles.workload();
+                let delay = self.gles_latency.ticks(&workload);
                 self.gles_latency_ticks += delay;
                 self.gles_byte_rate_ticks += self.delay(command_bytes + bytes);
                 if job.record_receipts {
                     update(
                         &mut job,
-                        vec![("bytes", num(bytes)), ("latency_ticks", num(delay))],
+                        vec![
+                            ("bytes", num(bytes)),
+                            ("draws", num(workload.draws)),
+                            ("filled_pixels", num(workload.filled_pixels)),
+                            ("blended_pixels", num(workload.blended_pixels)),
+                            ("latency_ticks", num(delay)),
+                        ],
                     );
                 }
                 self.pending_webgpu = None;
-                self.last_job = if job.record_receipts { Some(job.clone()) } else { None };
+                self.last_job = if job.record_receipts {
+                    Some(job.clone())
+                } else {
+                    None
+                };
                 self.schedule(
                     Completion {
                         cpu,
@@ -788,14 +849,19 @@ impl CommandProcessor {
                 if id != expected {
                     return fail("Vector WebGPU result does not match the pending UI batch");
                 }
-                let rendered: WebGpuUiResult = ciborium::de::from_reader(std::io::Cursor::new(result))
-                    .map_err(|error| Unsupported(format!("Decode vector WebGPU result: {error}")))?;
+                let rendered: WebGpuUiResult =
+                    ciborium::de::from_reader(std::io::Cursor::new(result)).map_err(|error| {
+                        Unsupported(format!("Decode vector WebGPU result: {error}"))
+                    })?;
                 let output: DmaOutput = rendered
                     .output
                     .into_iter()
                     .map(|(address, bytes)| (address, Arc::new(bytes)))
                     .collect();
-                let bytes = output.iter().map(|(_, data)| data.len() as u64).sum::<u64>();
+                let bytes = output
+                    .iter()
+                    .map(|(_, data)| data.len() as u64)
+                    .sum::<u64>();
                 if bytes > self.max_clear_bytes || rendered.touched_bytes > self.max_clear_bytes {
                     return fail("Vector WebGPU output exceeds configured bounds");
                 }
@@ -861,7 +927,11 @@ impl CommandProcessor {
                     log(actions, "Graphics declared UI batch started", &job);
                 }
                 self.pending_webgpu = None;
-                self.last_job = if job.record_receipts { Some(job.clone()) } else { None };
+                self.last_job = if job.record_receipts {
+                    Some(job.clone())
+                } else {
+                    None
+                };
                 self.schedule(
                     Completion {
                         cpu,
@@ -952,35 +1022,31 @@ impl CommandProcessor {
                 .gles
                 .encode_webgpu_request(&words)
                 .map_err(Unsupported)?;
-            if let Some(id) =
-                host.submit_webgpu_request("vector-gles-webgpu", webgpu_request)?
-            {
-            let delay = self.gles_job_ticks;
-            let job = self.new_job_with_receipts(receipts, || {
-                vec![
-                    ("operation", Value::constant("3D")),
-                    ("command_address", hex(address)),
-                    ("command_bytes", num(length)),
-                    ("bytes", num(0)),
-                    ("latency_ticks", num(delay)),
-                    ("completed", Value::Bool(false)),
-                ]
-            });
-            self.last_job = if receipts { Some(job.clone()) } else { None };
-            self.busy = true;
-            self.jobs_started += 1;
-            self.clear_ack_offsets.clear();
-            self.store(GLES_SUBMIT, trigger);
-            self.gpu_gles_lists += 1;
-            self.pending_webgpu = Some(PendingWebGpu::Gles {
-                id,
-                cpu,
-                irq_cpu,
-                command_address: address,
-                command_bytes: length,
-                job,
-            });
-            return Ok(());
+            if let Some(id) = host.submit_webgpu_request("vector-gles-webgpu", webgpu_request)? {
+                let job = self.new_job_with_receipts(receipts, || {
+                    vec![
+                        ("operation", Value::constant("3D")),
+                        ("command_address", hex(address)),
+                        ("command_bytes", num(length)),
+                        ("bytes", num(0)),
+                        ("completed", Value::Bool(false)),
+                    ]
+                });
+                self.last_job = if receipts { Some(job.clone()) } else { None };
+                self.busy = true;
+                self.jobs_started += 1;
+                self.clear_ack_offsets.clear();
+                self.store(GLES_SUBMIT, trigger);
+                self.gpu_gles_lists += 1;
+                self.pending_webgpu = Some(PendingWebGpu::Gles {
+                    id,
+                    cpu,
+                    irq_cpu,
+                    command_address: address,
+                    command_bytes: length,
+                    job,
+                });
+                return Ok(());
             }
         }
         self.cpu_raster_calls += 1;
@@ -1016,7 +1082,8 @@ impl CommandProcessor {
             })
             .collect::<Result<_>>()?;
         let count = output.iter().map(|(_, b)| b.len() as u64).sum::<u64>();
-        let delay = self.gles_job_ticks;
+        let workload = self.gles.workload();
+        let delay = self.gles_latency.ticks(&workload);
         self.gles_latency_ticks += delay;
         self.gles_byte_rate_ticks += self.delay(length + count);
         let job = self.new_job_with_receipts(receipts, || {
@@ -1025,6 +1092,9 @@ impl CommandProcessor {
                 ("command_address", hex(address)),
                 ("command_bytes", num(length)),
                 ("bytes", num(count)),
+                ("draws", num(workload.draws)),
+                ("filled_pixels", num(workload.filled_pixels)),
+                ("blended_pixels", num(workload.blended_pixels)),
                 ("latency_ticks", num(delay)),
                 ("completed", Value::Bool(false)),
             ]
@@ -1796,7 +1866,11 @@ impl CommandProcessor {
             if let Some(id) = host.submit_webgpu_request("vector-ui-webgpu", payload)? {
                 let radial_gradients = draws
                     .iter()
-                    .filter(|draw| draw.gradient.as_ref().is_some_and(|gradient| gradient.radial.is_some()))
+                    .filter(|draw| {
+                        draw.gradient
+                            .as_ref()
+                            .is_some_and(|gradient| gradient.radial.is_some())
+                    })
                     .count();
                 self.command_pending = None;
                 replace(&mut self.path, &banks.path);
@@ -1805,7 +1879,11 @@ impl CommandProcessor {
                 self.busy = true;
                 self.jobs_started += 1;
                 c.compact();
-                self.last_job = if record_receipts { Some(c.job.clone()) } else { None };
+                self.last_job = if record_receipts {
+                    Some(c.job.clone())
+                } else {
+                    None
+                };
                 self.gpu_vector_paint_calls += 1;
                 self.pending_webgpu = Some(PendingWebGpu::Ui {
                     id,
@@ -1817,13 +1895,14 @@ impl CommandProcessor {
                         .filter(|draw| !draw.stroke && draw.texture.is_none())
                         .count(),
                     stroked_paths: draws.iter().filter(|draw| draw.stroke).count(),
-                    sampled_images: draws
-                        .iter()
-                        .filter(|draw| draw.texture.is_some())
-                        .count(),
+                    sampled_images: draws.iter().filter(|draw| draw.texture.is_some()).count(),
                     linear_gradients: draws
                         .iter()
-                        .filter(|draw| draw.gradient.as_ref().is_some_and(|gradient| gradient.radial.is_none()))
+                        .filter(|draw| {
+                            draw.gradient
+                                .as_ref()
+                                .is_some_and(|gradient| gradient.radial.is_none())
+                        })
                         .count(),
                     radial_gradients,
                     job: c.job.clone(),
@@ -2121,9 +2200,26 @@ impl CommandProcessor {
             ("last_job".into(), j),
             ("bytes_per_tick".into(), num(self.bytes_per_tick)),
             ("copy_bytes_per_tick".into(), num(self.copy_bytes_per_tick)),
-            ("gles_job_ticks".into(), num(self.gles_job_ticks)),
+            (
+                "gles_latency".into(),
+                dict([
+                    ("base_ticks".into(), num(self.gles_latency.base_ticks)),
+                    ("draw_ticks".into(), num(self.gles_latency.draw_ticks)),
+                    (
+                        "filled_pixel_microticks".into(),
+                        num(self.gles_latency.filled_pixel_microticks),
+                    ),
+                    (
+                        "blended_pixel_microticks".into(),
+                        num(self.gles_latency.blended_pixel_microticks),
+                    ),
+                ]),
+            ),
             ("gles_latency_ticks".into(), num(self.gles_latency_ticks)),
-            ("gles_byte_rate_ticks".into(), num(self.gles_byte_rate_ticks)),
+            (
+                "gles_byte_rate_ticks".into(),
+                num(self.gles_byte_rate_ticks),
+            ),
             (
                 "copy_profile".into(),
                 self.copy_profile.map_or(Value::None, Profile::value),

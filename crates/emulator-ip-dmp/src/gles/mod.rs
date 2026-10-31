@@ -13,14 +13,16 @@ mod gpu_fragment;
 mod gpu_vertex;
 mod raster;
 mod shader;
-mod webgpu_wire;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod wasm_gpu;
+mod webgpu_wire;
+mod workload;
 use draw_state::DrawState;
 use shader::Vector;
 pub type Snapshots = Vec<(u64, Vec<u8>)>;
 pub type Reader<'a> = dyn FnMut(u64, usize) -> Result<Vec<u8>, String> + 'a;
 pub use webgpu_wire::{WebGpuRequest, decode_webgpu_request, encode_webgpu_result};
+pub use workload::Workload;
 pub struct HostGpuExecution {
     pub snapshots: Snapshots,
     pub draws: usize,
@@ -58,6 +60,12 @@ pub struct Engine {
     pending_inputs: Vec<[Vector; 16]>,
     fog: Vec<u32>,
     fog_cursor: usize,
+    /// Workload of the most recent command list. Serialized so a host
+    /// WebGPU result carries it back with the engine state.
+    #[serde(default)]
+    workload: Workload,
+    #[serde(default)]
+    workload_assembly: workload::Assembly,
 }
 impl Default for Engine {
     fn default() -> Self {
@@ -86,6 +94,8 @@ impl Default for Engine {
             pending_inputs: vec![],
             fog: vec![0; 128],
             fog_cursor: 0,
+            workload: Workload::default(),
+            workload_assembly: workload::Assembly::default(),
         }
     }
 }
@@ -98,7 +108,10 @@ fn host_gpu_mode_for(cpu_only: bool, verify: bool) -> (bool, bool) {
 #[cfg(not(target_arch = "wasm32"))]
 fn host_gpu_mode() -> (bool, bool) {
     let enabled = |name| std::env::var(name).is_ok_and(|value| value == "1");
-    host_gpu_mode_for(enabled("FUJIMOD_DMP_CPU"), enabled("FUJIMOD_DMP_VERIFY_GPU"))
+    host_gpu_mode_for(
+        enabled("FUJIMOD_DMP_CPU"),
+        enabled("FUJIMOD_DMP_VERIFY_GPU"),
+    )
 }
 pub fn float24(word: u32) -> f32 {
     let sign = (word & 0x800000) << 8;
@@ -153,7 +166,8 @@ impl Engine {
     pub fn diagnostics(&self) -> serde_json::Value {
         #[cfg(not(target_os = "emscripten"))]
         let host_shader_cache = {
-            let (vertex_modules, fragment_modules, pipelines) = gpu_draw::shader_cache_creation_counts();
+            let (vertex_modules, fragment_modules, pipelines) =
+                gpu_draw::shader_cache_creation_counts();
             serde_json::json!({"vertex_modules":vertex_modules,"fragment_modules":fragment_modules,"pipelines":pipelines})
         };
         #[cfg(target_os = "emscripten")]
@@ -230,6 +244,12 @@ impl Engine {
         let cpu_snapshots = cpu_output.into_snapshots();
 
         let (next, rendered) = self.render_host_gpu(words, read, Some(&cpu_snapshots))?;
+        if next.workload != reference.workload {
+            return Err(format!(
+                "DMP host GPU workload differs: GPU {:?}, CPU {:?}",
+                next.workload, reference.workload
+            ));
+        }
         if rendered.snapshots != cpu_snapshots {
             return Err(gpu_draw::snapshot_mismatch(
                 &rendered.snapshots,
@@ -333,6 +353,10 @@ impl Engine {
     pub fn written_ranges(&self) -> &[(u64, usize)] {
         &self.written_ranges
     }
+    /// Draw calls and covered fragments of the most recent successful list.
+    pub fn workload(&self) -> Workload {
+        self.workload
+    }
     fn packets(
         &mut self,
         words: &[u32],
@@ -342,6 +366,9 @@ impl Engine {
     ) -> Result<(), String> {
         if words.len() > 1024 * 1024 / 4 || depth > 16 {
             return Err("DMP 3D command bound exceeded".into());
+        }
+        if depth == 0 {
+            self.workload = Workload::default();
         }
         let mut at = 0;
         while at < words.len() {
@@ -406,6 +433,7 @@ impl Engine {
         if self.gpu_immediate.is_some() && !matches!(index, 0x432..=0x435) {
             self.flush_gpu_immediate()?;
         }
+        self.workload_assembly.register_write(index);
         let value = self.reg(index) & !mask | value & mask;
         self.regs.insert(index, value);
         match index {
@@ -494,10 +522,15 @@ impl Engine {
                     return Err("DMP vertex count exceeds bound".into());
                 }
                 let state = self.draw_state();
+                self.workload_assembly.draw_trigger(&mut self.workload);
                 #[cfg(not(target_os = "emscripten"))]
                 if self.gpu_primitives.is_some() {
                     let vertex =
                         gpu_vertex::prepare_draw(self, &state, count, index == 0x42f, read)?;
+                    for inputs in self.draw_inputs(index, count, &state, read)? {
+                        let output = shader::execute(self, &inputs)?;
+                        self.count_vertex(output, &state)?;
+                    }
                     self.vertices_executed += count as u64;
                     self.last_output = None;
                     self.record_gpu_draw(state, vertex);
@@ -510,6 +543,7 @@ impl Engine {
             0x45f | 0x431 if value == 1 => {
                 self.vertices.clear();
                 self.primitive_index = 0;
+                self.workload_assembly.restart();
             }
             0x210 if value != 0x12345678 => {
                 return Err("DMP invalid command completion marker".into());
@@ -534,6 +568,20 @@ impl Engine {
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
+        for inputs in self.draw_inputs(index, count, state, read)? {
+            self.interpret_vertex(&inputs, state, read, out)?;
+        }
+        Ok(())
+    }
+    /// Shader inputs of every vertex an array (0x42e) or indexed (0x42f)
+    /// draw trigger fetches, in submission order.
+    fn draw_inputs(
+        &self,
+        index: u16,
+        count: usize,
+        state: &DrawState,
+        read: &mut Reader<'_>,
+    ) -> Result<Vec<[Vector; 16]>, String> {
         let mut draw_dma = BTreeMap::new();
         let index_addr = self.reg(0x427);
         let indices = if index == 0x42f {
@@ -552,6 +600,7 @@ impl Engine {
         {
             return Err("DMP short index DMA".into());
         }
+        let mut vertices = Vec::with_capacity(count);
         for n in 0..count {
             let vertex = if let Some(bytes) = &indices {
                 if index_addr >> 31 != 0 {
@@ -562,12 +611,15 @@ impl Engine {
             } else {
                 n + self.reg(0x42a) as usize
             };
-            let inputs = self.fetch(vertex, state, &mut |address, length| {
+            vertices.push(self.fetch(vertex, state, &mut |address, length| {
                 read_guest_draw_memory(read, &mut draw_dma, address, length)
-            })?;
-            self.interpret_vertex(&inputs, state, read, out)?;
+            })?);
         }
-        Ok(())
+        Ok(vertices)
+    }
+    fn count_vertex(&mut self, output: [Vector; 16], state: &DrawState) -> Result<(), String> {
+        self.workload_assembly
+            .vertex(output, state, &mut self.workload)
     }
     fn fetch(
         &self,
@@ -644,6 +696,7 @@ impl Engine {
         read: &mut Reader<'_>,
         out: &mut raster::Targets,
     ) -> Result<(), String> {
+        self.workload_assembly.immediate_vertex(&mut self.workload);
         #[cfg(not(target_os = "emscripten"))]
         if self.gpu_primitives.is_some() {
             self.vertices_executed += 1;
@@ -651,10 +704,14 @@ impl Engine {
             // Attribute FIFO writes cannot change draw state. Every other
             // register write flushes this batch before updating its state.
             // Decode the register bank once, when its first vertex arrives.
-            if self.gpu_immediate.is_none() {
-                self.gpu_immediate = Some((self.draw_state(), Vec::new()));
-            }
-            self.gpu_immediate.as_mut().unwrap().1.push(*inputs);
+            let (state, mut batch) = match self.gpu_immediate.take() {
+                Some(batch) => batch,
+                None => (self.draw_state(), Vec::new()),
+            };
+            let output = shader::execute(self, inputs)?;
+            self.count_vertex(output, &state)?;
+            batch.push(*inputs);
+            self.gpu_immediate = Some((state, batch));
             return Ok(());
         }
         let state = self.draw_state();
@@ -668,6 +725,7 @@ impl Engine {
         out: &mut raster::Targets,
     ) -> Result<(), String> {
         let vertex = shader::execute(self, inputs)?;
+        self.count_vertex(vertex, state)?;
         self.vertex_output(vertex, inputs, state, read, out)
     }
     fn vertex_output(
