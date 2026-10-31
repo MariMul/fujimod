@@ -107,6 +107,26 @@ fn buffer_words(
         .collect())
 }
 
+/// Hexadecimal rows of a declared live-view host image, after its identity check.
+fn host_image(
+    assets: &BTreeMap<String, Vec<u8>>,
+    image: &fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage,
+) -> Result<String, String> {
+    let asset = &image.asset;
+    let data = assets
+        .get(asset)
+        .ok_or_else(|| format!("live-view image asset {asset} was not supplied"))?;
+    let digest: String = Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let size = u64::from(image.width) * u64::from(image.height) * 3;
+    if size == 0 || data.len() as u64 != size || digest != image.sha256 {
+        return Err(format!("live-view image asset {asset} identity differs"));
+    }
+    Ok(data.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
 fn serial_nodes(
     maps: &RegisterLayouts,
     reset: &HardwareReset,
@@ -351,6 +371,12 @@ fn nodes(
         if let Some(image) = image.filter(|image| image.unit == block.base) {
             model["live_view_image"] =
                 json!({ "lines": image.lines, "ycbcr": image.ycbcr, "scene": image.scene });
+            if let Some(host) = &image.host_image {
+                model["live_view_image"]["host_image"] = json!({
+                    "width": host.width, "height": host.height,
+                    "rgb": host_image(inputs.assets, host)?,
+                });
+            }
         }
         node(format!("block{n}"), model);
     }
@@ -897,6 +923,66 @@ mod tests {
         ] {
             assert!(built.nodes.contains_key(name), "missing node {name}");
         }
+    }
+
+    #[test]
+    fn a_live_view_host_image_is_checked_and_passed_to_its_unit() {
+        use fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage;
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let selection = &resolved.reference;
+        let banks = ram_banks(&selection.soc.memory_regions);
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let image = reset.live_view_image.as_mut().unwrap();
+        let unit = image.unit;
+        image.host_image = Some(LiveViewHostImage {
+            asset: "host".into(),
+            basis: "test".into(),
+            width: 2,
+            height: 1,
+            sha256: "0".repeat(64),
+        });
+        let starts = starts();
+        let mut assets = assets();
+        let pixels = vec![255, 0, 0, 0, 0, 255];
+        assets.insert("host".into(), pixels.clone());
+        let built = |reset: &HardwareReset, assets: &BTreeMap<String, Vec<u8>>| {
+            let inputs = Inputs {
+                starts: &starts,
+                sub_cpu_registers: &[],
+                assets,
+            };
+            nodes(maps, reset, selection.body.dram_bytes, &banks, &inputs)
+        };
+        assert_eq!(
+            built(&reset, &assets).err().unwrap(),
+            "live-view image asset host identity differs"
+        );
+        let host = reset
+            .live_view_image
+            .as_mut()
+            .unwrap()
+            .host_image
+            .as_mut()
+            .unwrap();
+        host.sha256 = Sha256::digest(&pixels)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let nodes = built(&reset, &assets).unwrap();
+        let block = nodes
+            .iter()
+            .map(|node| &node["model"])
+            .find(|model| model["base"] == unit)
+            .unwrap();
+        assert_eq!(
+            block["live_view_image"]["host_image"],
+            json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
+        );
     }
 
     #[test]
