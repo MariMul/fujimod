@@ -1756,6 +1756,44 @@
       ],
       "type": "object"
     },
+    "ResetLiveViewHostImage": {
+      "additionalProperties": false,
+      "description": "Host RGB image of a live-view output unit: an asset holding rows of red,\ngreen and blue bytes, sampled into the programmed buffer at each frame.",
+      "properties": {
+        "asset": {
+          "description": "Asset identity in the configuration assets.",
+          "type": "string"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Image height in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the asset.",
+          "type": "string"
+        },
+        "width": {
+          "description": "Image width in pixels.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "asset",
+        "basis",
+        "height",
+        "sha256",
+        "width"
+      ],
+      "type": "object"
+    },
     "ResetLiveViewImage": {
       "additionalProperties": false,
       "description": "Declared uniform image a live-view output unit writes at each frame.",
@@ -1763,6 +1801,17 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "host_image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetLiveViewHostImage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Host RGB image the unit writes instead of the uniform image (a\npost-ISP display source). Statistics stay with `zone_statistics`."
         },
         "lines": {
           "description": "Lines written to each buffer.",

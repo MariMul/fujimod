@@ -52,7 +52,7 @@
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 /// Frame law of a block: (offset, mask) of the start and stopped bits, the
 /// interrupt line and the frame period in ticks.
@@ -85,16 +85,27 @@ pub struct Command {
     pub state: u32,
 }
 /// Picture a live-view output unit writes at each frame.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum Picture {
     /// One packed pixel pair repeated.
     Uniform([u8; 4]),
     /// The declared virtual scene.
     Scene,
+    /// A host RGB image: width, height and rows of red, green, blue bytes.
+    Host(u64, u64, Arc<[u8]>),
 }
 /// Virtual scene size: its normalized coordinates.
 const SCENE_WIDTH: u64 = 1024;
 const SCENE_HEIGHT: u64 = 768;
+/// The whole of a scene, unscaled.
+fn whole(scene: fujimod_virtual_scene::Scene) -> fujimod_virtual_scene::Crop {
+    fujimod_virtual_scene::Crop {
+        x: 0,
+        y: 0,
+        width: scene.width,
+        height: scene.height,
+    }
+}
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -249,6 +260,26 @@ impl Block {
     pub fn with_live_view_scene(self, lines: u32) -> Result<Self, String> {
         self.with_picture(lines, Picture::Scene)
     }
+    /// A host RGB image (post-ISP) sampled at each frame, over `lines` lines.
+    pub fn with_live_view_host_image(
+        self,
+        lines: u32,
+        width: u64,
+        height: u64,
+        rgb: Vec<u8>,
+    ) -> Result<Self, String> {
+        let scene = fujimod_virtual_scene::Scene {
+            width,
+            height,
+            frame: 0,
+        };
+        if fujimod_virtual_scene::validate_crop(scene, whole(scene)).is_err()
+            || width.checked_mul(height).and_then(|n| n.checked_mul(3)) != Some(rgb.len() as u64)
+        {
+            return Err("Invalid X-Processor Pro live-view host image".into());
+        }
+        self.with_picture(lines, Picture::Host(width, height, rgb.into()))
+    }
     fn with_picture(mut self, lines: u32, picture: Picture) -> Result<Self, String> {
         if self.frames.is_none() || self.size <= WIDTH || !(1..=4096).contains(&lines) {
             return Err("Invalid X-Processor Pro live-view image".into());
@@ -257,7 +288,7 @@ impl Block {
         Ok(self)
     }
     fn write_image(&self, cx: &mut Cx<'_>) {
-        let Some((lines, pair)) = self.image else {
+        let Some((lines, picture)) = &self.image else {
             return;
         };
         let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
@@ -268,25 +299,38 @@ impl Block {
         if width & 1 != 0 || width > 0x2000 {
             return cx.fail("Unsupported live-view line width");
         }
-        let image = match pair {
-            Picture::Uniform(pair) => pair.repeat(width as usize / 2 * lines as usize),
+        let (width, lines) = (u64::from(width), u64::from(*lines));
+        let image = match picture {
+            Picture::Uniform(pair) => Ok(pair.repeat((width / 2 * lines) as usize)),
             Picture::Scene => {
                 let scene = fujimod_virtual_scene::Scene {
                     width: SCENE_WIDTH,
                     height: SCENE_HEIGHT,
                     frame: self.state.frames,
                 };
-                let crop = fujimod_virtual_scene::Crop {
-                    x: 0,
-                    y: 0,
-                    width: SCENE_WIDTH,
-                    height: SCENE_HEIGHT,
-                };
-                match fujimod_virtual_scene::output(scene, crop, width.into(), lines.into(), None) {
-                    Ok(image) => image,
-                    Err(_) => return cx.fail("Live-view scene output refused"),
-                }
+                fujimod_virtual_scene::output(scene, whole(scene), width, lines, None)
             }
+            Picture::Host(w, h, rgb) => {
+                let scene = fujimod_virtual_scene::Scene {
+                    width: *w,
+                    height: *h,
+                    frame: 0,
+                };
+                fujimod_virtual_scene::output_rgb(
+                    scene,
+                    whole(scene),
+                    width,
+                    lines,
+                    None,
+                    |x, y| {
+                        let i = ((y * w + x) * 3) as usize;
+                        [rgb[i], rgb[i + 1], rgb[i + 2]]
+                    },
+                )
+            }
+        };
+        let Ok(image) = image else {
+            return cx.fail("Live-view scene output refused");
         };
         if cx.ram_write(u64::from(address), &image).is_err() {
             cx.fail("Live-view buffer outside RAM");
@@ -654,6 +698,36 @@ mod tests {
         // The ramp moves with the frame phase.
         assert_ne!(h.ram[0x1000..0x1040], first[..]);
         assert_eq!(h.ram[0x1040], 0);
+    }
+
+    #[test]
+    fn a_live_view_host_image_unit_samples_the_image_into_the_buffer() {
+        use fujimod_emulator_devices::test_host::advance;
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let unit = || Block::new(BASE, 0x200, vec![(0, 1)], Some(frames)).unwrap();
+        let (red, blue) = ([255, 0, 0], [0, 0, 255]);
+        assert!(
+            unit()
+                .with_live_view_host_image(2, 2, 1, red.to_vec())
+                .is_err()
+        );
+        let mut unit = unit()
+            .with_live_view_host_image(2, 2, 1, [red, blue].concat())
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        advance(&mut unit, &mut h, 10);
+        // Each image pixel covers two output pixels, on both lines.
+        let row = [[81, 81, 90, 240], [41, 41, 240, 110]].concat();
+        assert_eq!(h.ram[0x1000..0x1010], [row.clone(), row].concat()[..]);
+        assert_eq!(h.ram[0x1010], 0);
     }
 
     #[test]

@@ -89,6 +89,17 @@ pub struct LiveViewImage {
     /// Profile of a declared scene that replaces the uniform image.
     #[serde(default)]
     pub scene: Option<String>,
+    /// Host RGB image that replaces the uniform image.
+    #[serde(default)]
+    pub host_image: Option<HostImage>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostImage {
+    pub width: u64,
+    pub height: u64,
+    /// Rows of red, green and blue bytes, in hexadecimal.
+    pub rgb: String,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -400,6 +411,21 @@ impl Device for Timers {
         self.model.restore(v)
     }
 }
+/// Bytes of a hexadecimal node field.
+fn hex(text: &str) -> Result<Vec<u8>, String> {
+    if text.len() % 2 != 0 {
+        return Err("live-view host image is not whole bytes of hexadecimal".into());
+    }
+    (0..text.len())
+        .step_by(2)
+        .map(|i| {
+            text.get(i..i + 2)
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                .ok_or_else(|| "live-view host image is not hexadecimal".to_string())
+        })
+        .collect()
+}
+
 pub fn build(
     graph: factory::Graph,
     spec: Spec,
@@ -613,12 +639,23 @@ pub fn build(
                     })?;
                 }
                 if let Some(image) = live_view_image {
-                    model = match image.scene.as_deref() {
-                        None => model.with_live_view_image(image.lines, image.ycbcr)?,
-                        Some(fujimod_virtual_scene::PROFILE) => {
+                    model = match (image.scene.as_deref(), image.host_image) {
+                        (None, None) => model.with_live_view_image(image.lines, image.ycbcr)?,
+                        (Some(fujimod_virtual_scene::PROFILE), None) => {
                             model.with_live_view_scene(image.lines)?
                         }
-                        Some(other) => return Err(format!("unknown live-view scene {other}")),
+                        (None, Some(host)) => model.with_live_view_host_image(
+                            image.lines,
+                            host.width,
+                            host.height,
+                            hex(&host.rgb)?,
+                        )?,
+                        (Some(_), Some(_)) => {
+                            return Err("a live-view image has one source".into());
+                        }
+                        (Some(other), None) => {
+                            return Err(format!("unknown live-view scene {other}"));
+                        }
                     };
                 }
                 if !fixed.is_empty() {
