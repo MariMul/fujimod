@@ -2491,6 +2491,7 @@ class HardwareImaging(TypedDict, total=False):
 class HardwareImagingControl(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
+    readout: NotRequired[HardwareSensorReadout | None]
     size: Required[int]
 
 
@@ -2563,6 +2564,14 @@ class HardwareIrisMechanics(TypedDict, total=False):
 class HardwareIrisOptics(TypedDict, total=False):
     output: Required[str]
     positions: Required[list[list[int]]]
+
+
+class HardwareJpegCodec(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    irq_route: Required[int]
+    run_ticks: Required[int]
+    size: Required[int]
 
 
 class HardwareLcdc(TypedDict, total=False):
@@ -2681,10 +2690,20 @@ class HardwareRaster(TypedDict, total=False):
 class HardwareRegisterBlock(TypedDict, total=False):
     base: Required[int]
     basis: Required[str]
+    commands: NotRequired[list[HardwareRegisterBlockCommand]]
+    fixed_words: NotRequired[list[HardwareRegisterFixedWord]]
     frames: NotRequired[HardwareRegisterBlockFrames | None]
     idle_bits: Required[list[HardwareRegisterIdleBits]]
     job: NotRequired[HardwareRegisterBlockJob | None]
     size: Required[int]
+
+
+class HardwareRegisterBlockCommand(TypedDict, total=False):
+    mask: Required[int]
+    state: Required[int]
+    status: Required[int]
+    value: Required[int]
+    word: Required[int]
 
 
 class HardwareRegisterBlockFrames(TypedDict, total=False):
@@ -2697,8 +2716,14 @@ class HardwareRegisterBlockFrames(TypedDict, total=False):
 class HardwareRegisterBlockJob(TypedDict, total=False):
     irq_route: Required[int]
     start: Required[HardwareRegisterIdleBits]
-    status: Required[HardwareRegisterIdleBits]
+    status: NotRequired[HardwareRegisterIdleBits | None]
+    stop: NotRequired[HardwareRegisterIdleBits | None]
     ticks: Required[int]
+
+
+class HardwareRegisterFixedWord(TypedDict, total=False):
+    offset: Required[int]
+    value: Required[int]
 
 
 class HardwareRegisterIdleBits(TypedDict, total=False):
@@ -2730,6 +2755,8 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     interrupts: NotRequired[HardwareInterrupts | None]
     interval_timer: NotRequired[HardwareIntervalTimer | None]
     io_groups: NotRequired[HardwareIoGroups | None]
+    jpeg_decoder: NotRequired[HardwareJpegCodec | None]
+    jpeg_encoder: NotRequired[HardwareJpegCodec | None]
     lcdc: NotRequired[list[HardwareLcdc] | None]
     loader_dma: NotRequired[HardwareLoaderDma | None]
     movdc: NotRequired[list[HardwareMovdc] | None]
@@ -2828,6 +2855,13 @@ class HardwareSensorCapture(TypedDict, total=False):
     height: Required[int]
     period_ticks: Required[int]
     width: Required[int]
+
+
+class HardwareSensorReadout(TypedDict, total=False):
+    basis: Required[str]
+    irq_route: Required[int]
+    offset: Required[int]
+    ticks: Required[int]
 
 
 class HardwareSerialFlash(TypedDict, total=False):
