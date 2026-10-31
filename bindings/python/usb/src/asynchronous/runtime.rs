@@ -60,6 +60,33 @@ impl Body for Peer {
     fn write(&mut self, address: u64, bytes: Vec<u8>) -> Pending<'_, ()> {
         self.unit("write", json!({"address":address}), bytes)
     }
+    fn read_many(&mut self, ranges: Vec<runtime::Range>) -> Pending<'_, Vec<Vec<u8>>> {
+        let sizes: Vec<u64> = ranges.iter().map(|r| r.size).collect();
+        let pending = self.request("read_many", json!({"ranges": ranges}), vec![]);
+        Box::pin(async move {
+            let bytes = pending.await?;
+            if bytes.len() as u64 != sizes.iter().sum::<u64>() {
+                return Err(runtime::Error::Body("read_many result size".into()));
+            }
+            let mut offset = 0usize;
+            Ok(sizes
+                .into_iter()
+                .map(|size| {
+                    let part = bytes[offset..offset + size as usize].to_vec();
+                    offset += size as usize;
+                    part
+                })
+                .collect())
+        })
+    }
+    fn write_many(&mut self, writes: Vec<(u64, Vec<u8>)>) -> Pending<'_, ()> {
+        let ranges: Vec<Value> = writes
+            .iter()
+            .map(|(address, bytes)| json!({"address": address, "size": bytes.len()}))
+            .collect();
+        let data = writes.into_iter().flat_map(|(_, bytes)| bytes).collect();
+        self.unit("write_many", json!({"ranges": ranges}), data)
+    }
     fn synchronize(&mut self, range: runtime::Range) -> Pending<'_, ()> {
         self.unit("synchronize", json!(range), vec![])
     }

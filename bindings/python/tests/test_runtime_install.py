@@ -99,6 +99,13 @@ class Body:
             raise ValueError('upload failed')
         await memory.write_range(self.session, address, data)
 
+    async def read_many(self, ranges):
+        return [await self.read(address, size) for address, size in ranges]
+
+    async def write_many(self, writes):
+        for address, data in writes:
+            await self.write(address, data)
+
     async def synchronize(self, address, size):
         self.events.append('synchronize')
 

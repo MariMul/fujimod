@@ -53,6 +53,27 @@ pub trait Body: Send {
     fn free(&mut self, base: u64) -> Pending<'_, ()>;
     fn read(&mut self, range: Range) -> Pending<'_, Vec<u8>>;
     fn write(&mut self, address: u64, bytes: Vec<u8>) -> Pending<'_, ()>;
+    /// Read several independent ranges. Transport bodies service the whole
+    /// list with one device wait; this default reads them in order.
+    fn read_many(&mut self, ranges: Vec<Range>) -> Pending<'_, Vec<Vec<u8>>> {
+        Box::pin(async move {
+            let mut out = Vec::with_capacity(ranges.len());
+            for range in ranges {
+                out.push(self.read(range).await?);
+            }
+            Ok(out)
+        })
+    }
+    /// Apply several ordered writes. Transport bodies send the whole list with
+    /// one device wait and no per-write readback; this default writes in order.
+    fn write_many(&mut self, writes: Vec<(u64, Vec<u8>)>) -> Pending<'_, ()> {
+        Box::pin(async move {
+            for (address, bytes) in writes {
+                self.write(address, bytes).await?;
+            }
+            Ok(())
+        })
+    }
     fn synchronize(&mut self, range: Range) -> Pending<'_, ()>;
     fn protect(&mut self, range: Range) -> Pending<'_, ()>;
     fn control(&mut self, entry: u64, operation: u32) -> Pending<'_, ()>;
@@ -217,14 +238,28 @@ impl Installer {
     pub async fn rollback(&mut self, body: &mut impl Body, token: u32) -> Result<ControlResult> {
         self.control(body, Operation::Rollback, token).await
     }
-    async fn word(body: &mut impl Body, address: u64) -> Result<u32> {
-        let bytes = body.read(Range { address, size: 4 }).await?;
-        Ok(u32::from_le_bytes(
-            bytes
-                .try_into()
-                .map_err(|_| Error::Invalid("word read size"))?,
-        ))
+    async fn words(body: &mut impl Body, addresses: &[u64]) -> Result<Vec<u32>> {
+        let ranges = addresses
+            .iter()
+            .map(|&address| Range { address, size: 4 })
+            .collect();
+        body.read_many(ranges)
+            .await?
+            .into_iter()
+            .map(|bytes| {
+                Ok(u32::from_le_bytes(
+                    bytes
+                        .try_into()
+                        .map_err(|_| Error::Invalid("word read size"))?,
+                ))
+            })
+            .collect()
     }
+    /// One control operation. Device waits: one ownership read, one write
+    /// batch, the body's synchronization and control call, one result read, and
+    /// for INSTALL/ROLLBACK a synchronization and one hook read. The mailbox
+    /// echo of nonce, operation and the fresh token verifies the control words;
+    /// installed state and every hook word verify the final state.
     pub async fn control(
         &mut self,
         body: &mut impl Body,
@@ -237,40 +272,44 @@ impl Installer {
         }
         let c = self.image.control.clone();
         let state = self.image.link_base + u64::from(c.state_offset);
-        let code = body
-            .read(Range {
-                address: self.image.link_base | c.read_alias,
-                size: u64::from(c.code_size),
-            })
+        let word = |offset: u32| Range {
+            address: (state + u64::from(offset)) | c.read_alias,
+            size: 4,
+        };
+        let ownership = body
+            .read_many(vec![
+                Range {
+                    address: self.image.link_base | c.read_alias,
+                    size: u64::from(c.code_size),
+                },
+                word(c.magic_offset),
+                word(c.nonce_offset),
+            ])
             .await?;
-        if code != self.image.bytes[..c.code_size as usize]
-            || Self::word(body, (state + u64::from(c.magic_offset)) | c.read_alias).await?
-                != c.magic
-            || Self::word(body, (state + u64::from(c.nonce_offset)) | c.read_alias).await?
-                != c.nonce
+        if ownership.len() != 3
+            || ownership[0] != self.image.bytes[..c.code_size as usize]
+            || ownership[1] != c.magic.to_le_bytes()
+            || ownership[2] != c.nonce.to_le_bytes()
         {
             return Err(Error::Invalid("image ownership lost"));
         }
-        self.set(
-            body,
-            state + u64::from(c.token_offset),
-            token.to_le_bytes().to_vec(),
-        )
-        .await?;
-        self.set(
-            body,
-            state + u64::from(c.mailbox.offset),
-            vec![0xa5; c.mailbox.size as usize],
-        )
-        .await?;
+        let mut writes = vec![
+            (
+                state + u64::from(c.token_offset),
+                token.to_le_bytes().to_vec(),
+            ),
+            (
+                state + u64::from(c.mailbox.offset),
+                vec![0xa5; c.mailbox.size as usize],
+            ),
+        ];
         if let Some(offset) = c.operation_offset {
-            self.set(
-                body,
+            writes.push((
                 state + u64::from(offset),
                 op.code(&self.image).to_le_bytes().to_vec(),
-            )
-            .await?;
+            ));
         }
+        self.write_many(body, writes).await?;
         body.synchronize(self.range()).await?;
         // Even unknown completion can have exposed hooks. Never free afterward.
         if op == Operation::Install {
@@ -281,15 +320,33 @@ impl Installer {
             op.code(&self.image),
         )
         .await?;
-        let mailbox = body
-            .read(Range {
+        let mut ranges = vec![
+            Range {
                 address: (state + u64::from(c.mailbox.offset)) | c.read_alias,
                 size: u64::from(c.mailbox.size),
-            })
-            .await?;
+            },
+            word(c.installed_offset),
+            word(c.inits_done_offset),
+        ];
+        ranges.extend(self.image.hooks.iter().map(|hook| Range {
+            address: hook.address | c.read_alias,
+            size: 4,
+        }));
+        let replies = body.read_many(ranges).await?;
+        if replies.len() != 3 + self.image.hooks.len() {
+            return Err(Error::Invalid("result read count"));
+        }
+        let mailbox = &replies[0];
         if mailbox.len() != c.mailbox.size as usize {
             return Err(Error::Invalid("mailbox read size"));
         }
+        let value = |bytes: &[u8]| -> Result<u32> {
+            Ok(u32::from_le_bytes(
+                bytes
+                    .try_into()
+                    .map_err(|_| Error::Invalid("word read size"))?,
+            ))
+        };
         let at = |offset: u32| {
             u32::from_le_bytes(
                 mailbox[offset as usize..offset as usize + 4]
@@ -320,8 +377,7 @@ impl Installer {
                 result.status
             )));
         }
-        let installed =
-            Self::word(body, (state + u64::from(c.installed_offset)) | c.read_alias).await?;
+        let installed = value(&replies[1])?;
         if installed > 1
             || (op == Operation::Install && installed != 1)
             || (op == Operation::Rollback && installed != 0)
@@ -330,38 +386,41 @@ impl Installer {
         }
         self.lease.as_mut().unwrap().installed = installed == 1;
         let installed = installed == 1;
-        for hook in &self.image.hooks {
-            let wanted = if installed { hook.new } else { hook.old };
-            if Self::word(body, hook.address | c.read_alias).await? != wanted {
+        let wanted: Vec<u32> = self
+            .image
+            .hooks
+            .iter()
+            .map(|hook| if installed { hook.new } else { hook.old })
+            .collect();
+        for (bytes, wanted) in replies[3..].iter().zip(&wanted) {
+            if value(bytes)? != *wanted {
                 return Err(Error::Invalid("hook readback differs"));
             }
         }
         if op == Operation::Init
             && (result.inits_done != Some(1)
                 || result.result != c.init_count
-                || Self::word(
-                    body,
-                    (state + u64::from(c.inits_done_offset)) | c.read_alias,
-                )
-                .await?
-                    != 1)
+                || value(&replies[2])? != 1)
         {
             return Err(Error::Invalid("INIT count or completion differs"));
         }
         if matches!(op, Operation::Install | Operation::Rollback) {
             body.synchronize(self.range()).await?;
-            for hook in &self.image.hooks {
-                let wanted = if installed { hook.new } else { hook.old };
-                if Self::word(body, hook.address | c.read_alias).await? != wanted {
-                    return Err(Error::Invalid("hook changed after synchronization"));
-                }
+            let addresses: Vec<u64> = self
+                .image
+                .hooks
+                .iter()
+                .map(|hook| hook.address | c.read_alias)
+                .collect();
+            if Self::words(body, &addresses).await? != wanted {
+                return Err(Error::Invalid("hook changed after synchronization"));
             }
         }
         Ok(result)
     }
-    pub async fn set(&self, body: &mut impl Body, address: u64, bytes: Vec<u8>) -> Result<()> {
+    fn check_write(&self, address: u64, length: usize) -> Result<()> {
         let end = address
-            .checked_add(bytes.len() as u64)
+            .checked_add(length as u64)
             .ok_or(Error::Invalid("write overflow"))?;
         if self.lease.as_ref().is_none_or(|l| l.freed)
             || address < self.image.link_base
@@ -369,18 +428,18 @@ impl Installer {
         {
             return Err(Error::Invalid("write outside image"));
         }
-        body.write(address, bytes.clone()).await?;
-        if body
-            .read(Range {
-                address: address | self.image.control.read_alias,
-                size: bytes.len() as u64,
-            })
-            .await?
-            != bytes
-        {
-            return Err(Error::Invalid("write readback differs"));
-        }
         Ok(())
+    }
+    async fn write_many(&self, body: &mut impl Body, writes: Vec<(u64, Vec<u8>)>) -> Result<()> {
+        for (address, bytes) in &writes {
+            self.check_write(*address, bytes.len())?;
+        }
+        body.write_many(writes).await
+    }
+    /// Write owned image bytes. No readback: the caller verifies the state the
+    /// write is meant to produce, since the image code may consume it at once.
+    pub async fn set(&self, body: &mut impl Body, address: u64, bytes: Vec<u8>) -> Result<()> {
+        self.write_many(body, vec![(address, bytes)]).await
     }
     pub async fn read(&self, body: &mut impl Body, range: Range) -> Result<Vec<u8>> {
         if range.size == 0 || range.address.checked_add(range.size).is_none() {

@@ -54,6 +54,15 @@ impl AsyncSession {
             Slot::Abandoned => SessionState::Abandoned,
         })
     }
+    /// Operations whose replies the host has waited for, counted as a device
+    /// share runs them: each sequence or read/write batch counts once.
+    #[getter]
+    fn round_trips(&self) -> PyResult<u64> {
+        match &*lock(&self.inner)? {
+            Slot::Open(native) => Ok(native.round_trips()),
+            _ => Err(binding_error(BindingError::Busy)),
+        }
+    }
     #[getter]
     fn packet_bytes(&self) -> u32 {
         self.packet_bytes

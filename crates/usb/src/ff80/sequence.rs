@@ -17,9 +17,12 @@ pub enum SequenceCommand {
         address: Address,
         bytes: Vec<u8>,
     },
+    /// `statuses` pins the accepted device statuses at the USB owner; `None`
+    /// accepts any completed reply that echoes the command, so later commands
+    /// in the sequence (such as restoring a borrowed slot) still run.
     Query {
         tag: diagnostic::DiagnosticTag,
-        statuses: Vec<(u32, u32)>,
+        statuses: Option<Vec<(u32, u32)>>,
     },
 }
 
@@ -56,19 +59,24 @@ impl CheckedCommand {
                 (request.clone(), 36, vec![request[..36].to_vec()])
             }
             SequenceCommand::Query { tag, statuses } => {
-                if statuses.is_empty() || statuses.len() > 8 {
-                    return Err(Error::InvalidLength);
-                }
                 let request = diagnostic::query(*tag);
-                let prefixes = statuses
-                    .iter()
-                    .map(|(primary, secondary)| {
-                        let mut prefix = request[..16].to_vec();
-                        prefix[4..8].copy_from_slice(&primary.to_le_bytes());
-                        prefix[8..12].copy_from_slice(&secondary.to_le_bytes());
-                        prefix
-                    })
-                    .collect();
+                let prefixes = match statuses {
+                    None => vec![request[..4].to_vec()],
+                    Some(statuses) => {
+                        if statuses.is_empty() || statuses.len() > 8 {
+                            return Err(Error::InvalidLength);
+                        }
+                        statuses
+                            .iter()
+                            .map(|(primary, secondary)| {
+                                let mut prefix = request[..16].to_vec();
+                                prefix[4..8].copy_from_slice(&primary.to_le_bytes());
+                                prefix[8..12].copy_from_slice(&secondary.to_le_bytes());
+                                prefix
+                            })
+                            .collect()
+                    }
+                };
                 (request, 32, prefixes)
             }
         };

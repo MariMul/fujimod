@@ -108,6 +108,24 @@ impl Body for Memory {
             Ok(())
         })
     }
+    fn read_many(&mut self, ranges: Vec<Range>) -> Pending<'_, Vec<Vec<u8>>> {
+        Box::pin(async move {
+            self.event("read_many")?;
+            Ok(ranges
+                .into_iter()
+                .map(|r| self.get(r.address, r.size as usize))
+                .collect())
+        })
+    }
+    fn write_many(&mut self, writes: Vec<(u64, Vec<u8>)>) -> Pending<'_, ()> {
+        Box::pin(async move {
+            self.event("write_many")?;
+            for (a, b) in writes {
+                self.put(a, &b);
+            }
+            Ok(())
+        })
+    }
     fn synchronize(&mut self, _: Range) -> Pending<'_, ()> {
         Box::pin(async { self.event("synchronize") })
     }
@@ -212,11 +230,50 @@ fn complete_lifecycle_and_serializable_lease() {
     });
 }
 #[test]
+fn control_batches_reads_and_writes_into_few_body_waits() {
+    block_on(async {
+        let mut installer = Installer::plan(image()).unwrap();
+        let mut body = Memory::default();
+        installer
+            .install(&mut body, Placement::Relocate, 11)
+            .await
+            .unwrap();
+        body.events.clear();
+        installer.status(&mut body, 12).await.unwrap();
+        assert_eq!(
+            body.events,
+            [
+                "read_many",
+                "write_many",
+                "synchronize",
+                "control",
+                "read_many"
+            ]
+        );
+        body.events.clear();
+        installer.rollback(&mut body, 13).await.unwrap();
+        assert_eq!(
+            body.events,
+            [
+                "read_many",
+                "write_many",
+                "synchronize",
+                "control",
+                "read_many",
+                "synchronize",
+                "read_many"
+            ]
+        );
+    });
+}
+#[test]
 fn pre_publication_failure_frees_and_publication_failure_retains() {
     for failure in [
         "placed",
         "write",
         "read",
+        "read_many",
+        "write_many",
         "synchronize",
         "protect",
         "control",

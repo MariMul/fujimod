@@ -33,7 +33,7 @@ impl CommandSequence {
         let index = self.commands.len();
         self.commands.push(SequenceCommand::Query {
             tag: diagnostic::DiagnosticTag::Research(tag),
-            statuses: statuses.unwrap_or_else(|| vec![(0, 0)]),
+            statuses: Some(statuses.unwrap_or_else(|| vec![(0, 0)])),
         });
         index
     }

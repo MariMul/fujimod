@@ -23,7 +23,7 @@ fn plan() -> Invocation {
         }],
         synchronization: vec![SequenceCommand::Query {
             tag: crate::ff80::commands::diagnostic::DiagnosticTag::Research(7),
-            statuses: vec![(0, 0)],
+            statuses: Some(vec![(0, 0)]),
         }],
         slot: CallbackSlot {
             address: Address(0x300),
@@ -210,7 +210,7 @@ fn precondition_failure_and_invalid_plans_never_write() {
     p = plan();
     p.synchronization.push(SequenceCommand::Query {
         tag: crate::ff80::commands::diagnostic::DiagnosticTag::Research(0),
-        statuses: vec![],
+        statuses: Some(vec![]),
     });
     assert!(p.validate(256, 64).is_err());
 }

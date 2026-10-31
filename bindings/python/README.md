@@ -130,7 +130,10 @@ the session. Native and Pyodide use the same Rust implementation.
 The [mod installation helpers](../../crates/mod-install/README.md) add
 `usb.InstallQueries(callback, stock, output, original)` for checked borrowed
 callback batches. `call(callback, tag, statuses, output)` returns query/output
-indices; `finish()` returns a `CommandSequence`. Use
+indices; `finish()` returns a `CommandSequence`, and
+`session.invoke_queries(plan)` runs it and checks every call's status.
+`session.round_trips` counts the operations the host has waited for, with each
+sequence or read/write batch counted once. Use
 `usb.CommandSequence.verified_writes(address, data, limits, packet_bytes)` for
 bounded write/readback batches. `usb.OwnedUpload(allocation_address,
 allocation_size, address, data, piece_bytes, alignment)` validates padding inside

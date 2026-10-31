@@ -54,7 +54,7 @@ impl CommandSequence {
         #[wasm_bindgen(unchecked_param_type = "ReadonlyArray<readonly [number, number]>")] statuses: JsValue,
     ) -> Result<usize, JsValue> {
         let tag = DiagnosticTag::Research(error::integer(tag, u32::MAX)?);
-        let statuses = parse_statuses(statuses)?;
+        let statuses = Some(parse_statuses(statuses)?);
         let index = self.commands.len();
         self.commands.push(SequenceCommand::Query { tag, statuses });
         Ok(index)

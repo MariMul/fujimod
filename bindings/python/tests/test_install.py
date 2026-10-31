@@ -28,21 +28,22 @@ def test_borrowed_callback_indices_and_restoration() -> None:
             *memory_read(0x1000, stock),
             *memory_read(0x1100, b"orig"),
             *write(0x1100, b"seed"),
-            *memory_read(0x1100, b"seed"),
             *write(0x1000, target),
-            *memory_read(0x1000, target),
             *query(77),
             *memory_read(0x1000, target),
             *memory_read(0x1100, b"done"),
             *write(0x1000, stock),
-            *memory_read(0x1000, stock),
             *write(0x1100, b"orig"),
+            *memory_read(0x1000, stock),
             *memory_read(0x1100, b"orig"),
         ])
         plan = usb.InstallQueries(0x1000, 0x9000, 0x1100, b"orig")
         queried, result = plan.call(0x8000, 77, [(0, 0)], b"seed")
-        replies = await session.execute_sequence(plan.finish())
-        assert replies[result] == b"done" and len(replies[queried]) == 32
+        before = session.round_trips
+        replies = await session.invoke_queries(plan)
+        assert session.round_trips - before == 1
+        assert replies == [(replies[0][0], b"done")] and len(replies[0][0]) == 32
+        assert (queried, result) == (4, 6)
         assert session.state == usb.SessionState.Ready and script.remaining == 0
 
     run(test)

@@ -25,7 +25,13 @@ INIT. `prepare` and `publish` expose the same steps separately for callers that
 need a policy check before publication. `status`, `rollback`, `init`, `set`, and
 `read` reuse the lease. Every control operation verifies immutable code, the
 cookie, a fresh caller token, the mailbox, and hook readback. Supply distinct
-nonzero tokens to distinguish replies from previous operations.
+nonzero tokens to distinguish replies from previous operations. A control
+operation asks the body for one ownership `read_many`, one `write_many` of the
+token and mailbox words, synchronization, the control call and one result
+`read_many` of the mailbox, state and every hook word; INSTALL and ROLLBACK add
+a synchronization and one more hook `read_many`. Writes are not read back one by
+one: the mailbox echo and the hook words verify the resulting state. `set` only
+writes; its caller verifies the state the write produces.
 
 Preparation failure frees the allocation. Once INSTALL is attempted, including
 unknown completion, the region is retained even after rollback. Lease records
@@ -34,8 +40,8 @@ caller. Dropping an in-flight operation does not initiate asynchronous cleanup.
 The caller must retain its recorded allocation when completion is unknown.
 
 Python uses `fujimod.runtime_install.Installer`. Its awaitable `Body` supplies
-`allocate`, `free`, `read`, `write`, `synchronize`, `protect`, `control`, and
-`placed`; see that module's docstring for signatures. The native cooperative
+`allocate`, `free`, `read`, `write`, `read_many`, `write_many`, `synchronize`,
+`protect`, `control`, and `placed`; see that module's docstring for signatures. The native cooperative
 adapter runs the same Rust installer and yields each body request for Python to
 await. No Python callback runs while Rust owns a USB session.
 

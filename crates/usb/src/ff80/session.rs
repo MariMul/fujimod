@@ -97,6 +97,12 @@ impl Session {
     pub fn invalidate_completion(&mut self) {
         self.core.state = SessionState::CompletionUnknown;
     }
+    /// Operations whose replies the host has waited for. A sequence or a batch
+    /// of reads or writes counts once on every backend, as a device share
+    /// streams it with one wait; each other command counts once.
+    pub fn round_trips(&self) -> u64 {
+        self.core.round_trips
+    }
     pub fn max_reply_bytes(&self) -> NonZeroU32 {
         NonZeroU32::new(self.core.max_reply_bytes).expect("validated before session open")
     }
@@ -160,15 +166,17 @@ impl Session {
             return Ok(Vec::new());
         }
         if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            let waits = self.core.round_trips + 1;
             let mut replies = Vec::with_capacity(commands.len());
             for command in commands {
-                replies.push(
-                    self.core
-                        .command(command.request.clone(), command.reply_size, |r| {
-                            command.decode(r)
-                        })
-                        .await?,
-                );
+                let reply = self
+                    .core
+                    .command(command.request.clone(), command.reply_size, |r| {
+                        command.decode(r)
+                    })
+                    .await;
+                self.core.round_trips = waits;
+                replies.push(reply?);
             }
             return Ok(replies);
         }
@@ -224,9 +232,12 @@ impl Session {
     /// Several reads; over a device share they stream with one wait.
     pub async fn read_memory_many(&mut self, commands: Vec<ReadMemory>) -> Result<Vec<Vec<u8>>> {
         if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            let waits = self.core.round_trips + 1;
             let mut replies = Vec::with_capacity(commands.len());
             for command in commands {
-                replies.push(self.core.read_memory(command).await?);
+                let reply = self.core.read_memory(command).await;
+                self.core.round_trips = waits;
+                replies.push(reply?);
             }
             return Ok(replies);
         }
@@ -250,8 +261,11 @@ impl Session {
     /// Several writes; over a device share they stream with one wait.
     pub async fn write_memory_many(&mut self, commands: Vec<WriteMemory>) -> Result<()> {
         if !matches!(self.core.io.inner_mut(), Backend::Proxy(_)) {
+            let waits = self.core.round_trips + 1;
             for command in commands {
-                self.core.write_memory(command).await?;
+                let result = self.core.write_memory(command).await;
+                self.core.round_trips = waits;
+                result?;
             }
             return Ok(());
         }
@@ -407,6 +421,8 @@ pub(crate) struct Core<I> {
     info: SessionInfo,
     state: SessionState,
     max_reply_bytes: u32,
+    /// Host operations that wait for the device, as a device share runs them.
+    round_trips: u64,
 }
 
 impl<I: Io> Core<I> {
@@ -431,12 +447,14 @@ impl<I: Io> Core<I> {
             },
             state: SessionState::Ready,
             max_reply_bytes,
+            round_trips: 0,
         })
     }
     fn start(&mut self) -> Result<()> {
         if self.state != SessionState::Ready {
             return Err(Error::CompletionUnknown);
         }
+        self.round_trips += 1;
         // Set before the first await; dropping any in-flight future preserves it.
         self.state = SessionState::CompletionUnknown;
         Ok(())

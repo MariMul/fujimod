@@ -27,6 +27,10 @@ Installation also uses two generic `fujimod-usb` operations:
 `operations::verified::verified_writes` (bounded write/readback batches whose
 guards run at the USB owner) and `operations::borrowed::BorrowedQueries`
 (borrowed callback words, explicit accepted statuses, one restore per batch).
+A borrowed batch is one checked sequence and one host wait: the USB owner
+guards the stock slot and original output, runs each call, restores both words
+and verifies their final values. Queries accept any completed reply at the USB
+owner so restoration always runs; the host then checks each call's status.
 
 - `OwnedUpload` checks that the image and its padded bulk extent fit inside the
   supplied owned allocation. `upload` checks the original destination pointer

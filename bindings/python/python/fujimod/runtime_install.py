@@ -1,8 +1,11 @@
 """Rust runtime installer with an awaitable, caller-supplied Body.
 
 Body methods: allocate(size, align) -> base; free(base); read(address, size)
--> bytes; write(address, data); synchronize(address, size); protect(address,
-size); control(entry, operation); placed(image, lease). The placed notification
+-> bytes; write(address, data); read_many([(address, size), ...]) -> [bytes];
+write_many([(address, data), ...]); synchronize(address, size);
+protect(address, size); control(entry, operation); placed(image, lease).
+read_many and write_many should each wait for the device once and write_many
+must not read back: the installer verifies the resulting state itself. The placed notification
 lets callers persist the image and allocation before the first upload.
 """
 import json
@@ -54,6 +57,18 @@ class Installer:
                     response = bytes(await self.body.read(facts['address'], facts['size']))
                 elif kind == 'write':
                     await self.body.write(facts['address'], bytes(data))
+                elif kind == 'read_many':
+                    ranges = [(r['address'], r['size']) for r in facts['ranges']]
+                    parts = await self.body.read_many(ranges)
+                    if [len(part) for part in parts] != [size for _, size in ranges]:
+                        raise RuntimeError('read_many returned the wrong sizes')
+                    response = b''.join(bytes(part) for part in parts)
+                elif kind == 'write_many':
+                    writes, offset = [], 0
+                    for r in facts['ranges']:
+                        writes.append((r['address'], bytes(data[offset:offset + r['size']])))
+                        offset += r['size']
+                    await self.body.write_many(writes)
                 elif kind in ('synchronize', 'protect'):
                     await getattr(self.body, kind)(facts['address'], facts['size'])
                 elif kind == 'control':
