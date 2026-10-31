@@ -84,24 +84,9 @@
           "card": "shape_aspect_item",
           "choices": [
             {
-              "label": "3:2",
-              "stock": true,
-              "icon": "ratio:3:2"
-            },
-            {
-              "label": "16:9",
-              "stock": true,
-              "icon": "ratio:16:9"
-            },
-            {
-              "label": "1:1",
-              "stock": true,
-              "icon": "ratio:1:1"
-            },
-            {
-              "label": "4:3",
+              "label": "17:6",
               "stock": false,
-              "icon": "ratio:4:3"
+              "icon": "ratio:17:6"
             },
             {
               "label": "65:24",
@@ -109,14 +94,24 @@
               "icon": "ratio:65:24"
             },
             {
-              "label": "17:6",
-              "stock": false,
-              "icon": "ratio:17:6"
+              "label": "16:9",
+              "stock": true,
+              "icon": "ratio:16:9"
             },
             {
-              "label": "3:4",
+              "label": "3:2",
+              "stock": true,
+              "icon": "ratio:3:2"
+            },
+            {
+              "label": "4:3",
               "stock": false,
-              "icon": "ratio:3:4"
+              "icon": "ratio:4:3"
+            },
+            {
+              "label": "5:4",
+              "stock": false,
+              "icon": "ratio:5:4"
             },
             {
               "label": "7:6",
@@ -124,9 +119,9 @@
               "icon": "ratio:7:6"
             },
             {
-              "label": "5:4",
-              "stock": false,
-              "icon": "ratio:5:4"
+              "label": "1:1",
+              "stock": true,
+              "icon": "ratio:1:1"
             }
           ],
           "actions": []
@@ -267,7 +262,7 @@
       "icon": "golden-ratio",
       "title": "FRAMING GUIDELINE",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "summary": "Choose a guide to display in the shooting view, including Golden Ratio and four Golden Spiral focal points.",
+      "summary": "Choose a guide to display in the shooting view, including Golden Ratio, four Golden Spiral focal points and Dynamic Symmetry.",
       "card": "c",
       "media_cards": ["c"],
       "controls": [
@@ -276,6 +271,11 @@
           "primary": true,
           "card": "c",
           "choices": [
+            {
+              "label": "NONE",
+              "stock": false,
+              "icon": null
+            },
             {
               "label": "GRID 9",
               "stock": true,
@@ -313,6 +313,11 @@
             },
             {
               "label": "GOLDEN SPIRAL - TOP RIGHT",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "DYNAMIC SYMMETRY",
               "stock": false,
               "icon": null
             }
@@ -823,7 +828,6 @@
         "4:3": "A taller frame, like most phones.",
         "65:24": "A panoramic strip, as on the Hasselblad XPan.",
         "17:6": "A wide panoramic strip.",
-        "3:4": "A tall portrait frame.",
         "7:6": "A near-square frame, like 6×7 film.",
         "5:4": "A frame like 4×5 large-format film."
       },
@@ -875,6 +879,20 @@
           ]
         }
       }
+    },
+    "shape_aspect_ratios_editor": {
+      "title": "EDIT ASPECT RATIOS",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Add up to eight custom ratios and hide ratios from the picker.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
     },
     "shape_surround_item": {
       "title": "SURROUND VIEW",
@@ -955,14 +973,16 @@
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": null,
       "choices": {
+        "NONE": "Hide the guide while keeping its selected type.",
         "GOLDEN RATIO": "Lines that divide the frame at the golden ratio.",
         "GOLDEN SPIRAL - BOTTOM LEFT": "A golden logarithmic spiral with its focal point at the lower-left golden-section intersection.",
         "GOLDEN SPIRAL - BOTTOM RIGHT": "A golden logarithmic spiral with its focal point at the lower-right golden-section intersection.",
         "GOLDEN SPIRAL - TOP LEFT": "A golden logarithmic spiral with its focal point at the upper-left golden-section intersection.",
-        "GOLDEN SPIRAL - TOP RIGHT": "A golden logarithmic spiral with its focal point at the upper-right golden-section intersection."
+        "GOLDEN SPIRAL - TOP RIGHT": "A golden logarithmic spiral with its focal point at the upper-right golden-section intersection.",
+        "DYNAMIC SYMMETRY": "Both diagonals, plus a line from each corner that meets the opposite diagonal at a right angle."
       },
       "related": [],
-      "changes": "Adds GOLDEN RATIO and four GOLDEN SPIRAL focal-point placements. All guides follow the selected image bounds and aspect ratio.",
+      "changes": "Adds NONE to hide the guide, GOLDEN RATIO, four GOLDEN SPIRAL focal-point placements and DYNAMIC SYMMETRY. All guides follow the selected image bounds and aspect ratio.",
       "credits": {
         "premiere": false,
         "inspired": [],
