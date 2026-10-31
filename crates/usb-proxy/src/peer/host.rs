@@ -1,5 +1,7 @@
 //! Native owner side of the encrypted WebRTC share protocol.
-use super::native::PeerSocket;
+use super::CandidatePolicy;
+use super::native::{IceConfig, PeerSocket};
+use super::turn;
 use crate::{Error, Result};
 use async_channel::{Receiver, Sender};
 use async_tungstenite::{
@@ -69,7 +71,7 @@ pub enum HostEvent {
 
 impl HostRoom {
     /// Join a share URL as its persistent owner using the ticket-file key.
-    pub async fn join(ticket_link: &str, owner_key: &str) -> Result<Self> {
+    pub async fn join(ticket_link: &str, owner_key: &str, policy: CandidatePolicy) -> Result<Self> {
         if owner_key.is_empty() || owner_key.len() > 1024 {
             return Err(error("invalid owner key"));
         }
@@ -101,6 +103,10 @@ impl HostRoom {
         if welcome["type"] != "ready" || welcome["peer"] != "host" {
             return Err(error("invalid signaling welcome"));
         }
+        let ice = IceConfig {
+            policy,
+            servers: turn::ice_servers(&welcome["ice_servers"]),
+        };
 
         let (signal, outgoing) = async_channel::unbounded();
         let (stop, stopping) = async_channel::bounded(1);
@@ -113,6 +119,7 @@ impl HostRoom {
             .spawn(move || {
                 futures_lite::future::block_on(signal_loop(
                     ticket,
+                    ice,
                     socket,
                     signal_to_loop,
                     outgoing,
@@ -170,6 +177,7 @@ impl Drop for HostRoom {
 
 async fn signal_loop(
     ticket: crate::share::Ticket,
+    ice: IceConfig,
     mut socket: Socket,
     signaling: Sender<Value>,
     outgoing: Receiver<Value>,
@@ -219,6 +227,7 @@ async fn signal_loop(
                     continue;
                 }
                 let ticket = ticket.clone();
+                let ice = ice.clone();
                 let signal = signaling.clone();
                 let controllers = controllers.clone();
                 let peer_id = id.clone();
@@ -228,7 +237,8 @@ async fn signal_loop(
                     .spawn(move || {
                         futures_lite::future::block_on(async move {
                             let result =
-                                PeerSocket::answer(ticket, peer_id.clone(), data, signal).await;
+                                PeerSocket::answer(ticket, peer_id.clone(), data, signal, ice)
+                                    .await;
                             let _ = controllers.send((ready_id, result)).await;
                         });
                     })

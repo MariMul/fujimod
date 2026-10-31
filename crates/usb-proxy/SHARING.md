@@ -68,10 +68,12 @@ The default tickets include Cloudflare's
 STUN discovers mapped addresses; it does not relay USB data. A configured
 production Worker adds temporary Cloudflare TURN credentials to its ready frames,
 keeping both the master API token and the temporary credentials out of share URLs.
-Browsers prefer direct connections and can fall back to TURN. Native controllers
-use outbound UDP, including to the browser owner's TURN relay; native TURN-over-
-TCP/TLS allocation is not implemented. The development Rust service remains
-STUN-only. Direct connections work where ICE
+Browsers prefer direct connections and can fall back to TURN. Native peers allocate
+a UDP TURN relay themselves when the join reply carries TURN credentials; native
+TURN over TCP or TLS is not implemented. `CandidatePolicy::RelayOnly` (the probe's
+`--relay-only` flag) advertises only that relay, so a connection never sends from a
+local address. The development Rust service issues no TURN credentials unless a test
+configures them. Direct connections work where ICE
 finds a viable path, including ordinary LAN and reachable tailnet addresses;
 restrictive NATs/firewalls can prevent a connection. See the
 [WebRTC connection guide](https://webrtc.org/getting-started/peer-connections)
@@ -266,9 +268,8 @@ fujimod-share-owner end TICKET.json
 - `end` joins with the owner key and revokes the room. It is refused while an
   owner is serving it.
 
-The native owner uses STUN and host candidates only. Browser controllers can
-still reach it through their own TURN relay; a native controller needs a direct
-or STUN-mapped path.
+The native owner gathers the same candidates as any peer: host, STUN-mapped and,
+when the join reply carries TURN credentials, a UDP relay.
 
 ### Code design
 

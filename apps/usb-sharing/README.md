@@ -88,12 +88,11 @@ only the resulting temporary `iceServers` credentials to its connected peers.
 Both secrets absent means STUN-only; partial configuration and issuance failures
 reject sharing rather than silently pretending TURN is available.
 
-Browser owners and browser controllers use TURN over UDP, TCP or TLS as offered
-by Cloudflare, with direct ICE candidates still preferred. Native Rust/Python
-controllers currently use outbound UDP and can connect to the browser owner's
-TURN relay. They do not yet allocate their own TURN-over-TCP/TLS connection, so
-a native controller on a network blocking all UDP still cannot connect. The
-Worker does not add WebSocket USB fallback or resend USB commands.
+Browsers use TURN over UDP, TCP or TLS as offered by Cloudflare, with direct ICE
+candidates still preferred. Native Rust and Python peers allocate a UDP TURN relay
+(TCP and TLS are not implemented natively), so a peer on a network that blocks all
+outbound UDP cannot connect. The Worker does not add WebSocket USB fallback or
+resend USB commands.
 
 Configuration defaults:
 

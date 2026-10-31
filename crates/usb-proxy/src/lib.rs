@@ -19,6 +19,7 @@ pub mod dev_shares;
 pub mod relay;
 
 mod peer;
+pub use peer::CandidatePolicy;
 #[cfg(not(target_arch = "wasm32"))]
 pub use peer::{HostEvent, HostRoom, PeerSocket};
 pub mod share;

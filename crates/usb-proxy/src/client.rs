@@ -141,6 +141,16 @@ impl Client {
     /// Connect, reporting each step. A failure names the last step reached, so
     /// signaling, WebRTC and the proxy handshake can be told apart.
     pub async fn connect_with_progress(url: &str, token: &str, progress: Progress) -> Result<Self> {
+        Self::connect_with_policy(url, token, progress, crate::CandidatePolicy::Any).await
+    }
+    /// Connect with the given candidate policy. `RelayOnly` requires a TURN relay and
+    /// is native only; browsers reject it.
+    pub async fn connect_with_policy(
+        url: &str,
+        token: &str,
+        progress: Progress,
+        policy: crate::CandidatePolicy,
+    ) -> Result<Self> {
         let reached = std::sync::Arc::new(std::sync::Mutex::new(String::from("started")));
         let report: Progress = {
             let reached = reached.clone();
@@ -149,7 +159,7 @@ impl Client {
                 progress(step);
             })
         };
-        Self::connect_reporting(url, token, report)
+        Self::connect_reporting(url, token, report, policy)
             .await
             .map_err(|e| {
                 err(format!(
@@ -159,14 +169,19 @@ impl Client {
                 ))
             })
     }
-    async fn connect_reporting(url: &str, token: &str, progress: Progress) -> Result<Self> {
+    async fn connect_reporting(
+        url: &str,
+        token: &str,
+        progress: Progress,
+        policy: crate::CandidatePolicy,
+    ) -> Result<Self> {
         let ticket = crate::share::Ticket::from_url(url)?;
         let token = ticket.as_ref().map(|t| t.key.as_str()).unwrap_or(token);
         deadline(
             Duration::from_secs(if ticket.is_some() { 30 } else { 10 }),
             async {
                 let mut socket = if ticket.is_some() {
-                    Socket::Peer(crate::peer::PeerSocket::connect(url, &progress).await?)
+                    Socket::Peer(crate::peer::PeerSocket::connect(url, &progress, policy).await?)
                 } else {
                     #[cfg(not(target_arch = "wasm32"))]
                     let socket = async_tungstenite::smol::connect_async(url)

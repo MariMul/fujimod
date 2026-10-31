@@ -20,7 +20,14 @@ fn error(value: JsValue) -> Error {
 }
 pub(crate) struct PeerSocket(Channel);
 impl PeerSocket {
-    pub async fn connect(url: &str, progress: &crate::Progress) -> Result<Self> {
+    pub async fn connect(
+        url: &str,
+        progress: &crate::Progress,
+        policy: crate::CandidatePolicy,
+    ) -> Result<Self> {
+        if policy == crate::CandidatePolicy::RelayOnly {
+            return Err(Error("relay-only connections are native only".into()));
+        }
         let channel = connect_peer(url).await.map_err(error)?.unchecked_into();
         progress("WebRTC data channel open");
         Ok(Self(channel))

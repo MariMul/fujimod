@@ -63,6 +63,6 @@ Gandi is the registrar. Cloudflare hosts DNS, delegated to `ali.ns.cloudflare.co
 and `rudy.ns.cloudflare.com`. Mail records remain in the zone. Worker custom
 domains manage the website records and HTTPS certificates. GitHub Pages is disabled.
 
-The sharing Worker currently provides STUN only. TURN usage monitoring and a
-budget cutoff are required before enabling relay credentials; its issuance quota
-is not a spending cap.
+The sharing Worker issues Cloudflare TURN credentials when its `TURN_KEY_ID` and
+`TURN_API_TOKEN` secrets are set. Its daily issuance quota (`TURN_DAILY_ISSUE_LIMIT`)
+is not a spending cap; monitor TURN usage in Cloudflare.

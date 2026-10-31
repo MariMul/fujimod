@@ -33,13 +33,16 @@ struct Hub {
     rooms: Arc<Mutex<HashMap<String, Room>>>,
     serial: Arc<AtomicU64>,
     idle: Duration,
+    /// Sent in every `ready` frame, as the Worker sends its TURN servers. Null sends none.
+    ice_servers: Arc<Value>,
 }
 impl Hub {
-    fn new(idle: Duration) -> Self {
+    fn new(idle: Duration, ice_servers: Value) -> Self {
         Self {
             rooms: Arc::new(Mutex::new(HashMap::new())),
             serial: Arc::new(AtomicU64::new(0)),
             idle,
+            ice_servers: Arc::new(ice_servers),
         }
     }
 }
@@ -51,6 +54,16 @@ pub fn router() -> Router {
 /// Create a development signaling service with a configurable persistent-room
 /// idle lifetime. The default is seven days, matching the Worker service.
 pub fn router_with_share_idle(idle: Duration) -> Router {
+    router_with_hub(idle, Value::Null)
+}
+
+/// Create a development signaling service that also gives every peer `ice_servers`.
+#[cfg(test)]
+pub fn router_with_ice_servers(idle: Duration, ice_servers: Value) -> Router {
+    router_with_hub(idle, ice_servers)
+}
+
+fn router_with_hub(idle: Duration, ice_servers: Value) -> Router {
     Router::new()
         .route(
             "/usb-proxy/signal",
@@ -60,7 +73,7 @@ pub fn router_with_share_idle(idle: Duration) -> Router {
                     .on_upgrade(move |socket| serve(hub, socket))
             }),
         )
-        .with_state(Hub::new(idle))
+        .with_state(Hub::new(idle, ice_servers))
 }
 
 async fn first(socket: &mut WebSocket) -> Option<Value> {
@@ -182,7 +195,10 @@ async fn serve(hub: Hub, mut socket: WebSocket) {
     }
 
     let (mut output, mut input) = socket.split();
-    let ready = json!({"type":"ready", "peer":peer});
+    let mut ready = json!({"type":"ready", "peer":peer});
+    if !hub.ice_servers.is_null() {
+        ready["ice_servers"] = (*hub.ice_servers).clone();
+    }
     let mut alive = output
         .send(Message::Text(ready.to_string().into()))
         .await
@@ -358,9 +374,13 @@ mod tests {
             URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ticket).unwrap())
         );
         let owner_key = "native-owner-secret";
-        let host = HostRoom::join(&link, owner_key).await.unwrap();
+        let host = HostRoom::join(&link, owner_key, crate::CandidatePolicy::Any)
+            .await
+            .unwrap();
         let progress: crate::Progress = Arc::new(|_| {});
-        let mut controller = PeerSocket::connect(&link, &progress).await.unwrap();
+        let mut controller = PeerSocket::connect(&link, &progress, crate::CandidatePolicy::Any)
+            .await
+            .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller connection");
         };
@@ -393,8 +413,12 @@ mod tests {
             "owner room did not become offline after disconnect"
         );
 
-        let host = HostRoom::join(&link, owner_key).await.unwrap();
-        let mut controller = PeerSocket::connect(&link, &progress).await.unwrap();
+        let host = HostRoom::join(&link, owner_key, crate::CandidatePolicy::Any)
+            .await
+            .unwrap();
+        let mut controller = PeerSocket::connect(&link, &progress, crate::CandidatePolicy::Any)
+            .await
+            .unwrap();
         let HostEvent::Controller(_, mut owner_peer) = host.next_event().await.unwrap() else {
             panic!("expected controller after owner restart");
         };
@@ -403,7 +427,11 @@ mod tests {
         assert_eq!(owner_peer.receive().await.unwrap(), payload);
         host.end().await.unwrap();
         assert!(controller.receive().await.is_err());
-        assert!(PeerSocket::connect(&link, &progress).await.is_err());
+        assert!(
+            PeerSocket::connect(&link, &progress, crate::CandidatePolicy::Any)
+                .await
+                .is_err()
+        );
         server.abort();
     }
 
