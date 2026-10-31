@@ -2142,6 +2142,7 @@ pub(super) fn assemble(
             "lens_aperture":"aperture",
             "lens_focus":"focus",
             "usb_cable":{"logic-level":inputs.usb.connected},
+            "display_output_hold":{"logic-level":false},
             "imaging_routes":"irq-routes",
             "image_outputs":"output-channels",
             "memory_outputs":"memory-outputs",
