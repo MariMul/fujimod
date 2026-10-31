@@ -1062,7 +1062,8 @@ impl Devices {
         if let Some(j) = block.job {
             model = model.with_job(fujimod_emulator_xpp::blocks::Job {
                 start: j.start,
-                status: j.status,
+                status: Some(j.status),
+                stop: None,
                 irq: j.irq,
                 ticks: j.ticks,
             })?;

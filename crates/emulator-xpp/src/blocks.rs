@@ -31,7 +31,21 @@
 //! set, and writing a status bit clears it, as for the face detection engine.
 //! The block at 0xfff7f000 (driver 0x1558424..0x1558a94) starts with +0x04
 //! bit 0 (0x15589c4); its handler 0x1558108 reads +0x44, writes 1 to it and
-//! calls the job's callback. What a job computes is not modeled.
+//! calls the job's callback. A job without a status bit instead declares a
+//! stop bit: its interrupt stays high until a write clears that bit (the
+//! development engine 0xfff98000, whose handler 0x1560744 writes 0 to +0x00
+//! and waits for bit 0 through 0x1560de8). Idle bits may share the status
+//! word when they do not overlap the status bit (0xfffc4000: +0x3c bit 20
+//! idle, bit 0 done; 0xfffc3000: +0xdc 0x01000100 idle, bit 0 done, which
+//! its handler 0xcce510 clears through 0xc6d580). What a job computes is not
+//! modeled.
+//!
+//! A block may declare [`Command`]s: writing exactly a command's value to its
+//! word sets the declared field of a status word, which otherwise reads back
+//! its last write. After a still, reccont takes the second DRAM controller
+//! 0xfff0f000 through 0xc6c64c (+0xb8 = 0x6a020202, then waits for +0xbc bits
+//! 5..0 = 0x27) and back through 0xc6c700 (0x01020202, waits for 0x20); these
+//! are its only +0xb8 commands. What the states mean is not known.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -46,14 +60,26 @@ pub struct Frames {
     pub irq: u32,
     pub period: u64,
 }
-/// Job law of a block: (offset, mask) of the start and status bits, the
-/// level interrupt line and the ticks a job takes.
+/// Job law of a block: (offset, mask) of the start and status bits (or,
+/// without a status bit, the stop bit that a write clears to acknowledge),
+/// the level interrupt line and the ticks a job takes.
 #[derive(Clone, Copy, Debug)]
 pub struct Job {
     pub start: (u64, u32),
-    pub status: (u64, u32),
+    pub status: Option<(u64, u32)>,
+    pub stop: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
+}
+/// Command law of a block: writing `value` to `word` sets the bits `mask` of
+/// the status word `status` to `state`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Command {
+    pub word: u64,
+    pub value: u32,
+    pub status: u64,
+    pub mask: u32,
+    pub state: u32,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -85,6 +111,9 @@ pub struct Block {
     job: Option<Job>,
     /// Lines and the Y0 Y1 Cb Cr pixel pair of a uniform live-view image.
     image: Option<(u32, [u8; 4])>,
+    /// (offset, value) of words that read a fixed value whatever is written.
+    fixed: Vec<(u64, u32)>,
+    commands: Vec<Command>,
     state: State,
 }
 impl Block {
@@ -117,6 +146,8 @@ impl Block {
             frames,
             job: None,
             image: None,
+            fixed: Vec::new(),
+            commands: Vec::new(),
             state: State::default(),
         })
     }
@@ -125,15 +156,73 @@ impl Block {
         let bit = |(o, mask): (u64, u32)| o & 3 != 0 || o >= self.size || mask == 0;
         if self.frames.is_some()
             || bit(job.start)
-            || bit(job.status)
-            || job.start.0 == job.status.0
-            || self.idle.iter().any(|&(o, _)| o == job.status.0)
+            || job.status.is_some() == job.stop.is_some()
+            || job.stop.is_some_and(bit)
+            || job.status.is_some_and(|status| {
+                bit(status)
+                    || job.start.0 == status.0
+                    || self
+                        .idle
+                        .iter()
+                        .any(|&(o, mask)| o == status.0 && mask & status.1 != 0)
+            })
             || !(32..512).contains(&job.irq)
             || job.ticks == 0
         {
             return Err("Invalid X-Processor Pro register block job".into());
         }
         self.job = Some(job);
+        Ok(self)
+    }
+    /// Words that read a fixed value: ready words a driver compares for
+    /// equality before a run (0xfffc3000 +0xdc and 0xfff7e000 +0x1c read
+    /// 0x01000100 while the firmware writes 1 there).
+    pub fn with_fixed(mut self, fixed: Vec<(u64, u32)>) -> Result<Self, String> {
+        let job_offsets = self
+            .job
+            .map(|j| [Some(j.start.0), j.status.map(|s| s.0)])
+            .unwrap_or_default();
+        if fixed.iter().any(|&(o, _)| {
+            o & 3 != 0
+                || o >= self.size
+                || self.idle.iter().any(|&(i, _)| i == o)
+                || job_offsets.contains(&Some(o))
+                || self
+                    .frames
+                    .is_some_and(|f| f.start.0 == o || f.stopped.0 == o)
+        }) {
+            return Err("Invalid X-Processor Pro register block fixed word".into());
+        }
+        self.fixed = fixed;
+        Ok(self)
+    }
+    /// Commands that set a field of a status word.
+    pub fn with_commands(mut self, commands: Vec<Command>) -> Result<Self, String> {
+        let word = |o: u64| o & 3 != 0 || o >= self.size;
+        let special = |o: u64| {
+            self.idle.iter().any(|&(i, _)| i == o)
+                || self.fixed.iter().any(|&(f, _)| f == o)
+                || self.job.is_some_and(|j| {
+                    j.start.0 == o
+                        || j.status.is_some_and(|s| s.0 == o)
+                        || j.stop.is_some_and(|s| s.0 == o)
+                })
+                || self
+                    .frames
+                    .is_some_and(|f| f.start.0 == o || f.stopped.0 == o)
+        };
+        if commands.iter().any(|c| {
+            word(c.word)
+                || word(c.status)
+                || c.word == c.status
+                || c.mask == 0
+                || c.state & !c.mask != 0
+                || special(c.word)
+                || special(c.status)
+        }) {
+            return Err("Invalid X-Processor Pro register block command".into());
+        }
+        self.commands = commands;
         Ok(self)
     }
     /// A uniform live-view image written at each frame: lines and Y, Cb, Cr.
@@ -190,13 +279,16 @@ impl Device for Block {
             cx.unmodeled();
             return 0;
         };
+        if let Some(&(_, value)) = self.fixed.iter().find(|(o, _)| *o == offset) {
+            return u64::from(value);
+        }
         let mut idle = self
             .idle
             .iter()
             .filter(|(o, _)| *o == offset)
             .fold(0, |bits, (_, mask)| bits | mask);
-        if let Some(job) = self.job.filter(|j| j.status.0 == offset) {
-            return u64::from(self.state.status & job.status.1);
+        if let Some((_, mask)) = self.job.and_then(|j| j.status).filter(|s| s.0 == offset) {
+            return u64::from(self.state.status & mask | idle);
         }
         if let Some(frames) = self.frames.filter(|f| f.stopped.0 == offset) {
             idle = idle & !frames.stopped.1
@@ -214,7 +306,15 @@ impl Device for Block {
         if let (Some(job), Some(offset), Ok(value)) =
             (self.job, self.offset(address, size), u32::try_from(value))
         {
-            if offset == job.status.0 {
+            if job
+                .stop
+                .is_some_and(|(o, mask)| o == offset && value & mask == 0)
+                && self.state.status != 0
+            {
+                self.state.status = 0;
+                cx.set_irq(job.irq, false);
+            }
+            if job.status.is_some_and(|s| s.0 == offset) {
                 self.state.status &= !value;
                 if self.state.status == 0 {
                     cx.set_irq(job.irq, false);
@@ -237,6 +337,18 @@ impl Device for Block {
             }
             _ => return cx.unmodeled(),
         }
+        if let Some(c) = self
+            .commands
+            .iter()
+            .find(|c| Some(c.word) == self.offset(address, size) && u64::from(c.value) == value)
+        {
+            let word = self.state.words.get(&c.status).copied().unwrap_or(0) & !c.mask | c.state;
+            if word == 0 {
+                self.state.words.remove(&c.status);
+            } else {
+                self.state.words.insert(c.status, word);
+            }
+        }
         if let Some(frames) = self.frames {
             self.state.due = match (self.started(&frames), self.state.due) {
                 (false, _) => None,
@@ -252,7 +364,7 @@ impl Device for Block {
             if self.state.due.is_some_and(|at| at <= cx.now()) {
                 self.state.due = None;
                 self.state.jobs += 1;
-                self.state.status |= job.status.1;
+                self.state.status |= job.status.map_or(1, |(_, mask)| mask);
                 cx.set_irq(job.irq, true);
             }
             return;
@@ -292,8 +404,11 @@ impl Device for Block {
             || self.frames.is_some() && started != state.due.is_some()
             || self.frames.is_none() && self.job.is_none() && state.due.is_some()
             || self.job.is_none() && (state.status != 0 || state.jobs != 0)
-            || self.job.is_some_and(|j| {
-                state.status & !j.status.1 != 0 || state.words.contains_key(&j.status.0)
+            || self.job.is_some_and(|j| match j.status {
+                Some((offset, mask)) => {
+                    state.status & !mask != 0 || state.words.contains_key(&offset)
+                }
+                None => state.status > 1,
             })
             || self
                 .frames
@@ -377,7 +492,8 @@ mod tests {
         const ENGINE: u64 = 0xfff7f000;
         let job = Job {
             start: (0x04, 1),
-            status: (0x44, 1),
+            status: Some((0x44, 1)),
+            stop: None,
             irq: 128,
             ticks: 100,
         };
@@ -386,7 +502,7 @@ mod tests {
         assert!(
             block()
                 .with_job(Job {
-                    status: (0x40, 1),
+                    status: Some((0x40, 1)),
                     ..job
                 })
                 .is_err()
@@ -469,5 +585,115 @@ mod tests {
         let mut cx = h.cx();
         unit.advance(&mut cx);
         assert_eq!(cx.refusal(), Some("Unsupported live-view line width"));
+    }
+
+    #[test]
+    fn development_engine_jobs_share_idle_status_words_or_have_no_status() {
+        use fujimod_emulator_devices::test_host::advance;
+        // 0xfffc4000: start +0x00 bit 0, done +0x3c bit 0 beside idle bit 20.
+        const ENGINE: u64 = 0xfffc4000;
+        let job = Job {
+            start: (0, 1),
+            status: Some((0x3c, 1)),
+            stop: None,
+            irq: 132,
+            ticks: 10,
+        };
+        let block = |idle| Block::new(ENGINE, 0x1000, idle, None).unwrap();
+        assert!(block(vec![(0x3c, 1 << 20 | 1)]).with_job(job).is_err());
+        let mut engine = block(vec![(0, 1 << 28), (0x3c, 1 << 20)])
+            .with_job(job)
+            .unwrap();
+        let mut h = TestHost::new();
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x3c), 1 << 20);
+        write(&mut engine, &mut h, ENGINE, 1);
+        advance(&mut engine, &mut h, 10);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x3c), 1 << 20 | 1);
+        write(&mut engine, &mut h, ENGINE + 0x3c, 1);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x3c), 1 << 20);
+        // 0xfff98000: start +0x04 bit 0, no status; the handler stops it
+        // (+0x00 = 0) to acknowledge interrupt 130.
+        let job = Job {
+            start: (4, 1),
+            status: None,
+            stop: Some((0, 1)),
+            irq: 130,
+            ticks: 10,
+        };
+        let block = || Block::new(0xfff98000, 0x1000, vec![(0, 1)], None).unwrap();
+        assert!(block().with_job(Job { stop: None, ..job }).is_err());
+        let mut engine = block().with_job(job).unwrap();
+        write(&mut engine, &mut h, 0xfff98004, 1);
+        assert_eq!(engine.next_deadline(10), Some(20));
+        advance(&mut engine, &mut h, 20);
+        assert_eq!(engine.state.status, 1);
+        assert_eq!(engine.state.jobs, 1);
+        assert_eq!(engine.next_deadline(20), None);
+        let saved = engine.save();
+        write(&mut engine, &mut h, 0xfff98000, 0);
+        assert_eq!(engine.state.status, 0);
+        assert_eq!(read(&mut engine, &mut h, 0xfff98000), 1);
+        engine.restore(&saved).unwrap();
+        assert_eq!(engine.state.status, 1);
+    }
+
+    #[test]
+    fn commands_set_their_status_field() {
+        let dram = |commands| {
+            Block::new(0xfff0f000, 0x1000, vec![(0x14c, 8)], None)?.with_commands(commands)
+        };
+        let enter = Command {
+            word: 0xb8,
+            value: 0x6a02_0202,
+            status: 0xbc,
+            mask: 0x3f,
+            state: 0x27,
+        };
+        let leave = Command {
+            value: 0x0102_0202,
+            state: 0x20,
+            ..enter
+        };
+        assert!(
+            dram(vec![Command {
+                state: 0x40,
+                ..enter
+            }])
+            .is_err()
+        );
+        assert!(
+            dram(vec![Command {
+                status: 0x14c,
+                ..enter
+            }])
+            .is_err()
+        );
+        let mut block = dram(vec![enter, leave]).unwrap();
+        let base = 0xfff0f000;
+        let mut h = TestHost::new();
+        write(&mut block, &mut h, base + 0xbc, 0x100);
+        write(&mut block, &mut h, base + 0xb8, 0x6a02_0202);
+        assert_eq!(read(&mut block, &mut h, base + 0xbc), 0x127);
+        assert_eq!(read(&mut block, &mut h, base + 0xb8), 0x6a02_0202);
+        write(&mut block, &mut h, base + 0xb8, 0x6a02_0203);
+        assert_eq!(read(&mut block, &mut h, base + 0xbc), 0x127);
+        write(&mut block, &mut h, base + 0xb8, 0x0102_0202);
+        let saved = block.save();
+        assert_eq!(read(&mut block, &mut h, base + 0xbc), 0x120);
+        let mut other = dram(vec![enter, leave]).unwrap();
+        other.restore(&saved).unwrap();
+        assert_eq!(read(&mut other, &mut h, base + 0xbc), 0x120);
+    }
+
+    #[test]
+    fn fixed_words_read_their_value_whatever_is_written() {
+        let block = || Block::new(0xfffc3000, 0x1000, vec![(0, 1)], None).unwrap();
+        assert!(block().with_fixed(vec![(0, 1)]).is_err());
+        let mut engine = block().with_fixed(vec![(0xdc, 0x0100_0100)]).unwrap();
+        let mut h = TestHost::new();
+        write(&mut engine, &mut h, 0xfffc30dc, 1);
+        assert_eq!(read(&mut engine, &mut h, 0xfffc30dc), 0x0100_0100);
+        write(&mut engine, &mut h, 0xfffc30d8, 4);
+        assert_eq!(read(&mut engine, &mut h, 0xfffc30d8), 4);
     }
 }

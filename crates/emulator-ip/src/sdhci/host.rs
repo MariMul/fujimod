@@ -51,6 +51,9 @@ pub struct Options {
     /// card answers only the CMD6 check of function 1 with default speed.
     #[serde(default)]
     pub high_speed: bool,
+    /// Further DRAM banks SDMA reaches: (physical base, bytes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ram_banks: Vec<(u64, u64)>,
 }
 const MAX_DATA_FAULTS: usize = 32;
 const COMMAND_TIMEOUT_ERROR: u16 = 1;
@@ -89,6 +92,8 @@ enum Transfer {
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Phase {
     Command,
+    /// SDHC response reported; the first block's buffer event follows.
+    Response,
     Ready,
     Sector,
     Boundary,
@@ -384,12 +389,17 @@ impl SdHost {
             return Err("ROM SDMA requires DRAM alias".into());
         }
         let physical = if alias { a & 0x3fffffff } else { a };
+        let inside = |base: u64, bytes: u64| {
+            physical >= base
+                && physical
+                    .checked_add(len as u64)
+                    .is_some_and(|end| end <= base + bytes)
+        };
         if address & 3 != 0
             || len == 0
             || len > 0x2000000
-            || physical
-                .checked_add(len as u64)
-                .is_none_or(|end| end > self.options.ram_bytes)
+            || !inside(0, self.options.ram_bytes)
+                && (alias || !self.options.ram_banks.iter().any(|&(b, n)| inside(b, n)))
         {
             return Err("SD DMA exceeds aligned DRAM".into());
         }
@@ -677,7 +687,25 @@ impl SdHost {
             {
                 return Err("SD block-size or DMA mode unsupported".into());
             }
-            if !rom && r.command != 17 && self.regs.get(0x34) & self.regs.get(0x38) & 2 == 0 {
+            // A transfer may start with all its data signals disabled when
+            // their status bits are enabled: X-T20 2.11 writes a PIO
+            // multi-block read with only command complete signalled
+            // (0xc65360..0xc6539c) and enables buffer read ready and transfer
+            // complete afterwards (0xc63588), so the latched status then
+            // drives the interrupt.
+            let data_signals = if r.transfer == Transfer::PioWrite {
+                0x12
+            } else if r.transfer == Transfer::PioRead {
+                0x22
+            } else {
+                0x0a
+            };
+            let enabled = if self.regs.get(0x38) & data_signals == 0 {
+                self.regs.get(0x34)
+            } else {
+                self.regs.get(0x34) & self.regs.get(0x38)
+            };
+            if !rom && r.command != 17 && enabled & 2 == 0 {
                 return Err("SD data-complete signal disabled".into());
             }
             if r.transfer == Transfer::Dma {
@@ -700,7 +728,9 @@ impl SdHost {
                 } else {
                     0x23
                 };
-                if self.regs.get(0x34) & self.regs.get(0x38) & signals != signals {
+                if enabled & signals & !1 != signals & !1
+                    || self.regs.get(0x34) & self.regs.get(0x38) & 1 == 0
+                {
                     return Err("SD PIO directional signals disabled".into());
                 }
             }
@@ -766,6 +796,25 @@ impl SdHost {
             );
         }
         if r.transfer != Transfer::Dma {
+            // On an SDHC host the response precedes the first block: a PIO
+            // transfer reports command complete, then buffer read or write
+            // ready one transfer later. X-T20 2.11 waits for each in turn
+            // (0xc628a4, then 0xc63394 per block) and abandons a transfer
+            // whose buffer-ready event came with the response.
+            if self.options.protocol == Protocol::Sdhc
+                && r.phase == Phase::Command
+                && r.command != 17
+            {
+                r.phase = Phase::Response;
+                r.due = Some(
+                    cx.now()
+                        .checked_add(self.options.transfer_ticks)
+                        .ok_or("SD PIO deadline overflow")?,
+                );
+                self.request = Some(r);
+                self.regs.set(0x30, self.regs.get(0x30) | 1);
+                return self.signal(cx);
+            }
             if r.phase == Phase::Sector && r.transfer == Transfer::PioWrite {
                 if let Payload::Write(first) = r.payload {
                     self.card.write_bytes(
@@ -1024,8 +1073,8 @@ impl SdHost {
         value: u32,
     ) -> Result<(), String> {
         let rom = self.options.protocol == Protocol::Rom;
-        if offset == 0x24 || (16..32).contains(&offset) {
-            return Err("SD response/present-state is read-only".into());
+        if offset == 0x24 || offset == 0x3c || (16..32).contains(&offset) {
+            return Err("SD response/present-state/auto-command status is read-only".into());
         }
         if offset == 0x20 {
             self.pio(cx, Some(value))?;
@@ -1088,6 +1137,23 @@ impl SdHost {
                     .ok_or("SD deadline overflow")?,
             );
             return Ok(());
+        }
+        // Status and signal enables only mask latched status bits and their
+        // interrupt output, so they may change while a command runs (X-T20
+        // 2.11 0xc61b8c clears the status enables before the command ends).
+        if self.request.is_some()
+            && !rom
+            && matches!((offset, size), (0x34 | 0x38, 2 | 4) | (0x36 | 0x3a, 2))
+        {
+            match size {
+                4 => self.regs.put_word(offset, value),
+                _ => self.regs.set(offset, value as u16),
+            }
+            self.regs
+                .set(0x30, self.regs.get(0x30) & self.regs.get(0x34));
+            self.regs
+                .set(0x32, self.regs.get(0x32) & self.regs.get(0x36));
+            return self.signal(cx);
         }
         if self.request.is_some() {
             return Err("SD configuration changed during command".into());
@@ -1442,6 +1508,7 @@ mod tests {
                 ram_bytes: 0x10000,
                 initialization_fault: InitializationFault::None,
                 high_speed: false,
+                ram_banks: vec![],
             },
             Wiring {
                 card: Card::new(sd_card::Options {
@@ -1865,6 +1932,10 @@ mod tests {
                     command(m, h, 0x123a0036, 0);
                 }
                 due(m, h);
+                if protocol == Protocol::Sdhc {
+                    // Command complete first, then the buffer.
+                    due(m, h);
+                }
             }
             let words = fast.fast_reads(BASE, 0x1000);
             let status = fast.fast_reads(BASE + 0x30, 4);
@@ -1934,6 +2005,50 @@ mod tests {
             }
             assert_eq!(normal_status.load(Ordering::Acquire), 0);
             assert_eq!(error_status.load(Ordering::Acquire), 0);
+        }
+    }
+    #[test]
+    fn pio_read_may_enable_its_data_signals_after_the_command() {
+        let mut m = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        m.card.write_bytes(4 * 512, &[0x5a; 1024]).unwrap();
+        // X-T20 2.11 signals command complete only (0xee01) when it writes
+        // the command, then enables buffer read ready and transfer complete.
+        write(&mut m, &mut h, 0x38, 2, 0xee01);
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 2);
+        command(&mut m, &mut h, 0x123a0036, 4);
+        write(&mut m, &mut h, 0x38, 2, 0xee23);
+        assert_eq!(read(&mut m, &mut h, 0x3c, 2), 0);
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 4, 2, 1024);
+        assert!(cx.refusal().is_some());
+        // The response comes first, then each block.
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x21, 1);
+        write(&mut m, &mut h, 0x30, 2, 1);
+        for _ in 0..2 {
+            due(&mut m, &mut h);
+            assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x20, 0x20);
+            write(&mut m, &mut h, 0x30, 2, 0x21);
+            for _ in 0..128 {
+                assert_eq!(read(&mut m, &mut h, 0x20, 4), 0x5a5a5a5a);
+            }
+        }
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 2);
+        // With transfer complete not even enabled as a status, it is refused;
+        // a partly enabled signal set still needs transfer complete.
+        for (status, signal) in [(0xfffd, 0xee01), (0xffff, 0xee21)] {
+            write(&mut m, &mut h, 0x30, 2, 0xffff);
+            write(&mut m, &mut h, 0x34, 2, status);
+            write(&mut m, &mut h, 0x38, 2, signal);
+            write(&mut m, &mut h, 8, 2, 4);
+            let mut cx = h.cx();
+            m.write(&mut cx, BASE + 12, 4, 0x123a0036);
+            assert!(cx.refusal().is_some());
         }
     }
     #[test]
