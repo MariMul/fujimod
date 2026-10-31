@@ -60,7 +60,13 @@ export function ShareAlert(props: {
   const incidents = createMemo(() =>
     props.cameras.flatMap((camera) =>
       camera.sharing?.offline
-        ? [{ key: `${camera.id}:${camera.sharing.offline}`, camera, reason: camera.sharing.offline }]
+        ? [
+            {
+              key: `${camera.id}:${camera.sharing.offline}`,
+              camera,
+              reason: camera.sharing.offline,
+            },
+          ]
         : [],
     ),
   );

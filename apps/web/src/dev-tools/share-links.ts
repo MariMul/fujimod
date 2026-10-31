@@ -16,7 +16,9 @@ export interface ShareLinks {
 
 /** One link per camera body, named by its FF80 product and serial. */
 export function shareCamera(identity: CameraIdentity | undefined): string | undefined {
-  return identity?.product && identity.serial ? `${identity.product} ${identity.serial}` : undefined;
+  return identity?.product && identity.serial
+    ? `${identity.product} ${identity.serial}`
+    : undefined;
 }
 
 const KEY = 'fujimod.dev-tools.share-links';
