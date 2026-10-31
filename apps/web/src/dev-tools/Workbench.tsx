@@ -27,6 +27,7 @@ import { LeaveDebugMode } from './debug-mode/LeaveDebugMode';
 import { debugModeOperations } from './debug-mode/operations';
 import { createOwnerCountdown, type Countdown } from './owner-countdown';
 import { ShareAlert, ownerChime } from './ShareAlert';
+import { useWakeLock } from './wake-lock';
 import { StateCaptures } from './captures/StateCaptures';
 import { MapControls } from './captures/MapControls';
 import type { CaptureSet } from './captures/capture';
@@ -73,6 +74,10 @@ export function Workbench(props: {
     );
   });
   const cameras = () => props.model.cameras();
+  // A shared camera is only reachable while this computer stays awake.
+  useWakeLock(() =>
+    cameras().some((camera) => camera.transport !== 'remote' && Boolean(camera.sharing)),
+  );
   // Follow the newest camera unless one is chosen; keep a chosen camera even once unplugged.
   createEffect(
     () => ({ ids: cameras().map((camera) => camera.id), current: selected() }),

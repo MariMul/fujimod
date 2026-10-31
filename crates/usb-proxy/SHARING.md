@@ -145,8 +145,9 @@ Sharing is displayed independently of the device connection state.
   is being used remotely. Keep this tab in front and your computer on to stay
   connected." If the page was hidden during a remote session, the strip turns
   amber on return and says when the connection was interrupted.
-- **Wake lock:** held only while a remote controller is connected; re-acquired
-  when the tab becomes visible again; released when the last controller leaves.
+- **Wake lock:** held while any camera on this page is shared, so viewers can
+  reach it; re-acquired when the tab becomes visible again (browsers drop it
+  while the tab is hidden); released when sharing stops.
 - **Leaving the page:** closing or reloading the page leaves the room without
   ending it and closes the camera session. Controllers see the camera offline.
   When the page next finds the same camera (FF80 product and serial), it shares

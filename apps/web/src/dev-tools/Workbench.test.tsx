@@ -216,6 +216,32 @@ test('a shared camera that goes away keeps its link, chimes and reconnects from 
   expect(play).toHaveBeenCalledTimes(3);
 });
 
+test('the computer is kept awake while a camera is shared', async () => {
+  const released = vi.fn(async () => {});
+  const request = vi.fn(async () => ({ release: released }));
+  Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } });
+  try {
+    const test = createTestCameraModel({});
+    test.add(testCamera('X70'));
+    const host = mount(test.model);
+    flush();
+    expect(request).not.toHaveBeenCalled();
+    const on = [...host.querySelectorAll('[aria-label="Sharing"] button')].find(
+      (node) => node.textContent === 'On',
+    ) as HTMLButtonElement;
+    on.click();
+    await vi.waitFor(() => {
+      flush();
+      expect(request).toHaveBeenCalledExactlyOnceWith('screen');
+    });
+    test.update('X70', (camera) => ({ ...camera, sharing: undefined }));
+    flush();
+    await vi.waitFor(() => expect(released).toHaveBeenCalledOnce());
+  } finally {
+    Reflect.deleteProperty(navigator, 'wakeLock');
+  }
+});
+
 test('Dump configuration adds configuration.bin to the Files pane', async () => {
   const pages: [number, number][] = [];
   const test = createTestCameraModel({
