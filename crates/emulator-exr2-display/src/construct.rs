@@ -34,6 +34,7 @@ fn scanout(builder: Builder<'_>, model: Model) -> Result<Built, String> {
 
 fn display_timing(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     let Builder {
+        id,
         resources,
         built,
         start_tick,
@@ -52,12 +53,19 @@ fn display_timing(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         let clock = resources.clock(&clock)?;
         let controllers =
             fujimod_emulator_exr2_plan::construction::controllers(built, controllers)?;
+        let output_hold = if options.output_hold {
+            resources.wire(timing::OUTPUT_HOLD_WIRE, id)?;
+            Some(resources.logic_level(timing::OUTPUT_HOLD_WIRE)?)
+        } else {
+            None
+        };
         Box::new(timing::DisplayTiming::new(
             options,
             timing::Wiring {
                 clock,
                 controllers,
                 start_tick,
+                output_hold,
             },
         )?)
     }))

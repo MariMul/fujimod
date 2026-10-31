@@ -62,7 +62,7 @@ impl Device for XppTiming {
             return 0;
         }
         let now = cx.now() as i64;
-        match self.state.read(a, size.into(), now, &mut Host(cx)) {
+        match self.state.read(a, size.into(), now, false, &mut Host(cx)) {
             Ok(value) => value.into(),
             Err(error) => {
                 cx.fail(error.0);
@@ -76,14 +76,14 @@ impl Device for XppTiming {
             return;
         }
         let (now, cpu) = (cx.now() as i64, cx.cpu as i64);
-        if let Err(error) = self.state.write(cpu, a, size.into(), value.into(), now, &mut Host(cx)) {
+        if let Err(error) = self.state.write(cpu, a, size.into(), value.into(), now, false, &mut Host(cx)) {
             cx.fail(error.0);
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now() as i64;
         if self.state.deadline_with_clock(now, true).is_some_and(|due| due <= now) {
-            if let Err(error) = self.state.tick(now, &mut Host(cx)) {
+            if let Err(error) = self.state.tick(now, false, &mut Host(cx)) {
                 cx.fail(error.0);
             }
         }

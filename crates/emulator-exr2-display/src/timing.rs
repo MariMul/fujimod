@@ -9,6 +9,8 @@ use std::sync::{
 
 pub const BASES: [u64; 2] = [0xfff6a000, 0xfff6d000];
 pub const EXTERNAL: &str = "declared-external-phase-clock-unmeasured";
+/// The external logic wire that holds the output boundary interrupt while high.
+pub const OUTPUT_HOLD_WIRE: &str = "display_output_hold";
 /// Profile parsing happens at the host boundary, never on register accesses.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum PhaseProfile {
@@ -134,6 +136,13 @@ pub struct Timing {
     pub bases: [u64; 2],
     #[serde(skip, default = "exr2_irqs")]
     pub irqs: [[u8; 3]; 2],
+    /// Frame-boundary interrupts withheld per bank while the output hold is
+    /// high. Delivered once on release; absent from saved state when zero.
+    #[serde(default, skip_serializing_if = "no_withheld")]
+    pub withheld: [u64; 2],
+}
+fn no_withheld(withheld: &[u64; 2]) -> bool {
+    withheld == &[0, 0]
 }
 fn exr2_bases() -> [u64; 2] {
     BASES
@@ -154,6 +163,7 @@ impl Timing {
             offsets: period.map(|p| [p / 2, p * 3 / 4, p]),
             bases: BASES,
             irqs: IRQS,
+            withheld: [0; 2],
         }
     }
     fn log(
@@ -264,6 +274,7 @@ impl Timing {
         i: usize,
         phase: usize,
         due: i64,
+        held: bool,
         host: &mut dyn TimingHost,
     ) -> Result<()> {
         let b = &mut self.banks[i];
@@ -274,6 +285,17 @@ impl Timing {
             b.status &= !2;
         }
         b.phases[phase] += 1;
+        if phase == 0 && held {
+            self.withheld[i] += 1;
+            return Self::log(
+                host,
+                "Display output boundary withheld",
+                vec![
+                    ("instance", Value::int(i as i64)),
+                    ("source_tick", Value::int(due)),
+                ],
+            );
+        }
         let (line, targets) = self.targets(i, phase, host)?;
         Self::log(
             host,
@@ -302,7 +324,36 @@ impl Timing {
         }
         Ok(())
     }
-    pub fn tick(&mut self, now: i64, host: &mut dyn TimingHost) -> Result<()> {
+    /// Deliver each bank's withheld frame-boundary interrupt once. The output
+    /// presents one frame per boundary, however many boundaries were held.
+    pub fn release_withheld(&mut self, host: &mut dyn TimingHost) -> Result<()> {
+        for i in 0..2 {
+            if self.withheld[i] == 0 {
+                continue;
+            }
+            let count = std::mem::take(&mut self.withheld[i]);
+            let (line, targets) = self.targets(i, 0, host)?;
+            Self::log(
+                host,
+                "Display output boundary delivered",
+                vec![
+                    ("instance", Value::int(i as i64)),
+                    ("withheld", Value::int(count as i64)),
+                    ("physical_irq", Value::hex(line as u128)),
+                ],
+            )?;
+            for cpu in targets {
+                host.queue_irq(cpu, line)?;
+            }
+        }
+        Ok(())
+    }
+    pub fn has_withheld(&self) -> bool {
+        self.withheld.iter().any(|count| *count > 0)
+    }
+    /// Advance to `now`. While `held` is set, frame-boundary interrupts are
+    /// withheld instead of delivered.
+    pub fn tick(&mut self, now: i64, held: bool, host: &mut dyn TimingHost) -> Result<()> {
         if now < self.last_tick {
             return Err("Display virtual time moved backwards".into());
         }
@@ -328,6 +379,7 @@ impl Timing {
                     i,
                     self.phase_order[self.banks[i].next_phase_index],
                     due,
+                    held,
                     host,
                 )?;
                 let b = &mut self.banks[i];
@@ -345,7 +397,14 @@ impl Timing {
         self.last_tick = now;
         Ok(())
     }
-    pub fn read(&mut self, a: u64, size: u32, now: i64, host: &mut dyn TimingHost) -> Result<u32> {
+    pub fn read(
+        &mut self,
+        a: u64,
+        size: u32,
+        now: i64,
+        held: bool,
+        host: &mut dyn TimingHost,
+    ) -> Result<u32> {
         let (i, o) = address_in(&self.bases, a, size)?;
         if now < self.last_tick {
             return Err("Display virtual time moved backwards".into());
@@ -353,7 +412,7 @@ impl Timing {
         // A status read between events is pure, including checkpoint state.
         // Due work and clock-peer transitions remain explicit boundaries.
         if self.deadline_with_clock(now, host.clock_ready()?).is_some_and(|at| at <= now) {
-            self.tick(now, host)?;
+            self.tick(now, held, host)?;
         }
         Ok(if o == 0x30 {
             self.banks[i].status
@@ -369,6 +428,7 @@ impl Timing {
         size: u32,
         value: i128,
         now: i64,
+        held: bool,
         host: &mut dyn TimingHost,
     ) -> Result<()> {
         let (i, o) = address_in(&self.bases, a, size)?;
@@ -388,7 +448,7 @@ impl Timing {
                 "Unrecovered display timing bits {a:#x}={v}"
             )));
         }
-        self.tick(now, host)?;
+        self.tick(now, held, host)?;
         let v = value as u32;
         if o == 0 && v & 0x10000 != 0 {
             self.validate_routes(i, host)?;
@@ -499,11 +559,16 @@ pub struct Options {
     pub mode: ClockMode,
     pub frame_ticks: Option<u64>,
     pub stop_ticks: u64,
+    /// Connect the external output-hold wire, which withholds frame-boundary
+    /// (phase 0) interrupts while it is high.
+    #[serde(default)]
+    pub output_hold: bool,
 }
 pub struct Wiring {
     pub clock: fujimod_emulator_devices::exr2::clock::Output,
     pub controllers: Vec<(usize, fujimod_emulator_devices::exr2::irq::Inputs)>,
     pub start_tick: u64,
+    pub output_hold: Option<fujimod_emulator_devices::signals::Level>,
 }
 pub struct DisplayTiming {
     state: Timing,
@@ -511,6 +576,7 @@ pub struct DisplayTiming {
     options: Options,
     clock: fujimod_emulator_devices::exr2::clock::Output,
     controllers: [fujimod_emulator_devices::exr2::irq::Inputs; 2],
+    output_hold: Option<fujimod_emulator_devices::signals::Level>,
     ceiling: u64,
 }
 struct Connected<'a, 'b> {
@@ -583,8 +649,13 @@ impl DisplayTiming {
             options,
             clock: wiring.clock,
             controllers,
+            output_hold: wiring.output_hold,
             ceiling,
         })
+    }
+    /// Whether the external output hold is high.
+    fn output_hold_high(&self) -> bool {
+        self.output_hold.as_ref().is_some_and(|hold| hold.high())
     }
     fn publish_status(&self) {
         for (snapshot, bank) in self.status_snapshots.iter().zip(&self.state.banks) {
@@ -684,13 +755,14 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
             return 0;
         }
         let Some(now) = self.time(cx) else { return 0 };
+        let held = self.output_hold_high();
         let result = {
             let mut host = Connected {
                 cx,
                 clock: &self.clock,
                 controllers: &self.controllers,
             };
-            self.state.read(a, size as u32, now, &mut host)
+            self.state.read(a, size as u32, now, held, &mut host)
         };
         self.publish_status();
         match result {
@@ -708,6 +780,7 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
         }
         let Some(now) = self.time(cx) else { return };
         let cpu = cx.cpu as i64;
+        let held = self.output_hold_high();
         let result = {
             let mut host = Connected {
                 cx,
@@ -715,7 +788,7 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
                 controllers: &self.controllers,
             };
             self.state
-                .write(cpu, a, size as u32, value.into(), now, &mut host)
+                .write(cpu, a, size as u32, value.into(), now, held, &mut host)
         };
         self.publish_status();
         if let Err(error) = result {
@@ -724,10 +797,13 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
     }
     fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
         let Some(now) = self.time(cx) else { return };
-        if !self
-            .state
-            .deadline_with_clock(now, self.clock.ready())
-            .is_some_and(|due| due <= now)
+        let held = self.output_hold_high();
+        let delivers = !held && self.state.has_withheld();
+        if !delivers
+            && !self
+                .state
+                .deadline_with_clock(now, self.clock.ready())
+                .is_some_and(|due| due <= now)
         {
             return;
         }
@@ -737,7 +813,12 @@ impl fujimod_emulator_devices::Device for DisplayTiming {
                 clock: &self.clock,
                 controllers: &self.controllers,
             };
-            self.state.tick(now, &mut host)
+            let released = if delivers {
+                self.state.release_withheld(&mut host)
+            } else {
+                Ok(())
+            };
+            released.and_then(|()| self.state.tick(now, held, &mut host))
         };
         self.publish_status();
         if let Err(error) = result {
@@ -801,11 +882,13 @@ mod native_tests {
                 mode: ClockMode::ConfiguredClocked,
                 frame_ticks: Some(12),
                 stop_ticks: 2,
+                output_hold: false,
             },
             Wiring {
                 clock: clock.output(),
                 controllers: inputs.into_iter().enumerate().collect(),
                 start_tick: 0,
+                output_hold: None,
             },
         )
         .unwrap();
@@ -885,12 +968,14 @@ mod native_tests {
                 Options {
                     mode: ClockMode::External,
                     frame_ticks: None,
-                    stop_ticks: 2
+                    stop_ticks: 2,
+                    output_hold: false,
                 },
                 Wiring {
                     clock: clock.output(),
                     controllers: vec![],
                     start_tick: 0,
+                    output_hold: None,
                 }
             )
             .is_err()
@@ -910,5 +995,82 @@ mod native_tests {
         host.now = u64::MAX;
         timing.advance(&mut host.cx());
         assert!(timing.next_deadline(u64::MAX).is_some());
+    }
+}
+#[cfg(test)]
+mod output_hold_tests {
+    use super::*;
+
+    /// Records delivered interrupts; CPU 0 has every line enabled.
+    #[derive(Default)]
+    struct Recorder {
+        irqs: Vec<(u8, u8)>,
+    }
+    impl TimingHost for Recorder {
+        fn enabled(&self) -> [u128; 2] {
+            [u128::MAX, 0]
+        }
+        fn clock_ready(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+        fn record(&mut self, _record: Record) -> Result<()> {
+            Ok(())
+        }
+        fn queue_irq(&mut self, cpu: u8, line: u8) -> Result<()> {
+            self.irqs.push((cpu, line));
+            Ok(())
+        }
+    }
+
+    const PHASE0: u8 = 0x40;
+    const PHASE1: u8 = 0x41;
+    const PHASE2: u8 = 0x42;
+
+    /// One running bank with a frame every 12 ticks and distinct phase lines.
+    /// The bit-16 profile takes its cadence from the bank's enable flag.
+    fn running_timing() -> Timing {
+        let mut timing = Timing::new(Some(12), 2, "bit16".into(), 0);
+        timing.irqs = [[PHASE0, PHASE1, PHASE2], [0x50, 0x51, 0x52]];
+        timing.banks[0].enabled = true;
+        timing
+    }
+
+    fn count(host: &Recorder, line: u8) -> usize {
+        host.irqs.iter().filter(|(_, l)| *l == line).count()
+    }
+
+    #[test]
+    fn held_frame_boundaries_are_withheld_and_released_once() {
+        let mut timing = running_timing();
+        let mut host = Recorder::default();
+
+        // Two frames pass while the hold is high: their boundaries are
+        // withheld, and the other phases still reach the guest.
+        timing.tick(12, true, &mut host).unwrap();
+        timing.tick(24, true, &mut host).unwrap();
+        assert_eq!(count(&host, PHASE0), 0);
+        assert_eq!(timing.withheld, [2, 0]);
+        assert_eq!(count(&host, PHASE1), 2);
+        assert_eq!(count(&host, PHASE2), 2);
+
+        // Release delivers one frame boundary for the held frames, and the
+        // cadence then resumes with its boundaries delivered again.
+        assert!(timing.has_withheld());
+        timing.release_withheld(&mut host).unwrap();
+        assert_eq!(count(&host, PHASE0), 1);
+        assert_eq!(timing.withheld, [0, 0]);
+        assert!(!timing.has_withheld());
+        timing.tick(36, false, &mut host).unwrap();
+        assert_eq!(count(&host, PHASE0), 2);
+        assert_eq!(count(&host, PHASE1), 3);
+    }
+
+    #[test]
+    fn saved_state_omits_withheld_counts_when_none_are_held() {
+        let timing = running_timing();
+        let saved = serde_json::to_value(&timing).unwrap();
+        assert!(saved.get("withheld").is_none());
+        let restored: Timing = serde_json::from_value(saved).unwrap();
+        assert_eq!(restored.withheld, [0, 0]);
     }
 }
