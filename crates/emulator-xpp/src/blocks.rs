@@ -111,8 +111,13 @@ const RESIZE_SOURCE_STRIDE: u64 = 0xc4;
 const RESIZE_DESTINATION: u64 = 0xc8;
 const RESIZE_DESTINATION_STRIDE: u64 = 0xcc;
 const RESIZE_FORMAT: u64 = 0x100;
-/// The only resizer format seen: packed 4:2:2 in and out.
+/// Packed 4:2:2 in and out, the format of a shot's jobs.
 const RESIZE_PACKED_422: u32 = 0x1100_0002;
+/// The same with bits 16 and 20 set: X-T20 2.11 playback (0x1548040) sets
+/// them from request bytes +0x32 and +0x31 when it magnifies the decoded
+/// picture to the display. Their effect is not modeled; the layout is
+/// declared packed 4:2:2 as well.
+const RESIZE_PACKED_422_PLAYBACK: u32 = 0x1111_0002;
 /// Picture a live-view output unit writes at each frame.
 #[derive(Clone, Debug, PartialEq)]
 enum Picture {
@@ -265,7 +270,7 @@ impl Block {
                 )
             }
             Work::Resize => {
-                if word(RESIZE_FORMAT) != RESIZE_PACKED_422 {
+                if ![RESIZE_PACKED_422, RESIZE_PACKED_422_PLAYBACK].contains(&word(RESIZE_FORMAT)) {
                     return Err(format!(
                         "Unmodeled resizer format {:#x}",
                         word(RESIZE_FORMAT)
@@ -974,6 +979,23 @@ mod tests {
         advance(&mut resizer, &mut h, 40);
         let scaled = &h.ram[0x8000..0x8000 + 12 * 6];
         assert!(scaled.chunks(4).all(|p| p == pixel));
+        // Playback's format magnifies: 6x6 to 12x12 at half-pixel steps.
+        h.ram[0x8000..0x8000 + 24 * 12].fill(0);
+        for (offset, value) in [
+            (0x08, 0x5_0005),
+            (0x14, 0xb_000b),
+            (0x18, 0x800),
+            (0x1c, 0x800),
+            (0xc0, 0x4000),
+            (0xcc, 12),
+            (0x100, RESIZE_PACKED_422_PLAYBACK),
+        ] {
+            write(&mut resizer, &mut h, 0xfffc3000 + offset, value);
+        }
+        write(&mut resizer, &mut h, 0xfffc3004, 1);
+        advance(&mut resizer, &mut h, 60);
+        let magnified = &h.ram[0x8000..0x8000 + 24 * 12];
+        assert!(magnified.chunks(4).all(|p| p == pixel));
     }
 
     #[test]
