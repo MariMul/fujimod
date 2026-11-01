@@ -5667,13 +5667,8 @@
           "errors": []
         },
         "facts": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "service_exit.jig_deinit_link",
-              "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "first-start": {
           "status": "available",
