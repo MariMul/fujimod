@@ -38,8 +38,8 @@
 //! response. sRGB black reads [`BLACK`], white [`WHITE`]; no optical or
 //! spectral calibration is claimed. The tile phase at the buffer origin is
 //! A caller may supply a host RGB image ([`Control::with_sensor_image`]):
-//! the read-out then writes that image, scaled to the whole raster by
-//! nearest neighbour, through the same response and tile phase in place of
+//! the read-out then writes that image, scaled to the whole raster
+//! bilinearly, through the same response and tile phase in place of
 //! the virtual scene. The image is caller-owned (a local picture), not a
 //! catalog input.
 //!
@@ -212,10 +212,7 @@ impl Control {
             for (x, sample) in line.chunks_exact_mut(2).enumerate() {
                 let colour = sites[(x + TILE_PHASE.1 as usize) % 6] as usize;
                 let rgb = match &self.sensor_image {
-                    Some((w, h, image)) => {
-                        let i = (((y * h / lines) * w + x as u64 * w / width) * 3) as usize;
-                        [image[i], image[i + 1], image[i + 2]]
-                    }
+                    Some((w, h, image)) => bilinear(image, *w, *h, x as u64, y, width, lines),
                     None => fujimod_virtual_scene::rgb(scene, x as u64, y),
                 };
                 sample.copy_from_slice(&response[usize::from(rgb[colour])].to_le_bytes());
@@ -247,6 +244,25 @@ impl Control {
         }
     }
 }
+/// The host image at raster site (`x`, `y`) of a `width` x `height` raster,
+/// interpolated bilinearly between pixel centres (8-bit fixed point).
+fn bilinear(image: &[u8], w: u64, h: u64, x: u64, y: u64, width: u64, height: u64) -> [u8; 3] {
+    // Pixel-centre position in 1/256 units, clamped to the image.
+    let at = |site: u64, sites: u64, size: u64| {
+        let p = ((2 * site + 1) * size * 256 / (2 * sites)).saturating_sub(128);
+        let p = p.min((size - 1) * 256);
+        ((p / 256) as usize, (p % 256) as u32)
+    };
+    let ((x0, fx), (y0, fy)) = (at(x, width, w), at(y, height, h));
+    let (x1, y1) = ((x0 + 1).min(w as usize - 1), (y0 + 1).min(h as usize - 1));
+    let pixel = |px: usize, py: usize, c: usize| u32::from(image[(py * w as usize + px) * 3 + c]);
+    [0, 1, 2].map(|c| {
+        let top = pixel(x0, y0, c) * (256 - fx) + pixel(x1, y0, c) * fx;
+        let bottom = pixel(x0, y1, c) * (256 - fx) + pixel(x1, y1, c) * fx;
+        ((top * (256 - fy) + bottom * fy + 32768) >> 16) as u8
+    })
+}
+
 impl Device for Control {
     fn name(&self) -> &'static str {
         "xpp-imaging-control"
@@ -529,12 +545,16 @@ mod tests {
             ticks: 10,
         };
         let control = || Control::new(BASE).unwrap().with_readout(readout).unwrap();
-        // Red on the left, blue on the right.
-        let image = vec![255, 0, 0, 0, 0, 255];
-        assert!(control().with_sensor_image(2, 1, image.clone()).is_err());
+        // Four red pixels, then four blue: one pixel centre per sample.
+        let image = [[255, 0, 0]; 4]
+            .into_iter()
+            .chain([[0, 0, 255]; 4])
+            .flatten()
+            .collect::<Vec<u8>>();
+        assert!(control().with_sensor_image(8, 1, image.clone()).is_err());
         let framed = || control().with_sensor_frame(SENSOR_PROFILE).unwrap();
-        assert!(framed().with_sensor_image(2, 2, image.clone()).is_err());
-        let mut control = framed().with_sensor_image(2, 1, image).unwrap();
+        assert!(framed().with_sensor_image(8, 2, image.clone()).is_err());
+        let mut control = framed().with_sensor_image(8, 1, image).unwrap();
         let mut h = TestHost::new();
         let unit = BASE + 0xc0;
         write(&mut control, &mut h, unit + 0x08, 6);
