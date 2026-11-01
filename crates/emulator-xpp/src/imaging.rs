@@ -37,6 +37,12 @@
 //! first frame over the whole raster, linear sRGB through a declared X-Trans
 //! response. sRGB black reads [`BLACK`], white [`WHITE`]; no optical or
 //! spectral calibration is claimed. The tile phase at the buffer origin is
+//! A caller may supply a host RGB image ([`Control::with_sensor_image`]):
+//! the read-out then writes that image, scaled to the whole raster by
+//! nearest neighbour, through the same response and tile phase in place of
+//! the virtual scene. The image is caller-owned (a local picture), not a
+//! catalog input.
+//!
 //! [`TILE_PHASE`] (line, sample): the 2.11 RAF writer stores 4032 lines of
 //! 6160 samples from buffer + 0x723c0, 38 lines down and 128 samples back
 //! (checked on an emulated RAF: the scene's edges move by exactly that), so
@@ -117,6 +123,9 @@ pub struct Control {
     readout_status: u32,
     /// The readout writes the declared sensor frame.
     sensor_frame: bool,
+    /// Host RGB image (width, height, rows of red, green and blue bytes)
+    /// written instead of the virtual scene.
+    sensor_image: Option<(u64, u64, std::sync::Arc<[u8]>)>,
 }
 impl Control {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -132,6 +141,7 @@ impl Control {
             readout_due: None,
             readout_status: 0,
             sensor_frame: false,
+            sensor_image: None,
         })
     }
     /// A sensor readout unit at a channel offset.
@@ -151,6 +161,24 @@ impl Control {
             return Err(format!("unknown X-Processor Pro sensor frame {profile}"));
         }
         self.sensor_frame = true;
+        Ok(self)
+    }
+    /// The declared sensor frame takes its picture from a host RGB image of
+    /// `width` x `height` pixels instead of the virtual scene.
+    pub fn with_sensor_image(
+        mut self,
+        width: u64,
+        height: u64,
+        rgb: Vec<u8>,
+    ) -> Result<Self, String> {
+        if !self.sensor_frame
+            || !(1..=16384).contains(&width)
+            || !(1..=16384).contains(&height)
+            || width * height * 3 != rgb.len() as u64
+        {
+            return Err("Invalid X-Processor Pro sensor host image".into());
+        }
+        self.sensor_image = Some((width, height, rgb.into()));
         Ok(self)
     }
     /// Lines of the declared sensor frame into the programmed buffer.
@@ -183,7 +211,13 @@ impl Control {
             let sites = &XTRANS[((y + TILE_PHASE.0) % 6) as usize];
             for (x, sample) in line.chunks_exact_mut(2).enumerate() {
                 let colour = sites[(x + TILE_PHASE.1 as usize) % 6] as usize;
-                let rgb = fujimod_virtual_scene::rgb(scene, x as u64, y);
+                let rgb = match &self.sensor_image {
+                    Some((w, h, image)) => {
+                        let i = (((y * h / lines) * w + x as u64 * w / width) * 3) as usize;
+                        [image[i], image[i + 1], image[i + 2]]
+                    }
+                    None => fujimod_virtual_scene::rgb(scene, x as u64, y),
+                };
                 sample.copy_from_slice(&response[usize::from(rgb[colour])].to_le_bytes());
             }
             if cx.ram_write(destination + y * stride, &line).is_err() {
@@ -485,5 +519,37 @@ mod tests {
             [WHITE, WHITE, WHITE, BLACK, BLACK, BLACK, WHITE, BLACK]
         );
         assert_eq!(h.ram[0x1000 + 16 * 6], 0);
+    }
+
+    #[test]
+    fn a_sensor_host_image_replaces_the_scene_at_each_site() {
+        let readout = Readout {
+            offset: 0xc0,
+            irq: 98,
+            ticks: 10,
+        };
+        let control = || Control::new(BASE).unwrap().with_readout(readout).unwrap();
+        // Red on the left, blue on the right.
+        let image = vec![255, 0, 0, 0, 0, 255];
+        assert!(control().with_sensor_image(2, 1, image.clone()).is_err());
+        let framed = || control().with_sensor_frame(SENSOR_PROFILE).unwrap();
+        assert!(framed().with_sensor_image(2, 2, image.clone()).is_err());
+        let mut control = framed().with_sensor_image(2, 1, image).unwrap();
+        let mut h = TestHost::new();
+        let unit = BASE + 0xc0;
+        write(&mut control, &mut h, unit + 0x08, 6);
+        write(&mut control, &mut h, unit + 0x0c, 0x1000);
+        write(&mut control, &mut h, unit + 0x10, 16);
+        write(&mut control, &mut h, unit, 1);
+        advance(&mut control, &mut h, 10);
+        let row: Vec<u16> = (0..8)
+            .map(|x| u16::from_le_bytes([h.ram[0x1000 + 2 * x], h.ram[0x1001 + 2 * x]]))
+            .collect();
+        // Sites B G G R | G G B G: the red half lights its R site, the blue
+        // half its B site.
+        assert_eq!(
+            row,
+            [BLACK, BLACK, BLACK, WHITE, BLACK, BLACK, WHITE, BLACK]
+        );
     }
 }
