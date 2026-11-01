@@ -5681,13 +5681,8 @@
           ]
         },
         "first-start": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "first-start",
-              "reason": "ValueError: ui_frame_write_triplet_113d8: 0 candidates, 0 verified results"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "flash": {
           "status": "unavailable",
