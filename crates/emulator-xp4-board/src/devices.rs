@@ -1402,11 +1402,12 @@ impl Devices {
         }
         Err("ARMv7-A device made no deadline progress".into())
     }
+    /// Device states keyed by model name; see [`state_keys`].
     pub fn snapshots(&self) -> std::collections::BTreeMap<String, String> {
-        self.models
-            .iter()
-            .flatten()
-            .map(|m| (m.name().into(), m.save().to_string()))
+        let models: Vec<_> = self.models.iter().flatten().collect();
+        state_keys(models.iter().map(|m| m.name()))
+            .into_iter()
+            .zip(models.iter().map(|m| m.save().to_string()))
             .collect()
     }
 }
@@ -1470,5 +1471,37 @@ impl Cluster {
             }
         }
         Ok(())
+    }
+}
+
+/// State keys in wiring order: a model's name, or `name#n` (n counting from 0
+/// in wiring order) when several models share it, so no state is dropped.
+fn state_keys<'a>(names: impl Iterator<Item = &'a str> + Clone) -> Vec<String> {
+    let mut counts = std::collections::BTreeMap::<&str, usize>::new();
+    for name in names.clone() {
+        *counts.entry(name).or_default() += 1;
+    }
+    let mut seen = std::collections::BTreeMap::<&str, usize>::new();
+    names
+        .map(|name| {
+            if counts[name] == 1 {
+                return name.to_owned();
+            }
+            let index = seen.entry(name).or_default();
+            *index += 1;
+            format!("{name}#{}", *index - 1)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod state_key_tests {
+    #[test]
+    fn shared_names_are_numbered_in_wiring_order() {
+        let names = ["serial", "timer", "serial", "serial"];
+        assert_eq!(
+            super::state_keys(names.into_iter()),
+            ["serial#0", "timer", "serial#1", "serial#2"]
+        );
     }
 }
