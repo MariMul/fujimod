@@ -440,6 +440,44 @@ impl Device for Timers {
         self.scheduled = None;
         self.model.restore(v)
     }
+    /// The channels and the earliest queued event. The event itself is in the
+    /// board timeline, which restores with this state, so the cache must come
+    /// back with it: re-arming would queue an extra event and change when
+    /// the device is advanced.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&self.model, self.scheduled),
+        )
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Timer checkpoint has unexpected parts".into());
+        }
+        let (model, scheduled): (timer::TickTimers, Option<u64>) = saved.decode(self.name())?;
+        self.model.check(&model)?;
+        // A queued event is never later than the next channel expiry.
+        if let (Some(at), Some(next)) = (scheduled, model.next_event_tick(0))
+            && at > next
+        {
+            return Err("Timer checkpoint event cache is later than its next expiry".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        (self.model, self.scheduled) = saved.decode(self.name())?;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
 }
 /// Bytes of a hexadecimal node field.
 fn hex(text: &str) -> Result<Vec<u8>, String> {
@@ -1214,5 +1252,44 @@ mod tests {
             error(json!([unit(Value::Null)])),
             "Invalid X-Processor Pro live-view image"
         );
+    }
+
+    #[test]
+    fn timer_checkpoint_keeps_the_event_cache_that_matches_the_board_timeline() {
+        use fujimod_emulator_devices::test_host::{TestHost, assert_exact_restore, write};
+        let base = 0xfff30000;
+        let mut timers = Timers {
+            base,
+            model: timer::TickTimers::new(&[(0, 48), (1, 49)]).unwrap(),
+            scheduled: None,
+        };
+        let mut host = TestHost::new();
+        write(&mut timers, &mut host, base + 0x100, 40);
+        write(&mut timers, &mut host, base + 0x104, 40);
+        write(&mut timers, &mut host, base, 0xfffe_0001);
+        let expiry = timers.model.next_event_tick(0).unwrap();
+        assert_eq!(timers.scheduled, Some(expiry));
+        let saved = assert_exact_restore(&mut timers, |d| {
+            let mut host = TestHost::new();
+            host.now = expiry + 1;
+            let mut cx = host.cx();
+            d.advance(&mut cx);
+        });
+        // The cache is part of the state: a restored device does not queue the
+        // same event a second time.
+        assert_eq!(timers.scheduled, Some(expiry));
+        let mut fresh = Timers {
+            base,
+            model: timer::TickTimers::new(&[(0, 48), (1, 49)]).unwrap(),
+            scheduled: None,
+        };
+        fresh.restore_checkpoint(&saved).unwrap();
+        assert_eq!(fresh.scheduled, Some(expiry));
+        let mut miswired = Timers {
+            base,
+            model: timer::TickTimers::new(&[(0, 50)]).unwrap(),
+            scheduled: None,
+        };
+        assert!(miswired.restore_checkpoint(&saved).is_err());
     }
 }

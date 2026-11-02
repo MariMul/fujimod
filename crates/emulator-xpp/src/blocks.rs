@@ -654,6 +654,40 @@ impl Device for Block {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.check(&state)?;
+        self.state = state;
+        self.publish();
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("Register block checkpoint has unexpected parts".into());
+        }
+        self.check(&saved.decode(self.name())?)
+    }
+    /// The published words are shared with the color unit's reader and are
+    /// refreshed in place from the restored register file.
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode(self.name())?;
+        self.publish();
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.fingerprint())
+    }
+}
+impl Block {
+    fn check(&self, state: &State) -> Result<(), String> {
         let started = self.frames.is_some_and(|f| {
             let (offset, mask) = f.start;
             state.words.get(&offset).is_some_and(|w| w & mask != 0)
@@ -678,8 +712,6 @@ impl Device for Block {
         {
             return Err("Invalid register block checkpoint".into());
         }
-        self.state = state;
-        self.publish();
         Ok(())
     }
 }
