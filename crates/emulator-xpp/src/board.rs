@@ -92,6 +92,19 @@ pub struct LiveViewImage {
     /// Host RGB image that replaces the uniform image.
     #[serde(default)]
     pub host_image: Option<HostImage>,
+    /// Uniform scene developed with the color unit's film law and white
+    /// balance, in place of the fixed `ycbcr` pair (which stays as the image
+    /// until the firmware programs the unit).
+    #[serde(default)]
+    pub film: Option<LiveViewFilm>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiveViewFilm {
+    /// 14-bit linear light of the scene at the reference white balance.
+    pub linear_rgb: [u16; 3],
+    /// (R, G, B) gains at which the scene renders neutral.
+    pub white_balance_reference: [u32; 3],
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -755,7 +768,24 @@ pub fn build(
                 }
                 if let Some(image) = live_view_image {
                     model = match (image.scene.as_deref(), image.host_image) {
-                        (None, None) => model.with_live_view_image(image.lines, image.ycbcr)?,
+                        (None, None) => match image.film {
+                            None => model.with_live_view_image(image.lines, image.ycbcr)?,
+                            Some(film) => {
+                                let (_, words, _) = color
+                                    .as_ref()
+                                    .ok_or("a live-view film needs the still color unit")?;
+                                model.with_live_view_film(
+                                    image.lines,
+                                    film.linear_rgb,
+                                    image.ycbcr,
+                                    words.clone(),
+                                    film.white_balance_reference,
+                                )?
+                            }
+                        },
+                        (Some(_), _) | (_, Some(_)) if image.film.is_some() => {
+                            return Err("a live-view film has no scene or host image".into());
+                        }
                         (Some(fujimod_virtual_scene::PROFILE), None) => {
                             model.with_live_view_scene(image.lines)?
                         }
