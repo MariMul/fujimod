@@ -1,0 +1,133 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xt20-211-restart",
+  "firmware_id": "xt20-211",
+  "product": "X-T20",
+  "internal_version": "1.46",
+  "code_alias": 1073741824,
+  "code_checks": [
+    {
+      "name": "query_dispatch",
+      "address": 22202964,
+      "size": 136,
+      "sha256": "1cf12727d03a87800d665bc63ed33c31e9ace779ec0804d5cb425d023e6a4380"
+    },
+    {
+      "name": "query_callback",
+      "address": 22211932,
+      "size": 144,
+      "sha256": "52ce46be65ea0718713807b4edf8b037379a43412c63c0dccbfcf10b8cda15b4"
+    },
+    {
+      "name": "power_off_sender",
+      "address": 22467236,
+      "size": 232,
+      "sha256": "978ba391e7177d3ea471806a74778436d8edf51083871d3ad17a6a95cdbe5c56"
+    },
+    {
+      "name": "message_send",
+      "address": 22465828,
+      "size": 64,
+      "sha256": "692af90477f12e99ef7f69f5d6ffccc2a09ceb2d1e00efbb71ac35ba3bdf87a9"
+    },
+    {
+      "name": "message_dispatcher",
+      "address": 23605392,
+      "size": 1088,
+      "sha256": "fdad60e61a726eb988a8c62d362dfafa79fa5c69dc0dac0245613de83e8a1649"
+    },
+    {
+      "name": "chart_engine",
+      "address": 23604912,
+      "size": 256,
+      "sha256": "15664df0521dd48d003258e54624e893b96d84275d81d677970826f2393021d3"
+    },
+    {
+      "name": "request_decoder",
+      "address": 23608468,
+      "size": 224,
+      "sha256": "c9e9c3f4b1e3ecc86c91969f02d46d292fe92843a914d45c4a3f81b91a63d19c"
+    },
+    {
+      "name": "power_off",
+      "address": 23621244,
+      "size": 216,
+      "sha256": "6ef61c0a31b2b0345ee005a50a4c59d82dcdd61028007e49d35191091ba7b95b"
+    },
+    {
+      "name": "alarm_setter",
+      "address": 13041044,
+      "size": 236,
+      "sha256": "4752b7b009158e50d799dbf69d462e4c41009be5c69cbfd408856cca08ec81ff"
+    },
+    {
+      "name": "power_cut",
+      "address": 12899564,
+      "size": 148,
+      "sha256": "5a36aa1232be7b99ba2554a69faff7781c0958439d08373d2534a7919c6bb6a1"
+    },
+    {
+      "name": "message_chart_cells",
+      "address": 26382284,
+      "size": 10,
+      "sha256": "0e036d9d9c336f9147786afb83c20007a837f5c02ef8a1414e5611e51ae1d7ad"
+    },
+    {
+      "name": "message_action",
+      "address": 26381236,
+      "size": 4,
+      "sha256": "9dda0538242efdb2a4b7dffac88016e0f286122fa28c0ebb51ea7dc8c54b6664"
+    },
+    {
+      "name": "power_off_chart_cells",
+      "address": 26380952,
+      "size": 2,
+      "sha256": "25dfd29c09617dcc9852281c030e5b3037a338a4712a42a21c907f259c6412a0"
+    },
+    {
+      "name": "power_off_action",
+      "address": 26381912,
+      "size": 4,
+      "sha256": "18074c70dd15fa9aff3aac3e2422cc748dff60f4691797105724629f08cd52e1"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 29818084,
+      "callback_offset": 12,
+      "stock_callback": 22546340,
+      "output_fields": 30735500,
+      "output_bytes": 8
+    },
+    "sender": 22467236,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 8,
+    "ui": {
+      "mode_address": 18673732,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 18673735,
+      "menu_active_address": 18067664
+    },
+    "power_off": {
+      "entry": 23621244,
+      "halt": 23621456,
+      "power_cut": 12899564,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
+      },
+      "deadline_parameter": 0,
+      "rollover_parameter": 13
+    }
+  }
+}

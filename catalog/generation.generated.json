@@ -5864,13 +5864,8 @@
           "errors": []
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "RestartCatalogError: Wake power-off located (request 0x86, sender 0x156d2a4, power-off 0x1686e7c); no debug-USB transport to the sender is located"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",

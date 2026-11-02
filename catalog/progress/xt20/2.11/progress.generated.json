@@ -52,7 +52,7 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "controls",
@@ -88,7 +88,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "partial"
+          "result": "not-run"
         },
         {
           "id": "emulator-sd-boot",
@@ -228,7 +228,7 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
@@ -248,7 +248,7 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "partial",
+      "result": "stale",
       "passed": 2,
       "total": 3
     },
@@ -259,7 +259,7 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },
