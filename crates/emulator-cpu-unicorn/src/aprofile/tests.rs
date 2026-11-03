@@ -350,10 +350,18 @@ fn armv7a_checkpoint_reports_its_backings_fingerprints_and_imports_into_a_fresh_
         cpu
     };
     let set = |cpu: &Core, n: usize, value: u32| {
-        cpu.write_register(arm::CORE[n], &value.to_le_bytes()).unwrap()
+        cpu.write_register(arm::CORE[n], &value.to_le_bytes())
+            .unwrap()
     };
     let cpu = open();
-    assert_eq!(cpu.checkpoint_backings().unwrap().iter().map(|b| b.1).collect::<Vec<_>>(), [0x4000]);
+    assert_eq!(
+        cpu.checkpoint_backings()
+            .unwrap()
+            .iter()
+            .map(|b| b.1)
+            .collect::<Vec<_>>(),
+        [0x4000]
+    );
     set(&cpu, 3, 0x1234);
     cpu.set_interrupt(Interrupt::Irq, true).unwrap();
     let fingerprint = cpu.fingerprint().unwrap();
