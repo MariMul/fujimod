@@ -26,10 +26,22 @@
 //! The same routine copies the video layer's words: shadow +0x10 to the
 //! format at +0x010, +0x3c to the size at +0x02c and +0x40 to the buffer at
 //! +0x030. The camera holds format 0x333, size 720 x 480 and the live-view
-//! buffer 0xa7d6000 there in REC, with +0x000 = 0x1010105. The emulated
-//! firmware writes 0x1010101 before REC and the camera's 0x1010105 on
-//! entering REC, while +0x030 cycles through the live-view buffers, so bit 2
-//! of +0x000 is taken as the video enable.
+//! buffer 0xa7d6000 there in REC, with +0x000 = 0x1010105.
+//!
+//! +0x000 bit 0 enables the video plane and bit 2 the OSD layer group. The
+//! firmware update page shows the OSD alone: it writes 0x1010104 (bit 0
+//! clear, bit 2 set) with the video size and buffer still zero. The playback information-off page shows why: the stock
+//! firmware writes 0x1010101 there (bit 2 clear) while the video words still
+//! name the decoded photo (0x5958000, format 0x333, 720 x 480) and the OSD
+//! layer buffer (0x384d000) is all zero, and that page's own sub-screen is
+//! UILIB's PLAYSTART_OSDOFF: the page is the photo with the OSD group off.
+//! Reading bit 2 as the video enable instead made that page black (OSD only),
+//! which no camera observation supports; the REC value 0x1010105 has both
+//! bits set, so it does not distinguish the two readings.
+//!
+//! A video layer whose words are all zero (format, size and buffer) is not
+//! yet programmed: the output shows only its OSD layers, or nothing (no
+//! frame) without them. Any other unsupported video word refuses.
 //! Format 0x333 is packed 4:2:2 `Y0 Y1 Cb Cr` with rows of two bytes per
 //! pixel, as in the camera's live-view buffers. The conversion to RGB
 //! (BT.601, limited range) is the shared raster law, not a measured one.
@@ -144,7 +156,8 @@ impl Device for FrameClock {
 }
 
 const CONTROL: u64 = 0x000;
-const VIDEO_ENABLE: u32 = 1 << 2;
+const VIDEO_ENABLE: u32 = 1 << 0;
+const OSD_ENABLE: u32 = 1 << 2;
 const VIDEO_FORMAT: u64 = 0x010;
 const PACKED_422: u32 = 0x333;
 const OUTPUT_SIZE: u64 = 0x014;
@@ -251,12 +264,21 @@ impl Output {
     /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
     /// no layer is enabled.
     fn compose(&self, cx: &mut Cx<'_>) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
-        let enable = self.word(LAYER_ENABLE);
-        let video = self.word(CONTROL) & VIDEO_ENABLE != 0;
-        if enable & !0xf != 0 {
+        let control = self.word(CONTROL);
+        let layers = self.word(LAYER_ENABLE);
+        let osd = control & OSD_ENABLE != 0;
+        // A video plane whose words are all zero is not yet programmed: the
+        // firmware enables the output (0x1010101) before REC sets it up, and
+        // nothing is shown until a plane or an OSD layer is.
+        let programmed = self.word(VIDEO_FORMAT) != 0
+            || self.word(VIDEO_SIZE) != 0
+            || self.word(VIDEO_BUFFER) != 0;
+        let video = control & VIDEO_ENABLE != 0 && programmed;
+        if layers & !0xf != 0 {
             return Err(());
         }
-        if enable == 0 && !video {
+        let layers = if osd { layers } else { 0 };
+        if layers == 0 && !video {
             return Ok(None);
         }
         let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
@@ -297,7 +319,7 @@ impl Output {
             }
             top = buffer;
         }
-        for layer in (0..4).filter(|n| enable & 1 << n != 0) {
+        for layer in (0..4).filter(|n| layers & 1 << n != 0) {
             let at = |offset: u64| offset + 4 * layer as u64;
             let (w, h) = Self::extent(self.word(at(LAYER_SIZE))).ok_or(())?;
             let buffer = u64::from(self.word(at(LAYER_BUFFER)));
@@ -347,10 +369,20 @@ impl Output {
             self.capture.hash = Some(hash);
         }
         let sequence = self.capture.sequence;
+        let control = self.word(CONTROL);
+        let video = control & VIDEO_ENABLE != 0
+            && (self.word(VIDEO_FORMAT) != 0
+                || self.word(VIDEO_SIZE) != 0
+                || self.word(VIDEO_BUFFER) != 0);
+        let layers = if control & OSD_ENABLE != 0 {
+            self.word(LAYER_ENABLE)
+        } else {
+            0
+        };
         let status = json!({
-            "active": true, "format": "rgba8888-premultiplied", "layers": self.word(LAYER_ENABLE),
+            "active": true, "format": "rgba8888-premultiplied", "layers": layers,
             "source": format!("0x{source:x}"), "sequence": sequence, "width": width,
-            "height": height, "tick": cx.now(), "capture": if self.word(CONTROL) & VIDEO_ENABLE != 0 {
+            "height": height, "tick": cx.now(), "capture": if video {
                 "osd-layers-over-video"
             } else {
                 "osd-layers-over-black"
@@ -713,6 +745,7 @@ mod tests {
             (host.frames.len(), host.active.as_slice()),
             (0, &[false][..])
         );
+        write(&mut out, &mut host, CONTROL, OSD_ENABLE);
         write(&mut out, &mut host, OUTPUT_SIZE, 0x1_0000);
         write(&mut out, &mut host, LAYER_ENABLE, 3);
         for (layer, buffer) in [(0, 0x40), (4, 0x80)] {
@@ -764,7 +797,7 @@ mod tests {
             );
         };
         for (offset, value) in [
-            (CONTROL, VIDEO_ENABLE),
+            (CONTROL, VIDEO_ENABLE | OSD_ENABLE),
             (OUTPUT_SIZE, 0x1_0000),
             (VIDEO_FORMAT, PACKED_422),
             (VIDEO_SIZE, 0x1_0000),
@@ -786,12 +819,86 @@ mod tests {
         let frame = host.frames.last().unwrap();
         assert_eq!(frame.rgba, [0, 0, 255, 255, 128, 128, 255, 255]);
         assert_eq!(frame.sequence, 2);
-        // Only the packed 4:2:2 format is modeled.
-        write(&mut out, &mut host, VIDEO_FORMAT, 0x222);
+        // With the OSD group disabled (+0x000 bit 2 clear) the video layer
+        // stays: the playback information-off page (PLAYSTART_OSDOFF) writes
+        // 0x1010101 there with the photo still programmed as the video layer.
+        write(&mut out, &mut host, CONTROL, VIDEO_ENABLE);
         host.now = 30;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        let frame = host.frames.last().unwrap();
+        assert_eq!(frame.rgba, [0, 0, 255, 255, 0, 0, 255, 255]);
+        // Only the packed 4:2:2 format is modeled.
+        write(&mut out, &mut host, CONTROL, VIDEO_ENABLE | OSD_ENABLE);
+        write(&mut out, &mut host, VIDEO_FORMAT, 0x222);
+        host.now = 40;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         out.advance(&mut cx);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn the_playback_information_off_output_composes_the_video_without_the_osd_group() {
+        // The X-T20 2.11 playback information-off page: +0x000 = 0x1010101
+        // (bit 0 output and video, bit 2 clear = OSD group off), the decoded
+        // photo in the packed 4:2:2 video plane, and an OSD layer buffer that
+        // still holds pixels from the previous page.
+        const BASE: u64 = 0xfff64000;
+        let scanout = Some(Scanout {
+            output: 0,
+            period: 10,
+        });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout).unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        host.ram[0x20..0x24].copy_from_slice(&[81, 81, 90, 240]);
+        host.ram[0x80..0x88].copy_from_slice(&[255, 0, 0, 255, 255, 0, 0, 255]);
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(
+                &mut Cx::new(host, 0, 0, 0),
+                BASE + offset,
+                4,
+                u64::from(value),
+            );
+        };
+        for (offset, value) in [
+            (CONTROL, 0x1010101 & 0xf),
+            (OUTPUT_SIZE, 0x1_0000),
+            (VIDEO_FORMAT, PACKED_422),
+            (VIDEO_SIZE, 0x1_0000),
+            (VIDEO_BUFFER, 0x20),
+            (LAYER_ENABLE, 1),
+            (LAYER_SIZE, 0x1_0000),
+            (LAYER_BUFFER, 0x80),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+        host.now = 10;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        let frame = host.frames.last().unwrap();
+        assert_eq!(frame.rgba, [0, 0, 255, 255, 0, 0, 255, 255]);
+        // The same words with the OSD group on composite the stale layer.
+        write(&mut out, &mut host, CONTROL, 0x1010105 & 0xf);
+        host.now = 20;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(
+            host.frames.last().unwrap().rgba,
+            [255, 0, 0, 255, 255, 0, 0, 255]
+        );
+        // The firmware update page: OSD group on, video plane off and not
+        // programmed; the layer composes over black.
+        for (offset, value) in [(CONTROL, 0x1010104), (VIDEO_SIZE, 0), (VIDEO_BUFFER, 0)] {
+            write(&mut out, &mut host, offset, value);
+        }
+        host.now = 30;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(!cx.is_unmodeled());
+        assert_eq!(
+            host.frames.last().unwrap().rgba,
+            [255, 0, 0, 255, 255, 0, 0, 255]
+        );
     }
 
     #[test]
