@@ -264,8 +264,8 @@
     },
     "playback-picture": {
       "result": "pass",
-      "passed": 3,
-      "total": 3
+      "passed": 4,
+      "total": 4
     },
     "playback-movie": {
       "result": "not-run"
