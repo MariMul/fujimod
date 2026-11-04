@@ -79,7 +79,9 @@
       "manual_page": 5,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-7"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Choose an exposure compensation amount; C lets the front command dial adjust compensation.",
@@ -295,7 +297,9 @@
       "manual_page": 5,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Choose the shutter speed.",
@@ -539,7 +543,9 @@
       "manual_page": 6,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Choose the drive mode.",
@@ -1048,7 +1054,9 @@
       "manual_page": 243,
       "face": "Q",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open the quick menu.",
@@ -1069,7 +1077,9 @@
       "manual_page": 248,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move the selection up; Fn2 is assigned to AF mode by default.",
@@ -1091,7 +1101,9 @@
       "manual_page": 248,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move the selection right; Fn4 is assigned to flash mode by default.",
@@ -1113,7 +1125,9 @@
       "manual_page": 248,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move the selection down; Fn5 is assigned to focus-frame selection by default.",
@@ -1135,7 +1149,9 @@
       "manual_page": 248,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move the selection left; Fn3 is assigned to film simulation by default.",
@@ -1157,7 +1173,9 @@
       "manual_page": 20,
       "face": "MENU/OK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display menus or confirm the selected item.",
@@ -1178,7 +1196,9 @@
       "manual_page": 16,
       "face": "DISP/BACK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Control indicators in the viewfinder and LCD monitor; go back from menus.",
