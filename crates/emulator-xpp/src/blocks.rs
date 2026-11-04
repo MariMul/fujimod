@@ -792,6 +792,20 @@ mod tests {
     }
 
     #[test]
+    fn x_t20_auto_mode_unit_reads_the_status_bits_its_driver_waits_for() {
+        // 0xfffd4000: 0x155d0ec polls +0x00 bit 0, 0x155d40c polls +0x088 bits 0 and 16.
+        let mut h = TestHost::new();
+        let mut pipeline =
+            Block::new(0xfffd4000, 0x1000, vec![(0, 1), (0x88, 1 << 16 | 1)], None).unwrap();
+        write(&mut pipeline, &mut h, 0xfffd4000, 0);
+        assert_eq!(read(&mut pipeline, &mut h, 0xfffd4000) & 1, 1);
+        assert_eq!(
+            read(&mut pipeline, &mut h, 0xfffd4088) & (1 << 16 | 1),
+            1 << 16 | 1
+        );
+    }
+
+    #[test]
     fn started_blocks_finish_a_frame_each_period() {
         use fujimod_emulator_devices::test_host::advance;
         let frames = Frames {
