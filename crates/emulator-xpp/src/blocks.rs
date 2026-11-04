@@ -194,6 +194,10 @@ pub struct Block {
     /// The color unit's words, for the film law of a development job, and
     /// the declared reference white balance.
     color: Option<(Published, [u32; 3])>,
+    /// The published integration value and scene-light scale the film
+    /// picture's light follows.
+    film_exposure: Option<crate::statistics::Exposure>,
+    film_light: Option<crate::statistics::SceneLight>,
     state: State,
 }
 impl Block {
@@ -231,6 +235,8 @@ impl Block {
             commands: Vec::new(),
             published: None,
             color: None,
+            film_exposure: None,
+            film_light: None,
             state: State::default(),
         })
     }
@@ -452,6 +458,38 @@ impl Block {
         self.color = Some((words, reference));
         Ok(self)
     }
+    /// The declared film light follows the published integration value, as the
+    /// statistics scene's light does (`crate::statistics::Exposure`).
+    pub fn with_film_exposure(
+        mut self,
+        exposure: crate::statistics::Exposure,
+    ) -> Result<Self, String> {
+        if !matches!(self.image, Some((_, Picture::Film(..)))) || exposure.reference == 0 {
+            return Err("Invalid X-Processor Pro live-view film exposure".into());
+        }
+        self.film_exposure = Some(exposure);
+        Ok(self)
+    }
+    /// The declared film light follows a published scene-light scale
+    /// (`crate::statistics::SceneLight`).
+    pub fn with_film_scene_light(
+        mut self,
+        light: crate::statistics::SceneLight,
+    ) -> Result<Self, String> {
+        if !matches!(self.image, Some((_, Picture::Film(..)))) {
+            return Err("Invalid X-Processor Pro live-view film scene light".into());
+        }
+        self.film_light = Some(light);
+        Ok(self)
+    }
+    /// The declared film light scaled by the published factors, in the 14-bit
+    /// sensor range.
+    fn scaled_film_light(&self, linear: [u16; 3]) -> [u16; 3] {
+        let exposure = self.film_exposure.as_ref().map_or(1., |e| e.factor());
+        let light = self.film_light.as_ref().map_or(1., |l| l.factor());
+        let factor = exposure * light;
+        linear.map(|value| (f64::from(value) * factor).round().clamp(0., 16383.) as u16)
+    }
     /// The declared virtual scene written at each frame, over `lines` lines.
     pub fn with_live_view_scene(self, lines: u32) -> Result<Self, String> {
         self.with_picture(lines, Picture::Scene)
@@ -499,6 +537,7 @@ impl Block {
         let image = match picture {
             Picture::Uniform(pair) => Ok(pair.repeat((width / 2 * lines) as usize)),
             Picture::Film(linear, unprogrammed) => {
+                let linear = self.scaled_film_light(*linear);
                 let pair = match &self.color {
                     Some((words, reference)) if !words.lock().unwrap().is_empty() => {
                         let words = words.lock().unwrap();
@@ -1023,6 +1062,104 @@ mod tests {
         program(None, reference);
         words.lock().unwrap().insert(0x440, 0);
         assert_eq!(frame(&mut unit, &mut h, 60), [0; 4]);
+    }
+
+    #[test]
+    fn a_live_view_film_follows_the_published_exposure_and_scene_light() {
+        use crate::statistics::{Exposure, LIGHT_UNIT, SceneLight};
+        use fujimod_emulator_devices::test_host::advance;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let frames = Frames {
+            start: (0xc8, 1 << 28),
+            stopped: (0xd8, 0x100),
+            irq: 108,
+            period: 10,
+        };
+        let reference = [1138, 604, 1096];
+        let words = Published::default();
+        let value = std::sync::Arc::new(AtomicU32::new(0));
+        let light = std::sync::Arc::new(AtomicU32::new(LIGHT_UNIT));
+        let block = || Block::new(BASE, 0x200, vec![(0, 1)], Some(frames)).unwrap();
+        let film = || {
+            block()
+                .with_live_view_film(
+                    3,
+                    [1015, 764, 577],
+                    [16, 128, 128],
+                    words.clone(),
+                    reference,
+                )
+                .unwrap()
+                .with_film_exposure(Exposure {
+                    value: value.clone(),
+                    reference: 1566,
+                })
+                .unwrap()
+                .with_film_scene_light(SceneLight {
+                    value: light.clone(),
+                })
+                .unwrap()
+        };
+        let mut unit = film();
+        // Not yet published: the declared light.
+        assert_eq!(
+            unit.scaled_film_light([1000, 2000, 16383]),
+            [1000, 2000, 16383]
+        );
+        // Twice the reference doubles it, clamped to the 14-bit range.
+        value.store(2 * 1566, Ordering::Relaxed);
+        assert_eq!(
+            unit.scaled_film_light([1000, 2000, 16383]),
+            [2000, 4000, 16383]
+        );
+        // The scene light is a second scale on the same light.
+        value.store(0, Ordering::Relaxed);
+        light.store(LIGHT_UNIT / 2, Ordering::Relaxed);
+        assert_eq!(
+            unit.scaled_film_light([1000, 2000, 16383]),
+            [500, 1000, 8192]
+        );
+        // The developed frame brightens with the exposure and keeps its
+        // declared light while the value is 0.
+        let mut all = crate::development::tests::provia();
+        all.insert(0x100, reference[0] | reference[1] << 16);
+        all.insert(0x104, reference[2]);
+        *words.lock().unwrap() = all;
+        let mut h = TestHost::new();
+        write(&mut unit, &mut h, BASE + BUFFER, 0x1000);
+        write(&mut unit, &mut h, BASE + WIDTH, 4);
+        write(&mut unit, &mut h, BASE + 0xc8, 1 << 28);
+        let frame = |unit: &mut Block, h: &mut TestHost, now| {
+            h.ram[0x1000..0x1100].fill(0);
+            advance(unit, h, now);
+            h.ram[0x1000]
+        };
+        light.store(LIGHT_UNIT, Ordering::Relaxed);
+        let declared = frame(&mut unit, &mut h, 10);
+        value.store(2 * 1566, Ordering::Relaxed);
+        let brighter = frame(&mut unit, &mut h, 20);
+        assert!(brighter > declared, "{brighter} vs {declared}");
+        value.store(0, Ordering::Relaxed);
+        assert_eq!(frame(&mut unit, &mut h, 30), declared);
+        // Only a film picture takes the two scales.
+        let plain = block().with_live_view_image(3, [73, 114, 138]).unwrap();
+        assert!(
+            plain
+                .with_film_exposure(Exposure {
+                    value: value.clone(),
+                    reference: 1566
+                })
+                .is_err()
+        );
+        assert!(
+            block()
+                .with_live_view_image(3, [73, 114, 138])
+                .unwrap()
+                .with_film_scene_light(SceneLight {
+                    value: light.clone()
+                })
+                .is_err()
+        );
     }
 
     #[test]

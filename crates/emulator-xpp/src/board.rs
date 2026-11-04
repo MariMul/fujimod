@@ -604,6 +604,18 @@ pub fn build(
             }
         )
     });
+    // The statistics scene-light scale (`statistics::Engine::set_scene_light`),
+    // shared with the live-view film that draws the same light.
+    let scene_light =
+        std::sync::Arc::new(std::sync::atomic::AtomicU32::new(statistics::LIGHT_UNIT));
+    let exposure_reference = spec.nodes.iter().find_map(|n| match &n.model {
+        Model::Statistics {
+            scene: Some(_),
+            exposure_reference,
+            ..
+        } => *exposure_reference,
+        _ => None,
+    });
     let mut color_published = false;
     for node in spec.nodes {
         if nodes.contains_key(&node.name) {
@@ -851,13 +863,22 @@ pub fn build(
                                 let (_, words, _) = color
                                     .as_ref()
                                     .ok_or("a live-view film needs the still color unit")?;
-                                model.with_live_view_film(
+                                model = model.with_live_view_film(
                                     image.lines,
                                     film.linear_rgb,
                                     image.ycbcr,
                                     words.clone(),
                                     film.white_balance_reference,
-                                )?
+                                )?;
+                                if let Some(reference) = exposure_reference {
+                                    model = model.with_film_exposure(statistics::Exposure {
+                                        value: integration_value.clone(),
+                                        reference,
+                                    })?;
+                                }
+                                model.with_film_scene_light(statistics::SceneLight {
+                                    value: scene_light.clone(),
+                                })?
                             }
                         },
                         (Some(_), _) | (_, Some(_)) if image.film.is_some() => {
@@ -919,6 +940,9 @@ pub fn build(
                             radiance: *radiance,
                         })?;
                     }
+                    model = model.with_scene_light(statistics::SceneLight {
+                        value: scene_light.clone(),
+                    })?;
                 }
                 if let Some(reference) = exposure_reference {
                     if !integration_declared {

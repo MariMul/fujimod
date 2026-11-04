@@ -48,7 +48,7 @@ const ZONE_SUMS: u64 = 0x1cc;
 const ZONES: usize = 256;
 const OUTPUTS: std::ops::RangeInclusive<u64> = 0x1b8..=0x1e4;
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
     words: BTreeMap<u64, u32>,
@@ -59,7 +59,34 @@ struct State {
     /// The engine writes the second half next.
     #[serde(default)]
     second: bool,
+    /// Scene-light scale in thousandths of the factor (`LIGHT_UNIT` = 1.0).
+    #[serde(default = "unit_light", skip_serializing_if = "is_unit_light")]
+    light: u32,
 }
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            words: BTreeMap::new(),
+            status: 0,
+            due: None,
+            line: false,
+            frames: 0,
+            second: false,
+            light: LIGHT_UNIT,
+        }
+    }
+}
+fn unit_light() -> u32 {
+    LIGHT_UNIT
+}
+fn is_unit_light(light: &u32) -> bool {
+    *light == LIGHT_UNIT
+}
+/// Thousandths of the scene-light factor: a value of [`LIGHT_UNIT`] leaves the
+/// declared scene unchanged.
+pub const LIGHT_UNIT: u32 = 1000;
+/// Largest scene-light factor the input accepts (1000).
+const LIGHT_MAX: f64 = 1000.;
 pub struct Engine {
     base: u64,
     irq: u32,
@@ -67,6 +94,7 @@ pub struct Engine {
     scene: Option<[u32; 3]>,
     zone_scene: Option<ZoneScene>,
     exposure: Option<Exposure>,
+    light: Option<SceneLight>,
     buffers: Vec<(u64, Vec<u8>)>,
     state: State,
 }
@@ -76,6 +104,27 @@ pub struct Engine {
 pub struct Exposure {
     pub value: std::sync::Arc<std::sync::atomic::AtomicU32>,
     pub reference: u32,
+}
+impl Exposure {
+    /// The published scale (1 while the value is 0, i.e. not yet published).
+    pub fn factor(&self) -> f64 {
+        match self.value.load(std::sync::atomic::Ordering::Relaxed) {
+            0 => 1.,
+            value => f64::from(value) / f64::from(self.reference),
+        }
+    }
+}
+/// A scene-light scale published by a runtime input
+/// ([`Engine::set_scene_light`]) and shared with the devices that draw the same
+/// light, in thousandths of the factor (0 is dark, [`LIGHT_UNIT`] unchanged).
+pub struct SceneLight {
+    pub value: std::sync::Arc<std::sync::atomic::AtomicU32>,
+}
+impl SceneLight {
+    /// The current scale; a fresh input reads [`LIGHT_UNIT`].
+    pub fn factor(&self) -> f64 {
+        f64::from(self.value.load(std::sync::atomic::Ordering::Relaxed)) / f64::from(LIGHT_UNIT)
+    }
 }
 /// A declared scene image for the zone sums and the measured wall it is
 /// calibrated against: 8-bit sRGB rows, the wall's measured zone sums and the
@@ -134,6 +183,7 @@ impl Engine {
             scene: None,
             zone_scene: None,
             exposure: None,
+            light: None,
             buffers: Vec::new(),
             state: State::default(),
         })
@@ -167,15 +217,40 @@ impl Engine {
         self.exposure = Some(exposure);
         Ok(self)
     }
-    /// Scale of the declared zone sums (1 until the value is published).
-    fn exposure_factor(&self) -> f64 {
-        match &self.exposure {
-            Some(e) => match e.value.load(std::sync::atomic::Ordering::Relaxed) {
-                0 => 1.,
-                value => f64::from(value) / f64::from(e.reference),
-            },
-            None => 1.,
+    /// The declared scene's light follows a published scale
+    /// ([`Engine::set_scene_light`]) as well; requires the declared sums.
+    pub fn with_scene_light(mut self, light: SceneLight) -> Result<Self, String> {
+        if self.scene.is_none() {
+            return Err("Invalid X-Processor Pro statistics scene light".into());
         }
+        light
+            .value
+            .store(self.state.light, std::sync::atomic::Ordering::Relaxed);
+        self.light = Some(light);
+        Ok(self)
+    }
+    /// Scale the declared scene's light by `factor` (1 leaves it unchanged);
+    /// published to the devices that share the scale.
+    pub fn set_scene_light(&mut self, factor: f64) -> Result<(), String> {
+        if !factor.is_finite() || !(0. ..=LIGHT_MAX).contains(&factor) {
+            return Err("Invalid X-Processor Pro scene light".into());
+        }
+        self.state.light = (factor * f64::from(LIGHT_UNIT)).round() as u32;
+        self.publish_light();
+        Ok(())
+    }
+    fn publish_light(&self) {
+        if let Some(light) = &self.light {
+            light
+                .value
+                .store(self.state.light, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    /// Scale of the declared scene light: the published integration value
+    /// (1 until one is published) times the published scene-light scale.
+    fn scene_factor(&self) -> f64 {
+        let exposure = self.exposure.as_ref().map_or(1., Exposure::factor);
+        exposure * f64::from(self.state.light) / f64::from(LIGHT_UNIT)
     }
     /// A declared buffer: the output word (+0x1b8..+0x1e4) and its contents.
     pub fn with_buffer(mut self, output: u64, words: &[u32]) -> Result<Self, String> {
@@ -203,7 +278,7 @@ impl Engine {
         }
     }
     fn write_buffers(&self, cx: &mut Cx<'_>) {
-        let factor = self.exposure_factor();
+        let factor = self.scene_factor();
         let scaled = |value: f64| (value * factor).round().clamp(0., f64::from(u32::MAX)) as u32;
         if let Some(scene) = &self.zone_scene {
             let mut planes = Vec::with_capacity(4 * ZONES * 4);
@@ -318,6 +393,7 @@ impl Device for Engine {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         self.check(&state)?;
         self.state = state;
+        self.publish_light();
         Ok(())
     }
     fujimod_emulator_devices::checkpoint_state!(state: State, Self::check);
@@ -328,6 +404,7 @@ impl Engine {
         if started != state.due.is_some()
             || state.due.is_some_and(|at| at % self.period != 0)
             || state.words.keys().any(|o| o & 3 != 0 || *o >= STATE)
+            || state.light > (LIGHT_MAX * f64::from(LIGHT_UNIT)) as u32
         {
             return Err("Invalid statistics engine checkpoint".into());
         }
@@ -460,6 +537,52 @@ mod tests {
                     value,
                     reference: 1566
                 })
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_published_scene_light_scales_the_zone_sums_and_is_checkpointed() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let light = std::sync::Arc::new(AtomicU32::new(LIGHT_UNIT));
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene([1000, 2000, 300])
+            .with_scene_light(SceneLight {
+                value: light.clone(),
+            })
+            .unwrap();
+        let mut h = TestHost::new();
+        let planes = |h: &TestHost| {
+            [0, 1, 2].map(|c| {
+                let at = 0x1000 + 0x400 * c;
+                u32::from_le_bytes(h.ram[at..at + 4].try_into().unwrap())
+            })
+        };
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        assert_eq!(planes(&h), [1000, 2000, 300]);
+        // The input halves the declared light and publishes the scale.
+        stats.set_scene_light(0.5).unwrap();
+        assert_eq!(light.load(Ordering::Relaxed), 500);
+        advance(&mut stats, &mut h, 2000);
+        assert_eq!(planes(&h), [500, 1000, 150]);
+        // A checkpoint keeps the input and republishes it on restore.
+        let saved = stats.save();
+        stats.set_scene_light(2.).unwrap();
+        stats.restore(&saved).unwrap();
+        assert_eq!(light.load(Ordering::Relaxed), 500);
+        advance(&mut stats, &mut h, 3000);
+        assert_eq!(planes(&h), [500, 1000, 150]);
+        // Only a finite factor in range is an input.
+        assert!(stats.set_scene_light(f64::NAN).is_err());
+        assert!(stats.set_scene_light(-1.).is_err());
+        assert!(stats.set_scene_light(1001.).is_err());
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_scene_light(SceneLight { value: light })
                 .is_err()
         );
     }
