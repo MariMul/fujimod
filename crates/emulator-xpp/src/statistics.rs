@@ -65,8 +65,62 @@ pub struct Engine {
     irq: u32,
     period: u64,
     scene: Option<[u32; 3]>,
+    zone_scene: Option<ZoneScene>,
+    exposure: Option<Exposure>,
     buffers: Vec<(u64, Vec<u8>)>,
     state: State,
+}
+/// The integration value another device publishes (0 = not yet set) and the
+/// value at which the declared zone sums hold: the sums scale by
+/// value / reference, as a sensor's signal scales with its integration time.
+pub struct Exposure {
+    pub value: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    pub reference: u32,
+}
+/// A declared scene image for the zone sums and the measured wall it is
+/// calibrated against: 8-bit sRGB rows, the wall's measured zone sums and the
+/// wall's declared linear radiance (the same units as the sensor's 16383
+/// full scale). Zone sums are linear in the scene's linearised radiance.
+pub struct ZoneScene {
+    pub width: u64,
+    pub height: u64,
+    pub rgb: Vec<u8>,
+    pub sums: [u32; 3],
+    pub radiance: [u16; 3],
+}
+impl ZoneScene {
+    /// Linearised sample of the declared wall's radiance, 0..1.
+    fn reference(&self, c: usize) -> f64 {
+        f64::from(self.radiance[c]) / 16383.
+    }
+    /// The mean linear radiance of one zone, sampled on a 4x4 grid.
+    fn zone(&self, zx: usize, zy: usize) -> [f64; 3] {
+        const GRID: usize = 16;
+        const STEPS: u64 = 4;
+        let mut sum = [0.; 3];
+        for sy in 0..STEPS {
+            for sx in 0..STEPS {
+                let x = (2 * (zx as u64 * STEPS + sx) + 1) * self.width / (2 * GRID as u64 * STEPS);
+                let y =
+                    (2 * (zy as u64 * STEPS + sy) + 1) * self.height / (2 * GRID as u64 * STEPS);
+                let at =
+                    ((y.min(self.height - 1) * self.width + x.min(self.width - 1)) * 3) as usize;
+                for c in 0..3 {
+                    sum[c] += linear(self.rgb[at + c]);
+                }
+            }
+        }
+        sum.map(|v| v / (STEPS * STEPS) as f64)
+    }
+}
+/// sRGB byte to linear light, 0..1.
+fn linear(sample: u8) -> f64 {
+    let s = f64::from(sample) / 255.;
+    if s <= 0.04045 {
+        s / 12.92
+    } else {
+        ((s + 0.055) / 1.055).powf(2.4)
+    }
 }
 impl Engine {
     pub fn new(base: u64, irq: u32, period: u64) -> Result<Self, String> {
@@ -78,6 +132,8 @@ impl Engine {
             irq,
             period,
             scene: None,
+            zone_scene: None,
+            exposure: None,
             buffers: Vec::new(),
             state: State::default(),
         })
@@ -86,6 +142,40 @@ impl Engine {
     pub fn with_scene(mut self, zone_sums: [u32; 3]) -> Self {
         self.scene = Some(zone_sums);
         self
+    }
+    /// The zone sums follow a declared scene image instead of one uniform
+    /// value per plane; requires the measured wall sums (`with_scene`).
+    pub fn with_zone_scene(mut self, scene: ZoneScene) -> Result<Self, String> {
+        if self.scene.is_none()
+            || !(1..=8192).contains(&scene.width)
+            || !(1..=8192).contains(&scene.height)
+            || scene.rgb.len() as u64 != scene.width * scene.height * 3
+            || scene.sums.contains(&0)
+            || scene.radiance.contains(&0)
+        {
+            return Err("Invalid X-Processor Pro zone scene".into());
+        }
+        self.zone_scene = Some(scene);
+        Ok(self)
+    }
+    /// The zone sums follow a published integration value; requires the
+    /// declared sums (`with_scene`).
+    pub fn with_exposure(mut self, exposure: Exposure) -> Result<Self, String> {
+        if self.scene.is_none() || exposure.reference == 0 {
+            return Err("Invalid X-Processor Pro statistics exposure".into());
+        }
+        self.exposure = Some(exposure);
+        Ok(self)
+    }
+    /// Scale of the declared zone sums (1 until the value is published).
+    fn exposure_factor(&self) -> f64 {
+        match &self.exposure {
+            Some(e) => match e.value.load(std::sync::atomic::Ordering::Relaxed) {
+                0 => 1.,
+                value => f64::from(value) / f64::from(e.reference),
+            },
+            None => 1.,
+        }
     }
     /// A declared buffer: the output word (+0x1b8..+0x1e4) and its contents.
     pub fn with_buffer(mut self, output: u64, words: &[u32]) -> Result<Self, String> {
@@ -113,9 +203,27 @@ impl Engine {
         }
     }
     fn write_buffers(&self, cx: &mut Cx<'_>) {
-        if let Some(scene) = self.scene {
+        let factor = self.exposure_factor();
+        let scaled = |value: f64| (value * factor).round().clamp(0., f64::from(u32::MAX)) as u32;
+        if let Some(scene) = &self.zone_scene {
             let mut planes = Vec::with_capacity(4 * ZONES * 4);
-            for value in scene.into_iter().chain([0]) {
+            for plane in 0..4 {
+                for zone in 0..ZONES {
+                    let value = match plane {
+                        3 => 0,
+                        c => {
+                            let (zx, zy) = (zone % 16, zone / 16);
+                            let radiance = scene.zone(zx, zy)[c];
+                            scaled(f64::from(scene.sums[c]) * radiance / scene.reference(c))
+                        }
+                    };
+                    planes.extend_from_slice(&value.to_le_bytes());
+                }
+            }
+            self.write_output(cx, ZONE_SUMS, &planes);
+        } else if let Some(scene) = self.scene {
+            let mut planes = Vec::with_capacity(4 * ZONES * 4);
+            for value in scene.map(|v| scaled(f64::from(v))).into_iter().chain([0]) {
                 for _ in 0..ZONES {
                     planes.extend_from_slice(&value.to_le_bytes());
                 }
@@ -233,6 +341,128 @@ mod tests {
     use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
 
     const BASE: u64 = 0xfff54000;
+
+    #[test]
+    fn a_zone_scene_image_scales_the_measured_wall_sums_by_radiance() {
+        // sRGB byte whose linear light is the declared wall radiance.
+        let srgb = |radiance: u16| {
+            let linear = f64::from(radiance) / 16383.;
+            let s = if linear <= 0.0031308 {
+                linear * 12.92
+            } else {
+                1.055 * linear.powf(1. / 2.4) - 0.055
+            };
+            (s * 255.).round() as u8
+        };
+        let sums = [145_000, 383_000, 34_000];
+        let radiance = [1015_u16, 764, 577];
+        let wall = [srgb(1015), srgb(764), srgb(577)];
+        let levels: [u8; 3] = [wall[0], wall[1], wall[2]];
+        let wall_pixels = || {
+            std::iter::repeat(levels)
+                .take(16)
+                .flat_map(|pixel| pixel)
+                .collect::<Vec<u8>>()
+        };
+        let mut engine = || {
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_scene(sums)
+                .with_zone_scene(ZoneScene {
+                    width: 4,
+                    height: 4,
+                    rgb: wall_pixels(),
+                    sums,
+                    radiance,
+                })
+                .unwrap()
+        };
+        let mut h = TestHost::new();
+        let word = |h: &TestHost, address: usize| {
+            u32::from_le_bytes(h.ram[address..address + 4].try_into().unwrap())
+        };
+        let mut stats = engine();
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        advance(&mut stats, &mut h, 1000);
+        for c in 0..3 {
+            for zone in [0, 255] {
+                let value = word(&h, 0x1000 + 0x400 * c + 4 * zone);
+                let expected = f64::from(sums[c]);
+                assert!(
+                    (f64::from(value) - expected).abs() <= expected * 0.02,
+                    "c{c} zone{zone}: {value} vs {expected}"
+                );
+            }
+        }
+        assert_eq!(word(&h, 0x1000 + 0x400 * 3), 0);
+        // A black scene has zero sums; a scene twice as bright is twice the sums.
+        let mut black = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene(sums)
+            .with_zone_scene(ZoneScene {
+                width: 4,
+                height: 4,
+                rgb: vec![0; 48],
+                sums,
+                radiance,
+            })
+            .unwrap();
+        write(&mut black, &mut h, BASE + ZONE_SUMS, 0x2000);
+        write(&mut black, &mut h, BASE + CONTROL, START);
+        advance(&mut black, &mut h, 1000);
+        assert_eq!(word(&h, 0x2000), 0);
+        // A missing wall scene is refused.
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_zone_scene(ZoneScene {
+                    width: 4,
+                    height: 4,
+                    rgb: vec![0; 48],
+                    sums,
+                    radiance,
+                })
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_published_integration_value_scales_the_zone_sums() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let value = std::sync::Arc::new(AtomicU32::new(0));
+        let frame = |value: &std::sync::Arc<AtomicU32>| {
+            let mut stats = Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_scene([1000, 2000, 300])
+                .with_exposure(Exposure {
+                    value: value.clone(),
+                    reference: 1566,
+                })
+                .unwrap();
+            let mut h = TestHost::new();
+            write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+            write(&mut stats, &mut h, BASE + CONTROL, START);
+            advance(&mut stats, &mut h, 1000);
+            let word = |address: usize| {
+                u32::from_le_bytes(h.ram[address..address + 4].try_into().unwrap())
+            };
+            [word(0x1000), word(0x1400), word(0x1800)]
+        };
+        // Not yet published: the declared sums.
+        assert_eq!(frame(&value), [1000, 2000, 300]);
+        value.store(2 * 1566, Ordering::Relaxed);
+        assert_eq!(frame(&value), [2000, 4000, 600]);
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_exposure(Exposure {
+                    value,
+                    reference: 1566
+                })
+                .is_err()
+        );
+    }
 
     #[test]
     fn started_engine_completes_at_frame_ticks_and_stops_at_once() {

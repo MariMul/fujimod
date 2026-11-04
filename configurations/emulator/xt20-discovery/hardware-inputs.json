@@ -441,6 +441,13 @@
     ],
     "zone_statistics": {
       "zone_sums": [144736, 383321, 33695],
+      "exposure": {
+        "select": 4,
+        "low": 29,
+        "high": 30,
+        "reference": 1566,
+        "basis": "Section 6 0x17f67f4 builds the register-bus block 0x1a36c40 that 0xc35254 sends with frame count 8 (0x16b76fc): in REC eight writes to select 4, registers 0x1d..0x24, the u16 value repeated four times as low/high byte pairs (0x1d low, 0x1e high). The value grows as the scene darkens (emulator wall/half/quarter/black pictures 1566/2951/3843/3890; value x radiance about constant, capped at 3890), and the camera holds 3936 with the lens cap on and 3316/3207 in two lit live-view dumps: an integration time. Declared approximation, not measured: the zone sums scale linearly with it, and 1566, the value the AE reaches on the emulated wall picture whose sums are the measured ones, is the reference at which the declared sums hold."
+      },
       "buffers": [
         {
           "output": 464,

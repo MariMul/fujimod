@@ -239,6 +239,10 @@ pub enum Model {
         /// Measured buffers written each frame: output register offset and words.
         #[serde(default)]
         buffers: Vec<(u64, Vec<u32>)>,
+        /// The zone sums scale by the imaging chip's integration value over
+        /// this reference (declared with the imaging control's `integration`).
+        #[serde(default)]
+        exposure_reference: Option<u32>,
     },
     /// GPIO keys whose inputs also drive external interrupt lines; follows
     /// the GPIO bank and the reset/gate bank.
@@ -308,6 +312,14 @@ pub enum Model {
         /// the virtual scene.
         #[serde(default)]
         sensor_image: Option<HostImage>,
+        /// Opt-in register-bus frame log, read back through the device's
+        /// diagnostic state (never part of a checkpoint).
+        #[serde(default)]
+        write_log: bool,
+        /// Chip register pair (select, low, high) published as the
+        /// integration value the statistics engine's zone sums follow.
+        #[serde(default)]
+        integration: Option<(u8, u16, u16)>,
     },
     FrameSync {
         base: u64,
@@ -558,6 +570,39 @@ pub fn build(
             ..
         } => Some((*base, blocks::Published::default(), *white_balance)),
         _ => None,
+    });
+    // A scene picture on the sensor and the live-view film's declared radiance
+    // give the zone sums their per-zone content; without them the statistics
+    // scene stays uniform.
+    let film_radiance = spec.nodes.iter().find_map(|n| match &n.model {
+        Model::RegisterBlock {
+            live_view_image: Some(image),
+            ..
+        } => image.film.as_ref().map(|film| film.linear_rgb),
+        _ => None,
+    });
+    let mut zone_source = None;
+    for node in &spec.nodes {
+        if let Model::ImagingControl {
+            sensor_image: Some(image),
+            ..
+        } = &node.model
+        {
+            if let Some(radiance) = film_radiance {
+                zone_source = Some((image.width, image.height, hex(&image.rgb)?, radiance));
+            }
+        }
+    }
+    // The imaging chip's integration value, shared with the statistics engine.
+    let integration_value = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let integration_declared = spec.nodes.iter().any(|n| {
+        matches!(
+            n.model,
+            Model::ImagingControl {
+                integration: Some(_),
+                ..
+            }
+        )
     });
     let mut color_published = false;
     for node in spec.nodes {
@@ -860,10 +905,31 @@ pub fn build(
                 period_ticks,
                 scene,
                 buffers,
+                exposure_reference,
             } => {
                 let mut model = statistics::Engine::new(base, irq, period_ticks)?;
                 if let Some(scene) = scene {
                     model = model.with_scene(scene);
+                    if let Some((width, height, rgb, radiance)) = &zone_source {
+                        model = model.with_zone_scene(statistics::ZoneScene {
+                            width: *width,
+                            height: *height,
+                            rgb: rgb.clone(),
+                            sums: scene,
+                            radiance: *radiance,
+                        })?;
+                    }
+                }
+                if let Some(reference) = exposure_reference {
+                    if !integration_declared {
+                        return Err(
+                            "A statistics exposure requires a declared imaging integration".into(),
+                        );
+                    }
+                    model = model.with_exposure(statistics::Exposure {
+                        value: integration_value.clone(),
+                        reference,
+                    })?;
                 }
                 for (output, words) in buffers {
                     model = model.with_buffer(output, &words)?;
@@ -982,6 +1048,8 @@ pub fn build(
                 readout,
                 sensor_frame,
                 sensor_image,
+                write_log,
+                integration,
             } => {
                 let end = base + imaging::WINDOW;
                 let windows = match hole {
@@ -1010,13 +1078,29 @@ pub fn build(
                             Some(profile) => control.with_sensor_frame(&profile)?,
                             None => control,
                         };
-                        match sensor_image {
+                        let control = match sensor_image {
                             Some(image) => control.with_sensor_image(
                                 image.width,
                                 image.height,
                                 hex(&image.rgb)?,
                             )?,
                             None => control,
+                        };
+                        let control = match integration {
+                            Some((select, low, high)) => {
+                                control.with_integration(imaging::Integration {
+                                    select,
+                                    low,
+                                    high,
+                                    value: integration_value.clone(),
+                                })?
+                            }
+                            None => control,
+                        };
+                        if write_log {
+                            control.with_write_log()
+                        } else {
+                            control
                         }
                     }),
                 )?

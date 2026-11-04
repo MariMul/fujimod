@@ -3565,6 +3565,17 @@
           },
           "type": "array"
         },
+        "exposure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ZoneExposure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared integration value that scales the zone sums: a register\npair the firmware writes to an imaging-side chip."
+        },
         "zone_sums": {
           "description": "Red, green and blue sum of every zone.",
           "items": {
@@ -3580,6 +3591,51 @@
       "required": [
         "basis",
         "zone_sums"
+      ],
+      "type": "object"
+    },
+    "ZoneExposure": {
+      "additionalProperties": false,
+      "description": "Integration value of the zone sums: the chip register pair (low byte,\nhigh byte) of one select on the imaging control page's register bus.\nThe zone sums scale by value / reference; before the pair is written the\nsums are the declared ones.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "high": {
+          "description": "Register holding the high byte.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "description": "Register holding the low byte.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reference": {
+          "description": "Value at which the declared zone sums hold.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "select": {
+          "description": "Register-bus select (configuration bits 8..12).",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "select",
+        "low",
+        "high",
+        "reference"
       ],
       "type": "object"
     }

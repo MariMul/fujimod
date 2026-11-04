@@ -521,6 +521,12 @@ fn nodes(
         });
         if let Some(scene) = scene {
             model["scene"] = json!(scene.zone_sums);
+            if let Some(exposure) = &scene.exposure {
+                if maps.imaging_control.is_none() {
+                    return Err("a zone-sum exposure requires the imaging control page".into());
+                }
+                model["exposure_reference"] = json!(exposure.reference);
+            }
             model["buffers"] = scene
                 .buffers
                 .iter()
@@ -682,6 +688,11 @@ fn nodes(
                     "width": image.width, "height": image.height,
                     "rgb": image.rgb.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
                 })),
+                "integration": reset
+                    .zone_statistics
+                    .as_ref()
+                    .and_then(|scene| scene.exposure.as_ref())
+                    .map(|e| json!([e.select, e.low, e.high])),
             }),
         );
     } else if reset.sensor_frame.is_some() {
@@ -1318,6 +1329,39 @@ mod tests {
             imaging["model"]["sensor_image"],
             json!({"width": 2, "height": 1, "rgb": "ff00000000ff"})
         );
+    }
+
+    #[test]
+    fn a_declared_zone_exposure_reaches_the_imaging_and_statistics_nodes() {
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = soc_profile(&resolved)
+            .unwrap()
+            .register_maps
+            .as_ref()
+            .unwrap();
+        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let (starts, assets) = (starts(), assets());
+        let inputs = Inputs {
+            starts: &starts,
+            sub_cpu_registers: &[],
+            assets: &assets,
+            sensor_image: None,
+        };
+        let banks = ram_banks(&resolved.reference.soc.memory_regions);
+        let nodes = nodes(
+            maps,
+            &reset,
+            resolved.dram_address_space_limit_bytes().unwrap(),
+            &banks,
+            &inputs,
+        )
+        .unwrap();
+        let named = |name: &str| nodes.iter().find(|node| node["name"] == name).unwrap();
+        assert_eq!(
+            named("imaging")["model"]["integration"],
+            json!([4, 0x1d, 0x1e])
+        );
+        assert_eq!(named("statistics")["model"]["exposure_reference"], 1566);
     }
 
     #[test]
