@@ -1,8 +1,8 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
-    adc, blocks, boot, clocks, display, dram, face, flash, i2c, imaging, jpeg, keys, lens, power,
-    resets, sd, serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, encoder, face, flash, i2c, imaging, jpeg, keys, lens,
+    power, resets, sd, serial, shutter, statistics, sync, timer,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -149,6 +149,14 @@ pub enum Model {
     Gpio {
         base: u64,
         inputs: [u16; 16],
+    },
+    /// A command dial on declared GPIO pads, its phases emitted at declared
+    /// edge times. The X-Processor Pro board has no pulse unit, so a counter
+    /// wiring is refused.
+    Encoder {
+        options: fujimod_emulator_parts_controls::encoder::Options,
+        #[serde(default)]
+        counter: Option<String>,
     },
     ClockControl {
         options: clocks::Options,
@@ -349,6 +357,7 @@ pub struct Built {
     pub nodes: BTreeMap<String, usize>,
     pub inputs: Vec<(String, Level, usize)>,
     pub contacts: BTreeMap<String, fujimod_emulator_devices::parts::card_contacts::Contacts>,
+    pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
 }
 struct Source(Arc<flash::Aperture>);
 impl pl330::Source for Source {
@@ -473,6 +482,7 @@ pub fn build(
     let mut nodes = BTreeMap::new();
     let mut inputs = vec![];
     let mut card_contacts = BTreeMap::new();
+    let mut encoders = BTreeMap::new();
     // Cross-node wiring, in node order: GPIO pins for the lens and shutter,
     // reset/gate lines for SD and the lens, the lens link for the PL330.
     let mut pins = None;
@@ -517,6 +527,28 @@ pub fn build(
                         base, shared,
                     )?),
                 )?
+            }
+            Model::Encoder { options, counter } => {
+                if counter.is_some() {
+                    return Err(
+                        "the X-Processor Pro board has no command-dial counter wiring".into(),
+                    );
+                }
+                let wiring = encoder::BankPins::new(
+                    pins.clone()
+                        .ok_or("the command-dial encoder follows the GPIO bank")?,
+                );
+                let model = fujimod_emulator_parts_controls::encoder::Encoder::new(
+                    options,
+                    fujimod_emulator_parts_controls::encoder::Wiring {
+                        gpio: Box::new(wiring),
+                        counter: None,
+                    },
+                )?;
+                if encoders.insert(node.name.clone(), model.input()).is_some() {
+                    return Err("repeated X-Processor Pro command-dial encoder".into());
+                }
+                devices.attach(Box::new(model))
             }
             Model::ClockControl { options } => {
                 let base = options.base;
@@ -1121,6 +1153,7 @@ pub fn build(
         nodes,
         inputs,
         contacts: card_contacts,
+        encoders,
     })
 }
 
@@ -1154,6 +1187,49 @@ mod tests {
         }))
         .map_err(|e| e.to_string())?;
         build(graph(), spec, &BTreeMap::new(), Mode::Strict)
+    }
+
+    #[test]
+    fn command_dial_phases_follow_the_gray_order_at_their_declared_pace() {
+        // A dial on GPIO bank 1 pads 2 and 3, resting at phase 2 (A high, B low),
+        // with a 10-tick edge period so the timeline stays short.
+        let built = build_nodes(json!([
+            {"name": "gpio", "model": {"kind": "gpio", "base": 0xfff10000_u64,
+                                       "inputs": [0, 4, 0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0, 0, 0]}},
+            {"name": "dial", "model": {"kind": "encoder", "options": {
+                "pins": [{"port": 1, "pin": 2}, {"port": 1, "pin": 3}],
+                "phase_ticks": 10, "rest_phase": 2}, "counter": null}}
+        ]))
+        .unwrap();
+        let Built {
+            mut board,
+            nodes,
+            encoders,
+            ..
+        } = built;
+        let gpio = nodes["gpio"];
+        let level = |board: &Board| {
+            let state = board.device_save(gpio).unwrap();
+            state["inputs"][1].as_u64().unwrap() as u32 & 0xf
+        };
+        assert_eq!(level(&board), 0x4);
+        let dial = encoders["dial"].clone();
+        let dial_node = nodes["dial"];
+        // One increasing step: 2 -> 0 -> 1 -> 3 -> 2, one edge per declared period.
+        dial.queue_cycles(0, 1).unwrap();
+        board.inputs_changed(dial_node).unwrap();
+        for (edge, pins) in [(10, 0x0), (20, 0x8), (30, 0xc), (40, 0x4)] {
+            board.run_until(edge + 1, 1).unwrap();
+            assert_eq!(level(&board), pins, "up at {edge}");
+        }
+        // One decreasing step runs the same Gray order backwards.
+        dial.queue_cycles(45, -1).unwrap();
+        board.inputs_changed(dial_node).unwrap();
+        for (edge, pins) in [(55, 0xc), (65, 0x8), (75, 0x0), (85, 0x4)] {
+            board.run_until(edge + 1, 1).unwrap();
+            assert_eq!(level(&board), pins, "down at {edge}");
+        }
     }
 
     #[test]
