@@ -9,6 +9,9 @@ use serde_json::{Value, json};
 const CONTROL: [u64; 5] = [0x30, 0x3c, 0x48, 0x54, 0x80];
 const LOCK: [u32; 5] = [2, 4, 16, 8, 1];
 const DIVIDER_BUSY: u64 = 0x68;
+/// PLL control bits the model refuses. Bit 28 is stored without effect: X-T20 2.11 stage 2
+/// sets or clears it while it reprograms PLL 4 (0xa49c/0xa4e8); its meaning is not established.
+const CONTROL_UNSUPPORTED: u32 = 0xe000_0000;
 fn word(offset: u64) -> bool {
     offset <= 0x64 || matches!(offset, 0x70 | 0x78 | 0x7c | 0x80)
 }
@@ -88,7 +91,7 @@ impl ClockControl {
             return Err(format!("Unsupported clock register {offset:#x}"));
         }
         if let Some(value) = value {
-            if CONTROL.contains(&offset) && value & 0xf0000000 != 0 {
+            if CONTROL.contains(&offset) && value & u64::from(CONTROL_UNSUPPORTED) != 0 {
                 return Err("Unsupported PLL control bits".into());
             }
             self.state.words.insert(offset, value as u32);
@@ -170,7 +173,7 @@ impl Device for ClockControl {
             || state.words.iter().any(|(&offset, &value)| {
                 offset & 3 != 0
                     || !word(offset)
-                    || CONTROL.contains(&offset) && value & 0xf0000000 != 0
+                    || CONTROL.contains(&offset) && value & CONTROL_UNSUPPORTED != 0
             })
         {
             return Err("Invalid clock checkpoint register shape".into());
@@ -227,6 +230,24 @@ mod tests {
         write(&mut d, &mut h, 0x10058, 0x14001);
         assert_eq!(read(&mut d, &mut h, 0x10058), 0x14001);
         assert_eq!(read(&mut d, &mut h, 0x10068), 0);
+    }
+    #[test]
+    fn pll_control_bit_28_is_stored_and_does_not_block_lock() {
+        let mut d = ClockControl::new(Options {
+            base: 0x10000,
+            lock_ticks: 5,
+            running: vec![4],
+        })
+        .unwrap();
+        let mut h = TestHost::new();
+        write(&mut d, &mut h, 0x10080, 0x1000002e);
+        assert_eq!(read(&mut d, &mut h, 0x10080), 0x1000002e);
+        assert_eq!(read(&mut d, &mut h, 0x1006c) & u64::from(LOCK[4]), 0);
+        write(&mut d, &mut h, 0x10080, 0x1400002e);
+        let at = h.now;
+        advance(&mut d, &mut h, at + 5);
+        assert_ne!(read(&mut d, &mut h, 0x1006c) & u64::from(LOCK[4]), 0);
+        assert!(d.restore_checkpoint(&d.checkpoint().unwrap()).is_ok());
     }
     #[test]
     fn running_plls_start_powered_and_locked() {
