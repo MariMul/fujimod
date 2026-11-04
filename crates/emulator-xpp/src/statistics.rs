@@ -13,14 +13,19 @@
 //! is set. No frame is ever in flight, so +0x1ec reads only the idle bit and
 //! +0x00 bit 0 reads set. Other words read back their last write.
 //!
-//! The twelve output buffers are the words +0x1b8..+0x1e4, programmed for
-//! the first of two halves; +0x10 is the distance to the second (0x3690).
-//! The engine alternates halves frame by frame, beginning with the first,
-//! and keeps alternating when the firmware restarts it between frames (the
-//! camera fills both halves while +0x1cc keeps the first half's address).
-//! Section 6 0x1698dd0 takes each completion as the half it was writing and
-//! switches its own pointer (0x1bc6310) to the other, without reprogramming
-//! the engine. With a declared scene, each frame writes the zone sums buffer
+//! The twelve output buffers are the words +0x1b8..+0x1e4; each holds the
+//! address of the half it writes, and +0x10 is the distance between the two
+//! halves (0x3690). The firmware alternates those addresses itself, frame by
+//! frame: the section 6 statistics consumer 0x16963dc reads the half a
+//! completion filled, then hands the other half's addresses to the section 5
+//! setters 0xc38d5c..0xc38fc0 (through 0x156a470/0x1568ad8), which reprogram
+//! the words. Measured on X-T20 2.11 from 253M instructions on: +0x1cc
+//! alternates 0x3f480360/0x3f4839f0 on every completion while CONTROL stays
+//! at START (no per-frame restart), so both halves hold data one frame old.
+//! Each completion therefore writes its buffers at exactly the programmed
+//! address, in the half the firmware chose; the engine does not add +0x10
+//! itself (doing so would double the firmware's offset and leave the first
+//! half stale). With a declared scene, each frame writes the zone sums buffer
 //! (+0x1cc) of the half it completes: three planes of 16x16 u32 zone sums
 //! (red, green, blue; green is about 2.6 times red, probably both green
 //! sites) and a fourth plane of zeros, as in the camera's captures. The
@@ -45,7 +50,6 @@ const STATE: u64 = 0x1ec;
 const SOURCES: u32 = 0x3ff;
 const START: u32 = 1 << 28;
 const IDLE: u32 = 1 << 16;
-const HALF: u64 = 0x10;
 const ZONE_SUMS: u64 = 0x1cc;
 const ZONES: usize = 256;
 const OUTPUTS: std::ops::RangeInclusive<u64> = 0x1b8..=0x1e4;
@@ -58,9 +62,6 @@ struct State {
     due: Option<u64>,
     line: bool,
     frames: u64,
-    /// The engine writes the second half next.
-    #[serde(default)]
-    second: bool,
     /// Scene-light scale in thousandths of the factor (`LIGHT_UNIT` = 1.0).
     #[serde(default = "unit_light", skip_serializing_if = "is_unit_light")]
     light: u32,
@@ -73,7 +74,6 @@ impl Default for State {
             due: None,
             line: false,
             frames: 0,
-            second: false,
             light: LIGHT_UNIT,
         }
     }
@@ -300,13 +300,10 @@ impl Engine {
         buffer.light = words.to_vec();
         Ok(self)
     }
+    /// Write one output buffer at the address its word holds: the firmware
+    /// programs the half it wants filled (see the module notes).
     fn write_output(&self, cx: &mut Cx<'_>, output: u64, data: &[u8]) {
-        let half = if self.state.second {
-            self.word(HALF)
-        } else {
-            0
-        };
-        let address = u64::from(self.word(output)) + u64::from(half);
+        let address = u64::from(self.word(output));
         if cx.ram_write(address, data).is_err() {
             cx.fail("Statistics buffer outside RAM");
         }
@@ -420,7 +417,6 @@ impl Device for Engine {
         self.state.status |= self.word(ENABLE) & SOURCES;
         self.state.frames += 1;
         self.write_buffers(cx);
-        self.state.second = !self.state.second;
         let frames = (cx.now() - due) / self.period + 1;
         self.state.due = frames
             .checked_mul(self.period)
@@ -670,7 +666,7 @@ mod tests {
     }
 
     #[test]
-    fn declared_scene_fills_the_zone_sums_of_alternating_halves() {
+    fn the_firmware_alternates_the_zone_sums_output_word_between_the_halves() {
         let mut stats = Engine::new(BASE, 106, 1000)
             .unwrap()
             .with_scene([145_000, 383_000, 34_000]);
@@ -680,26 +676,33 @@ mod tests {
         };
         let plane =
             |h: &TestHost, address: usize| [0, 1, 2, 3].map(|n| word(h, address + 0x400 * n));
-        write(&mut stats, &mut h, BASE + HALF, 0x3690);
+        // The firmware programs the first half, then starts the engine.
         write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
         write(&mut stats, &mut h, BASE + CONTROL, START);
         advance(&mut stats, &mut h, 1000);
         assert_eq!(plane(&h, 0x1000), [145_000, 383_000, 34_000, 0]);
-        assert_eq!(plane(&h, 0x13fc), [145_000, 383_000, 34_000, 0]);
         assert_eq!(word(&h, 0x4690), 0);
+        // Measured order on X-T20 2.11: the section 6 statistics consumer hands
+        // the other half's address to the section 5 setters, so the next frame
+        // completes into the second half.
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x4690);
         advance(&mut stats, &mut h, 2000);
         assert_eq!(plane(&h, 0x4690), [145_000, 383_000, 34_000, 0]);
-        // A restart keeps alternating.
+        // The +0x10 distance is the firmware's, not an offset the engine adds.
+        assert_eq!(word(&h, 0x4690 + 0x3690), 0);
+        // A stop/start between frames keeps writing the programmed half.
         write(&mut stats, &mut h, BASE + CONTROL, 0);
-        h.ram[0x1000..0x1004].fill(0);
+        h.ram[0x4690..0x4694].fill(0);
         write(&mut stats, &mut h, BASE + CONTROL, START);
         advance(&mut stats, &mut h, 3000);
-        assert_eq!(word(&h, 0x1000), 145_000);
-        h.ram[0x4690..0x4694].fill(0);
+        assert_eq!(word(&h, 0x4690), 145_000);
+        // Back to the first half, still alternating across the restart.
+        write(&mut stats, &mut h, BASE + ZONE_SUMS, 0x1000);
+        h.ram[0x1000..0x1004].fill(0);
         write(&mut stats, &mut h, BASE + CONTROL, 0);
         write(&mut stats, &mut h, BASE + CONTROL, START);
         advance(&mut stats, &mut h, 4000);
-        assert_eq!(word(&h, 0x4690), 145_000);
+        assert_eq!(word(&h, 0x1000), 145_000);
     }
 
     #[test]
@@ -725,13 +728,16 @@ mod tests {
         let word = |h: &TestHost, address: usize| {
             u32::from_le_bytes(h.ram[address..address + 4].try_into().unwrap())
         };
-        write(&mut stats, &mut h, BASE + HALF, 0x3690);
         write(&mut stats, &mut h, BASE + 0x1d0, 0x2000);
         write(&mut stats, &mut h, BASE + CONTROL, START);
         advance(&mut stats, &mut h, 1000);
         assert_eq!([0, 4, 8].map(|o| word(&h, 0x2000 + o)), [7, 0, 9]);
+        // The firmware programs the other half for the next frame.
+        write(&mut stats, &mut h, BASE + 0x1d0, 0x5690);
         advance(&mut stats, &mut h, 2000);
         assert_eq!(word(&h, 0x5690), 7);
+        assert_eq!(word(&h, 0x5690 + 0x3690), 0);
+        assert_eq!(word(&h, 0x2000), 7);
     }
 
     #[test]
@@ -759,18 +765,21 @@ mod tests {
         let words = |h: &TestHost, at: usize| {
             [0, 4, 8, 12].map(|o| u32::from_le_bytes(h.ram[at + o..at + 4 + o].try_into().unwrap()))
         };
-        write(&mut stats, &mut h, BASE + HALF, 0x3690);
         write(&mut stats, &mut h, BASE + 0x1d0, 0x2000);
         write(&mut stats, &mut h, BASE + CONTROL, START);
         // Frame 1 writes the first half.
         advance(&mut stats, &mut h, 1000);
         assert_eq!(words(&h, 0x2000), [10, 20, 30, 40]);
-        // Only the declared light words follow the scene light.
+        // Only the declared light words follow the scene light; the firmware
+        // programs the other half for the next frame.
         stats.set_scene_light(0.5).unwrap();
+        write(&mut stats, &mut h, BASE + 0x1d0, 0x5690);
         advance(&mut stats, &mut h, 2000);
         assert_eq!(words(&h, 0x5690), [5, 20, 15, 40]);
-        // The published exposure scales them as it scales the zone sums.
+        // The published exposure scales them as it scales the zone sums, in the
+        // half programmed for this frame.
         integration.store(2 * 1566, Ordering::Relaxed);
+        write(&mut stats, &mut h, BASE + 0x1d0, 0x2000);
         advance(&mut stats, &mut h, 3000);
         assert_eq!(words(&h, 0x2000), [10, 20, 30, 40]);
         // A buffer must be declared, and every index inside it.
