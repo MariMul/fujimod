@@ -175,10 +175,10 @@ fn loads(routine: &Routine) -> Vec<(usize, u64)> {
     found
 }
 
-/// Locate the XP5 stock flash reader. `jedec_id` is the installed hardware
-/// identity, verified against the driver's supported-device table. It is not
-/// selected arbitrarily from the list of supported NOR chips. `image_origin`
-/// and `control_offset` come from the decoded update's packaging records.
+/// Locate a stock flash reader for one processor family. `jedec_id` is the
+/// installed hardware identity, verified against the driver's supported-device
+/// table. It is not selected arbitrarily from the list of supported NOR chips.
+/// `image_origin` and `control_offset` come from the decoded update packaging.
 pub fn flash<L: Lookup>(
     index: &L,
     firmware: &str,
@@ -189,6 +189,9 @@ pub fn flash<L: Lookup>(
 ) -> Result<Value> {
     if processor == "xp4" {
         return xp4_flash(index, firmware, image_origin);
+    }
+    if processor == "xpp" {
+        return xpp_flash(index, firmware, image_origin);
     }
     if processor != "xp5" {
         return Err(format!(
@@ -417,6 +420,396 @@ pub fn flash<L: Lookup>(
     );
     Ok(
         json!({"device":device,"window":{"address":0xf0000000u64,"size":0x8000000},"e1_window":{"address":0xf0000000u64,"size":0x8000000},"update_image":{"dat_offset":image_origin,"xor":255},"reader":{"symbol":"flash_read","alignment":64},"transport":"xp5-cmd-callback","code_ranges":ranges,"state_checks":checks,"control":{"offset":control_offset,"size":32768}}),
+    )
+}
+
+/// Locate the X-Processor Pro stock reader and its large-transfer helper from
+/// instruction behavior. The installed chip is a 64 MiB serial NOR; this
+/// reader does not establish its manufacturer or JEDEC identity.
+fn xpp_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
+    let locator = Locator {
+        index,
+        firmware,
+        unit: "main".into(),
+    };
+
+    // XPP readers share this request-struct prologue, while clock setup and
+    // aperture bounds vary. Match instruction behavior instead of carrying
+    // camera addresses or hashes, then locate dependencies from call edges.
+    const PREFIX: [u32; 8] = [
+        0xe92d_4ff0,
+        0xe28d_b020,
+        0xe24d_d014,
+        0xe590_5000,
+        0xe590_4004,
+        0xe590_6008,
+        0xe5d0_700c,
+        0xe5d0_a00d,
+    ];
+    let mut candidates = Vec::new();
+    for unit in index
+        .units(firmware, Some("main"))
+        .map_err(|e| e.to_string())?
+    {
+        if unit.layout.architecture != Architecture::Arm32 {
+            continue;
+        }
+        for region in &unit.regions {
+            for (offset, bytes) in region
+                .bytes
+                .windows(PREFIX.len() * 4)
+                .enumerate()
+                .step_by(4)
+            {
+                if bytes
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .ne(PREFIX)
+                {
+                    continue;
+                }
+                let address = region.address + offset as u64;
+                let Ok(reader) = locator.routine(address) else {
+                    continue;
+                };
+                let window_size = if reader.has("cmp", "r8, #0xf4000000") {
+                    0x4000000
+                } else if reader.has("cmn", "r8, #0x8000001") {
+                    0x8000000
+                } else {
+                    continue;
+                };
+                if reader.header.architecture == Architecture::Arm32
+                    && reader.code.len() >= 200
+                    && (1..=2).contains(&reader.header.ranges.len())
+                    && reader.has("add", "r3, r4, #0x10000000")
+                    && reader.has("cmn", "r3, #0xf8000001")
+                    && xpp_clock_vote(&reader)
+                    && reader.has("movw", "r2, #0x6555")
+                    && reader.has("movt", "r2, #0x7766")
+                {
+                    candidates.push((reader, window_size));
+                }
+            }
+        }
+    }
+    let (reader, window_size) = one(candidates, "X-Processor Pro stock flash reader")?;
+    let marker = xpp_initialized_marker(&reader)?;
+
+    const WAIT_PREFIX: [u32; 10] = [
+        0xe92d_4800,
+        0xe28d_b004,
+        0xe24d_d010,
+        0xe50b_0014,
+        0xe50b_1010,
+        0xe50b_200c,
+        0xe54b_3008,
+        0xe3a0_3001,
+        0xe54b_3007,
+        0xe24b_0014,
+    ];
+    const WAIT_SUFFIX: [u32; 2] = [0xe24b_d004, 0xe8bd_8800];
+    let mut wrapper_candidates = Vec::new();
+    for unit in index
+        .units(firmware, Some("main"))
+        .map_err(|e| e.to_string())?
+    {
+        if unit.layout.architecture != Architecture::Arm32 {
+            continue;
+        }
+        for region in &unit.regions {
+            for (offset, bytes) in region
+                .bytes
+                .windows((WAIT_PREFIX.len() + 1 + WAIT_SUFFIX.len()) * 4)
+                .enumerate()
+                .step_by(4)
+            {
+                let words: Vec<_> = bytes
+                    .chunks_exact(4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .collect();
+                if words[..WAIT_PREFIX.len()] != WAIT_PREFIX
+                    || words[WAIT_PREFIX.len()] & 0x0f00_0000 != 0x0b00_0000
+                    || words[WAIT_PREFIX.len() + 1..] != WAIT_SUFFIX
+                {
+                    continue;
+                }
+                let address = region.address + offset as u64;
+                let Ok(target) = arm_branch_target(
+                    address + (WAIT_PREFIX.len() * 4) as u64,
+                    words[WAIT_PREFIX.len()],
+                ) else {
+                    continue;
+                };
+                if target != reader.header.key.address {
+                    continue;
+                }
+                let Ok(wrapper) = locator.routine(address) else {
+                    continue;
+                };
+                if wrapper.code.len() == WAIT_PREFIX.len() + 1 + WAIT_SUFFIX.len()
+                    && wrapper.header.ranges == [(address, address + 52)]
+                {
+                    wrapper_candidates.push(wrapper);
+                }
+            }
+        }
+    }
+    if wrapper_candidates.is_empty() {
+        for (id, reference) in index
+            .referrers(firmware, Some("main"), reader.header.key.address)
+            .map_err(|e| e.to_string())?
+        {
+            if !reference.kind.ends_with("CALL") {
+                continue;
+            }
+            let Some(entry) = index.entry(id).map_err(|e| e.to_string())? else {
+                continue;
+            };
+            let address = entry.function.key.address;
+            let Ok(wrapper) = locator.routine(address) else {
+                continue;
+            };
+            let calls_reader = wrapper.code.iter().any(|instruction| {
+                instruction.mnemonic == "bl"
+                    && number(instruction.operands.trim_start_matches('#')).ok()
+                        == Some(reader.header.key.address)
+            });
+            if wrapper.header.architecture == Architecture::Arm32
+                && wrapper.header.ranges == [(address, address + 52)]
+                && wrapper.code.len() == 13
+                && wrapper.code.first().is_some_and(|instruction| {
+                    instruction.mnemonic == "stmdb" && instruction.operands.contains("lr")
+                })
+                && wrapper.code.iter().any(|instruction| {
+                    instruction.mnemonic == "strb" && instruction.operands.starts_with("r3,")
+                })
+                && wrapper.code.iter().any(|instruction| {
+                    instruction.mnemonic == "mov" && instruction.operands == "r3, #0x1"
+                })
+                && calls_reader
+            {
+                wrapper_candidates.push(wrapper);
+            }
+        }
+    }
+    let wait = one(
+        wrapper_candidates,
+        "X-Processor Pro flash-read wait wrapper",
+    )?;
+
+    let callees = locator.calls(&reader)?;
+    let mode = one(
+        callees.into_iter().filter(xpp_read_mode).collect(),
+        "X-Processor Pro flash read-mode selector",
+    )?;
+    let mode_address = mode.header.key.address;
+    let transfer = one(
+        locator
+            .calls(&reader)?
+            .into_iter()
+            .filter(|routine| {
+                routine.code.len() > 50
+                    && routine.code.iter().any(|instruction| {
+                        arm_instruction_value(instruction, "ands", "r5", 0x3f)
+                            && instruction.operands.contains("r7")
+                    })
+                    && routine.code.iter().any(|instruction| {
+                        instruction.mnemonic == "bl"
+                            && number(instruction.operands.trim_start_matches('#')).ok()
+                                == Some(mode_address)
+                    })
+            })
+            .collect(),
+        "X-Processor Pro flash transfer helper",
+    )?;
+    let transfer_name = if locator.calls(&transfer)?.iter().any(|routine| {
+        routine
+            .header
+            .names
+            .iter()
+            .any(|name| name == "sflash_dma_read")
+    }) {
+        "flash PL330 transfer"
+    } else {
+        "flash transfer helper"
+    };
+    let ranges = [
+        reader.span("flash_read"),
+        wait.span("flash_read_wait"),
+        transfer.span(transfer_name),
+        mode.span("flash read-mode selector"),
+    ];
+    let code_ranges: Vec<Value> = ranges.into_iter().collect();
+    let checks = vec![json!({
+        "name": "flash driver initialized",
+        "address": marker,
+        "size": 4,
+        "value": 0x77666555u32
+    })];
+    Ok(json!({
+        "device": {"kind":"serial-nor"},
+        "window": {"address":0xf0000000u64,"size":window_size},
+        "update_image": {"dat_offset":image_origin,"xor":255},
+        "reader": {"symbol":"flash_read_wait","alignment":4},
+        "transport": "xpp-cmd-callback",
+        "code_ranges":code_ranges,
+        "state_checks":checks,
+        "control": {"offset":0,"size":32768}
+    }))
+}
+
+fn xpp_clock_vote(routine: &Routine) -> bool {
+    routine.has("mov", "r0, #0x15")
+        || routine.code.windows(4).any(|instructions| {
+            instructions[0].mnemonic == "mov"
+                && instructions[0].operands == "r0, #0x0"
+                && instructions[1].mnemonic == "mov"
+                && instructions[1].operands == "r1, #0x3"
+                && instructions[2].mnemonic == "movt"
+                && instructions[2].operands == "r1, #0x15"
+                && instructions[3].mnemonic == "bl"
+        })
+}
+
+fn xpp_read_mode(routine: &Routine) -> bool {
+    let code = &routine.code;
+    (code.len() > 100
+        && code
+            .get(4)
+            .is_some_and(|i| arm_instruction_value(i, "cmp", "r0", 1))
+        && code
+            .get(7)
+            .is_some_and(|i| arm_instruction_value(i, "cmp", "r3", 5))
+        && code.get(8).is_some_and(|i| i.mnemonic == "ldrls")
+        && code
+            .iter()
+            .any(|i| i.mnemonic == "bic" && i.operands.contains("0x80000000")))
+        || xpp_register_table_read_mode(routine)
+}
+
+fn xpp_register_table_read_mode(routine: &Routine) -> bool {
+    let address_pair = |address: u64| {
+        routine.code.windows(2).any(|instructions| {
+            let immediate = |instruction: &Instruction| {
+                let (register, value) = instruction.operands.split_once(", ")?;
+                Some((register.to_string(), number(value.trim_start_matches('#')).ok()?))
+            };
+            let Some((low_register, low_value)) = immediate(&instructions[0]) else {
+                return false;
+            };
+            let Some((high_register, high_value)) = immediate(&instructions[1]) else {
+                return false;
+            };
+            matches!(instructions[0].mnemonic.as_str(), "mov" | "movw")
+                && instructions[1].mnemonic == "movt"
+                && low_register == high_register
+                && low_value == address
+                && high_value == 0xfff1
+        })
+    };
+    routine.code.len() > 100
+        && routine
+            .code
+            .iter()
+            .any(|instruction| arm_instruction_value(instruction, "cmp", "r0", 1))
+        && routine
+            .code
+            .iter()
+            .any(|instruction| arm_instruction_value(instruction, "cmp", "r1", 2))
+        && routine
+            .code
+            .iter()
+            .any(|instruction| arm_instruction_value(instruction, "cmp", "r1", 3))
+        && [0x4000, 0x4010, 0x4020].into_iter().all(address_pair)
+}
+
+fn arm_instruction_value(
+    instruction: &Instruction,
+    mnemonic: &str,
+    register: &str,
+    value: u64,
+) -> bool {
+    if instruction.mnemonic != mnemonic {
+        return false;
+    }
+    let operands: Vec<_> = instruction.operands.split(", ").collect();
+    operands.first() == Some(&register)
+        && operands
+            .last()
+            .and_then(|operand| number(operand.trim_start_matches('#')).ok())
+            == Some(value)
+}
+
+fn xpp_initialized_marker(reader: &Routine) -> Result<u64> {
+    let pair = |at: usize| -> Option<(String, u32)> {
+        let first = reader.code.get(at)?;
+        let second = reader.code.get(at + 1)?;
+        if first.mnemonic != "movw" || second.mnemonic != "movt" {
+            return None;
+        }
+        let low: Vec<_> = first.operands.split(", ").collect();
+        let high: Vec<_> = second.operands.split(", ").collect();
+        if low.len() != 2 || high.len() != 2 || low[0] != high[0] {
+            return None;
+        }
+        let low_value = u32::try_from(number(low[1].trim_start_matches('#')).ok()?).ok()?;
+        let high_value = u32::try_from(number(high[1].trim_start_matches('#')).ok()?).ok()?;
+        Some((low[0].to_string(), low_value | (high_value << 16)))
+    };
+    let mut markers = BTreeSet::new();
+    for magic_at in 0..reader.code.len().saturating_sub(1) {
+        let Some((magic_register, magic)) = pair(magic_at) else {
+            continue;
+        };
+        if magic != 0x7766_6555 {
+            continue;
+        }
+        for compare_at in magic_at + 2..reader.code.len().min(magic_at + 8) {
+            let compare = &reader.code[compare_at];
+            if compare.mnemonic != "cmp" {
+                continue;
+            }
+            let operands: Vec<_> = compare.operands.split(", ").collect();
+            if operands.len() != 2 || operands[1] != magic_register {
+                continue;
+            }
+            for load_at in (magic_at.saturating_sub(8)..compare_at).rev() {
+                let load = &reader.code[load_at];
+                if load.mnemonic != "ldr" {
+                    continue;
+                }
+                let Some((destination, memory)) = load.operands.split_once(", ") else {
+                    continue;
+                };
+                let Some(memory) = memory
+                    .strip_prefix('[')
+                    .and_then(|memory| memory.strip_suffix(']'))
+                else {
+                    continue;
+                };
+                let fields: Vec<_> = memory.split(", ").collect();
+                if fields.first() != Some(&destination)
+                    || fields
+                        .get(1)
+                        .is_some_and(|offset| !matches!(*offset, "#0" | "#0x0"))
+                    || fields.len() > 2
+                {
+                    continue;
+                }
+                for address_at in load_at.saturating_sub(8)..load_at {
+                    if let Some((register, address)) = pair(address_at)
+                        && register == destination
+                    {
+                        markers.insert(u64::from(address));
+                    }
+                }
+            }
+        }
+    }
+    one(
+        markers.into_iter().collect(),
+        "X-Processor Pro initialized marker",
     )
 }
 
@@ -768,13 +1161,13 @@ fn arm_mov_pair_for(low: u32, high: u32, register: u32) -> Result<u64> {
 
 fn arm_branch_target(site: u64, word: u32) -> Result<u64> {
     if word & 0x0f00_0000 != 0x0b00_0000 {
-        return Err("XP4 flash reader call is not BL".into());
+        return Err("ARM flash reader call is not BL".into());
     }
     let raw = (word & 0x00ff_ffff) << 2;
     let displacement = ((raw << 6) as i32) >> 6;
     site.checked_add(8)
         .and_then(|pc| pc.checked_add_signed(i64::from(displacement)))
-        .ok_or_else(|| "XP4 flash call target overflow".into())
+        .ok_or_else(|| "ARM flash call target overflow".into())
 }
 
 fn locate_xp4_byte_reader<L: Lookup>(
