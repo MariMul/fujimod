@@ -239,6 +239,12 @@ pub enum Model {
         /// Measured buffers written each frame: output register offset and words.
         #[serde(default)]
         buffers: Vec<(u64, Vec<u32>)>,
+        /// Words of a declared buffer that are linear light sums: output
+        /// register offset and `u32` indices into that buffer's words. They
+        /// follow the scene light like the zone sums; the other words are
+        /// written as declared.
+        #[serde(default)]
+        buffer_light_words: Vec<(u64, Vec<u32>)>,
         /// The zone sums scale by the imaging chip's integration value over
         /// this reference (declared with the imaging control's `integration`).
         #[serde(default)]
@@ -926,6 +932,7 @@ pub fn build(
                 period_ticks,
                 scene,
                 buffers,
+                buffer_light_words,
                 exposure_reference,
             } => {
                 let mut model = statistics::Engine::new(base, irq, period_ticks)?;
@@ -957,6 +964,9 @@ pub fn build(
                 }
                 for (output, words) in buffers {
                     model = model.with_buffer(output, &words)?;
+                }
+                for (output, words) in buffer_light_words {
+                    model = model.with_buffer_light_words(output, &words)?;
                 }
                 devices.register(base, statistics::WINDOW, Box::new(model))?
             }

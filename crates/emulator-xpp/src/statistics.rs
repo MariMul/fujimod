@@ -27,7 +27,9 @@
 //! scene is uniform, so every zone of a plane holds the declared value.
 //! Declared buffers name one of the twelve output words and the u32 words
 //! the engine writes there each frame, in the half it completes (measured
-//! buffers of the same scene). The other buffers are not written.
+//! buffers of the same scene). Declared light words of a buffer are linear
+//! light sums and follow the same scale as the zone sums; the other words are
+//! written as declared. The other buffers are not written.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -95,8 +97,16 @@ pub struct Engine {
     zone_scene: Option<ZoneScene>,
     exposure: Option<Exposure>,
     light: Option<SceneLight>,
-    buffers: Vec<(u64, Vec<u8>)>,
+    buffers: Vec<Buffer>,
     state: State,
+}
+/// One declared buffer: the output word (+0x1b8..+0x1e4), the u32 words the
+/// engine writes there each frame, and the word indices that are linear light
+/// sums.
+struct Buffer {
+    output: u64,
+    words: Vec<u32>,
+    light: Vec<u32>,
 }
 /// The integration value another device publishes (0 = not yet set) and the
 /// value at which the declared zone sums hold: the sums scale by
@@ -258,12 +268,36 @@ impl Engine {
             || output & 3 != 0
             || words.is_empty()
             || (output == ZONE_SUMS && self.scene.is_some())
-            || self.buffers.iter().any(|(o, _)| *o == output)
+            || self.buffers.iter().any(|buffer| buffer.output == output)
         {
             return Err("Invalid X-Processor Pro statistics buffer".into());
         }
-        let bytes = words.iter().flat_map(|w| w.to_le_bytes()).collect();
-        self.buffers.push((output, bytes));
+        self.buffers.push(Buffer {
+            output,
+            words: words.to_vec(),
+            light: Vec::new(),
+        });
+        Ok(self)
+    }
+    /// The words of a declared buffer that are linear light sums: `words` are
+    /// `u32` indices into the buffer [`Engine::with_buffer`] declared at
+    /// `output`. They follow the scene light and the published exposure like
+    /// the zone sums; the other words are written as declared.
+    pub fn with_buffer_light_words(mut self, output: u64, words: &[u32]) -> Result<Self, String> {
+        let buffer = self
+            .buffers
+            .iter_mut()
+            .find(|buffer| buffer.output == output)
+            .ok_or("Invalid X-Processor Pro statistics buffer light words")?;
+        if words.is_empty()
+            || !buffer.light.is_empty()
+            || words
+                .iter()
+                .any(|word| *word as usize >= buffer.words.len())
+        {
+            return Err("Invalid X-Processor Pro statistics buffer light words".into());
+        }
+        buffer.light = words.to_vec();
         Ok(self)
     }
     fn write_output(&self, cx: &mut Cx<'_>, output: u64, data: &[u8]) {
@@ -305,8 +339,21 @@ impl Engine {
             }
             self.write_output(cx, ZONE_SUMS, &planes);
         }
-        for (output, data) in &self.buffers {
-            self.write_output(cx, *output, data);
+        for buffer in &self.buffers {
+            let data: Vec<u8> = buffer
+                .words
+                .iter()
+                .enumerate()
+                .flat_map(|(index, word)| {
+                    let word = if buffer.light.contains(&(index as u32)) {
+                        scaled(f64::from(*word))
+                    } else {
+                        *word
+                    };
+                    word.to_le_bytes()
+                })
+                .collect();
+            self.write_output(cx, buffer.output, &data);
         }
     }
     fn word(&self, offset: u64) -> u32 {
@@ -685,5 +732,61 @@ mod tests {
         assert_eq!([0, 4, 8].map(|o| word(&h, 0x2000 + o)), [7, 0, 9]);
         advance(&mut stats, &mut h, 2000);
         assert_eq!(word(&h, 0x5690), 7);
+    }
+
+    #[test]
+    fn declared_light_words_of_a_buffer_follow_the_scene_light() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let scene = std::sync::Arc::new(AtomicU32::new(LIGHT_UNIT));
+        let integration = std::sync::Arc::new(AtomicU32::new(0));
+        let mut stats = Engine::new(BASE, 106, 1000)
+            .unwrap()
+            .with_scene([1000, 2000, 300])
+            .with_scene_light(SceneLight {
+                value: scene.clone(),
+            })
+            .unwrap()
+            .with_exposure(Exposure {
+                value: integration.clone(),
+                reference: 1566,
+            })
+            .unwrap()
+            .with_buffer(0x1d0, &[10, 20, 30, 40])
+            .unwrap()
+            .with_buffer_light_words(0x1d0, &[0, 2])
+            .unwrap();
+        let mut h = TestHost::new();
+        let words = |h: &TestHost, at: usize| {
+            [0, 4, 8, 12].map(|o| u32::from_le_bytes(h.ram[at + o..at + 4 + o].try_into().unwrap()))
+        };
+        write(&mut stats, &mut h, BASE + HALF, 0x3690);
+        write(&mut stats, &mut h, BASE + 0x1d0, 0x2000);
+        write(&mut stats, &mut h, BASE + CONTROL, START);
+        // Frame 1 writes the first half.
+        advance(&mut stats, &mut h, 1000);
+        assert_eq!(words(&h, 0x2000), [10, 20, 30, 40]);
+        // Only the declared light words follow the scene light.
+        stats.set_scene_light(0.5).unwrap();
+        advance(&mut stats, &mut h, 2000);
+        assert_eq!(words(&h, 0x5690), [5, 20, 15, 40]);
+        // The published exposure scales them as it scales the zone sums.
+        integration.store(2 * 1566, Ordering::Relaxed);
+        advance(&mut stats, &mut h, 3000);
+        assert_eq!(words(&h, 0x2000), [10, 20, 30, 40]);
+        // A buffer must be declared, and every index inside it.
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_buffer_light_words(0x1d0, &[0])
+                .is_err()
+        );
+        assert!(
+            Engine::new(BASE, 106, 1000)
+                .unwrap()
+                .with_buffer(0x1d0, &[1, 2, 3])
+                .unwrap()
+                .with_buffer_light_words(0x1d0, &[3])
+                .is_err()
+        );
     }
 }

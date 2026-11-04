@@ -3159,6 +3159,15 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "light_words": {
+          "description": "`u32` word indices of the buffer that are linear light sums: the engine\nscales them with the scene light and the published exposure, like the\nzone sums. Empty: every word is written as declared.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
         "output": {
           "description": "Engine register holding the buffer's address (+0x1b8..+0x1e4).",
           "format": "uint64",

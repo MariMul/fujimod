@@ -1412,6 +1412,11 @@ pub struct StatisticsBuffer {
     pub output: u64,
     /// SHA-256 of the asset.
     pub sha256: String,
+    /// `u32` word indices of the buffer that are linear light sums: the engine
+    /// scales them with the scene light and the published exposure, like the
+    /// zone sums. Empty: every word is written as declared.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub light_words: Vec<u32>,
 }
 
 /// Declared hardware reset facts.

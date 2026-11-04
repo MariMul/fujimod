@@ -537,6 +537,15 @@ fn nodes(
                     ]))
                 })
                 .collect::<Result<Value, String>>()?;
+            let light_words: Vec<Value> = scene
+                .buffers
+                .iter()
+                .filter(|b| !b.light_words.is_empty())
+                .map(|b| json!([b.output, b.light_words]))
+                .collect();
+            if !light_words.is_empty() {
+                model["buffer_light_words"] = json!(light_words);
+            }
         }
         node("statistics".into(), model);
     } else if scene.is_some() {
@@ -1083,6 +1092,15 @@ mod tests {
         assert_eq!(statistics["scene"], json!([144736, 383321, 33695]));
         assert_eq!(statistics["buffers"][0][0], 0x1d0);
         assert_eq!(statistics["buffers"][0][1].as_array().unwrap().len(), 80);
+        // The declared light sums of that buffer reach the node.
+        assert_eq!(statistics["buffer_light_words"][0][0], 0x1d0);
+        assert_eq!(
+            statistics["buffer_light_words"][0][1],
+            json!([
+                0, 2, 4, 8, 10, 12, 16, 18, 20, 24, 26, 28, 32, 34, 36, 40, 42, 44, 48, 50, 52, 56,
+                58, 60, 64, 66, 68
+            ])
+        );
         // Serial peers: the lens port has its own node; sub-CPU, gauge frames, idle channel 3.
         assert!(!names.contains(&"serial0"));
         assert_eq!(node(devices, "serial2")["peer"]["kind"], "registers");
