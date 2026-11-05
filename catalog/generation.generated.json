@@ -3607,13 +3607,8 @@
       "internal_version": "1.90",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "BulkCatalogError: No bulk transport locator for X-Processor Pro"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
