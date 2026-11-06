@@ -782,6 +782,7 @@
       "face": null,
       "icon": null,
       "connection_ids": [
+        "controls-gpio-0-13",
         "controls-encoder-front"
       ],
       "assignable": false,
@@ -803,8 +804,8 @@
           }
         },
         "press": {
-          "kind": "debug_key",
-          "name": "CMD_PUSH"
+          "kind": "native_input",
+          "name": "KEY_FUNC_CMDL_PUSH"
         },
         "endless": null
       },
