@@ -37,12 +37,12 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "state-regions",
@@ -103,7 +103,7 @@
         {
           "id": "emulator-updater",
           "title": "The stock updater installs an update from the card",
-          "result": "not-run"
+          "result": "pass"
         }
       ]
     },
@@ -243,7 +243,7 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
@@ -251,10 +251,14 @@
       "result": "not-run"
     },
     "control-input": {
-      "result": "not-run"
+      "result": "pass",
+      "passed": 11,
+      "total": 11
     },
     "focus": {
-      "result": "not-run"
+      "result": "partial",
+      "passed": 3,
+      "total": 4
     },
     "lens": {
       "result": "not-run"
@@ -263,7 +267,7 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 4,
       "total": 4
     },
@@ -274,7 +278,7 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },
