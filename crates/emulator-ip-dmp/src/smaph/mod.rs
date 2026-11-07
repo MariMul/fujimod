@@ -880,7 +880,13 @@ fn rectangles(
         } else {
             None
         };
-        let solid = packed(get(r, 0x185)?.to_le_bytes(), r, &f.stream.gamma, order)?;
+        let solid = if texture.is_none() && gradient.is_none() {
+            packed(get(r, 0x185)?.to_le_bytes(), r, &f.stream.gamma, order)?
+        } else {
+            // Both paint paths replace this unused solid parameter with the
+            // selected source; it does not represent a register reset value.
+            [0; 4]
+        };
         let coverage_index = coverage_inputs.len();
         coverage_inputs.push(scanline::CoverageInput::new(
             &contours,
@@ -1326,9 +1332,15 @@ mod tests {
             15,
             6,
             &[
-                1.0f32.to_bits(), 0, 0,
-                0, 1.0f32.to_bits(), 0,
-                0, 0, 1.0f32.to_bits(),
+                1.0f32.to_bits(),
+                0,
+                0,
+                0,
+                1.0f32.to_bits(),
+                0,
+                0,
+                0,
+                1.0f32.to_bits(),
             ],
         );
         append_packet(&mut words, 0x65, 15, 4, &[0]);
@@ -1378,9 +1390,11 @@ mod tests {
             (0xa3, (16 << 16) | 16),
             (0xa4, 0),
             (0xa5, 0),
-            (0x185, 0),
         ] {
             append_packet(&mut words, index, 15, 4, &[value]);
+        }
+        if !image {
+            append_packet(&mut words, 0x185, 15, 4, &[0]);
         }
         let gamma: Vec<u32> = (0..=255).collect();
         append_packet(&mut words, 0x188, 15, 4, &gamma);
@@ -1423,6 +1437,38 @@ mod tests {
         }
     }
     #[test]
+    fn texture_first_draw_needs_no_solid_register_but_solid_draw_does() {
+        let (_, paths) = parse_path(&path_program(1, [0, 0, 16, 16]), Stream::default()).unwrap();
+        let (_, fills) = parse_fill(&fill_program(1, true), Stream::default()).unwrap();
+        assert!(!fills[0].stream.regs.contains_key(&0x185));
+        let mut host = RecordingHost {
+            ram: vec![0xa5; 0x4000],
+            ram_base: 0x100000,
+            ..Default::default()
+        };
+        let mut expected = vec![0; 1024];
+        for y in 0..16 {
+            for x in 0..16 {
+                let index = pixel_index(x, y, 16, true) * 4;
+                expected[index..index + 4].copy_from_slice(&[
+                    255,
+                    x as u8 * 16,
+                    y as u8 * 16,
+                    (x + y) as u8,
+                ]);
+            }
+        }
+        host.ram_write(0x103800, &expected).unwrap();
+        let output = rectangles(&mut Cx::new(&mut host, 0, 0, 0), &paths, &fills).unwrap();
+        assert_eq!(output, vec![(0x102000, expected)]);
+
+        let (_, mut solid_fills) = parse_fill(&fill_program(1, false), Stream::default()).unwrap();
+        solid_fills[0].stream.regs.remove(&0x185);
+        let error = rectangles(&mut Cx::new(&mut host, 0, 0, 0), &paths, &solid_fills).unwrap_err();
+        assert_eq!(error, "DMP missing stream register 0x185");
+    }
+
+    #[test]
     fn authored_path_and_fill_commands_drive_dma_fences_and_ack() {
         let path = path_program(1, [0, 0, 16, 16]);
         let fill = fill_program(1, false);
@@ -1443,7 +1489,8 @@ mod tests {
         assert!(host.bytes(0x102000, 1024).unwrap().iter().all(|b| *b == 0));
         let (device, at, token) = host.events.pop().unwrap();
         host.now = at;
-        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token).unwrap();
+        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token)
+            .unwrap();
         assert!(host.bytes(0x102000, 1024).unwrap().iter().all(|b| *b == 0));
         assert_eq!(host.irqs.last(), Some(&(153, true)));
         for (ack, status) in [(0x1800, COMMAND), (0x1020, 0)] {
@@ -1460,9 +1507,10 @@ mod tests {
         let mut bad_geometry = path.clone();
         bad_geometry[22] = 0;
         assert!(parse_path(&bad_geometry, Stream::default()).is_err());
-        assert!(bus
-            .write(&mut Cx::new(&mut host, 0, 0, 0), 0xff93cc18, 4, 1)
-            .is_err());
+        assert!(
+            bus.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff93cc18, 4, 1)
+                .is_err()
+        );
         assert!(host.events.is_empty());
         put(&mut host, 0x100000, &[11, 0x100000]);
         assert!(linked_words(&Cx::new(&mut host, 0, 0, 0), 0x100000, 2).is_err());
@@ -1483,7 +1531,8 @@ mod tests {
         submit(&mut bus, &mut host, &image_path, &image_fill, 0x2000);
         let (device, at, token) = host.events.pop().unwrap();
         host.now = at;
-        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token).unwrap();
+        bus.event(&mut Cx::new(&mut host, 0, 0, 0), device, token)
+            .unwrap();
         let output = host.bytes(0x102000, 1024).unwrap();
         assert_eq!(output.len(), 1024);
         assert!(output.iter().any(|byte| *byte != 0));
@@ -1496,13 +1545,8 @@ mod tests {
             .stream
             .regs;
         sample_regs.insert(0x10c, 0x3a0000);
-        let texture = Texture::new(
-            &Cx::new(&mut host, 0, 0, 0),
-            &sample_regs,
-            0x102000,
-            1024,
-        )
-        .unwrap();
+        let texture =
+            Texture::new(&Cx::new(&mut host, 0, 0, 0), &sample_regs, 0x102000, 1024).unwrap();
         assert_eq!(texture.sample(1, 1).unwrap(), [0, 16, 0, 255]);
 
         // An 8x8 image in a 16x16 backing, drawn over 16x16: the normalized matrix spans the
@@ -1511,11 +1555,13 @@ mod tests {
         padded.insert(0x10c, 0x3b0000);
         padded.insert(0x158, (8 << 16) | 8);
         let texture = Texture::new(&Cx::new(&mut host, 0, 0, 0), &padded, 0x102000, 1024).unwrap();
-        assert_eq!(texture.sample(15, 15).unwrap(), texture.sample(14, 14).unwrap());
+        assert_eq!(
+            texture.sample(15, 15).unwrap(),
+            texture.sample(14, 14).unwrap()
+        );
         assert_ne!(texture.sample(15, 15).unwrap(), [0; 4]);
         assert_eq!(texture.sample(15, 0).unwrap(), [112, 0, 0, 255]);
     }
-
 }
 
 impl State {
@@ -1805,9 +1851,7 @@ impl Device for Renderer {
                     if self.webgpu_bridge {
                         let payload = s.gles.encode_webgpu_request(&data)?;
                         let id = s.next_host_request;
-                        let next_id = id
-                            .checked_add(1)
-                            .ok_or("DMP WebGPU request ID exhausted")?;
+                        let next_id = id.checked_add(1).ok_or("DMP WebGPU request ID exhausted")?;
                         cx.request_pause()?;
                         s.next_host_request = next_id;
                         s.host_request = Some(PendingHostRequest {
