@@ -1193,6 +1193,15 @@ impl Cpu for Core {
             "translation_invalidations",
             "tb_restore_lookups",
             "tb_restart_lookups",
+            "translation_invalidations_restore_nocache",
+            "translation_invalidations_exec_nocache",
+            "translation_invalidations_io_recompile",
+            "translation_invalidations_guest_store",
+            "translation_invalidations_exit_address",
+            "translation_invalidations_embedder",
+            "translation_invalidations_watchpoint",
+            "translation_invalidations_restart",
+            "translation_invalidations_physical_write",
         ];
         let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len()) };
         Ok(names.into_iter().zip(values.iter().copied()).collect())
@@ -1512,14 +1521,13 @@ mod tests {
     }
     unsafe fn redirect_pc(address: u64, _: u32, data: *mut c_void) {
         let context = unsafe { &mut *data.cast::<Redirect<'_>>() };
-        if address == 0x1000 {
-            if let Err(error) = context
+        if address == 0x1000
+            && let Err(error) = context
                 .cpu
                 .write_register(Register::Pc, &0x1004u32.to_le_bytes())
-            {
-                context.error = Some(error);
-                let _ = context.cpu.stop();
-            }
+        {
+            context.error = Some(error);
+            let _ = context.cpu.stop();
         }
     }
     #[test]

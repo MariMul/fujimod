@@ -37,6 +37,9 @@ pub enum InitializationFault {
     RejectCmd8,
     /// Allow this many CMD8 responses, then time out one CMD8.
     RejectCmd8OnceAfter(u32),
+    /// As `RejectCmd8OnceAfter`, and time out every CMD3 sent in Stand-by,
+    /// so a host cannot adopt an identified card and must identify it again.
+    RejectStandbyCmd3AndCmd8OnceAfter(u32),
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -479,7 +482,12 @@ impl SdHost {
         let single =
             self.options.protocol == Protocol::Sdhc && matches!(word, 0x113a0010 | 0x113a0011);
         let pio = !rom && (matches!(word, 0x193a0026 | 0x123a0036) || single && word & 1 == 0);
-        if (rom && word >> 16 & 255 != expected) || (!rom && word != expected && !pio && !single) {
+        // CMD7 with RCA 0 deselects every card and none answers it, so a
+        // host sends it without a response (Physical Layer 7.10, 4.7.4).
+        let deselect = !rom && word == 0x07000000 && argument == 0;
+        if (rom && word >> 16 & 255 != expected)
+            || (!rom && word != expected && !pio && !single && !deselect)
+        {
             return Err(format!("Unsupported SD command {command}/{word:#x}"));
         }
         let mut request = Request {
@@ -562,9 +570,11 @@ impl SdHost {
                 self.state != State::Ready || argument != 0
             }
             3 => {
+                // Physical Layer 7.10, 4.2.2: the host may send CMD3 again in
+                // Stand-by to have the card publish a new RCA.
                 request.state = State::Standby;
                 response = rca | if rom { 0x500 } else { 0x600 };
-                self.state != State::Identification || argument != 0
+                !matches!(self.state, State::Identification | State::Standby) || argument != 0
             }
             9 if !rom => {
                 let csd = 1u128 << 126
@@ -586,7 +596,13 @@ impl SdHost {
                 } else {
                     State::Standby
                 };
-                response = if argument != 0 { 0x900 } else { 0x600 };
+                response = if deselect {
+                    0
+                } else if argument != 0 {
+                    0x900
+                } else {
+                    0x600
+                };
                 !matches!(self.state, State::Standby | State::Transfer)
                     || ![0, rca].contains(&(argument & 0xffff0000))
                     || rom && argument == 0
@@ -807,7 +823,8 @@ impl SdHost {
             && match self.options.initialization_fault {
                 InitializationFault::None => false,
                 InitializationFault::RejectCmd8 => true,
-                InitializationFault::RejectCmd8OnceAfter(count) => {
+                InitializationFault::RejectCmd8OnceAfter(count)
+                | InitializationFault::RejectStandbyCmd3AndCmd8OnceAfter(count) => {
                     self.cmd8_responses == u64::from(count)
                 }
             };
@@ -815,11 +832,18 @@ impl SdHost {
             && matches!(
                 self.options.initialization_fault,
                 InitializationFault::RejectCmd8OnceAfter(_)
+                    | InitializationFault::RejectStandbyCmd3AndCmd8OnceAfter(_)
             )
         {
             self.cmd8_responses = self.cmd8_responses.saturating_add(1);
         }
-        if reject_cmd8 {
+        let reject_cmd3 = r.command == 3
+            && self.state == State::Standby
+            && matches!(
+                self.options.initialization_fault,
+                InitializationFault::RejectStandbyCmd3AndCmd8OnceAfter(_)
+            );
+        if reject_cmd8 || reject_cmd3 {
             self.latch_error(COMMAND_TIMEOUT_ERROR);
             return self.signal(cx);
         }
@@ -1162,8 +1186,9 @@ impl SdHost {
                 },
             );
         }
-        if offset == 0 && self.request.is_some() {
-            let r = self.request.as_mut().unwrap();
+        if offset == 0
+            && let Some(r) = self.request.as_mut()
+        {
             if r.phase != Phase::Boundary
                 || self.regs.get(0x30) & 8 != 0
                 || value != self.regs.word(0)
@@ -1199,8 +1224,7 @@ impl SdHost {
             return Err(format!(
                 "SD configuration changed during CMD{} ({:?}, byte {} of {}): offset {offset:#x} size {size} value {value:#x}",
                 r.command, r.phase, r.cursor, r.quantity
-            )
-            .into());
+            ));
         }
         // Power-control bits 12-15 select SDHCI 4 VDD2, used only by UHS-II
         // cards; GFX 50R 0xcac8e4 sets them. They are stored with no effect.
@@ -1425,10 +1449,11 @@ impl Device for SdHost {
                 cx.fail("SD clock changed during command");
             } else {
                 self.clocks.write(cx, address, 2, value & 0xffff);
-                if size == 4 && cx.refusal().is_none() {
-                    if let Err(e) = self.store(cx, 0x2e, 2, (value >> 16) as u32) {
-                        cx.fail(e);
-                    }
+                if size == 4
+                    && cx.refusal().is_none()
+                    && let Err(e) = self.store(cx, 0x2e, 2, (value >> 16) as u32)
+                {
+                    cx.fail(e);
                 }
             }
             if cx.refusal().is_none() {
@@ -1525,6 +1550,48 @@ impl Device for SdHost {
         address != self.options.base + 0x20
             && (self.valid(address.wrapping_sub(self.options.base) as usize, size)
                 || address == self.options.base + 0x2c && matches!(size, 2 | 4))
+    }
+}
+
+impl fujimod_emulator_devices::capability::CardSlot for SdHost {
+    fn card(&self) -> &fujimod_emulator_devices::parts::sd_card::Card {
+        SdHost::card(self)
+    }
+    fn busy(&self) -> bool {
+        SdHost::busy(self)
+    }
+    fn readable_card(
+        &self,
+        revision: Option<u64>,
+    ) -> std::result::Result<&fujimod_emulator_devices::parts::sd_card::Card, String> {
+        SdHost::readable_card(self, revision)
+    }
+    fn replace_card(
+        &mut self,
+        card: fujimod_emulator_devices::parts::sd_card::Card,
+    ) -> std::result::Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        SdHost::replace_card(self, card)
+    }
+    fn retain_card(
+        &mut self,
+        card: fujimod_emulator_devices::parts::sd_card::Card,
+    ) -> std::result::Result<(), String> {
+        SdHost::retain_card(self, card)
+    }
+    fn initialize_revision(&mut self, revision: u64) -> std::result::Result<(), String> {
+        SdHost::initialize_revision(self, revision)
+    }
+    fn inject_data_fault(&mut self, fault: DataFault) -> std::result::Result<(), String> {
+        SdHost::inject_data_fault(self, fault)
+    }
+    fn clear_data_faults(&mut self) -> std::result::Result<(), String> {
+        SdHost::clear_data_faults(self)
+    }
+    fn data_faults(&self) -> &[DataFault] {
+        SdHost::data_faults(self)
+    }
+    fn fault_history(&self) -> &[DataFaultEvent] {
+        SdHost::fault_history(self)
     }
 }
 
@@ -1637,6 +1704,18 @@ mod tests {
         }
     }
     #[test]
+    fn an_identified_card_is_deselected_and_publishes_a_new_rca_in_standby() {
+        let mut m = host(Protocol::Sdhc);
+        m.state = State::Transfer;
+        assert_eq!(m.plan(0x07000000, 0).unwrap().state, State::Standby);
+        assert!(m.plan(0x07000000, 0x12340000).is_err());
+        m.state = State::Standby;
+        assert_eq!(m.plan(0x07000000, 0).unwrap().state, State::Standby);
+        assert_eq!(m.plan(0x031a0000, 0).unwrap().state, State::Standby);
+        m.state = State::Transfer;
+        assert!(m.plan(0x031a0000, 0).is_err());
+    }
+    #[test]
     fn ocr_inquiry_keeps_idle_until_a_supported_voltage_is_selected() {
         let mut m = host(Protocol::Sdhc);
         let mut h = Ram::new(0x10000);
@@ -1738,6 +1817,29 @@ mod tests {
         assert_eq!((bytes[16], mode), (0x0f, 15));
         let (bytes, mode) = switch_status(0x00ffffff, 1);
         assert_eq!((bytes[16], mode), (1, 1));
+    }
+    #[test]
+    fn switch_function_sdma_queries_and_selects_only_supported_high_speed() {
+        for high_speed in [false, true] {
+            let mut m = host(Protocol::Sdhc);
+            m.options.high_speed = high_speed;
+            let mut h = Ram::new(0x10000);
+            setup(&mut m, &mut h);
+            m.state = State::Transfer;
+            write(&mut m, &mut h, 4, 2, 64);
+            write(&mut m, &mut h, 6, 2, 1);
+            for argument in [1, 0x80fffff1] {
+                h.bytes[0x1000..0x1044].fill(0xcc);
+                write(&mut m, &mut h, 0, 4, 0x1000);
+                command(&mut m, &mut h, 0x063a0011, argument);
+                due(&mut m, &mut h);
+                assert_eq!(read(&mut m, &mut h, 0x30, 2) & 3, 3);
+                assert_eq!(h.bytes[0x100d] & 3, if high_speed { 3 } else { 1 });
+                assert_eq!(h.bytes[0x1010] & 15, if high_speed { 1 } else { 15 });
+                assert_eq!(&h.bytes[0x1040..0x1044], &[0xcc; 4]);
+                assert_eq!(m.access_mode, u8::from(high_speed && argument >> 31 != 0));
+            }
+        }
     }
     #[test]
     fn state_distinguishes_media_with_the_same_diagnostic_summary() {
@@ -2276,47 +2378,5 @@ mod tests {
         due(&mut m, &mut h);
         assert!(h.effects.contains(&Effect::Write(0x40001000, 512)));
         assert_eq!(&h.bytes[0x1000..0x1200], &[0x7b; 512]);
-    }
-}
-
-impl fujimod_emulator_devices::capability::CardSlot for SdHost {
-    fn card(&self) -> &fujimod_emulator_devices::parts::sd_card::Card {
-        SdHost::card(self)
-    }
-    fn busy(&self) -> bool {
-        SdHost::busy(self)
-    }
-    fn readable_card(
-        &self,
-        revision: Option<u64>,
-    ) -> std::result::Result<&fujimod_emulator_devices::parts::sd_card::Card, String> {
-        SdHost::readable_card(self, revision)
-    }
-    fn replace_card(
-        &mut self,
-        card: fujimod_emulator_devices::parts::sd_card::Card,
-    ) -> std::result::Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
-        SdHost::replace_card(self, card)
-    }
-    fn retain_card(
-        &mut self,
-        card: fujimod_emulator_devices::parts::sd_card::Card,
-    ) -> std::result::Result<(), String> {
-        SdHost::retain_card(self, card)
-    }
-    fn initialize_revision(&mut self, revision: u64) -> std::result::Result<(), String> {
-        SdHost::initialize_revision(self, revision)
-    }
-    fn inject_data_fault(&mut self, fault: DataFault) -> std::result::Result<(), String> {
-        SdHost::inject_data_fault(self, fault)
-    }
-    fn clear_data_faults(&mut self) -> std::result::Result<(), String> {
-        SdHost::clear_data_faults(self)
-    }
-    fn data_faults(&self) -> &[DataFault] {
-        SdHost::data_faults(self)
-    }
-    fn fault_history(&self) -> &[DataFaultEvent] {
-        SdHost::fault_history(self)
     }
 }
