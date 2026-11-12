@@ -15,7 +15,9 @@ type Span = (u64, u64);
 pub struct Records {
     ranges: Vec<Span>,
     limit: usize,
-    rows: Vec<Value>,
+    // Each record is kept as its serialized JSON object: a bound of millions of
+    // records stays near 300 bytes each instead of a multi-kilobyte `Value` map.
+    rows: Vec<Box<str>>,
     violation: Option<String>,
 }
 impl Records {
@@ -34,7 +36,7 @@ impl Records {
                 self.limit
             ));
         } else {
-            self.rows.push(row);
+            self.rows.push(row.to_string().into_boxed_str());
         }
     }
     pub(super) fn transfer(&mut self, source: &str, physical: u64, address: u64, bytes: usize) {
@@ -46,7 +48,27 @@ impl Records {
         }
     }
     pub fn state(&self) -> Value {
-        json!({"enabled":true,"ranges":self.ranges,"records":self.rows,"violation":self.violation})
+        serde_json::from_str(&self.state_json(None)).expect("memory watch state is valid JSON")
+    }
+    /// Serialize the state without building `Value`s for the records.
+    /// `violation` is reported when the watch itself recorded none.
+    pub fn state_json(&self, violation: Option<&str>) -> String {
+        let violation = self.violation.as_deref().or(violation);
+        let size = self.rows.iter().map(|row| row.len() + 1).sum::<usize>();
+        let mut out = String::with_capacity(size + 256);
+        out.push_str(r#"{"enabled":true,"ranges":"#);
+        out.push_str(&json!(self.ranges).to_string());
+        out.push_str(r#","records":["#);
+        for (index, row) in self.rows.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push_str(row);
+        }
+        out.push_str(r#"],"violation":"#);
+        out.push_str(&json!(violation).to_string());
+        out.push('}');
+        out
     }
 }
 pub struct MemoryWatch {
