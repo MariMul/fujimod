@@ -129,13 +129,19 @@ pub fn composite_snapshot(
     let p = s.plane;
     let yuv = matches!(p.order, PixelOrder::YyCbCr);
     let row_start = if yuv { p.source_x & !1 } else { p.source_x };
-    for (n, row) in s.rows.iter().enumerate() {
-        let y = p.work_y + n as u32;
-        for x in p.work_x..(p.work_x + p.work_width).min(width) {
-            let sx = p.sampling.map_or_else(
+    // Source columns depend only on x: compute them once, not per row.
+    let columns: Vec<u32> = (p.work_x..(p.work_x + p.work_width).min(width))
+        .map(|x| {
+            p.sampling.map_or_else(
                 || (x - p.work_x) * p.source_width / p.work_width,
                 |q| (x - p.work_x) * q[0] / 4096,
-            );
+            )
+        })
+        .collect();
+    for (n, row) in s.rows.iter().enumerate() {
+        let y = p.work_y + n as u32;
+        let line = &mut rgba[y as usize * width as usize * 4..][..width as usize * 4];
+        for (x, &sx) in (p.work_x..).zip(columns.iter()) {
             let c = if yuv {
                 let pixel = sx + p.source_x - row_start;
                 let i = (pixel & !1) as usize * 2;
@@ -144,10 +150,17 @@ pub fn composite_snapshot(
             } else {
                 p.order.rgba(&row[sx as usize * 4..sx as usize * 4 + 4])
             };
-            let out = &mut rgba[(y as usize * width as usize + x as usize) * 4..][..4];
-            let a = c[3] as u32;
-            for n in 0..3 {
-                out[n] = ((c[n] as u32 * a + out[n] as u32 * (255 - a) + 127) / 255) as u8;
+            let out = &mut line[x as usize * 4..][..4];
+            // (c*a + o*(255-a) + 127) / 255 is exactly o at a = 0 and c at a = 255.
+            match c[3] {
+                0 => {}
+                255 => out[..3].copy_from_slice(&c[..3]),
+                a => {
+                    let a = a as u32;
+                    for n in 0..3 {
+                        out[n] = ((c[n] as u32 * a + out[n] as u32 * (255 - a) + 127) / 255) as u8;
+                    }
+                }
             }
             out[3] = 255;
         }
