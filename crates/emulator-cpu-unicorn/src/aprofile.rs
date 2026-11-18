@@ -62,6 +62,9 @@ struct Execution {
     exclusive_exits: Cell<bool>,
     owner_interrupts: Cell<bool>,
     owner_aborts: Cell<bool>,
+    // ARMv7-A MPIDR and CBAR values the owner reports (see
+    // `Core::set_identity`): reads complete in the instruction hook.
+    identity: Cell<Option<(u32, u32)>>,
     // Newest entered instruction addresses, oldest first, while an owner
     // keeps an entry trace (`Core::set_entry_trace`).
     trace: RefCell<Option<EntryTrace>>,
@@ -136,6 +139,7 @@ impl Core {
             exclusive_exits: Cell::new(false),
             owner_interrupts: Cell::new(false),
             owner_aborts: Cell::new(false),
+            identity: Cell::new(None),
             trace: RefCell::new(None),
         });
         let owner: Rc<dyn CodeOwner> = e.clone();
@@ -178,6 +182,16 @@ impl Core {
             }
         }
         Ok(Self { execution: e })
+    }
+    /// Report ARMv7-A MPIDR and CBAR reads as these constants inside the
+    /// engine instead of exiting to the owner for them.
+    pub fn set_identity(&self, mpidr: u32, configuration_base: u32) -> Result<(), String> {
+        let e = &self.execution;
+        if !e.a32 || e.active.get() {
+            return Err("A-profile identity requires an idle ARMv7-A processor".into());
+        }
+        e.identity.set(Some((mpidr, configuration_base)));
+        Ok(())
     }
     /// The raw engine this processor runs on, for owner protocols that
     /// address it directly (translation maintenance). Execution, mapping
@@ -509,7 +523,9 @@ impl Execution {
             let mut bytes = [0; 4];
             self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
             let word = u32::from_le_bytes(bytes);
-            if self.framework(word) {
+            if self.identity_read(address, word)? {
+                // Completed here, as the owner would, without leaving the engine.
+            } else if self.framework(word) {
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
                 self.cpu.stop()?;
@@ -524,6 +540,33 @@ impl Execution {
         self.at_instruction.set(false);
         self.reset();
         Ok(())
+    }
+    /// Complete an ARMv7-A MPIDR or CBAR read with the owner's constant: a
+    /// failed condition retires it unexecuted; a transfer to PC stays with
+    /// the owner. Both registers are fixed processor wiring.
+    fn identity_read(&self, address: u64, word: u32) -> Result<bool, String> {
+        let Some((mpidr, cbar)) = self.identity.get().filter(|_| self.a32) else {
+            return Ok(false);
+        };
+        let value = match word & 0x0fff_0fff {
+            0x0e10_0fb0 => mpidr,
+            0x0e9f_0f10 => cbar,
+            _ => return Ok(false),
+        };
+        let rd = ((word >> 12) & 15) as usize;
+        let cpsr = self.scalar(arm::CPSR)? as u32;
+        if word >> 28 == 15 || rd == 15 || cpsr & 0x20 != 0 {
+            return Ok(false);
+        }
+        if arm::condition_passes(word >> 28, cpsr) {
+            self.cpu
+                .write_register(arm::CORE[rd], &value.to_le_bytes())?;
+        }
+        self.cpu.write_register(
+            Register::Pc,
+            &(address as u32).wrapping_add(4).to_le_bytes(),
+        )?;
+        Ok(true)
     }
     fn deliver_interrupt(&self) -> Result<bool, String> {
         if self.a32 {

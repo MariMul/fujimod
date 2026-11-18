@@ -566,6 +566,11 @@ pub trait Cpu {
     fn exception_entries(&self) -> Option<armv7a::Entries> {
         None
     }
+    /// Answer ARMv7-A MPIDR and CBAR reads with these constants inside the
+    /// engine. Returns false when the owner must keep performing them.
+    fn set_armv7a_identity(&self, _mpidr: u32, _configuration_base: u32) -> Result<bool, String> {
+        Ok(false)
+    }
     /// Configure instruction-proven loops; statistics remain observational.
     fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
         if mode == loops::LoopMode::Disabled {

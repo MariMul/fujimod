@@ -509,3 +509,73 @@ fn code_rewritten_again_while_a_peer_has_not_flushed_runs_the_new_code() {
         assert_eq!(value(&cpu, arm::CORE[0]), u64::from(n));
     }
 }
+#[test]
+fn armv7a_identity_reads_complete_in_the_engine_once_configured() {
+    let library = crate::test_support::library();
+    let open = |identity: bool| {
+        let raw = library.open(Model::CortexA7, 1 << 20).unwrap();
+        let cpu = Core::new(raw, Memory::default()).unwrap();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        // SVC with IRQ/FIQ masked; Z clear, so EQ fails.
+        cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+            .unwrap();
+        if identity {
+            assert!(cpu.set_armv7a_identity(0x80000001, 0xffff0000).unwrap());
+        }
+        cpu.write_memory(
+            0x1000,
+            &[
+                0xee100fb0u32, // mrc p15, 0, r0, c0, c0, 5 (MPIDR)
+                0x0e102fb0,    // mrceq p15, 0, r2, c0, c0, 5: not executed
+                0xee9f1f10,    // mrc p15, 4, r1, c15, c0, 0 (CBAR)
+                0xe1a00000,    // nop
+                0xee10ffb0,    // MPIDR to APSR_nzcv stays with the owner
+            ]
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        cpu.write_register(arm::CORE[2], &0x1234u32.to_le_bytes())
+            .unwrap();
+        cpu
+    };
+    let cpu = open(true);
+    let exit = cpu
+        .run(Run {
+            begin: 0x1000,
+            until: None,
+            instructions: Some(4),
+            watchdog_us: 0,
+        })
+        .unwrap();
+    assert!(!matches!(exit, Exit::BeforeInstruction(_)), "{exit:?}");
+    assert_eq!(value(&cpu, arm::CORE[0]), 0x80000001);
+    assert_eq!(value(&cpu, arm::CORE[1]), 0xffff0000);
+    assert_eq!(value(&cpu, arm::CORE[2]), 0x1234);
+    assert_eq!(value(&cpu, Register::Pc), 0x1010);
+    assert!(matches!(
+        cpu.run(Run {
+            begin: 0x1010,
+            until: None,
+            instructions: Some(1),
+            watchdog_us: 0
+        })
+        .unwrap(),
+        Exit::BeforeInstruction(0xee10ffb0)
+    ));
+    // Without the owner's values the read still exits to the owner.
+    let cpu = open(false);
+    assert!(matches!(
+        cpu.run(Run {
+            begin: 0x1000,
+            until: None,
+            instructions: Some(4),
+            watchdog_us: 0
+        })
+        .unwrap(),
+        Exit::BeforeInstruction(0xee100fb0)
+    ));
+    assert!(open(false).set_identity(0, 0).is_ok());
+    assert!(cpu.set_armv7a_identity(0, 0).is_ok());
+}

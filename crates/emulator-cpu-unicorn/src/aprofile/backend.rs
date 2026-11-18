@@ -51,6 +51,10 @@ impl Cpu for Core {
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         self.execution.cpu.set_execution_policy(policy)
     }
+    fn set_armv7a_identity(&self, mpidr: u32, configuration_base: u32) -> Result<bool, String> {
+        self.set_identity(mpidr, configuration_base)?;
+        Ok(true)
+    }
     fn exception_entries(&self) -> Option<armv7a::Entries> {
         self.execution.a32.then(|| self.execution.entries.get())
     }

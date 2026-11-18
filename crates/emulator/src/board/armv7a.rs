@@ -191,6 +191,10 @@ impl Board {
         if state.instructions[core] != 0 || state.armv7a[core].is_some() {
             return Err("ARMv7-A reset wiring must be configured once before execution".into());
         }
+        // A counted backend answers the identity reads itself; the others
+        // keep exiting to `Profile::before`.
+        self.cpu(core)?
+            .set_armv7a_identity(config.mpidr, config.configuration_base)?;
         state.armv7a[core] = Some(Profile::new(config));
         Ok(())
     }
