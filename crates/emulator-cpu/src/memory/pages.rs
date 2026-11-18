@@ -43,8 +43,14 @@ fn uniform(byte: u8) -> &'static Arc<Page> {
 }
 /// The byte every cell of `bytes` holds, if they are all equal.
 fn uniform_byte(bytes: &[u8]) -> Option<u8> {
-    let (&first, rest) = bytes.split_first()?;
-    rest.iter().all(|&byte| byte == first).then_some(first)
+    let &first = bytes.first()?;
+    // Whole words without an early exit: a page-sized pass vectorizes.
+    let pattern = u64::from_ne_bytes([first; 8]);
+    let (words, tail) = bytes.as_chunks::<8>();
+    let differ = words
+        .iter()
+        .fold(0, |acc, word| acc | (u64::from_ne_bytes(*word) ^ pattern));
+    (differ == 0 && tail.iter().all(|&byte| byte == first)).then_some(first)
 }
 /// A retained copy of one page: the previous version when unchanged, a
 /// shared uniform page, or a new copy.
