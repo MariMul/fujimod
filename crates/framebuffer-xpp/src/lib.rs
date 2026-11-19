@@ -10,7 +10,8 @@ pub const PACKED_422: u32 = 0x333;
 pub const OUTPUT_SIZE: u64 = 0x014;
 pub const VIDEO_SIZE: u64 = 0x02c;
 pub const VIDEO_BUFFER: u64 = 0x030;
-pub const LAYER_ENABLE: u64 = 0x200;
+pub const OSD_GROUP_ATTRIBUTES: u64 = 0x200;
+pub const OSD_WINDOW_FLAGS: u64 = 0x20c;
 pub const LAYER_ORIGIN: u64 = 0x210;
 pub const LAYER_SIZE: u64 = 0x220;
 pub const LAYER_BUFFER: u64 = 0x230;
@@ -21,8 +22,27 @@ pub fn register_ranges(output: usize) -> Result<Vec<(u64, usize)>, String> {
     Ok(vec![(b, 0x34), (b + 0x200, 0x40)])
 }
 pub const REGISTER_BYTES: usize = 0x240;
+/// Register layout that supplies the OSD window enables.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum WindowEnables {
+    #[default]
+    GroupAttributeMask,
+    SlotNibbles,
+}
+
+impl WindowEnables {
+    pub fn from_offset(offset: u64) -> Result<Self, String> {
+        match offset {
+            OSD_GROUP_ATTRIBUTES => Ok(Self::GroupAttributeMask),
+            OSD_WINDOW_FLAGS => Ok(Self::SlotNibbles),
+            _ => Err(format!("Unsupported XPP OSD enable register {offset:#x}")),
+        }
+    }
+}
+
 pub struct Decoder<'a> {
     pub words: &'a BTreeMap<u64, u32>,
+    pub window_enables: WindowEnables,
 }
 impl Decoder<'_> {
     fn word(&self, o: u64) -> u32 {
@@ -41,10 +61,20 @@ impl Decoder<'_> {
                 || self.word(VIDEO_SIZE) != 0
                 || self.word(VIDEO_BUFFER) != 0)
     }
+    /// The raw window enables normalized to one bit per slot.
+    pub fn window_mask(&self) -> u32 {
+        match self.window_enables {
+            WindowEnables::GroupAttributeMask => self.word(OSD_GROUP_ATTRIBUTES),
+            WindowEnables::SlotNibbles => {
+                let flags = self.word(OSD_WINDOW_FLAGS);
+                (0..4).fold(0, |mask, slot| mask | (((flags >> (slot * 4)) & 1) << slot))
+            }
+        }
+    }
     /// The enabled OSD layers, or none while the OSD group is off.
     pub fn layers_shown(&self) -> u32 {
         if self.word(CONTROL) & OSD_ENABLE != 0 {
-            self.word(LAYER_ENABLE)
+            self.window_mask()
         } else {
             0
         }
@@ -67,7 +97,7 @@ impl Decoder<'_> {
         &self,
         mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
     ) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
-        if self.word(LAYER_ENABLE) & !0xf != 0 {
+        if self.window_mask() & !0xf != 0 {
             return Err(());
         }
         let video = self.video_shown();

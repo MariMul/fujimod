@@ -1979,6 +1979,9 @@ pub struct UsbRegisters {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterLayouts"))]
 pub struct RegisterLayouts {
+    /// Offset of the XPP output register that supplies per-window enables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub osd_window_enable_offset: Option<u64>,
     /// Declared adc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adc: Option<Adc>,

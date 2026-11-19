@@ -321,6 +321,8 @@ pub enum Model {
     DisplayOutput {
         #[serde(default)]
         handshake_ticks: Option<u64>,
+        #[serde(default)]
+        osd_window_enable_offset: Option<u64>,
         base: u64,
         size: u64,
         set_bits: Vec<(u64, u32)>,
@@ -1213,6 +1215,7 @@ pub fn build(
             }
             Model::DisplayOutput {
                 handshake_ticks,
+                osd_window_enable_offset,
                 base,
                 size,
                 set_bits,
@@ -1226,6 +1229,10 @@ pub fn build(
                     &clear_bits,
                     scanout.map(|(output, period)| display::Scanout { output, period }),
                 )?;
+                let output = match osd_window_enable_offset {
+                    Some(offset) => output.with_osd_window_enable_offset(offset)?,
+                    None => output,
+                };
                 let output = match handshake_ticks {
                     Some(ticks) => output.with_handshake(ticks)?,
                     None => output,
