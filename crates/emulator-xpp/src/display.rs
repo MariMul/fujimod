@@ -18,9 +18,10 @@
 //! In the slot-nibble layout +0x200 holds group attributes and the low bit
 //! of each nibble at +0x20c enables that slot. The origins, sizes and buffers
 //! are at +0x210, +0x220 and +0x230. Sizes, like the output size at +0x014, hold
-//! `(width - 1) << 16 | (height - 1)`. The graph decodes packed rows of
-//! premultiplied RGBA words, using the window width for pitch. Layers compose in
-//! index order over the video layer, or over black without it.
+//! `(width - 1) << 16 | (height - 1)`. In the slot-nibble layout each word
+//! at +0x320 adds the low 14 bits of row skip to its window width in pixels.
+//! The group format selector at +0x200 selects straight A,B,G,R bytes for
+//! value 1. Layers compose in index order over the video layer, or over black.
 //!
 //! The same routine copies the video layer's words: shadow +0x10 to the
 //! format at +0x010, +0x3c to the size at +0x02c and +0x40 to the buffer at
@@ -47,9 +48,8 @@
 //! Format 0x333 is packed 4:2:2 `Y0 Y1 Cb Cr` with rows of two bytes per
 //! pixel, as in the camera's live-view buffers. The conversion to RGB
 //! (BT.601, limited range) is the shared raster law, not a measured one.
-//! Frames keep the byte order of the OSD buffers (blue, green, red, alpha:
-//! the camera's red battery icon reads blue as RGBA), so video pixels are
-//! stored in that order too.
+//! The host frame interface uses blue, green, red, alpha for the composed
+//! video and OSD channels.
 //!
 //! A declared handshake clock makes +0 a bit-16 status: a falling request
 //! sets status after that delay; a set request clears it. Other words retain
@@ -162,8 +162,8 @@ use fujimod_framebuffer_xpp::{
 };
 #[cfg(test)]
 use fujimod_framebuffer_xpp::{
-    LAYER_ORIGIN, OSD_ENABLE, OSD_GROUP_ATTRIBUTES, OSD_WINDOW_FLAGS, OUTPUT_SIZE, PACKED_422,
-    VIDEO_FORMAT,
+    LAYER_ORIGIN, LAYER_ROW_SKIP, OSD_ENABLE, OSD_GROUP_ATTRIBUTES, OSD_WINDOW_FLAGS,
+    OUTPUT_SIZE, PACKED_422, VIDEO_FORMAT,
 };
 
 /// Host output index and capture period of a scanned-out display output.
@@ -292,11 +292,12 @@ impl Output {
             let buffer = u64::from(self.word(VIDEO_BUFFER));
             key.extend(cx.ram_bytes(buffer, w as usize * h as usize * 2).ok()?);
         }
-        let mask = self.decoder().window_mask();
+        let decoder = self.decoder();
+        let mask = decoder.window_mask();
         for layer in (0..4u64).filter(|n| mask & 1 << n != 0) {
             let (w, h) = fujimod_framebuffer_xpp::Decoder::extent(self.word(LAYER_SIZE + 4 * layer))?;
             let buffer = u64::from(self.word(LAYER_BUFFER + 4 * layer));
-            key.extend(cx.ram_bytes(buffer, w as usize * h as usize * 4).ok()?);
+            key.extend(cx.ram_bytes(buffer, decoder.layer_stride(layer, w) * h as usize).ok()?);
         }
         Some(key)
     }
@@ -748,9 +749,12 @@ mod tests {
             .unwrap()
             .with_osd_window_enable_offset(OSD_WINDOW_FLAGS)
             .unwrap();
-        let mut host = Screen { ram: vec![0; 0x100], ..Screen::default() };
-        host.ram[0x40..0x44].copy_from_slice(&[255, 0, 0, 255]);
-        host.ram[0x80..0x84].copy_from_slice(&[0, 128, 0, 128]);
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        host.ram[0x40..0x44].copy_from_slice(&[255, 255, 0, 0]);
+        host.ram[0x80..0x84].copy_from_slice(&[128, 0, 255, 0]);
         let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
             out.write(&mut Cx::new(host, 0, 0, 0), BASE + offset, 4, u64::from(value));
         };
@@ -765,7 +769,7 @@ mod tests {
         assert_eq!(host.frames.last().unwrap().rgba, [127, 128, 0, 255]);
 
         // A write to slot 3's source memory must invalidate the scanout cache.
-        host.ram[0x80..0x84].copy_from_slice(&[0, 0, 128, 128]);
+        host.ram[0x80..0x84].copy_from_slice(&[128, 0, 0, 255]);
         host.now = 20;
         out.advance(&mut Cx::new(&mut host, 0, 0, 0));
         assert_eq!(host.frames.last().unwrap().rgba, [127, 0, 128, 255]);
@@ -776,6 +780,59 @@ mod tests {
         out.advance(&mut Cx::new(&mut host, 0, 0, 0));
         assert_eq!(host.frames.last().unwrap().rgba, [255, 0, 0, 255]);
         assert_eq!(out.word(OSD_GROUP_ATTRIBUTES), 1);
+    }
+
+    #[test]
+    fn scanout_uses_the_selected_windows_row_skip() {
+        const BASE: u64 = 0xfff64000;
+        const SLOT3: u64 = 3 * 4;
+        let scanout = Some(Scanout { output: 0, period: 10 });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout)
+            .unwrap()
+            .with_osd_window_enable_offset(OSD_WINDOW_FLAGS)
+            .unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        let red = [0, 0, 225, 255];
+        let white = [4, 4, 4, 255];
+        let padding = [255, 0, 255, 255];
+        // Opaque red and partial-alpha white are measured window bytes.
+        let red_word = [255, 0, 0, 225];
+        let white_word = [4, 255, 255, 255];
+        let padding_word = [255, 255, 0, 255];
+        host.ram[0x40..0x58].copy_from_slice(
+            &[red_word, red_word, padding_word, white_word, white_word, padding_word].concat(),
+        );
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(&mut Cx::new(host, 0, 0, 0), BASE + offset, 4, u64::from(value));
+        };
+        for (offset, value) in [
+            (CONTROL, OSD_ENABLE),
+            (OUTPUT_SIZE, 0x1_0001),
+            (OSD_GROUP_ATTRIBUTES, 1),
+            (OSD_WINDOW_FLAGS, 0x1000),
+            (LAYER_SIZE + SLOT3, 0x1_0001),
+            (LAYER_BUFFER + SLOT3, 0x40),
+            (LAYER_ROW_SKIP, 12),
+            (LAYER_ROW_SKIP + SLOT3, 1),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+
+        host.now = 10;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [red, red, white, white].concat());
+        write(&mut out, &mut host, LAYER_ROW_SKIP + SLOT3, 0);
+        host.now = 20;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [red, red, padding, white].concat());
+        write(&mut out, &mut host, OSD_GROUP_ATTRIBUTES, 2);
+        host.now = 30;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(cx.is_unmodeled());
     }
 
     #[test]

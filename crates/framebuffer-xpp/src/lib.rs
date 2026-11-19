@@ -15,6 +15,7 @@ pub const OSD_WINDOW_FLAGS: u64 = 0x20c;
 pub const LAYER_ORIGIN: u64 = 0x210;
 pub const LAYER_SIZE: u64 = 0x220;
 pub const LAYER_BUFFER: u64 = 0x230;
+pub const LAYER_ROW_SKIP: u64 = 0x320;
 
 pub const BASES: [u64; 2] = [0xfff59000, 0xfff64000];
 pub fn register_ranges(output: usize) -> Result<Vec<(u64, usize)>, String> {
@@ -22,6 +23,8 @@ pub fn register_ranges(output: usize) -> Result<Vec<(u64, usize)>, String> {
     Ok(vec![(b, 0x34), (b + 0x200, 0x40)])
 }
 pub const REGISTER_BYTES: usize = 0x240;
+const WINDOW_FORMAT_MASK: u32 = 7;
+const WINDOW_FORMAT_STRAIGHT_ABGR8888: u32 = 1;
 /// Register layout that supplies the OSD window enables.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum WindowEnables {
@@ -79,6 +82,27 @@ impl Decoder<'_> {
             0
         }
     }
+    /// Byte pitch of a window with the supplied visible width.
+    pub fn layer_stride(&self, slot: u64, width: u32) -> usize {
+        let skip = match self.window_enables {
+            WindowEnables::GroupAttributeMask => 0,
+            WindowEnables::SlotNibbles => self.word(LAYER_ROW_SKIP + 4 * slot) & 0x3fff,
+        };
+        (width + skip) as usize * 4
+    }
+
+    fn straight_abgr(&self) -> Result<bool, ()> {
+        match self.window_enables {
+            WindowEnables::GroupAttributeMask => Ok(false),
+            WindowEnables::SlotNibbles => {
+                let format = self.word(OSD_GROUP_ATTRIBUTES) & WINDOW_FORMAT_MASK;
+                if format != WINDOW_FORMAT_STRAIGHT_ABGR8888 {
+                    return Err(());
+                }
+                Ok(true)
+            }
+        }
+    }
     /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
     /// no layer is enabled.
     ///
@@ -105,6 +129,8 @@ impl Decoder<'_> {
         if enable == 0 && !video {
             return Ok(None);
         }
+        let straight_abgr = enable != 0 && self.straight_abgr()?;
+        let (alpha_index, color_offset) = if straight_abgr { (0, 1) } else { (3, 0) };
         let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
         let mut rgba = vec![0; width as usize * height as usize * 4];
         for pixel in rgba.as_chunks_mut::<4>().0 {
@@ -148,15 +174,16 @@ impl Decoder<'_> {
             }
         }
         for layer in (0..4).filter(|n| enable & 1 << n != 0) {
-            let at = |offset: u64| offset + 4 * layer as u64;
+            let at = |offset: u64| offset + 4 * layer;
             let (w, h) = Self::extent(self.word(at(LAYER_SIZE))).ok_or(())?;
             let buffer = u64::from(self.word(at(LAYER_BUFFER)));
             if self.word(at(LAYER_ORIGIN)) != 0 || buffer & 3 != 0 {
                 return Err(());
             }
             let (shown_w, shown_h) = (w.min(width) as usize, h.min(height) as usize);
-            let pixels = read(buffer, w as usize * shown_h * 4).map_err(|_| ())?;
-            for (y, row) in pixels.chunks_exact(w as usize * 4).enumerate() {
+            let stride = self.layer_stride(layer, w);
+            let pixels = read(buffer, stride * shown_h).map_err(|_| ())?;
+            for (y, row) in pixels.chunks_exact(stride).enumerate() {
                 let row = &row[..shown_w * 4];
                 let line = &mut rgba[y * width as usize * 4..][..shown_w * 4];
                 for (out, src) in line
@@ -165,9 +192,16 @@ impl Decoder<'_> {
                     .iter_mut()
                     .zip(row.as_chunks::<4>().0)
                 {
-                    let keep = 255 - u32::from(src[3]);
+                    let alpha = u32::from(src[alpha_index]);
+                    let keep = 255 - alpha;
                     for n in 0..3 {
-                        let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
+                        let color = u32::from(src[color_offset + n]);
+                        let contribution = if straight_abgr {
+                            (color * alpha + 127) / 255
+                        } else {
+                            color
+                        };
+                        let value = contribution + (u32::from(out[n]) * keep + 127) / 255;
                         out[n] = value.min(255) as u8;
                     }
                 }
