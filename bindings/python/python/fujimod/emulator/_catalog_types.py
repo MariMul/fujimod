@@ -3073,6 +3073,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     loader_dma: NotRequired[HardwareLoaderDma | None]
     movdc: NotRequired[list[HardwareMovdc] | None]
     nand: NotRequired[HardwareLoaderDma | None]
+    osd_window_enable_offset: NotRequired[int | None]
     pl330: NotRequired[HardwarePl330 | None]
     pll_clocks: NotRequired[HardwarePllClocks | None]
     power_control: NotRequired[HardwarePowerControl | None]

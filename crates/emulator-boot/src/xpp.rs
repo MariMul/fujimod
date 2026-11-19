@@ -138,8 +138,8 @@ fn body_profile(resolved: &ResolvedConfiguration) -> Result<&BodyProfile, String
 }
 
 /// Add body-specific registers to the shared SoC profile. The shared profile
-/// wins every field it declares; a body may add a register block and the
-/// H.264 layout that block belongs to (X-T20 2.11 is the only such body).
+/// wins every field it declares; a body may add a register block, its
+/// H.264 layout, or its display window-enable register layout.
 fn register_maps<'a>(
     soc: &'a RegisterLayouts,
     body: Option<&RegisterLayouts>,
@@ -147,10 +147,16 @@ fn register_maps<'a>(
     let Some(body) = body else {
         return Cow::Borrowed(soc);
     };
-    if body.h264_encoder.is_none() && body.register_blocks.is_empty() {
+    if body.h264_encoder.is_none()
+        && body.register_blocks.is_empty()
+        && body.osd_window_enable_offset.is_none()
+    {
         return Cow::Borrowed(soc);
     }
     let mut maps = soc.clone();
+    maps.osd_window_enable_offset = maps
+        .osd_window_enable_offset
+        .or(body.osd_window_enable_offset);
     if maps.h264_encoder.is_none() {
         maps.h264_encoder = body.h264_encoder.clone();
     }
@@ -780,6 +786,9 @@ fn nodes(
             if let Some(ticks) = output.handshake_ticks {
                 model["handshake_ticks"] = json!(ticks);
             }
+            if let Some(offset) = maps.osd_window_enable_offset {
+                model["osd_window_enable_offset"] = json!(offset);
+            }
             model
         });
     }
@@ -1123,7 +1132,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_xt20_body_adds_the_h264_and_playback_registers() {
+    fn only_the_xt20_body_adds_the_observed_register_layouts() {
         for (configuration, expected) in [
             ("gfx50r-311", false),
             ("xt2-441", false),
@@ -1137,6 +1146,11 @@ mod tests {
                 .unwrap();
             let body = body_profile(&resolved).unwrap().register_maps.as_ref();
             let maps = register_maps(soc, body);
+            assert_eq!(
+                maps.osd_window_enable_offset,
+                expected.then_some(0x20c),
+                "{configuration} OSD window enables"
+            );
             assert_eq!(
                 maps.h264_encoder.is_some(),
                 expected,

@@ -15121,6 +15121,15 @@
           ],
           "description": "Declared nand."
         },
+        "osd_window_enable_offset": {
+          "description": "Offset of the XPP output register that supplies per-window enables.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "pl330": {
           "anyOf": [
             {
