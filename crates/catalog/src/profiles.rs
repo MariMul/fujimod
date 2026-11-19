@@ -1973,6 +1973,17 @@ pub struct UsbRegisters {
     pub phy: u64,
 }
 
+/// Word placement of the DMP copy engine's equal-shape pixmap readback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum DmpPixmapReadback {
+    /// Preserve the packed source word while untiling.
+    PreservesWords,
+    /// Rotate the packed source word to its readback byte order.
+    RotatesChannels,
+}
+
 /// Declared register maps facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1982,6 +1993,9 @@ pub struct RegisterLayouts {
     /// Offset of the XPP output register that supplies per-window enables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub osd_window_enable_offset: Option<u64>,
+    /// Declared DMP equal-shape copy byte placement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dmp_pixmap_readback: Option<DmpPixmapReadback>,
     /// Declared adc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adc: Option<Adc>,

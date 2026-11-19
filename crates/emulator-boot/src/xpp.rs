@@ -138,8 +138,8 @@ fn body_profile(resolved: &ResolvedConfiguration) -> Result<&BodyProfile, String
 }
 
 /// Add body-specific registers to the shared SoC profile. The shared profile
-/// wins every field it declares; a body may add a register block, its
-/// H.264 layout, or its display window-enable register layout.
+/// wins every field it declares; a body may add a register block, its H.264
+/// layout, its display window-enable layout, and DMP copy byte placement.
 fn register_maps<'a>(
     soc: &'a RegisterLayouts,
     body: Option<&RegisterLayouts>,
@@ -150,6 +150,7 @@ fn register_maps<'a>(
     if body.h264_encoder.is_none()
         && body.register_blocks.is_empty()
         && body.osd_window_enable_offset.is_none()
+        && body.dmp_pixmap_readback.is_none()
     {
         return Cow::Borrowed(soc);
     }
@@ -157,6 +158,7 @@ fn register_maps<'a>(
     maps.osd_window_enable_offset = maps
         .osd_window_enable_offset
         .or(body.osd_window_enable_offset);
+    maps.dmp_pixmap_readback = maps.dmp_pixmap_readback.or(body.dmp_pixmap_readback);
     if maps.h264_encoder.is_none() {
         maps.h264_encoder = body.h264_encoder.clone();
     }
@@ -890,10 +892,11 @@ fn nodes(
         );
     }
     if let Some(dmp) = &maps.dmp {
-        node(
-            "renderer".into(),
-            json!({ "kind": "renderer", "base": dmp.base, "irq": dmp.irq_route }),
-        );
+        let mut model = json!({ "kind": "renderer", "base": dmp.base, "irq": dmp.irq_route });
+        if let Some(readback) = maps.dmp_pixmap_readback {
+            model["pixmap_readback"] = json!(readback);
+        }
+        node("renderer".into(), model);
     }
     if let Some(lens) = &reset.lens {
         node(
@@ -1150,6 +1153,11 @@ mod tests {
                 maps.osd_window_enable_offset,
                 expected.then_some(0x20c),
                 "{configuration} OSD window enables"
+            );
+            assert_eq!(
+                maps.dmp_pixmap_readback,
+                expected.then_some(fujimod_catalog::profiles::DmpPixmapReadback::PreservesWords),
+                "{configuration} DMP copy byte placement"
             );
             assert_eq!(
                 maps.h264_encoder.is_some(),

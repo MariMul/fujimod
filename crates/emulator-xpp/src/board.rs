@@ -386,6 +386,8 @@ pub enum Model {
     Renderer {
         base: u64,
         irq: u32,
+        #[serde(default)]
+        pixmap_readback: fujimod_emulator_ip_dmp::smaph::PixmapReadback,
     },
     /// Shutter motor and sensors on the GPIO banks; follows the GPIO node.
     Shutter {
@@ -1378,13 +1380,13 @@ pub fn build(
                     None,
                 )),
             )?,
-            Model::Renderer { base, irq } => devices.register(
+            Model::Renderer { base, irq, pixmap_readback } => devices.register(
                 base,
                 0x3000,
                 Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(
                     base,
                     irq,
-                    fujimod_emulator_ip_dmp::smaph::PixmapReadback::RotatesChannels,
+                    pixmap_readback,
                 )?),
             )?,
             Model::Shutter {

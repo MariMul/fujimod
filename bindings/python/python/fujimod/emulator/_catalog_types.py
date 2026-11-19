@@ -1545,6 +1545,9 @@ class DmaMapping(TypedDict, total=False):
     size: Required[RegionSize]
 
 
+type DmpPixmapReadback = Literal["preserves-words", "rotates-channels"]
+
+
 class EarlyBootConstants(TypedDict, total=False):
     exr2_restart_alarm_enable: Required[int]
     exr2_restart_alarm_high: Required[int]
@@ -3052,6 +3055,7 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     display_outputs: NotRequired[list[HardwareDisplayOutput] | None]
     dma: NotRequired[HardwareDma | None]
     dmp: NotRequired[HardwareDmp | None]
+    dmp_pixmap_readback: NotRequired[DmpPixmapReadback | None]
     dram_alias: NotRequired[HardwareDramAlias | None]
     dram_controller: NotRequired[HardwareDramController | None]
     face_detection: NotRequired[HardwareFaceDetection | None]
