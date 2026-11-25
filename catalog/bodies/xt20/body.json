@@ -85,6 +85,8 @@
       "xt20-discovery": {
         "dram_basis": "Camera MMU first-level table (X-T20 2.11, ff80 read of 0x108000, 2026-10-20): virtual 0-0x3fffffff is normal memory over physical 0. The second bank at 0x80000000 is not declared; no RAM population was measured.",
         "register_maps": {
+          "osd_window_enable_offset": 524,
+          "dmp_pixmap_readback": "preserves-words",
           "register_blocks": [
             {
               "base": 4294291456,

@@ -147,10 +147,18 @@ fn register_maps<'a>(
     let Some(body) = body else {
         return Cow::Borrowed(soc);
     };
-    if body.h264_encoder.is_none() && body.register_blocks.is_empty() {
+    if body.h264_encoder.is_none()
+        && body.register_blocks.is_empty()
+        && body.osd_window_enable_offset.is_none()
+        && body.dmp_pixmap_readback.is_none()
+    {
         return Cow::Borrowed(soc);
     }
     let mut maps = soc.clone();
+    maps.osd_window_enable_offset = maps
+        .osd_window_enable_offset
+        .or(body.osd_window_enable_offset);
+    maps.dmp_pixmap_readback = maps.dmp_pixmap_readback.or(body.dmp_pixmap_readback);
     if maps.h264_encoder.is_none() {
         maps.h264_encoder = body.h264_encoder.clone();
     }
@@ -780,6 +788,9 @@ fn nodes(
             if let Some(ticks) = output.handshake_ticks {
                 model["handshake_ticks"] = json!(ticks);
             }
+            if let Some(offset) = maps.osd_window_enable_offset {
+                model["osd_window_enable_offset"] = json!(offset);
+            }
             model
         });
     }
@@ -881,10 +892,11 @@ fn nodes(
         );
     }
     if let Some(dmp) = &maps.dmp {
-        node(
-            "renderer".into(),
-            json!({ "kind": "renderer", "base": dmp.base, "irq": dmp.irq_route }),
-        );
+        let mut model = json!({ "kind": "renderer", "base": dmp.base, "irq": dmp.irq_route });
+        if let Some(readback) = maps.dmp_pixmap_readback {
+            model["pixmap_readback"] = json!(readback);
+        }
+        node("renderer".into(), model);
     }
     if let Some(lens) = &reset.lens {
         node(
@@ -1125,7 +1137,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_xt20_body_adds_the_h264_and_playback_registers() {
+    fn only_the_xt20_body_adds_the_observed_register_layouts() {
         for (configuration, expected) in [
             ("gfx50r-311", false),
             ("xt2-441", false),
@@ -1139,6 +1151,16 @@ mod tests {
                 .unwrap();
             let body = body_profile(&resolved).unwrap().register_maps.as_ref();
             let maps = register_maps(soc, body);
+            assert_eq!(
+                maps.osd_window_enable_offset,
+                expected.then_some(0x20c),
+                "{configuration} OSD window enables"
+            );
+            assert_eq!(
+                maps.dmp_pixmap_readback,
+                expected.then_some(fujimod_catalog::profiles::DmpPixmapReadback::PreservesWords),
+                "{configuration} DMP copy byte placement"
+            );
             assert_eq!(
                 maps.h264_encoder.is_some(),
                 expected,

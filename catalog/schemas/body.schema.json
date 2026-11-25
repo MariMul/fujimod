@@ -3509,6 +3509,21 @@
       ],
       "type": "object"
     },
+    "DmpPixmapReadback": {
+      "description": "Word placement of the DMP copy engine's equal-shape pixmap readback.",
+      "oneOf": [
+        {
+          "const": "preserves-words",
+          "description": "Preserve the packed source word while untiling.",
+          "type": "string"
+        },
+        {
+          "const": "rotates-channels",
+          "description": "Rotate the packed source word to its readback byte order.",
+          "type": "string"
+        }
+      ]
+    },
     "EncoderLevels": {
       "additionalProperties": false,
       "description": "Raw ADC codes for one encoder phase channel.",
@@ -6881,6 +6896,17 @@
           ],
           "description": "Declared dmp."
         },
+        "dmp_pixmap_readback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DmpPixmapReadback"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared DMP equal-shape copy byte placement."
+        },
         "dram_alias": {
           "anyOf": [
             {
@@ -7109,6 +7135,15 @@
             }
           ],
           "description": "Declared nand."
+        },
+        "osd_window_enable_offset": {
+          "description": "Offset of the XPP output register that supplies per-window enables.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "pl330": {
           "anyOf": [

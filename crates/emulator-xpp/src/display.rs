@@ -13,15 +13,15 @@
 //! controller clears at once). No frame timing is attached to the status bits.
 //!
 //! An output with a declared [`Scanout`] captures its OSD layer group once per
-//! declared period, as the panel reads the buffers every frame. The X-T20
-//! 2.11 commit routine 0xca5a0c copies its shadow block to the group: +0x200
-//! enables the four layers by bit, then four words each from shadow +0x1c4,
-//! +0x1c8 and +0x1cc to the origins at +0x210, the sizes at +0x220 and the
-//! buffers at +0x230. Sizes, like the output size at +0x014, hold
-//! `(width - 1) << 16 | (height - 1)`. The firmware writes no pitch; the
-//! camera's OSD buffers (0x354d000, 0x384d000) are 720 x 480 premultiplied
-//! RGBA words with a 2880-byte pitch, so rows are packed. Layers compose in
-//! index order over the video layer, or over black without it.
+//! declared period, as the panel reads the buffers every frame.
+//! The selected display register layout determines the group 1 enables.
+//! In the slot-nibble layout +0x200 holds group attributes and the low bit
+//! of each nibble at +0x20c enables that slot. The origins, sizes and buffers
+//! are at +0x210, +0x220 and +0x230. Sizes, like the output size at +0x014, hold
+//! `(width - 1) << 16 | (height - 1)`. In the slot-nibble layout each word
+//! at +0x320 adds the low 14 bits of row skip to its window width in pixels.
+//! The group format selector at +0x200 selects straight A,B,G,R bytes for
+//! value 1. Layers compose in index order over the video layer, or over black.
 //!
 //! The same routine copies the video layer's words: shadow +0x10 to the
 //! format at +0x010, +0x3c to the size at +0x02c and +0x40 to the buffer at
@@ -157,11 +157,11 @@ impl Device for FrameClock {
     }
 }
 
-use fujimod_framebuffer_xpp::LAYER_BUFFER;
+use fujimod_framebuffer_xpp::{LAYER_BUFFER, WindowEnables};
 #[cfg(test)]
 use fujimod_framebuffer_xpp::{
-    CONTROL, LAYER_ENABLE, LAYER_ORIGIN, LAYER_SIZE, OSD_ENABLE, OUTPUT_SIZE, PACKED_422,
-    VIDEO_BUFFER, VIDEO_ENABLE, VIDEO_FORMAT, VIDEO_SIZE,
+    CONTROL, LAYER_ORIGIN, LAYER_ROW_SKIP, LAYER_SIZE, OSD_ENABLE, OSD_GROUP_ATTRIBUTES,
+    OSD_WINDOW_FLAGS, OUTPUT_SIZE, PACKED_422, VIDEO_BUFFER, VIDEO_ENABLE, VIDEO_FORMAT, VIDEO_SIZE,
 };
 
 /// Host output index and capture period of a scanned-out display output.
@@ -257,6 +257,7 @@ pub struct Output {
     set: BTreeMap<u64, u32>,
     clear: BTreeMap<u64, u32>,
     words: BTreeMap<u64, u32>,
+    window_enables: WindowEnables,
     scanout: Option<Scanout>,
     capture: Capture,
     last: Option<RenderedFrame>,
@@ -301,6 +302,7 @@ impl Output {
             set,
             clear,
             words: BTreeMap::new(),
+            window_enables: WindowEnables::default(),
             scanout,
             handshake_ticks: None,
             handshake: Handshake::default(),
@@ -310,6 +312,14 @@ impl Output {
                 ..Capture::default()
             },
         })
+    }
+    /// Select a declared OSD enable register layout for this output.
+    pub fn with_osd_window_enable_offset(mut self, offset: u64) -> Result<Self, String> {
+        self.window_enables = WindowEnables::from_offset(offset)?;
+        if self.size <= offset {
+            return Err("OSD enable register lies outside the display output".into());
+        }
+        Ok(self)
     }
     /// Use timed bit-16 request completion in place of fixed bits at +0.
     pub fn with_handshake(mut self, ticks: u64) -> Result<Self, String> {
@@ -323,7 +333,10 @@ impl Output {
         self.words.get(&offset).copied().unwrap_or(0)
     }
     fn scan(&mut self, cx: &mut Cx<'_>, scanout: Scanout) {
-        let decoder = fujimod_framebuffer_xpp::Decoder { words: &self.words };
+        let decoder = fujimod_framebuffer_xpp::Decoder {
+            words: &self.words,
+            window_enables: self.window_enables,
+        };
         let (inputs, source) = match decoder.capture(|address, len| cx.ram_bytes(address, len)) {
             Ok(Some(frame)) => frame,
             Ok(None) => {
@@ -750,7 +763,7 @@ mod tests {
         );
         write(&mut out, &mut host, CONTROL, OSD_ENABLE);
         write(&mut out, &mut host, OUTPUT_SIZE, 0x1_0000);
-        write(&mut out, &mut host, LAYER_ENABLE, 3);
+        write(&mut out, &mut host, OSD_GROUP_ATTRIBUTES, 3);
         for (layer, buffer) in [(0, 0x40), (4, 0x80)] {
             write(&mut out, &mut host, LAYER_SIZE + layer, 0x1_0000);
             write(&mut out, &mut host, LAYER_BUFFER + layer, buffer);
@@ -769,6 +782,100 @@ mod tests {
         assert_eq!(out.next_deadline(30), Some(30));
         // A layer origin away from the corner is not modeled.
         write(&mut out, &mut host, LAYER_ORIGIN, 1);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        out.advance(&mut cx);
+        assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn scanout_uses_per_slot_flags_independently_of_group_attributes() {
+        const BASE: u64 = 0xfff64000;
+        let scanout = Some(Scanout { output: 0, period: 10 });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout)
+            .unwrap()
+            .with_osd_window_enable_offset(OSD_WINDOW_FLAGS)
+            .unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        host.ram[0x40..0x44].copy_from_slice(&[255, 255, 0, 0]);
+        host.ram[0x80..0x84].copy_from_slice(&[128, 0, 255, 0]);
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(&mut Cx::new(host, 0, 0, 0), BASE + offset, 4, u64::from(value));
+        };
+        write(&mut out, &mut host, CONTROL, OSD_ENABLE);
+        write(&mut out, &mut host, OUTPUT_SIZE, 0);
+        write(&mut out, &mut host, OSD_GROUP_ATTRIBUTES, 1);
+        write(&mut out, &mut host, LAYER_BUFFER, 0x40);
+        write(&mut out, &mut host, LAYER_BUFFER + 12, 0x80);
+        write(&mut out, &mut host, OSD_WINDOW_FLAGS, 0x1001);
+        host.now = 10;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [127, 128, 0, 255]);
+
+        // A write to slot 3's source memory must invalidate the scanout cache.
+        host.ram[0x80..0x84].copy_from_slice(&[128, 0, 0, 255]);
+        host.now = 20;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [127, 0, 128, 255]);
+
+        // Preserve the group attribute and slot 0 while relinquishing slot 3.
+        write(&mut out, &mut host, OSD_WINDOW_FLAGS, 1);
+        host.now = 30;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [255, 0, 0, 255]);
+        assert_eq!(out.word(OSD_GROUP_ATTRIBUTES), 1);
+    }
+
+    #[test]
+    fn scanout_uses_the_selected_windows_row_skip() {
+        const BASE: u64 = 0xfff64000;
+        const SLOT3: u64 = 3 * 4;
+        let scanout = Some(Scanout { output: 0, period: 10 });
+        let mut out = Output::new(BASE, 0x3000, &[], &[], scanout)
+            .unwrap()
+            .with_osd_window_enable_offset(OSD_WINDOW_FLAGS)
+            .unwrap();
+        let mut host = Screen {
+            ram: vec![0; 0x100],
+            ..Screen::default()
+        };
+        let red = [0, 0, 225, 255];
+        let white = [4, 4, 4, 255];
+        let padding = [255, 0, 255, 255];
+        // Opaque red and partial-alpha white are measured window bytes.
+        let red_word = [255, 0, 0, 225];
+        let white_word = [4, 255, 255, 255];
+        let padding_word = [255, 255, 0, 255];
+        host.ram[0x40..0x58].copy_from_slice(
+            &[red_word, red_word, padding_word, white_word, white_word, padding_word].concat(),
+        );
+        let write = |out: &mut Output, host: &mut Screen, offset: u64, value: u32| {
+            out.write(&mut Cx::new(host, 0, 0, 0), BASE + offset, 4, u64::from(value));
+        };
+        for (offset, value) in [
+            (CONTROL, OSD_ENABLE),
+            (OUTPUT_SIZE, 0x1_0001),
+            (OSD_GROUP_ATTRIBUTES, 1),
+            (OSD_WINDOW_FLAGS, 0x1000),
+            (LAYER_SIZE + SLOT3, 0x1_0001),
+            (LAYER_BUFFER + SLOT3, 0x40),
+            (LAYER_ROW_SKIP, 12),
+            (LAYER_ROW_SKIP + SLOT3, 1),
+        ] {
+            write(&mut out, &mut host, offset, value);
+        }
+
+        host.now = 10;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [red, red, white, white].concat());
+        write(&mut out, &mut host, LAYER_ROW_SKIP + SLOT3, 0);
+        host.now = 20;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.frames.last().unwrap().rgba, [red, red, padding, white].concat());
+        write(&mut out, &mut host, OSD_GROUP_ATTRIBUTES, 2);
+        host.now = 30;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         out.advance(&mut cx);
         assert!(cx.is_unmodeled());
@@ -814,7 +921,7 @@ mod tests {
             host.frames.last().unwrap().rgba,
             [0, 0, 255, 255, 0, 0, 255, 255]
         );
-        write(&mut out, &mut host, LAYER_ENABLE, 1);
+        write(&mut out, &mut host, OSD_GROUP_ATTRIBUTES, 1);
         write(&mut out, &mut host, LAYER_SIZE, 0x1_0000);
         write(&mut out, &mut host, LAYER_BUFFER, 0x80);
         host.now = 20;
@@ -878,7 +985,7 @@ mod tests {
             (VIDEO_FORMAT, PACKED_422),
             (VIDEO_SIZE, 0),
             (VIDEO_BUFFER, 0),
-            (LAYER_ENABLE, 1),
+            (OSD_GROUP_ATTRIBUTES, 1),
             (LAYER_SIZE, 0x1_0000),
             (LAYER_BUFFER, 0x40),
         ] {
@@ -930,7 +1037,7 @@ mod tests {
             (VIDEO_FORMAT, PACKED_422),
             (VIDEO_SIZE, 0x3_0001),
             (VIDEO_BUFFER, 0x80),
-            (LAYER_ENABLE, 1),
+            (OSD_GROUP_ATTRIBUTES, 1),
             (LAYER_SIZE, 0x2_0001),
             (LAYER_BUFFER, 0x40),
         ] {
@@ -977,7 +1084,7 @@ mod tests {
             (VIDEO_FORMAT, PACKED_422),
             (VIDEO_SIZE, 0x1_0000),
             (VIDEO_BUFFER, 0x20),
-            (LAYER_ENABLE, 1),
+            (OSD_GROUP_ATTRIBUTES, 1),
             (LAYER_SIZE, 0x1_0000),
             (LAYER_BUFFER, 0x80),
         ] {

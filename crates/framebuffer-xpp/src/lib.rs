@@ -10,10 +10,12 @@ pub const PACKED_422: u32 = 0x333;
 pub const OUTPUT_SIZE: u64 = 0x014;
 pub const VIDEO_SIZE: u64 = 0x02c;
 pub const VIDEO_BUFFER: u64 = 0x030;
-pub const LAYER_ENABLE: u64 = 0x200;
+pub const OSD_GROUP_ATTRIBUTES: u64 = 0x200;
+pub const OSD_WINDOW_FLAGS: u64 = 0x20c;
 pub const LAYER_ORIGIN: u64 = 0x210;
 pub const LAYER_SIZE: u64 = 0x220;
 pub const LAYER_BUFFER: u64 = 0x230;
+pub const LAYER_ROW_SKIP: u64 = 0x320;
 
 pub const BASES: [u64; 2] = [0xfff59000, 0xfff64000];
 pub fn register_ranges(output: usize) -> Result<Vec<(u64, usize)>, String> {
@@ -21,23 +23,52 @@ pub fn register_ranges(output: usize) -> Result<Vec<(u64, usize)>, String> {
     Ok(vec![(b, 0x34), (b + 0x200, 0x40)])
 }
 pub const REGISTER_BYTES: usize = 0x240;
+const WINDOW_FORMAT_MASK: u32 = 7;
+const WINDOW_FORMAT_STRAIGHT_ABGR8888: u32 = 1;
+/// Register layout that supplies the OSD window enables.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum WindowEnables {
+    /// The group word at +0x200 itself holds one bit per window.
+    #[default]
+    GroupAttributeMask,
+    /// The low bit of each nibble at +0x20c enables that slot; +0x200 then
+    /// holds the group format selector and +0x320 each window's row skip.
+    SlotNibbles,
+}
+
+impl WindowEnables {
+    pub fn from_offset(offset: u64) -> Result<Self, String> {
+        match offset {
+            OSD_GROUP_ATTRIBUTES => Ok(Self::GroupAttributeMask),
+            OSD_WINDOW_FLAGS => Ok(Self::SlotNibbles),
+            _ => Err(format!("Unsupported XPP OSD enable register {offset:#x}")),
+        }
+    }
+}
+
 /// Bytes and geometry that determine the rendered pixels.
 #[derive(PartialEq)]
 pub struct Capture {
     width: u32,
     height: u32,
     video: Option<raster::Snapshot>,
+    /// Straight A,B,G,R window bytes instead of premultiplied B,G,R,A words.
+    straight: bool,
     layers: Vec<Layer>,
 }
 
 #[derive(PartialEq)]
 struct Layer {
+    /// Bytes per stored row, including the window's skip.
+    stride: usize,
+    /// Visible pixels per row, clipped to the output.
     width: usize,
     pixels: Vec<u8>,
 }
 
 pub struct Decoder<'a> {
     pub words: &'a BTreeMap<u64, u32>,
+    pub window_enables: WindowEnables,
 }
 impl Decoder<'_> {
     fn word(&self, o: u64) -> u32 {
@@ -56,12 +87,43 @@ impl Decoder<'_> {
                 || self.word(VIDEO_SIZE) != 0
                 || self.word(VIDEO_BUFFER) != 0)
     }
+    /// The raw window enables normalized to one bit per slot.
+    pub fn window_mask(&self) -> u32 {
+        match self.window_enables {
+            WindowEnables::GroupAttributeMask => self.word(OSD_GROUP_ATTRIBUTES),
+            WindowEnables::SlotNibbles => {
+                let flags = self.word(OSD_WINDOW_FLAGS);
+                (0..4).fold(0, |mask, slot| mask | (((flags >> (slot * 4)) & 1) << slot))
+            }
+        }
+    }
     /// The enabled OSD layers, or none while the OSD group is off.
     pub fn layers_shown(&self) -> u32 {
         if self.word(CONTROL) & OSD_ENABLE != 0 {
-            self.word(LAYER_ENABLE)
+            self.window_mask()
         } else {
             0
+        }
+    }
+    /// Byte pitch of a window with the supplied visible width.
+    pub fn layer_stride(&self, slot: u64, width: u32) -> usize {
+        let skip = match self.window_enables {
+            WindowEnables::GroupAttributeMask => 0,
+            WindowEnables::SlotNibbles => self.word(LAYER_ROW_SKIP + 4 * slot) & 0x3fff,
+        };
+        (width + skip) as usize * 4
+    }
+
+    fn straight_abgr(&self) -> Result<bool, ()> {
+        match self.window_enables {
+            WindowEnables::GroupAttributeMask => Ok(false),
+            WindowEnables::SlotNibbles => {
+                let format = self.word(OSD_GROUP_ATTRIBUTES) & WINDOW_FORMAT_MASK;
+                if format != WINDOW_FORMAT_STRAIGHT_ABGR8888 {
+                    return Err(());
+                }
+                Ok(true)
+            }
         }
     }
     /// Composite the video layer and the enabled OSD layers; `Ok(None)` when
@@ -100,7 +162,7 @@ impl Decoder<'_> {
         &self,
         mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
     ) -> Result<Option<(Capture, u64)>, ()> {
-        if self.word(LAYER_ENABLE) & !0xf != 0 {
+        if self.window_mask() & !0xf != 0 {
             return Err(());
         }
         let video = self.video_shown();
@@ -108,11 +170,13 @@ impl Decoder<'_> {
         if enable == 0 && !video {
             return Ok(None);
         }
+        let straight = enable != 0 && self.straight_abgr()?;
         let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
         let mut capture = Capture {
             width,
             height,
             video: None,
+            straight,
             layers: Vec::new(),
         };
         let mut top = 0;
@@ -164,9 +228,14 @@ impl Decoder<'_> {
             if self.word(at(LAYER_ORIGIN)) != 0 || buffer & 3 != 0 {
                 return Err(());
             }
-            let width = w as usize;
-            let pixels = read(buffer, width * h.min(height) as usize * 4).map_err(|_| ())?;
-            capture.layers.push(Layer { width, pixels });
+            let shown = (w.min(width) as usize, h.min(height) as usize);
+            let stride = self.layer_stride(layer, w);
+            let pixels = read(buffer, stride * shown.1).map_err(|_| ())?;
+            capture.layers.push(Layer {
+                stride,
+                width: shown.0,
+                pixels,
+            });
             top = buffer;
         }
         Ok(Some((capture, top)))
@@ -191,41 +260,50 @@ impl Capture {
                 pixel.swap(0, 2);
             }
         }
+        let (alpha_index, color_offset) = if self.straight { (0, 1) } else { (3, 0) };
         for Layer {
-            width: stride,
+            stride,
+            width: shown,
             pixels,
         } in &self.layers
         {
-            let shown_w = (*stride).min(width as usize);
-            for (y, row) in pixels.chunks_exact(stride * 4).enumerate() {
+            let shown_w = (*shown).min(width as usize);
+            for (y, row) in pixels.chunks_exact(*stride).enumerate() {
                 let row = &row[..shown_w * 4];
                 let line = &mut rgba[y * width as usize * 4..][..shown_w * 4];
                 let (source, tail) = row.as_chunks::<4>().0.as_chunks::<16>();
                 let (destination, tail_out) = line.as_chunks_mut::<4>().0.as_chunks_mut::<16>();
                 for (out, src) in destination.iter_mut().zip(source) {
                     if *src != [[0; 4]; 16] {
-                        blend_osd(out, src);
+                        blend_osd(out, src, alpha_index, color_offset);
                     }
                 }
-                blend_osd(tail_out, tail);
+                blend_osd(tail_out, tail, alpha_index, color_offset);
             }
         }
         Ok(rgba)
     }
 }
 
-fn blend_osd(output: &mut [[u8; 4]], source: &[[u8; 4]]) {
+fn blend_osd(output: &mut [[u8; 4]], source: &[[u8; 4]], alpha_index: usize, color_offset: usize) {
     for (out, src) in output.iter_mut().zip(source) {
         if *src == [0; 4] {
             continue;
         }
-        if src[3] == 255 {
+        let alpha = u32::from(src[alpha_index]);
+        if alpha == 255 && alpha_index == 3 {
             *out = *src;
             continue;
         }
-        let keep = 255 - u32::from(src[3]);
+        let keep = 255 - alpha;
         for n in 0..3 {
-            let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
+            let color = u32::from(src[color_offset + n]);
+            let contribution = if alpha_index == 0 {
+                (color * alpha + 127) / 255
+            } else {
+                color
+            };
+            let value = contribution + (u32::from(out[n]) * keep + 127) / 255;
             out[n] = value.min(255) as u8;
         }
     }

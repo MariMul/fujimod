@@ -76,10 +76,12 @@ struct PendingHostRequest {
 /// What an equal-shape untiling copy (control 1, destination shape equal to
 /// the source extent) stores for each pixel word. The renderer writes RGBA8
 /// as memory bytes A,B,G,R; the processor selects the readback law.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum PixmapReadback {
     /// Rotates packed channels (RGBA8 to bytes B,G,R,A). The law the XPP and
     /// XP5 boards assume; no camera measurement backs it.
+    #[default]
     RotatesChannels,
     /// Keeps each pixel word, so the pixmap holds the renderer's A,B,G,R
     /// bytes. On an X-T3 5.11 (camera runs 2026-11-11/12) a CPU word stored
