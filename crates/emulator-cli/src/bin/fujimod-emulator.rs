@@ -14,7 +14,7 @@ use std::{
 };
 
 const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
-  fujimod-emulator open --firmware ID --boot stock|sd-card|autostart [--sd-card DIR] [--execution-policy interactive|exact] [--no-boot-cache] [--gui]\n\n\
+  fujimod-emulator open --firmware ID --boot stock|sd-card|autostart [--sd-card DIR] [--execution-policy interactive|exact] [--no-boot-cache] [--gui [--speed FACTOR|max]]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -45,7 +45,8 @@ XP5 --watch-writes logs each CPU store, DMA and host write into the physical ran
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
-Native GUI: --gui opens the desktop window connected to this session.\n\
+Native GUI: --gui opens the desktop window connected to this session. --speed FACTOR|max sets its guest\n\
+seconds per wall second (default 1, real time; max runs unpaced); XP5 windows run unpaced.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
 \n\
 open names a catalog firmware whose update and boot ROM are found by name in\n\
@@ -60,10 +61,10 @@ open restores a saved boot for the same firmware, boot, SD card, policy and engi
 state directory holds one, and saves each new boot; --no-boot-cache boots without reading or writing\n\
 the cache.\n\
 open boots to REC, prints a JSON report of the firmware, boot, stage and engine, and exits 0.\n\
---gui opens the desktop window on the opened session before the report.\n";
+--gui opens the desktop window on the opened session before the report; --speed as for boot.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 42] = [
+const VALUED: [&str; 43] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -76,6 +77,7 @@ const VALUED: [&str; 42] = [
     "--screenshot",
     "--instruction-limit",
     "--execution-policy",
+    "--speed",
     "--clock-seconds-2000",
     "--output",
     "--seconds",
@@ -230,6 +232,7 @@ struct Open {
     policy: Option<ExecutionPolicy>,
     boot_cache: bool,
     gui: bool,
+    speed: Option<fujimod_emulator_gui::Speed>,
 }
 
 impl Open {
@@ -294,7 +297,7 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
         }
         if !matches!(
             key.as_str(),
-            "--firmware" | "--boot" | "--sd-card" | "--execution-policy"
+            "--firmware" | "--boot" | "--sd-card" | "--execution-policy" | "--speed"
         ) {
             return Err(format!("unknown option: {key}"));
         }
@@ -325,6 +328,19 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
         .map(|value| ExecutionPolicy::parse(&value))
         .transpose()?;
     let sd_card = values.remove("--sd-card").map(PathBuf::from);
+    let speed = values
+        .remove("--speed")
+        .map(|value| {
+            value
+                .into_string()
+                .map_err(|_| "--speed must be UTF-8".to_owned())
+        })
+        .transpose()?
+        .map(|value| fujimod_emulator_gui::Speed::parse(&value))
+        .transpose()?;
+    if speed.is_some() && !gui {
+        return Err("--speed applies only to the --gui window".into());
+    }
     Ok(Some(Open {
         firmware,
         boot,
@@ -332,6 +348,7 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
         policy,
         boot_cache,
         gui,
+        speed,
     }))
 }
 
@@ -1011,7 +1028,11 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
 }
 
 /// Open any camera from its files and run it live in the desktop window.
-fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
+fn run_window(
+    mut options: Boot,
+    resolved: ResolvedConfiguration,
+    speed: fujimod_emulator_gui::Speed,
+) -> Result<Outcome, String> {
     let request = boot::Request {
         update: options.required("--update")?.into(),
         boot_rom: options.path("--boot-rom"),
@@ -1032,7 +1053,7 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
     let room = fujimod_emulator_gui::Room::loopback()?;
     let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
     let report = fujimod_emulator_gui::serve(
-        fujimod_emulator_gui::Live::new(camera, selection),
+        fujimod_emulator_gui::Live::new(camera, selection).with_speed(speed),
         room,
         &mut || window.open(),
     )?;
@@ -1070,7 +1091,8 @@ fn run_open(open: Open) -> Result<Outcome, String> {
         let room = fujimod_emulator_gui::Room::loopback()?;
         let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
         let served = fujimod_emulator_gui::serve(
-            fujimod_emulator_gui::Live::new(opened.into_camera(), selection),
+            fujimod_emulator_gui::Live::new(opened.into_camera(), selection)
+                .with_speed(open.speed.unwrap_or(fujimod_emulator_gui::Speed::REAL_TIME)),
             room,
             &mut || window.open(),
         )?;
@@ -1115,8 +1137,17 @@ fn run_boot(mut boot_options: Boot) -> Result<Outcome, String> {
         .text("--configuration")?
         .ok_or("required option: --configuration")?;
     let resolved = boot_options.resolve(&configuration_id)?;
-    if boot_options.gui && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
-        return run_window(boot_options, resolved);
+    let speed = boot_options
+        .text("--speed")?
+        .map(|text| fujimod_emulator_gui::Speed::parse(&text))
+        .transpose()?;
+    let xp5 = matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)));
+    if speed.is_some() && (!boot_options.gui || xp5) {
+        return Err("--speed applies only to the --gui window of a non-XP5 camera".into());
+    }
+    if boot_options.gui && !xp5 {
+        let speed = speed.unwrap_or(fujimod_emulator_gui::Speed::REAL_TIME);
+        return run_window(boot_options, resolved, speed);
     }
     if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") {
         return run_application(boot_options, resolved);
@@ -1198,6 +1229,26 @@ mod tests {
         ));
         assert!(parse_command(args(&["xp5", "boot"])).is_err());
         assert!(parse_command(args(&[])).is_err());
+    }
+
+    #[test]
+    fn open_window_speed_defaults_to_none_and_needs_the_window() {
+        use fujimod_emulator_gui::Speed;
+        let base = ["open", "--firmware", "x70-110", "--boot", "stock"];
+        let open = parse_open(args(&base)).unwrap().unwrap();
+        assert_eq!(open.speed, None);
+        let with = |extra: &[&'static str]| {
+            let mut all = base.to_vec();
+            all.extend_from_slice(extra);
+            parse_open(args(&all).collect::<Vec<_>>().into_iter())
+        };
+        let open = with(&["--gui", "--speed", "max"]).unwrap().unwrap();
+        assert_eq!(open.speed, Some(Speed::Unpaced));
+        let open = with(&["--speed", "2", "--gui"]).unwrap().unwrap();
+        assert_eq!(open.speed, Some(Speed::Paced(2.0)));
+        assert!(with(&["--speed", "1"]).is_err());
+        assert!(with(&["--gui", "--speed", "0"]).is_err());
+        assert!(with(&["--gui", "--speed", "1", "--speed", "2"]).is_err());
     }
 
     #[test]
