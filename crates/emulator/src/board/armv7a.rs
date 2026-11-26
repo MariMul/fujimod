@@ -61,12 +61,37 @@ impl Profile {
     }
     pub fn before(&mut self, cpu: &dyn Cpu, pc: u64, now: u64) -> Result<Entry, String> {
         let cpsr = scalar(cpu, arm::CPSR)? as u32;
-        if cpsr & 0x20 != 0 {
-            return Ok(Entry::Execute);
-        }
         let mut bytes = [0; 4];
-        cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
-        let word = u32::from_le_bytes(bytes);
+        let thumb = cpsr & 0x20 != 0;
+        let (word, width) = if thumb {
+            cpu.read_virtual(pc, Access::Fetch, &mut bytes[..2])?;
+            let first = u32::from(u16::from_le_bytes([bytes[0], bytes[1]]));
+            let (instruction, width) = if first >= 0xe800 {
+                cpu.read_virtual(pc + 2, Access::Fetch, &mut bytes[2..])?;
+                (u32::from_le_bytes(bytes).rotate_left(16), 4)
+            } else {
+                (first, 2)
+            };
+            let Some(word) = fujimod_emulator_cpu::armv7a::thumb_framework_instruction(instruction)
+            else {
+                return Ok(Entry::Execute);
+            };
+            (word, width)
+        } else {
+            cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
+            (u32::from_le_bytes(bytes), 4)
+        };
+        let advance = || {
+            if thumb {
+                set(cpu, arm::CPSR, u64::from(arm::thumb::advance_it(cpsr)))?;
+            }
+            set(cpu, Register::Pc, pc.wrapping_add(width) | u64::from(thumb))
+        };
+        if thumb && !arm::thumb::condition_passed(cpsr) {
+            advance()?;
+            cpu.stop()?;
+            return Ok(Entry::Completed);
+        }
         let body = word & 0x0fff_ffff;
         if word >> 28 != 15 && !arm::condition_passes(word >> 28, cpsr) {
             return Ok(Entry::Execute);
@@ -107,7 +132,7 @@ impl Profile {
                         _ => return Err("ARMv7-A PMU operation is unsupported".into()),
                     }
                 }
-                set(cpu, Register::Pc, pc.wrapping_add(4))?;
+                advance()?;
                 cpu.stop()?;
                 return Ok(Entry::Completed);
             }
@@ -149,7 +174,7 @@ impl Profile {
                 _ => return Ok(Entry::Execute),
             }
         };
-        set(cpu, Register::Pc, pc.wrapping_add(4))?;
+        advance()?;
         cpu.stop()?;
         Ok(entry)
     }

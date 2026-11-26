@@ -291,6 +291,9 @@ impl Cpu for Core {
                 && e.count.get() < e.cap.get()
             {
                 begin = e.restart.get().unwrap_or(e.scalar(Register::Pc)?);
+                if e.a32 && e.scalar(arm::CPSR)? & 0x20 != 0 {
+                    begin |= 1;
+                }
                 continue;
             }
             return Ok(exit);
