@@ -197,7 +197,7 @@ impl Board {
             .iter()
             .flat_map(|w| w.addresses.iter().copied())
             .collect();
-        if addresses.len() + existing.len() > 4096
+        if addresses.len() + existing.len() > 8192
             || addresses.iter().any(|p| existing.contains(p))
             || addresses.windows(2).any(|p| p[0] >= p[1])
             || addresses.iter().any(|p| p & 1 != 0)
