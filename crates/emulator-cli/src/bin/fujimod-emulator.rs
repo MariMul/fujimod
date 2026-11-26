@@ -1025,8 +1025,10 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         card_layout: None,
         card_initialization_fault: None,
     };
+    let policy = options.execution_policy(false)?;
     let selection = resolved.reference.clone();
-    let camera = boot::open_request(resolved, request)?;
+    let mut camera = boot::open_request(resolved, request)?;
+    camera.session.board.set_execution_policy(policy)?;
     let room = fujimod_emulator_gui::Room::loopback()?;
     let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
     let report = fujimod_emulator_gui::serve(
