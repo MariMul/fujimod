@@ -115,6 +115,9 @@ pub enum BlockDevice {
         /// OSD layer capture for this output.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         scanout: Option<crate::profiles::DisplayScanout>,
+        /// Output register offset that supplies the per-window OSD enables.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        osd_window_enable_offset: Option<u64>,
         /// Position of this window in the declared display-output order.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         order: Option<u32>,
@@ -222,6 +225,9 @@ pub enum BlockDevice {
     Dmp {
         /// Declared basis.
         basis: String,
+        /// Word placement of the equal-shape copy's pixmap readback.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pixmap_readback: Option<crate::profiles::DmpPixmapReadback>,
     },
     /// MOVDC imaging channel.
     Movdc {
@@ -364,6 +370,9 @@ pub enum BlockDevice {
         /// OSD layer capture for this output.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         scanout: Option<crate::profiles::DisplayScanout>,
+        /// Output register offset that supplies the per-window OSD enables.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        osd_window_enable_offset: Option<u64>,
         /// Declared basis.
         basis: String,
         /// Position of this window in the declared display-output order.

@@ -455,6 +455,7 @@ class BlockDeviceVariant2(TypedDict, total=False):
 class BlockDeviceVariant20(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["dmp"]]
+    pixmap_readback: NotRequired[DmpPixmapReadback | None]
 
 
 class BlockDeviceVariant21(TypedDict, total=False):
@@ -526,6 +527,7 @@ class BlockDeviceVariant3(TypedDict, total=False):
     handshake_ticks: NotRequired[int | None]
     model: Required[Literal["display"]]
     order: NotRequired[int | None]
+    osd_window_enable_offset: NotRequired[int | None]
     period_ticks: NotRequired[int | None]
     picture_layout: NotRequired[PictureLayout | None]
     pixel_clock_ticks: NotRequired[int | None]
@@ -572,6 +574,7 @@ class BlockDeviceVariant34(TypedDict, total=False):
     handshake_ticks: NotRequired[int | None]
     model: Required[Literal["display_output"]]
     order: NotRequired[int | None]
+    osd_window_enable_offset: NotRequired[int | None]
     scanout: NotRequired[HardwareDisplayScanout | None]
     set_bits: Required[list[HardwareDisplayStatusBits]]
 
@@ -2315,6 +2318,9 @@ class DmaMapping(TypedDict, total=False):
     permissions: Required[int]
     physical: Required[int]
     size: Required[RegionSize]
+
+
+type DmpPixmapReadback = Literal["preserves-words", "rotates-channels"]
 
 
 class EarlyBootConstants(TypedDict, total=False):
@@ -5813,10 +5819,9 @@ class RunPreview(TypedDict, total=False):
     statistics_profile: Required[str]
 
 
-type RunProducerDataProfile = (
-    Literal["xm1-150-declared-continuous-statistics-scene-unmeasured"]
-    | Literal["recorded-statistics",]
-)
+type RunProducerDataProfile = Literal[
+    "xm1-150-declared-continuous-statistics-scene-unmeasured"] | Literal["recorded-statistics",
+]
 
 
 type RunProducerStopProfile = Literal["stock-idle-stop-handshakes-unmeasured"]
@@ -5882,9 +5887,9 @@ type RunSdCardProfile = Literal[
 ]
 
 
-type RunSecondaryBusProfile = (
-    Literal["usbcharge-disconnected-pwic-startup-tagged"] | Literal["disabled",]
-)
+type RunSecondaryBusProfile = Literal[
+    "usbcharge-disconnected-pwic-startup-tagged"] | Literal["disabled",
+]
 
 
 type RunSensorFrameClock = Literal["sensor", "periodic"]
@@ -5935,12 +5940,11 @@ class RunStatisticsSpan(TypedDict, total=False):
 type RunStillCapture = Literal["register-capture-readonly-card-observation"]
 
 
-type RunStorageProfile = (
-    Literal["captured", "browser", "erased"]
-    | Literal["settings"]
-    | Literal["profile"]
-    | Literal["factory",]
-)
+type RunStorageProfile = Literal[
+    "captured",
+    "browser",
+    "erased"] | Literal["settings"] | Literal["profile"] | Literal["factory",
+]
 
 
 class RunUsbInput(TypedDict, total=False):

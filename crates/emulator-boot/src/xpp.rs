@@ -243,12 +243,16 @@ fn block_register_layouts(
                     maps.adc = Some(value);
                 }
             }
-            BlockDevice::Dmp { basis } => {
+            BlockDevice::Dmp {
+                basis,
+                pixmap_readback,
+            } => {
                 maps.dmp = Some(Dmp {
                     base: block.base,
                     basis: basis.clone(),
                     irq_route: first_irq(block).unwrap_or_default(),
                     size: block.size,
+                    pixmap_readback: *pixmap_readback,
                 });
             }
             BlockDevice::Movdc { reset_ticks, .. } => movdc.push(Movdc {
@@ -479,6 +483,7 @@ fn block_register_layouts(
                 clear_bits,
                 handshake_ticks,
                 scanout,
+                osd_window_enable_offset,
                 basis,
                 order,
             } => {
@@ -492,6 +497,7 @@ fn block_register_layouts(
                         set_bits: set_bits.clone(),
                         size: block.size,
                         scanout: scanout.clone(),
+                        osd_window_enable_offset: *osd_window_enable_offset,
                     },
                 ));
             }
@@ -650,6 +656,7 @@ fn block_register_layouts(
                 clear_bits,
                 handshake_ticks,
                 scanout,
+                osd_window_enable_offset,
                 order,
             } => {
                 if let Some(pixel_clock_ticks) = pixel_clock_ticks {
@@ -685,6 +692,7 @@ fn block_register_layouts(
                             set_bits: set_bits.clone(),
                             size: block.size,
                             scanout: scanout.clone(),
+                            osd_window_enable_offset: *osd_window_enable_offset,
                         },
                     ));
                 }
@@ -1469,6 +1477,9 @@ fn nodes(
             if let Some(ticks) = output.handshake_ticks {
                 model["handshake_ticks"] = json!(ticks);
             }
+            if let Some(offset) = output.osd_window_enable_offset {
+                model["osd_window_enable_offset"] = json!(offset);
+            }
             model
         });
     }
@@ -1572,10 +1583,11 @@ fn nodes(
         );
     }
     if let Some(dmp) = &maps.dmp {
-        node(
-            "renderer".into(),
-            json!({ "kind": "renderer", "base": dmp.base, "irq": dmp.irq_route }),
-        );
+        let mut model = json!({ "kind": "renderer", "base": dmp.base, "irq": dmp.irq_route });
+        if let Some(readback) = dmp.pixmap_readback {
+            model["pixmap_readback"] = json!(readback);
+        }
+        node("renderer".into(), model);
     }
     if let Some(lens) = &reset.lens {
         node(
@@ -1817,6 +1829,37 @@ mod tests {
     }
 
     #[test]
+    fn only_the_xt20_body_declares_its_osd_windows_and_dmp_readback() {
+        for (configuration, expected) in [
+            ("gfx50r-311", false),
+            ("xt2-441", false),
+            ("xt20-211", true),
+        ] {
+            let resolved = ResolvedConfiguration::bundled(configuration).unwrap();
+            let maps = block_register_layouts(
+                &resolved.reference.soc,
+                &body_profile(&resolved).unwrap().block_overrides,
+            )
+            .unwrap();
+            let outputs = maps.display_outputs.as_deref().unwrap_or_default();
+            assert!(!outputs.is_empty(), "{configuration} display outputs");
+            for output in outputs {
+                assert_eq!(
+                    output.osd_window_enable_offset,
+                    expected.then_some(0x20c),
+                    "{configuration} OSD window enables of {:#x}",
+                    output.base
+                );
+            }
+            assert_eq!(
+                maps.dmp.as_ref().unwrap().pixmap_readback,
+                expected.then_some(fujimod_catalog::profiles::DmpPixmapReadback::PreservesWords),
+                "{configuration} DMP copy word placement"
+            );
+        }
+    }
+
+    #[test]
     fn only_the_xt20_body_adds_the_h264_and_playback_registers() {
         for (configuration, expected) in [
             ("gfx50r-311", false),
@@ -1856,6 +1899,10 @@ mod tests {
         let assets = assets();
         let assembly = xt20(&assets).unwrap();
         let devices = &assembly.devices;
+        assert_eq!(node(devices, "renderer")["pixmap_readback"], "preserves-words");
+        for output in ["display0", "display1"] {
+            assert_eq!(node(devices, output)["osd_window_enable_offset"], 0x20c);
+        }
         let names: Vec<_> = devices["nodes"]
             .as_array()
             .unwrap()

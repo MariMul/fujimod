@@ -261,15 +261,16 @@ impl Profile {
                 }
             }
             Self::Xpp => {
-                let compose=|w:&BTreeMap<u64,u32>,read:&mut dyn FnMut(u64,usize)->Result<Vec<u8>,String>|fujimod_framebuffer_xpp::Decoder{words:w}.compose(read);
+                let compose=|w:&BTreeMap<u64,u32>,read:&mut dyn FnMut(u64,usize)->Result<Vec<u8>,String>|fujimod_framebuffer_xpp::Decoder{words:w,window_enables:fujimod_framebuffer_xpp::WindowEnables::default()}.compose(read);
                 if let Ok(Some((w, h, rgba, _))) = compose(words, read) {
                     emit("frame.bmp".into(), w, h, rgba)?;
                 }
                 use fujimod_framebuffer_xpp::{
-                    CONTROL, Decoder, LAYER_ENABLE, OSD_ENABLE, VIDEO_ENABLE,
+                    CONTROL, Decoder, OSD_ENABLE, OSD_GROUP_ATTRIBUTES, VIDEO_ENABLE,
+                    WindowEnables,
                 };
                 // The video plane alone, then each enabled OSD layer alone.
-                let decoder = Decoder { words };
+                let decoder = Decoder { words, window_enables: WindowEnables::default() };
                 let control =
                     words.get(&CONTROL).copied().unwrap_or(0) & !(VIDEO_ENABLE | OSD_ENABLE);
                 let video =
@@ -279,11 +280,11 @@ impl Profile {
                 let shown = decoder.layers_shown();
                 let layers = (0..4)
                     .filter(|bit| shown & (1 << bit) != 0)
-                    .map(|bit| (LAYER_ENABLE, bit, control | OSD_ENABLE, 1 << bit));
+                    .map(|bit| (OSD_GROUP_ATTRIBUTES, bit, control | OSD_ENABLE, 1 << bit));
                 for (r, bit, control, enable) in video.into_iter().chain(layers) {
                     let mut layer = words.clone();
                     layer.insert(CONTROL, control);
-                    layer.insert(LAYER_ENABLE, enable);
+                    layer.insert(OSD_GROUP_ATTRIBUTES, enable);
                     if let Ok(Some((w, h, rgba, _))) = compose(&layer, read) {
                         emit(format!("layer/{r:x}.{bit}.bmp"), w, h, rgba)?;
                     }

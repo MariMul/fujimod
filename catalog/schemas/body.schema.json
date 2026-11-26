@@ -222,6 +222,15 @@
                 "null"
               ]
             },
+            "osd_window_enable_offset": {
+              "description": "Output register offset that supplies the per-window OSD enables.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "period_ticks": {
               "description": "Frame period in device ticks, when the block declares the frame law.",
               "format": "uint64",
@@ -696,6 +705,17 @@
             "model": {
               "const": "dmp",
               "type": "string"
+            },
+            "pixmap_readback": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DmpPixmapReadback"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Word placement of the equal-shape copy's pixmap readback."
             }
           },
           "required": [
@@ -1187,6 +1207,15 @@
             "order": {
               "description": "Position of this window in the declared display-output order.",
               "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "osd_window_enable_offset": {
+              "description": "Output register offset that supplies the per-window OSD enables.",
+              "format": "uint64",
               "minimum": 0,
               "type": [
                 "integer",
@@ -6780,6 +6809,21 @@
         "connection_id"
       ],
       "type": "object"
+    },
+    "DmpPixmapReadback": {
+      "description": "Word placement of the DMP copy engine's equal-shape pixmap readback.",
+      "oneOf": [
+        {
+          "const": "preserves-words",
+          "description": "Preserve the packed source word while untiling.",
+          "type": "string"
+        },
+        {
+          "const": "rotates-channels",
+          "description": "Rotate the packed source word to its readback byte order.",
+          "type": "string"
+        }
+      ]
     },
     "EncoderLevels": {
       "additionalProperties": false,

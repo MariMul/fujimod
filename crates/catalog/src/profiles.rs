@@ -1221,6 +1221,9 @@ pub struct DisplayOutput {
     /// OSD layer capture, when the output is scanned out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scanout: Option<DisplayScanout>,
+    /// Output register offset that supplies the per-window OSD enables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub osd_window_enable_offset: Option<u64>,
 }
 
 /// Host output index and capture period of a display output's OSD layers.
@@ -1249,6 +1252,20 @@ pub struct Dmp {
     pub irq_route: u64,
     /// Declared size.
     pub size: u64,
+    /// Word placement of the equal-shape copy's pixmap readback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pixmap_readback: Option<DmpPixmapReadback>,
+}
+
+/// Word placement of the DMP copy engine's equal-shape pixmap readback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum DmpPixmapReadback {
+    /// Preserve the packed source word while untiling.
+    PreservesWords,
+    /// Rotate the packed source word to its readback byte order.
+    RotatesChannels,
 }
 
 /// Declared gic facts.
