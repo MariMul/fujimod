@@ -1,4 +1,4 @@
-//! ARMv7-A (AArch32, ARM state) architectural mechanisms, independent of a
+//! ARMv7-A (AArch32) architectural mechanisms, independent of a
 //! host execution backend. Cluster identity, PMU and hint semantics belong to
 //! the board; this module only names the instructions the board performs.
 use super::{Cpu, Register, arm};
@@ -23,6 +23,99 @@ impl Entries {
             prefetch_abort: self.prefetch_abort + other.prefetch_abort,
         }
     }
+}
+
+/// Thumb-2 coprocessor transfers share the ARM encoding with condition AL.
+pub fn thumb_coprocessor(word: u32) -> Option<u32> {
+    (word & 0xff00_0010 == 0xee00_0010).then_some(word)
+}
+
+/// Present T32 coprocessor transfers and Thumb hints to the same board
+/// framework as their A32 equivalents. The caller evaluates the IT condition.
+pub fn thumb_framework_word(word: u32) -> Option<u32> {
+    match word {
+        0xbf20 | 0xf3af_8002 => Some(0xe320_f002),
+        0xbf30 | 0xf3af_8003 => Some(0xe320_f003),
+        0xbf40 | 0xf3af_8004 => Some(0xe320_f004),
+        _ => thumb_coprocessor(word),
+    }
+}
+
+/// Owner-managed Thumb exclusives. Doubleword forms name both registers.
+pub enum ThumbExclusive {
+    Clear,
+    Transfer {
+        load: bool,
+        base: usize,
+        data: usize,
+        second: Option<usize>,
+        status: usize,
+        size: usize,
+        offset: u32,
+    },
+}
+
+pub fn thumb_exclusive(word: u32) -> Result<Option<ThumbExclusive>, String> {
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    if matches!(word & 0xfff0_00f0, 0xe8d0_0070 | 0xe8c0_0070)
+        && (first & 0x10 == 0 || second & 15 == 15)
+    {
+        let (base, data, other, status) = (
+            usize::from(first & 15),
+            usize::from(second >> 12),
+            usize::from((second >> 8) & 15),
+            usize::from(second & 15),
+        );
+        let load = first & 0x10 != 0;
+        if base == 15
+            || matches!(data, 13 | 15)
+            || matches!(other, 13 | 15)
+            || data == other
+            || (!load && (matches!(status, 13 | 15) || [base, data, other].contains(&status)))
+        {
+            return Err("Unpredictable Thumb doubleword exclusive register".into());
+        }
+        return Ok(Some(ThumbExclusive::Transfer {
+            load,
+            base,
+            data,
+            second: Some(other),
+            status,
+            size: 8,
+            offset: 0,
+        }));
+    }
+    use arm::thumb::exclusive::Instruction;
+    Ok(
+        arm::thumb::exclusive::decode(first, second)?.map(|instruction| match instruction {
+            Instruction::Clear => ThumbExclusive::Clear,
+            Instruction::Transfer {
+                load,
+                base,
+                data,
+                status,
+                bytes,
+                offset,
+            } => ThumbExclusive::Transfer {
+                load,
+                base: base.into(),
+                data: data.into(),
+                second: None,
+                status: status.into(),
+                size: bytes.into(),
+                offset: offset.into(),
+            },
+        }),
+    )
+}
+
+/// Advance an externally performed Thumb instruction, preserving instruction
+/// set state in the PC write and advancing any live IT block.
+pub fn finish_thumb(cpu: &dyn Cpu, pc: u32, cpsr: u32) -> Result<(), String> {
+    let (_, size) = arm::thumb::fetch(cpu, pc)?;
+    cpu.write_register(arm::CPSR, &arm::thumb::advance_it(cpsr).to_le_bytes())?;
+    cpu.write_register(Register::Pc, &(pc.wrapping_add(size) | 1).to_le_bytes())
 }
 
 /// Instructions the board performs itself: the MPIDR, CBAR and CCSIDR
@@ -78,7 +171,7 @@ pub fn block_boundary(word: u32) -> bool {
 
 /// Take an asserted IRQ at an instruction boundary, as the ARMv7-A board
 /// profile does: LR_irq = PC + 4, vectors from SCTLR.V or VBAR. Returns false
-/// when CPSR.I masks it. Thumb and big-endian exception entry are refused.
+/// when CPSR.I masks it. Big-endian exception entry is refused.
 pub fn enter_irq(cpu: &dyn Cpu) -> Result<bool, String> {
     let read = |r| {
         let mut b = [0; 8];
@@ -100,8 +193,8 @@ pub fn enter_irq(cpu: &dyn Cpu) -> Result<bool, String> {
         wide: false,
     };
     let sctlr = cpu.coprocessor(cp(1), None)? as u32;
-    if sctlr & ((1 << 30) | (1 << 25)) != 0 {
-        return Err("Thumb/big-endian IRQ entry is unsupported".into());
+    if sctlr & (1 << 25) != 0 {
+        return Err("Big-endian IRQ entry is unsupported".into());
     }
     let base = if sctlr & (1 << 13) != 0 {
         0xffff0000
@@ -110,11 +203,25 @@ pub fn enter_irq(cpu: &dyn Cpu) -> Result<bool, String> {
     };
     let pc = read(Register::Pc)?;
     let next = (cpsr & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x12 | 0x80 | 0x100;
-    write(arm::CPSR, next)?;
+    let thumb = (sctlr >> 30) & 1;
+    write(arm::CPSR, next | (thumb << 5))?;
     write(arm::SPSR, cpsr)?;
     write(arm::CORE[14], pc.wrapping_add(4))?;
-    write(Register::Pc, base.wrapping_add(0x18))?;
+    write(Register::Pc, base.wrapping_add(0x18) | thumb)?;
     Ok(true)
+}
+
+/// Identify VFP/Advanced SIMD instructions in either AArch32 state.
+pub fn is_vfp(word: u32, thumb: bool) -> bool {
+    if thumb {
+        word & 0xef00_0000 == 0xef00_0000
+            || word & 0xff10_0000 == 0xf900_0000
+            || word >> 28 == 14 && word & 0x0c00_0e00 == 0x0c00_0a00
+    } else {
+        word & 0xfe00_0000 == 0xf200_0000
+            || word & 0xff10_0000 == 0xf400_0000
+            || word >> 28 != 15 && word & 0x0c00_0e00 == 0x0c00_0a00
+    }
 }
 
 /// Take the undefined-instruction exception for a VFP/Advanced SIMD
@@ -123,7 +230,7 @@ pub fn enter_irq(cpu: &dyn Cpu) -> Result<bool, String> {
 /// lazily. Covers conditional CP10/CP11 encodings and the unconditional
 /// Advanced SIMD data-processing (0xf2/0xf3) and element/structure
 /// load/store (0xf4, bit 20 clear) encodings. Returns false for any other
-/// instruction, so the engine's refusal stands. Thumb entry is refused.
+/// instruction, so the engine's refusal stands.
 pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     let read = |r| {
         let mut b = [0; 8];
@@ -132,15 +239,16 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     };
     let write = |r, v: u32| cpu.write_register(r, &v.to_le_bytes());
     let cpsr = read(arm::CPSR)?;
-    if cpsr & 0x20 != 0 {
-        return Ok(false);
-    }
+    let thumb = cpsr & 0x20 != 0;
     let pc = read(Register::Pc)?;
-    let mut bytes = [0; 4];
-    cpu.read_virtual(pc.into(), super::Access::Fetch, &mut bytes)?;
-    let word = u32::from_le_bytes(bytes);
-    let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
-    if !simd && (word >> 28 == 15 || word & 0x0c00_0e00 != 0x0c00_0a00) {
+    let word = if thumb {
+        arm::thumb::fetch(cpu, pc)?.0
+    } else {
+        let mut bytes = [0; 4];
+        cpu.read_virtual(pc.into(), super::Access::Fetch, &mut bytes)?;
+        u32::from_le_bytes(bytes)
+    };
+    if !is_vfp(word, thumb) {
         return Ok(false);
     }
     let cpacr = read(Register::Arm32(arm::Register::Cpacr))?;
@@ -162,8 +270,8 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
         wide: false,
     };
     let sctlr = cpu.coprocessor(cp(1), None)? as u32;
-    if sctlr & ((1 << 30) | (1 << 25)) != 0 {
-        return Err("Thumb/big-endian undefined exception entry is unsupported".into());
+    if sctlr & (1 << 25) != 0 {
+        return Err("Big-endian undefined exception entry is unsupported".into());
     }
     let base = if sctlr & (1 << 13) != 0 {
         0xffff0000
@@ -171,10 +279,11 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
         cpu.coprocessor(cp(12), None)? as u32 & !31
     };
     let next = (cpsr & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x1b | 0x80;
-    write(arm::CPSR, next)?;
+    let thumb = (sctlr >> 30) & 1;
+    write(arm::CPSR, next | (thumb << 5))?;
     write(arm::SPSR, cpsr)?;
     write(arm::CORE[14], pc.wrapping_add(4))?;
-    write(Register::Pc, base.wrapping_add(4))?;
+    write(Register::Pc, base.wrapping_add(4) | thumb)?;
     Ok(true)
 }
 

@@ -543,3 +543,274 @@ fn code_rewritten_again_while_a_peer_has_not_flushed_runs_the_new_code() {
         assert_eq!(value(&cpu, arm::CORE[0]), u64::from(n));
     }
 }
+
+#[test]
+fn thumb_entries_preserve_itstate_and_interwork_at_every_budget_boundary() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    // movw r3,#0x1021; blx r3; mov r2,#3
+    code(&cpu, &[0xe3013021, 0xe12fff33, 0xe3a02003]);
+    // cmp r0,#0; ite eq; moveq r1,#1; movne.w r1,#2; bx lr
+    let thumb = [0x2800u16, 0xbf0c, 0x2101, 0xf04f, 0x0102, 0x4770];
+    cpu.write_memory(
+        0x1020,
+        &thumb
+            .into_iter()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    cpu.set_entry_trace(16).unwrap();
+
+    let entries = [
+        0x1000, 0x1004, 0x1020, 0x1022, 0x1024, 0x1026, 0x102a, 0x1008,
+    ];
+    for (r0, step) in [(0u32, 1), (1, 1), (0, 8), (1, 8)] {
+        cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+            .unwrap();
+        cpu.write_register(arm::CORE[0], &r0.to_le_bytes()).unwrap();
+        let mut begin = entries[0];
+        for _ in 0..entries.len() / step {
+            assert!(matches!(run(&cpu, begin, step), Exit::Stopped));
+            assert_eq!(cpu.instruction_progress(), Some(step as u64));
+            begin = value(&cpu, Register::Pc) | ((value(&cpu, arm::CPSR) >> 5) & 1);
+        }
+        assert_eq!(cpu.take_entries().unwrap(), entries);
+        assert_eq!(value(&cpu, arm::CORE[1]), u64::from(r0 + 1));
+        assert_eq!(value(&cpu, arm::CORE[2]), 3);
+        assert_eq!(begin, 0x100c);
+    }
+}
+
+#[test]
+fn thumb_framework_hints_respect_it_and_resume_in_thumb() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    // cmp r0,#0; it eq; wfieq; movs r1,#3
+    cpu.write_memory(0x1000, &[0x00, 0x28, 0x08, 0xbf, 0x30, 0xbf, 0x03, 0x21])
+        .unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    assert!(matches!(
+        run(&cpu, 0x1001, 4),
+        Exit::BeforeInstruction(0xe320_f003)
+    ));
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, Register::Pc), 0x1004);
+    let cpsr = value(&cpu, arm::CPSR) as u32;
+    armv7a::finish_thumb(&cpu, 0x1004, cpsr).unwrap();
+    assert_eq!(value(&cpu, arm::CPSR) as u32, arm::thumb::advance_it(cpsr));
+    run(&cpu, 0x1007, 1);
+    assert_eq!(value(&cpu, arm::CORE[1]), 3);
+
+    cpu.write_register(arm::CORE[0], &1u32.to_le_bytes())
+        .unwrap();
+    assert!(matches!(run(&cpu, 0x1001, 4), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(4));
+    assert_eq!(value(&cpu, Register::Pc), 0x1008);
+}
+
+#[test]
+fn irq_from_thumb_restores_the_it_predicate_on_exception_return() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x2000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0x53u32.to_le_bytes())
+        .unwrap();
+    // ARM IRQ handler: subs pc,lr,#4
+    cpu.write_memory(0x18, &0xe25ef004u32.to_le_bytes())
+        .unwrap();
+    // cmp r0,#0; it eq; moveq r1,#1
+    cpu.write_memory(0x1000, &[0x00, 0x28, 0x08, 0xbf, 0x01, 0x21])
+        .unwrap();
+    run(&cpu, 0x1001, 2);
+    let interrupted = value(&cpu, arm::CPSR);
+    assert_ne!(interrupted & 0x0600_fc00, 0);
+    cpu.set_interrupt(Interrupt::Irq, true).unwrap();
+    run(&cpu, 0x1005, 1);
+    assert_eq!(cpu.instruction_progress(), Some(0));
+    assert_eq!(value(&cpu, arm::SPSR), interrupted);
+    assert_eq!(value(&cpu, Register::Pc), 0x18);
+    cpu.set_interrupt(Interrupt::Irq, false).unwrap();
+    run(&cpu, 0x18, 2);
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, arm::CORE[1]), 1);
+    assert_eq!(value(&cpu, Register::Pc), 0x1006);
+}
+
+#[test]
+fn changing_the_second_thumb_halfword_invalidates_the_mmu_translation() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x200000, 7).unwrap();
+    let descriptors = [0x0010_0c02u32, 0x0000_0c02];
+    cpu.write_memory(
+        0x4008,
+        &descriptors.into_iter().flat_map(u32::to_le_bytes).collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let cp = |crn| arm::Coprocessor {
+        cp: 15,
+        opc1: 0,
+        crn,
+        crm: 0,
+        opc2: 0,
+        secure: 0,
+        wide: false,
+    };
+    cpu.coprocessor(cp(2), Some(0x4000)).unwrap();
+    cpu.coprocessor(cp(3), Some(0xffff_ffff)).unwrap();
+    let sctlr = cpu.coprocessor(cp(1), None).unwrap();
+    cpu.coprocessor(cp(1), Some(sctlr | 1)).unwrap();
+    // mov.w r0,#1 at 0x2ffffe, crossing into a nonadjacent physical page.
+    cpu.write_memory(0x1ffffe, &[0x4f, 0xf0]).unwrap();
+    cpu.write_memory(0, &[0x01, 0x00]).unwrap();
+    run(&cpu, 0x2fffff, 1);
+    assert_eq!(value(&cpu, arm::CORE[0]), 1);
+    cpu.write_memory(0, &[0x02, 0x00]).unwrap();
+    run(&cpu, 0x2fffff, 1);
+    assert_eq!(value(&cpu, arm::CORE[0]), 2);
+}
+
+#[test]
+fn thumb_mmio_entry_is_counted_once() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+        .unwrap();
+    // movs r2,#1; ldr r0,[r1]; adds r2,#1
+    cpu.write_memory(0x1000, &[0x01, 0x22, 0x08, 0x68, 0x01, 0x32])
+        .unwrap();
+    let mut d = Device {
+        cpu: &cpu,
+        reads: vec![],
+        writes: vec![],
+        tighten: false,
+    };
+    unsafe {
+        cpu.map_mmio(
+            0x8000,
+            0x1000,
+            Mmio {
+                read,
+                write,
+                data: (&mut d as *mut Device<'_>).cast(),
+            },
+        )
+        .unwrap();
+    }
+    run(&cpu, 0x1001, 3);
+    assert_eq!(cpu.instruction_progress(), Some(3));
+    assert_eq!(d.reads, [2]);
+    assert_eq!(value(&cpu, arm::CORE[0]), 42);
+    assert_eq!(value(&cpu, arm::CORE[2]), 2);
+}
+
+#[test]
+fn thumb_store_rewrites_a_previously_translated_instruction() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    // movs r0,#1; b 0x1020
+    cpu.write_memory(0x1000, &[0x01, 0x20, 0x0d, 0xe0]).unwrap();
+    // ldr r1,=0x2002; ldr r2,=0x1000; strh r1,[r2]; b 0x1000
+    let words = [0x4901u16, 0x4a02, 0x8011, 0xe7eb, 0x2002, 0, 0x1000, 0];
+    cpu.write_memory(
+        0x1020,
+        &words
+            .into_iter()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    run(&cpu, 0x1001, 7);
+    assert_eq!(cpu.instruction_progress(), Some(7));
+    assert_eq!(value(&cpu, arm::CORE[0]), 2);
+}
+
+#[test]
+fn thumb_data_abort_enters_arm_with_the_architectural_fault_registers() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x2000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    let cp = |crn, opc2| arm::Coprocessor {
+        cp: 15,
+        opc1: 0,
+        crn,
+        crm: 0,
+        opc2,
+        secure: 0,
+        wide: false,
+    };
+    let sctlr = cpu.coprocessor(cp(1, 0), None).unwrap();
+    cpu.coprocessor(cp(1, 0), Some(sctlr | 2)).unwrap();
+    cpu.write_register(arm::CORE[1], &0x1001u32.to_le_bytes())
+        .unwrap();
+    // ldr r0,[r1] from an unaligned address
+    cpu.write_memory(0x1000, &[0x08, 0x68]).unwrap();
+    run(&cpu, 0x1001, 1);
+    assert_eq!(cpu.instruction_progress(), Some(1));
+    assert_eq!(value(&cpu, Register::Pc), 0x10);
+    assert_eq!(value(&cpu, arm::SPSR), 0xf3);
+    assert_eq!(value(&cpu, arm::CORE[14]), 0x1008);
+    assert_eq!(cpu.coprocessor(cp(5, 0), None).unwrap(), 1);
+    assert_eq!(cpu.coprocessor(cp(6, 0), None).unwrap(), 0x1001);
+}
+
+#[test]
+fn ldr_pc_and_pop_pc_interwork_on_an_a7() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    // ldr pc,[pc,#-4]; .word 0x1021; mov r0,#7
+    code(&cpu, &[0xe51ff004, 0x1021, 0xe3a00007]);
+    cpu.write_memory(0x1020, &[0x00, 0xbd]).unwrap();
+    cpu.write_register(arm::CORE[13], &0x1080u32.to_le_bytes())
+        .unwrap();
+    cpu.write_memory(0x1080, &0x1008u32.to_le_bytes()).unwrap();
+    run(&cpu, 0x1000, 3);
+    assert_eq!(cpu.instruction_progress(), Some(3));
+    assert_eq!(value(&cpu, arm::CORE[0]), 7);
+    assert_eq!(value(&cpu, arm::CPSR) & 0x20, 0);
+}
+
+#[test]
+fn thumb_irq_unmask_is_a_boundary_before_the_following_entry() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x2000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    // nop; cpsie i; movs r0,#7
+    cpu.write_memory(0x1000, &[0x00, 0xbf, 0x62, 0xb6, 0x07, 0x20])
+        .unwrap();
+    cpu.set_interrupt(Interrupt::Irq, true).unwrap();
+    run(&cpu, 0x1001, 4);
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, Register::Pc), 0x18);
+    assert_eq!(value(&cpu, arm::SPSR) & 0xa0, 0x20);
+    assert_eq!(value(&cpu, arm::CORE[0]), 0);
+}

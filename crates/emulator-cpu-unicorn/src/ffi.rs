@@ -82,6 +82,7 @@ pub struct Extensions {
     pub set_parallel_cpus: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    pub arm_abort: unsafe extern "C" fn(Engine, *mut u32, *mut u32) -> Error,
     pub set_entry_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
@@ -264,6 +265,7 @@ mod linked {
         fn uc_embedder_request_restart(engine: Engine) -> Error;
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_arm_abort(engine: Engine, address: *mut u32, status: *mut u32) -> Error;
         fn uc_embedder_set_entry_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
@@ -288,6 +290,7 @@ mod linked {
             request_restart: Some(uc_embedder_request_restart),
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
+            arm_abort: uc_embedder_arm_abort,
             set_entry_exits: Some(uc_embedder_set_entry_exits),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),

@@ -2039,7 +2039,11 @@ impl State {
                             .ok_or("ARMv7-A framework instruction without a profile")?;
                         match profile.before_counted(cpu, pc, now, word)? {
                             // A failed condition retires the instruction unexecuted.
-                            armv7a::Entry::Execute => set(cpu, Register::Pc, pc.wrapping_add(4))?,
+                            armv7a::Entry::Execute => armv7a::finish(
+                                cpu,
+                                pc,
+                                scalar(cpu, fujimod_emulator_cpu::arm::CPSR)? as u32,
+                            )?,
                             armv7a::Entry::Completed => (),
                             armv7a::Entry::Hint(hint) => self.hint(core, hint),
                         }

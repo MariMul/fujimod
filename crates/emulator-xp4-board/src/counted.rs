@@ -248,7 +248,22 @@ impl Cluster {
     /// prologue already ran. `true` ends the slice (the hook's redirect).
     fn perform(&self, core: usize, word: u32) -> Result<bool, String> {
         let address = self.reg(core, arm::PC)?;
-        if self.word(core, u64::from(address))? != word {
+        let cpsr = self.reg(core, arm::CPSR)?;
+        let thumb = cpsr & 0x20 != 0;
+        use fujimod_emulator_cpu::armv7a::{self, ThumbExclusive};
+        let mut thumb_exclusive = None;
+        let current = if thumb {
+            let (encoded, _) = arm::thumb::fetch(&*self.cpus[core], address)?;
+            thumb_exclusive = armv7a::thumb_exclusive(encoded)?;
+            if thumb_exclusive.is_some() {
+                Some(encoded)
+            } else {
+                armv7a::thumb_framework_word(encoded)
+            }
+        } else {
+            Some(self.word(core, u64::from(address))?)
+        };
+        if current != Some(word) {
             return Err(format!("Counted XP4 exit word changed at {address:#x}"));
         }
         self.advance(core, 1)?;
@@ -257,6 +272,41 @@ impl Cluster {
         state.last_observed[core] = Some((address, state.instructions));
         self.record(core, address, word);
         observe(self, core, u64::from(address))?;
+        if let Some(exclusive) = thumb_exclusive {
+            match exclusive {
+                ThumbExclusive::Clear => unsafe {
+                    (&mut (*self.state.get()).exclusive)[core] = None
+                },
+                ThumbExclusive::Transfer {
+                    load,
+                    base,
+                    data,
+                    second,
+                    status,
+                    size,
+                    offset,
+                } => {
+                    let guest = self.reg(core, arm::CORE[base])?.wrapping_add(offset);
+                    let transfer = super::ExclusiveTransfer {
+                        load,
+                        size,
+                        data,
+                        second,
+                        status,
+                        guest,
+                    };
+                    if matches!(
+                        transfer.run(self, core, u64::from(address), false, true)?,
+                        Exclusive::Aborted
+                    ) {
+                        return Ok(true);
+                    }
+                }
+            }
+            self.write_reg(core, arm::CPSR, arm::thumb::advance_it(cpsr))?;
+            self.write_reg(core, arm::PC, address.wrapping_add(4) | 1)?;
+            return Ok(false);
+        }
         special(self, core, u64::from(address), word)?;
         let state = unsafe { &*self.state.get() };
         if state.redirected.is_some() && state.resume && state.failure.is_none() && state.waiting[core] == 0 {
@@ -304,7 +354,11 @@ impl Cluster {
             let value = self.reg(core, arm::CORE[rt])?;
             self.cpus[core].coprocessor(selector, Some(u64::from(value)))?;
         }
-        self.write_reg(core, arm::PC, address + 4)?;
+        if thumb {
+            fujimod_emulator_cpu::armv7a::finish_thumb(&*self.cpus[core], address, cpsr)?;
+        } else {
+            self.write_reg(core, arm::PC, address + 4)?;
+        }
         Ok(false)
     }
     /// The hook's per-core trace entry.
@@ -400,7 +454,8 @@ impl Cluster {
                 (*self.state.get()).accounted = 0;
                 (*self.state.get()).counted_core = Some(core);
             }
-            let begin = u64::from(self.reg(core, arm::PC)?);
+            let begin = u64::from(self.reg(core, arm::PC)?)
+                | u64::from((self.reg(core, arm::CPSR)? >> 5) & 1);
             let mut exit = cpu.run(Run {
                 begin,
                 until: None,
@@ -558,9 +613,27 @@ pub(super) unsafe fn counted_observer(address: u64, _size: u32, data: *mut c_voi
     let result = (|| -> Result<(), String> {
         // A board instruction exits right after this callback without being
         // entered; `perform` observes it at the boundary.
-        let word = c.word(core, address)?;
-        if (fujimod_emulator_cpu::armv7a::framework_instruction(word) && !fujimod_emulator_cpu::armv7a::mpidr_read(word)) || exclusive_word(word) {
-            return Ok(());
+        let cpsr = c.reg(core, arm::CPSR)?;
+        if cpsr & 0x20 != 0 {
+            if arm::thumb::condition_passed(cpsr) {
+                let (encoded, _) = arm::thumb::fetch(&*c.cpus[core], address as u32)?;
+                use fujimod_emulator_cpu::armv7a;
+                if armv7a::thumb_exclusive(encoded)?.is_some()
+                    || armv7a::thumb_framework_word(encoded).is_some_and(|word| {
+                        armv7a::framework_instruction(word) && !armv7a::mpidr_read(word)
+                    })
+                {
+                    return Ok(());
+                }
+            }
+        } else {
+            let word = c.word(core, address)?;
+            if (fujimod_emulator_cpu::armv7a::framework_instruction(word)
+                && !fujimod_emulator_cpu::armv7a::mpidr_read(word))
+                || exclusive_word(word)
+            {
+                return Ok(());
+            }
         }
         let progress = c.cpus[core]
             .instruction_progress()

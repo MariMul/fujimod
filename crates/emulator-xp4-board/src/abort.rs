@@ -359,8 +359,39 @@ impl Cluster {
         }
         Ok(())
     }
+    pub(super) fn deliver_exclusive_abort(
+        &self,
+        core: usize,
+        address: u32,
+        size: usize,
+        access: Access,
+    ) -> Result<(), String> {
+        let pc = self.reg(core, arm::PC)?;
+        if address & (size as u32 - 1) != 0 {
+            return self.abort_entry(core, pc, address, 1, access);
+        }
+        let mmu = Mmu::read(self, core)?;
+        let status = mmu
+            .status(self, address, access, mmu.user)?
+            .ok_or("Exclusive abort is not explained by the architectural page tables")?;
+        self.abort_entry(core, pc, address, status, access)
+    }
+
     pub(super) fn deliver_abort(&self, core: usize, fetch: bool) -> Result<(), String> {
         let pc = self.reg(core, arm::PC)?;
+        if self.reg(core, arm::CPSR)? & 0x20 != 0
+            && let Some(cpu) = self.cpus[core].counted()
+        {
+            let (address, status) = cpu.raw().take_arm_abort()?;
+            let access = if fetch {
+                Access::Fetch
+            } else if status & (1 << 11) != 0 {
+                Access::Write
+            } else {
+                Access::Read
+            };
+            return self.abort_entry(core, pc, address, status, access);
+        }
         if self.cp(core, 1, 0, 0, 0)? & 1 == 0 {
             let (address, access) = mmu_off_alignment(self, core, pc, fetch)?;
             return self.abort_entry(core, pc, address, 1, access);

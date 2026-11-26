@@ -213,16 +213,25 @@ impl Execution {
     }
 
     /// An observed instruction: apply a data-cache maintenance operation.
-    pub(super) fn coherent_instruction(&self, address: u64) -> Result<(), String> {
+    pub(super) fn coherent_instruction(
+        &self,
+        address: u64,
+        decoded: Option<u32>,
+    ) -> Result<(), String> {
         let mut guard = self.coherence.borrow_mut();
         let Some(core) = guard.as_mut() else {
             return Ok(());
         };
         let mut shared = core.domain.0.borrow_mut();
         self.flush_restore(&mut shared)?;
-        let mut bytes = [0; 4];
-        self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
-        let word = u32::from_le_bytes(bytes);
+        let word = match decoded {
+            Some(word) => word,
+            None => {
+                let mut bytes = [0; 4];
+                self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
+                u32::from_le_bytes(bytes)
+            }
+        };
         if translation_change(word) {
             core.cacheable.clear();
             return Ok(());

@@ -236,6 +236,7 @@ impl Cpu for Core {
         e.stopped.set(false);
         e.exit.set(None);
         e.exception.set(None);
+        e.thumb_abort.set(None);
         e.restart.set(None);
         e.failure.borrow_mut().take();
         if request.instructions == Some(0) {
@@ -285,7 +286,11 @@ impl Cpu for Core {
             }
             if let Some(exception) = e.exception.take() {
                 let fetch = exception == arm::Exception::PrefetchAbort;
-                armv7a::abort::enter(&*e.cpu, fetch)?;
+                if let Some((address, status)) = e.thumb_abort.take() {
+                    armv7a::abort::enter_with_fault(&*e.cpu, fetch, address, status)?;
+                } else {
+                    armv7a::abort::enter(&*e.cpu, fetch)?;
+                }
                 e.count_entry(|n| {
                     if fetch {
                         n.prefetch_abort += 1
@@ -311,6 +316,9 @@ impl Cpu for Core {
                 && !e.cpu.translation_maintenance_status().is_ok_and(|s| s.pending != 0 || s.poison != 0)
             {
                 begin = e.restart.get().unwrap_or(e.scalar(Register::Pc)?);
+                if e.a32 && e.scalar(arm::CPSR)? & 0x20 != 0 {
+                    begin |= 1;
+                }
                 continue;
             }
             return Ok(exit);

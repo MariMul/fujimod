@@ -62,6 +62,10 @@ impl Profile {
     pub fn before(&mut self, cpu: &dyn Cpu, pc: u64, now: u64) -> Result<Entry, String> {
         let cpsr = scalar(cpu, arm::CPSR)? as u32;
         if cpsr & 0x20 != 0 {
+            let (encoded, _) = arm::thumb::fetch(cpu, pc as u32)?;
+            if let Some(word) = fujimod_emulator_cpu::armv7a::thumb_framework_word(encoded) {
+                return self.before_word(cpu, pc, now, word, cpsr);
+            }
             return Ok(Entry::Execute);
         }
         let mut bytes = [0; 4];
@@ -86,7 +90,12 @@ impl Profile {
         cpsr: u32,
     ) -> Result<Entry, String> {
         let body = word & 0x0fff_ffff;
-        if word >> 28 != 15 && !arm::condition_passes(word >> 28, cpsr) {
+        let passed = if cpsr & 0x20 != 0 {
+            arm::thumb::condition_passed(cpsr)
+        } else {
+            word >> 28 == 15 || arm::condition_passes(word >> 28, cpsr)
+        };
+        if !passed {
             return Ok(Entry::Execute);
         }
         if body & 0x0f00_0f10 == 0x0e00_0f10 && (body >> 16) & 15 == 9 {
@@ -125,7 +134,7 @@ impl Profile {
                         _ => return Err("ARMv7-A PMU operation is unsupported".into()),
                     }
                 }
-                set(cpu, Register::Pc, pc.wrapping_add(4))?;
+                finish(cpu, pc, cpsr)?;
                 cpu.stop()?;
                 return Ok(Entry::Completed);
             }
@@ -167,7 +176,7 @@ impl Profile {
                 _ => return Ok(Entry::Execute),
             }
         };
-        set(cpu, Register::Pc, pc.wrapping_add(4))?;
+        finish(cpu, pc, cpsr)?;
         cpu.stop()?;
         Ok(entry)
     }
@@ -177,6 +186,13 @@ impl Profile {
         }
         cpu.stop()?;
         Ok(true)
+    }
+}
+pub(super) fn finish(cpu: &dyn Cpu, pc: u64, cpsr: u32) -> Result<(), String> {
+    if cpsr & 0x20 != 0 {
+        fujimod_emulator_cpu::armv7a::finish_thumb(cpu, pc as u32, cpsr)
+    } else {
+        set(cpu, Register::Pc, pc.wrapping_add(4))
     }
 }
 impl Board {

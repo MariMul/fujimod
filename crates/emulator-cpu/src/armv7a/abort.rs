@@ -390,15 +390,26 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
             found.ok_or("Data abort is not explained by the architectural page tables")?
         }
     };
-    c.write_cp(
-        5,
-        u32::from(fetch),
-        status | if access == Access::Write { 1 << 11 } else { 0 },
-    )?;
+    let status = status | if access == Access::Write { 1 << 11 } else { 0 };
+    enter_with_fault(cpu, fetch, address, status)
+}
+
+/// Enter an abort with the instruction engine's fault address and status.
+pub fn enter_with_fault(
+    cpu: &dyn Cpu,
+    fetch: bool,
+    address: u32,
+    status: u32,
+) -> Result<(), String> {
+    let c = Cluster(cpu);
+    let core = 0;
+    let pc = c.reg(core, arm::PC)?;
+    let sctlr = c.cp(core, 1, 0, 0, 0)? as u32;
+    c.write_cp(5, u32::from(fetch), status)?;
     c.write_cp(6, if fetch { 2 } else { 0 }, address)?;
     let old = c.reg(core, arm::CPSR)?;
-    if old & 0x20 != 0 || sctlr & ((1 << 30) | (1 << 25)) != 0 {
-        return Err("Unsupported Thumb/big-endian ARMv7-A exception entry".into());
+    if sctlr & (1 << 25) != 0 {
+        return Err("Unsupported big-endian ARMv7-A exception entry".into());
     }
     let base = if sctlr & (1 << 13) != 0 {
         0xffff0000
@@ -408,8 +419,9 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
     let (offset, return_offset) = if fetch { (0x0c, 4) } else { (0x10, 8) };
     let new = (old & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x17 | 0x180;
     let write = |r, v: u32| cpu.write_register(r, &v.to_le_bytes());
-    write(arm::CPSR, new)?;
+    let thumb = (sctlr >> 30) & 1;
+    write(arm::CPSR, new | (thumb << 5))?;
     write(arm::SPSR, old)?;
     write(arm::CORE[14], pc.wrapping_add(return_offset))?;
-    write(Register::Pc, base + offset)
+    write(Register::Pc, (base + offset) | thumb)
 }

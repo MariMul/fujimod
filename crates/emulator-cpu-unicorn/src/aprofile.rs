@@ -1,4 +1,4 @@
-//! Exact AArch64 and ARMv7-A (ARM state) instruction entries, code coherence,
+//! Exact AArch64 and ARMv7-A instruction entries, code coherence,
 //! and architectural exits. Guest clocks, devices, and framework register
 //! values remain with the owner.
 use crate::{
@@ -35,7 +35,7 @@ struct Execution {
     // Engine destruction precedes callback data, ring, and owned RAM.
     cpu: Rc<RawCore>,
     memory: Memory,
-    // ARMv7-A in ARM state; otherwise AArch64.
+    // ARMv7-A; otherwise AArch64.
     a32: bool,
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
@@ -48,6 +48,7 @@ struct Execution {
     manual: Cell<Option<Span>>,
     active: Cell<bool>,
     at_block: Cell<bool>,
+    thumb_block: Cell<bool>,
     at_instruction: Cell<bool>,
     stopped: Cell<bool>,
     irq: Cell<bool>,
@@ -56,6 +57,7 @@ struct Execution {
     exit: Cell<Option<u32>>,
     // ARMv7-A abort reported by the engine, entered after the run.
     exception: Cell<Option<arm::Exception>>,
+    thumb_abort: Cell<Option<(u32, u32)>>,
     entries: Cell<armv7a::Entries>,
     failure: RefCell<Option<String>>,
     observers: RefCell<BTreeMap<usize, Observer>>,
@@ -132,6 +134,7 @@ impl Core {
             manual: Cell::new(None),
             active: Cell::new(false),
             at_block: Cell::new(false),
+            thumb_block: Cell::new(false),
             at_instruction: Cell::new(false),
             stopped: Cell::new(false),
             irq: Cell::new(false),
@@ -139,6 +142,7 @@ impl Core {
             restart: Cell::new(None),
             exit: Cell::new(None),
             exception: Cell::new(None),
+            thumb_abort: Cell::new(None),
             entries: Cell::default(),
             failure: RefCell::new(None),
             observers: RefCell::new(BTreeMap::new()),
@@ -330,6 +334,20 @@ impl Core {
 /// [`Core::set_owner_inline_instructions`].
 pub type InlineInstruction = unsafe fn(u64, u32, *mut std::ffi::c_void) -> bool;
 /// ARMv7-A ARM-state LDREX/STREX family (any width) and CLREX encodings.
+// An MMIO access may trigger Unicorn's end-of-block replay. Close the
+// block at a Thumb memory instruction so its already-observed entry is
+// never replayed. This includes the memory forms of VFP and SIMD.
+fn thumb_memory_access(word: u32) -> bool {
+    if word <= u16::MAX.into() {
+        matches!(word, 0x4800..=0x9fff | 0xb400..=0xb5ff | 0xbc00..=0xbdff | 0xc000..=0xcfff)
+    } else {
+        matches!(
+            word >> 24,
+            0xe8 | 0xe9 | 0xec | 0xed | 0xf8 | 0xf9 | 0xfc | 0xfd
+        )
+    }
+}
+
 fn exclusive_instruction(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f
 }
@@ -451,9 +469,45 @@ impl Execution {
         let _ = self.cpu.stop();
     }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
+        let thumb = self.a32 && address & 1 != 0;
+        let address = address & !1;
+        let size = if thumb && word <= u16::MAX.into() {
+            2
+        } else {
+            4
+        };
         let physical = self.cpu.translate(address, Access::Fetch)?;
-        self.memory.note_code(self.id.get(), physical, 4)?;
+        if thumb && size == 4 && address & 4095 == 4094 {
+            let second = self
+                .cpu
+                .translate(address.wrapping_add(2) & 0xffff_ffff, Access::Fetch)?;
+            self.memory.note_code(self.id.get(), physical, 2)?;
+            self.memory.note_code(self.id.get(), second, 2)?;
+        } else {
+            self.memory.note_code(self.id.get(), physical, size)?;
+        }
         self.memory.apply_watches()?;
+        if thumb {
+            let boundary = thumb_memory_access(word)
+                || armv7a::thumb_framework_word(word).is_some_and(|word| {
+                    armv7a::block_boundary(word)
+                        || self.framework(word)
+                        || (self.is_coherent()
+                            && (coherent_cpu::maintenance(word).is_some()
+                                || coherent_cpu::translation_change(word)))
+                });
+            return Ok(Translation {
+                instruction: if boundary
+                    || !self.index.borrow().stores.is_empty()
+                    || !self.index.borrow().instructions.at(address).is_empty()
+                {
+                    InstructionDisposition::ObserveAndEndBlock
+                } else {
+                    InstructionDisposition::Observe
+                },
+                observe_block: true,
+            });
+        }
         let framework = self.framework(word);
         let boundary = if self.a32 {
             armv7a::block_boundary(word)
@@ -483,6 +537,12 @@ impl Execution {
                 || !self.index.borrow().blocks.at(address).is_empty(),
         })
     }
+    fn thumb_framework(&self, encoded: u32) -> Result<Option<u32>, String> {
+        if self.exclusive_exits.get() && armv7a::thumb_exclusive(encoded)?.is_some() {
+            return Ok(Some(encoded));
+        }
+        Ok(armv7a::thumb_framework_word(encoded).filter(|word| self.framework(*word)))
+    }
     fn framework(&self, word: u32) -> bool {
         if self.a32 {
             (armv7a::framework_instruction(word)
@@ -506,6 +566,7 @@ impl Execution {
         self.settle(0, true)?;
         self.publish()?;
         self.at_block.set(true);
+        self.thumb_block.set(self.a32 && b.thumb == Some(true));
         let result = self.enter(b);
         self.at_block.set(false);
         result
@@ -539,12 +600,10 @@ impl Execution {
             self.reset();
             return self.cpu.stop();
         }
-        // The translation filter and the 4-byte span ring cover ARM state only.
-        if self.a32
-            && b.thumb
-                .map_or_else(|| Ok::<_, String>(self.scalar(arm::CPSR)? & 0x20 != 0), Ok)?
-        {
-            return Err("Thumb execution is unsupported by the counted ARMv7-A backend".into());
+        // Thumb entries are counted individually before their IT predicates.
+        if self.thumb_block.get() {
+            self.reset();
+            return Ok(());
         }
         if b.bytes == 0 || !b.bytes.is_multiple_of(4) {
             return Err("invalid A-profile block span".into());
@@ -591,13 +650,28 @@ impl Execution {
             }
         }
         let intercepted = self.stopped.get();
+        let thumb = self.thumb_block.get();
         let mut performed = false;
+        let mut coherent_word = None;
         if !intercepted && self.scalar(Register::Pc)? == address {
             let mut bytes = [0; 4];
-            self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
-            let word = u32::from_le_bytes(bytes);
-            if self.framework(word) {
-                if let Some((perform, data)) = self.inline.get()
+            self.cpu
+                .read_virtual(address, Access::Fetch, &mut bytes[..size as usize])?;
+            let raw = u32::from_le_bytes(bytes);
+            let framework = if thumb {
+                let encoded = if size == 4 { raw.rotate_left(16) } else { raw };
+                if arm::thumb::condition_passed(self.scalar(arm::CPSR)? as u32) {
+                    coherent_word = armv7a::thumb_coprocessor(encoded);
+                    self.thumb_framework(encoded)?
+                } else {
+                    None
+                }
+            } else {
+                self.framework(raw).then_some(raw)
+            };
+            if let Some(word) = framework {
+                if !thumb
+                    && let Some((perform, data)) = self.inline.get()
                     && unsafe { perform(address, word, data) }
                 {
                     performed = true;
@@ -608,8 +682,13 @@ impl Execution {
                 }
             }
         }
-        if self.is_coherent() && self.exit.get().is_none() && !intercepted && !performed {
-            self.coherent_instruction(address)?;
+        if self.is_coherent()
+            && self.exit.get().is_none()
+            && !intercepted
+            && !performed
+            && (!thumb || coherent_word.is_some())
+        {
+            self.coherent_instruction(address, coherent_word)?;
         }
         if traced
             && self.exit.get().is_none()
@@ -768,6 +847,9 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
                 }
             }
             return e.cpu.stop();
+        }
+        if e.scalar(arm::CPSR)? & 0x20 != 0 {
+            e.thumb_abort.set(Some(e.cpu.take_arm_abort()?));
         }
         e.exception.set(Some(exception));
         e.cpu.stop()

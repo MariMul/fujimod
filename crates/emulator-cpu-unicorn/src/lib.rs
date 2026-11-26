@@ -200,6 +200,15 @@ impl Core {
     /// block retry is pending, and test no exit request after memory accesses.
     /// Every stop a device or exception callback raises then takes effect at
     /// the next block entry; accesses that can stop end their blocks.
+    /// Consume the fault registers while a Thumb abort callback is active.
+    pub fn take_arm_abort(&self) -> Result<(u32, u32), String> {
+        let (mut address, mut status) = (0, 0);
+        self.check(unsafe {
+            (self.api.extensions.arm_abort)(self.raw, &mut address, &mut status)
+        })?;
+        Ok((address, status))
+    }
+
     pub(crate) fn set_entry_exits(&self, enabled: bool) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         let set = self

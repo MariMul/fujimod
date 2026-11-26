@@ -504,8 +504,8 @@ impl Cluster {
     ) -> Result<(), String> {
         let old = self.reg(core, arm::CPSR)?;
         let sctlr = self.cp(core, 1, 0, 0, 0)? as u32;
-        if old & 0x20 != 0 || sctlr & ((1 << 30) | (1 << 25)) != 0 {
-            return Err("Unsupported Thumb/big-endian ARMv7-A exception entry".into());
+        if sctlr & (1 << 25) != 0 {
+            return Err("Unsupported big-endian ARMv7-A exception entry".into());
         }
         let base = if sctlr & (1 << 13) != 0 {
             0xffff0000
@@ -519,27 +519,27 @@ impl Cluster {
             ExceptionEntry::DataAbort => (0x17, 0x10, 8, 0x180),
         };
         let new = (old & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | mode | masks;
-        self.write_reg(core, arm::CPSR, new)?;
+        let thumb = (sctlr >> 30) & 1;
+        self.write_reg(core, arm::CPSR, new | (thumb << 5))?;
         self.write_reg(core, arm::SPSR, old)?;
         self.write_reg(core, arm::CORE[14], pc.wrapping_add(return_offset))?;
         unsafe {
             (&mut (*self.state.get()).exclusive)[core] = None;
         }
-        self.redirect(core, base + offset)
+        self.redirect(core, (base + offset) | thumb)
     }
     fn disabled_vfp_exception(&self, core: usize) -> Result<bool, String> {
         let pc = self.reg(core, arm::PC)?;
-        let word = self.word(core, u64::from(pc))?;
-        // Conditional ARM coprocessor-10/11 instructions (including VPUSH),
-        // and the unconditional Advanced SIMD data-processing (0xf2/0xf3) and
-        // element/structure load/store (0xf4 with bit 20 clear) encodings,
-        // which share the CPACR/FPEXC gate. Other invalid/unsupported
-        // instructions retain the engine refusal.
-        let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
-        if !simd && (word >> 28 == 15 || word & 0x0c000e00 != 0x0c000a00) {
+        let cpsr = self.reg(core, arm::CPSR)?;
+        let thumb = cpsr & 0x20 != 0;
+        let word = if thumb {
+            arm::thumb::fetch(&*self.cpus[core], pc)?.0
+        } else {
+            self.word(core, u64::from(pc))?
+        };
+        if !fujimod_emulator_cpu::armv7a::is_vfp(word, thumb) {
             return Ok(false);
         }
-        let cpsr = self.reg(core, arm::CPSR)?;
         let cpacr = self.cp(core, 1, 0, 0, 2)? as u32;
         let privileged = cpsr & 31 != 0x10;
         let accessible = [20, 22].into_iter().all(|shift| {
@@ -891,7 +891,6 @@ enum Exclusive {
 /// `false` for anything it cannot finish without leaving the run (a fault, an
 /// unpredictable encoding, a refused engine call).
 fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) -> Result<Exclusive, String> {
-    let state = unsafe { &mut *c.state.get() };
     let load_exclusive = word & 0x0f900fff == 0x01900f9f;
     let rn = ((word >> 16) & 15) as usize;
     let rd = ((word >> 12) & 15) as usize;
@@ -914,90 +913,129 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) ->
     {
         return Ok(Exclusive::Declined);
     }
-    let data_address = c.reg(core, arm::CORE[rn])?;
-    let physical = match c.physical_ram(
-        core,
-        data_address,
+    let data = if load { rd } else { rt };
+    let transfer = ExclusiveTransfer {
+        load,
         size,
-        if load { Access::Read } else { Access::Write },
-    ) {
-        Ok(physical) => physical,
-        Err(_) if inline => return Ok(Exclusive::Declined),
-        Err(error) => {
-            c.deliver_abort(core, false)
-                .map_err(|abort| format!("{error}: {abort}"))?;
-            return Ok(Exclusive::Aborted);
-        }
+        data,
+        second: (size == 8 && data & 1 == 0 && data <= 12).then_some(data + 1),
+        status: rd,
+        guest: c.reg(core, arm::CORE[rn])?,
     };
-    if load {
-        if size == 8 && (rd & 1 != 0 || rd > 12) {
-            return Err("Unpredictable LDREXD register pair".into());
-        }
-        if c.counted {
-            // Counted runs see stores on watched pages only: route
-            // every core's stores to this monitor through `store`.
-            for cpu in &c.cpus {
-                match cpu.watch_stores(physical, size as u64) {
+    transfer.run(c, core, address, inline, false)
+}
+
+struct ExclusiveTransfer {
+    load: bool,
+    size: usize,
+    data: usize,
+    second: Option<usize>,
+    status: usize,
+    guest: u32,
+}
+
+impl ExclusiveTransfer {
+    fn run(
+        self,
+        c: &Cluster,
+        core: usize,
+        address: u64,
+        inline: bool,
+        thumb: bool,
+    ) -> Result<Exclusive, String> {
+        let Self {
+            load,
+            size,
+            data,
+            second,
+            status,
+            guest,
+        } = self;
+        let state = unsafe { &mut *c.state.get() };
+        let access = if load { Access::Read } else { Access::Write };
+        let physical = match c.physical_ram(core, guest, size, access) {
+            Ok(physical) => physical,
+            Err(_) if inline => return Ok(Exclusive::Declined),
+            Err(error) => {
+                if thumb {
+                    c.deliver_exclusive_abort(core, guest, size, access)
+                } else {
+                    c.deliver_abort(core, false)
+                }
+                .map_err(|abort| format!("{error}: {abort}"))?;
+                return Ok(Exclusive::Aborted);
+            }
+        };
+        if load {
+            if size == 8 && second.is_none() {
+                return Err("Unpredictable LDREXD register pair".into());
+            }
+            if c.counted {
+                // Counted runs see stores on watched pages only: route
+                // every core's stores to this monitor through `store`.
+                for cpu in &c.cpus {
+                    match cpu.watch_stores(physical, size as u64) {
+                        Err(_) if inline => return Ok(Exclusive::Declined),
+                        result => result?,
+                    }
+                }
+            }
+            let mut bytes = [0u8; 8];
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    c.ram.as_ptr().add(physical as usize),
+                    bytes.as_mut_ptr(),
+                    size,
+                );
+            }
+            let value = u64::from_le_bytes(bytes);
+            c.write_reg(core, arm::CORE[data], value as u32)?;
+            if let Some(second) = second {
+                c.write_reg(core, arm::CORE[second], (value >> 32) as u32)?;
+            }
+            state.exclusive[core] = Some((physical, size));
+        } else {
+            let success = state.exclusive[core] == Some((physical, size));
+            if success {
+                if data == 15 {
+                    return Err("Unpredictable ARMv7-A STREX Rt".into());
+                }
+                if size == 8 && second.is_none() {
+                    return Err("Unpredictable STREXD register pair".into());
+                }
+                let mut value = u64::from(c.reg(core, arm::CORE[data])?);
+                if let Some(second) = second {
+                    value |= u64::from(c.reg(core, arm::CORE[second])?) << 32;
+                }
+                match c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size]) {
                     Err(_) if inline => return Ok(Exclusive::Declined),
                     result => result?,
                 }
-            }
-        }
-        let mut bytes = [0u8; 8];
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                c.ram.as_ptr().add(physical as usize),
-                bytes.as_mut_ptr(),
-                size,
-            );
-        }
-        let value = u64::from_le_bytes(bytes);
-        c.write_reg(core, arm::CORE[rd], value as u32)?;
-        if size == 8 {
-            c.write_reg(core, arm::CORE[rd + 1], (value >> 32) as u32)?;
-        }
-        state.exclusive[core] = Some((physical, size));
-    } else {
-        let success = state.exclusive[core] == Some((physical, size));
-        if success {
-            if rt == 15 {
-                return Err("Unpredictable ARMv7-A STREX Rt".into());
-            }
-            if size == 8 && (rt & 1 != 0 || rt > 12) {
-                return Err("Unpredictable STREXD register pair".into());
-            }
-            let mut value = u64::from(c.reg(core, arm::CORE[rt])?);
-            if size == 8 {
-                value |= u64::from(c.reg(core, arm::CORE[rt + 1])?) << 32;
-            }
-            match c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size]) {
-                Err(_) if inline => return Ok(Exclusive::Declined),
-                result => result?,
-            }
-            for monitor in &mut state.exclusive {
-                if monitor
-                    .is_some_and(|(p, n)| p < physical + size as u64 && physical < p + n as u64)
-                {
-                    *monitor = None;
+                for monitor in &mut state.exclusive {
+                    if monitor
+                        .is_some_and(|(p, n)| p < physical + size as u64 && physical < p + n as u64)
+                    {
+                        *monitor = None;
+                    }
+                }
+                // Software-emulated exclusives bypass the CPU memory hook.
+                // Preflight checked the complete RAM write and record bound;
+                // record only the store that actually succeeded.
+                if let Some(guard) = &mut state.driver_guard {
+                    guard.store(
+                        core,
+                        address,
+                        physical,
+                        size as u32,
+                        value & (u64::MAX >> ((8 - size) * 8)),
+                    );
                 }
             }
-            // Software-emulated exclusives bypass the CPU memory hook.
-            // Preflight checked the complete RAM write and record bound;
-            // record only the store that actually succeeded.
-            if let Some(guard) = &mut state.driver_guard {
-                guard.store(
-                    core,
-                    address,
-                    physical,
-                    size as u32,
-                    value & (u64::MAX >> ((8 - size) * 8)),
-                );
-            }
+            state.exclusive[core] = None;
+            c.write_reg(core, arm::CORE[status], u32::from(!success))?;
         }
-        state.exclusive[core] = None;
-        c.write_reg(core, arm::CORE[rd], u32::from(!success))?;
+        Ok(Exclusive::Done)
     }
-    Ok(Exclusive::Done)
 }
 /// The instructions the board performs itself (PMU profile, exclusives,
 /// CLREX, identity reads, WFI/WFE/SEV) at an entered instruction whose word
@@ -1014,7 +1052,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             pmu.before(&*c.cpus[core], address, state.ticks)?,
             Entry::Execute
         ) {
-            state.redirected = Some(address as u32 + 4);
+            state.redirected = Some(c.reg(core, arm::PC)?);
             return Ok(());
         }
     }
@@ -1034,6 +1072,21 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
     }
     let condition = word >> 28;
     let flags = c.reg(core, arm::CPSR)?;
+    let finish = |resume| -> Result<(), String> {
+        if flags & 0x20 == 0 {
+            if resume {
+                return c.redirect_resume(core, address as u32 + 4);
+            }
+            return c.redirect(core, address as u32 + 4);
+        }
+        fujimod_emulator_cpu::armv7a::finish_thumb(&*c.cpus[core], address as u32, flags)?;
+        let pc = c.reg(core, arm::PC)?;
+        unsafe {
+            (*c.state.get()).redirected = Some(pc);
+            (*c.state.get()).resume = resume;
+        }
+        c.cpus[core].stop()
+    };
     let (n, z, carry, v) = (
         flags >> 31 != 0,
         flags & (1 << 30) != 0,
@@ -1063,12 +1116,12 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
     if load_exclusive || store_exclusive {
         return match exclusive(c, core, address, word, false)? {
             Exclusive::Aborted => Ok(()),
-            _ => c.redirect_resume(core, address as u32 + 4),
+            _ => finish(true),
         };
     }
     if word == 0xf57ff01f {
         state.exclusive[core] = None;
-        return c.redirect_resume(core, address as u32 + 4);
+        return finish(true);
     }
     // MPIDR is an architectural cluster input (Unicorn standalone engines
     // each default to CPU0). CBAR is an explicit reset input, never inferred.
@@ -1078,7 +1131,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             return Err("Unsupported CCSIDR-to-APSR read".into());
         }
         c.write_reg(core, arm::CORE[rd], c.cp(core, 0, 0, 1, 0)? as u32)?;
-        return c.redirect_resume(core, address as u32 + 4);
+        return finish(true);
     }
     if cp_read == 0x0e100fb0 || cp_read == 0x0e9f0f10 {
         if (word >> 12) & 15 == 15 {
@@ -1102,16 +1155,16 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             c.cbar.unwrap_or(0)
         };
         c.write_reg(core, arm::CORE[((word >> 12) & 15) as usize], value)?;
-        return c.redirect_resume(core, address as u32 + 4);
+        return finish(true);
     }
     if hint == 0x0320f003 || hint == 0x0320f002 {
         // architectural WFI/WFE
         if hint == 0x0320f002 && state.events[core] {
             state.events[core] = false;
-            return c.redirect_resume(core, address as u32 + 4);
+            return finish(true);
         }
         state.waiting[core] = if hint == 0x0320f003 { 1 } else { 2 };
-        return c.redirect(core, address as u32 + 4);
+        return finish(false);
     }
     if hint == 0x0320f004 {
         state.events.fill(true);
@@ -1120,7 +1173,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
                 *wait = 0;
             }
         }
-        return c.redirect_resume(core, address as u32 + 4);
+        return finish(true);
     }
     Ok(())
 }
