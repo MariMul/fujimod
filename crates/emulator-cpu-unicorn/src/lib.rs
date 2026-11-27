@@ -1706,16 +1706,27 @@ unsafe extern "C" fn block(_: ffi::Engine, address: u64, size: u32, data: *mut c
     let context = unsafe { &*data.cast::<HookData>() };
     if let Hook::Block { callback, data, .. } = context.hook {
         let thumb = context.thumb_metadata.get().then_some(size >> 31 != 0);
+        let thumb_entries = if thumb == Some(true)
+            && size >> 30 == 3
+            && context.api.extensions.features & ffi::FEATURE_THUMB_BLOCK_ENTRIES != 0
+        {
+            std::num::NonZeroU16::new(((size >> 16) & 0x3fff) as u16)
+        } else {
+            None
+        };
         unsafe {
             callback(
                 Block {
                     address,
-                    bytes: if thumb.is_some() {
+                    bytes: if thumb_entries.is_some() {
+                        size & 0xffff
+                    } else if thumb.is_some() {
                         size & 0x3fffffff
                     } else {
                         size
                     },
                     thumb,
+                    thumb_entries,
                 },
                 data,
             );

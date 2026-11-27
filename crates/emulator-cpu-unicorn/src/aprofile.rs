@@ -616,22 +616,15 @@ impl Execution {
         if block.bytes == 0 || !block.bytes.is_multiple_of(2) || block.address & 1 != 0 {
             return Err("invalid Thumb block span".into());
         }
-        let end = block.address + u64::from(block.bytes);
-        let mut pc = block.address;
         let mut entries = self.thumb_entries.borrow_mut();
-        while pc < end {
-            let mut bytes = [0; 2];
-            self.cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
-            entries.push(pc);
-            pc += if u16::from_le_bytes(bytes) >= 0xe800 {
-                4
-            } else {
-                2
-            };
-        }
-        if pc != end {
-            entries.clear();
-            return Err("Thumb block ends inside an instruction".into());
+        if let Some(mask) = block.thumb_entries {
+            let mut mask = mask.get();
+            while mask != 0 {
+                entries.push(block.address + 2 * u64::from(mask.trailing_zeros()));
+                mask &= mask - 1;
+            }
+        } else {
+            self.read_thumb_entries(block, &mut entries)?;
         }
         let count = entries.len() as u64;
         if count > room {
@@ -648,6 +641,43 @@ impl Execution {
         self.synced.set(room as i64);
         Ok(())
     }
+    fn read_thumb_entries(&self, block: Block, entries: &mut Vec<u64>) -> Result<(), String> {
+        let end = block.address + u64::from(block.bytes);
+        let mut pc = block.address;
+        // Check one fetch for short blocks. Fall back to fetching instruction
+        // starts if the whole span cannot be inspected as a range.
+        let mut buffer = [0; 256];
+        let fetched = buffer
+            .get_mut(..block.bytes as usize)
+            .filter(|bytes| bytes.len() > 2);
+        let fetched = fetched.and_then(|bytes| {
+            self.cpu
+                .read_virtual(block.address, Access::Fetch, bytes)
+                .ok()
+                .map(|()| &*bytes)
+        });
+        while pc < end {
+            let mut bytes = [0; 2];
+            if let Some(fetched) = fetched {
+                let offset = (pc - block.address) as usize;
+                bytes.copy_from_slice(&fetched[offset..offset + 2]);
+            } else {
+                self.cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
+            }
+            entries.push(pc);
+            pc += if u16::from_le_bytes(bytes) >= 0xe800 {
+                4
+            } else {
+                2
+            };
+        }
+        if pc != end {
+            entries.clear();
+            return Err("Thumb block ends inside an instruction".into());
+        }
+        Ok(())
+    }
+
     fn instruction(&self, address: u64, size: u32) -> Result<(), String> {
         let thumb = !self.thumb_entries.borrow().is_empty();
         self.settle(self.tail(address, false), false)?;

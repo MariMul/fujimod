@@ -432,6 +432,8 @@ pub struct Block {
     pub address: u64,
     pub bytes: u32,
     pub thumb: Option<bool>,
+    /// Bit per halfword within a short Thumb block, set at instruction starts.
+    pub thumb_entries: Option<std::num::NonZeroU16>,
 }
 /// The externally selected input phase used by optional guest block profiles.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
