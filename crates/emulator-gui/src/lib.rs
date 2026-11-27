@@ -39,8 +39,8 @@ impl Run for RunHost {
     }
 }
 
-/// Shortest wall time between LCD reads, about 30 images a second.
-const FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+/// Wall interval for polling displays that do not publish frames.
+const LCD_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
 
 /// How fast a live camera's guest time runs against the host's wall time.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,7 +96,7 @@ impl Live {
         Self {
             camera,
             selection,
-            read_at: std::time::Instant::now() - FRAME_INTERVAL,
+            read_at: std::time::Instant::now() - LCD_POLL_INTERVAL,
             speed: Speed::REAL_TIME,
             pace: None,
         }
@@ -163,8 +163,9 @@ impl Run for Live {
     fn frames(
         &mut self,
     ) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
-        if self.read_at.elapsed() < FRAME_INTERVAL {
-            return Ok(Vec::new());
+        if self.read_at.elapsed() < LCD_POLL_INTERVAL {
+            // Device-published frames are already paced by guest scanout.
+            return Ok(self.camera.session.board.take_frames());
         }
         self.read_at = std::time::Instant::now();
         // The wiring is located once the firmware has loaded its configuration.
