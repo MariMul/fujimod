@@ -125,6 +125,12 @@ fn interval_mask(
     analog_levels: u32,
 ) -> Result<Mask, Unresolved> {
     let (low, high) = match interval {
+        // A literal band that runs past the converter's top, such as the
+        // firmware's 0..65535 "any level" on a 10-bit converter, accepts
+        // every level up to the top.
+        AdcInterval::Literal { lower, upper, .. } if u32::from(*lower) < analog_levels => {
+            (u32::from(*lower), u32::from(*upper).min(analog_levels - 1))
+        }
         AdcInterval::Literal { lower, upper, .. } => (u32::from(*lower), u32::from(*upper)),
         AdcInterval::ConfigurationU16 { lower, upper, .. } => {
             let low = calibrated(calibration, *lower)?;
@@ -837,5 +843,24 @@ mod calibration_tests {
         assert!(interval_mask(&interval, Some(&vec![0; 4]), 1024).is_err());
         assert!(interval_mask(&interval, Some(&vec![0xff; 4]), 1024).is_err());
         assert!(interval_mask(&interval, Some(&vec![0, 0, 29, 0]), 1024).is_ok());
+    }
+
+    #[test]
+    fn a_literal_band_past_the_converter_top_ends_at_the_top() {
+        let literal = |lower, upper| AdcInterval::Literal {
+            lower,
+            upper,
+            when: None,
+            unless: Vec::new(),
+        };
+        assert_eq!(
+            interval_mask(&literal(0, 65535), None, 1024).ok().unwrap(),
+            Mask::range(0, 1023)
+        );
+        assert_eq!(
+            interval_mask(&literal(900, 2000), None, 1024).ok().unwrap(),
+            Mask::range(900, 1023)
+        );
+        assert!(interval_mask(&literal(1024, 2000), None, 1024).is_err());
     }
 }
