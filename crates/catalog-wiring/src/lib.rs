@@ -993,6 +993,20 @@ mod tests {
     }
 
     #[test]
+    fn xt20_buttons_read_calibrated_10_bit_bands_from_the_loaded_configuration() {
+        let selection = ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve_firmware("xt20-211")
+            .unwrap();
+        let located = super::locate(&selection).unwrap();
+        assert_eq!(located.analog_levels, 1024);
+        assert!(matches!(
+            located.calibration,
+            Some(super::ConfigurationLocation::Pointer { address: 0xffb164 })
+        ));
+    }
+
+    #[test]
     fn x70_menu_ok_is_one_calibrated_adc_band_reported_by_one_scanner_record() {
         let selection = ReferenceCatalog::bundled()
             .unwrap()

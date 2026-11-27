@@ -14,5 +14,11 @@
       "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
     },
     "address": 4293918720
+  },
+  "generated_facts": {
+    "cfgdata_location": {
+      "address": 16757092,
+      "kind": "pointer"
+    }
   }
 }
