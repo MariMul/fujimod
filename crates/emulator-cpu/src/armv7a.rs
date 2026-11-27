@@ -191,7 +191,8 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     let next = (cpsr & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x1b | 0x80;
     write(arm::CPSR, next)?;
     write(arm::SPSR, cpsr)?;
-    write(arm::CORE[14], pc.wrapping_add(4))?;
+    // LR_und is the faulting instruction's address + 4 in ARM state and + 2 in Thumb state.
+    write(arm::CORE[14], pc.wrapping_add(if thumb { 2 } else { 4 }))?;
     write(Register::Pc, base.wrapping_add(4))?;
     Ok(true)
 }

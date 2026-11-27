@@ -321,9 +321,17 @@ mod tests {
     }
     #[test]
     fn disabled_vfp_enters_the_undefined_vector_and_the_handler_retries_it() {
+        check_disabled_vfp_retry(false);
+    }
+    #[test]
+    fn disabled_thumb_vfp_resumes_one_halfword_early_using_the_arm_retry_rule() {
+        check_disabled_vfp_retry(true);
+    }
+
+    fn exception_test_board(thumb: bool) -> Board {
         let graph: factory::Graph = serde_json::from_value(json!({
             "processors":[{"model":"cortex-a7","released":true,"mprofile":null,"rprofile":null,
-                "registers":[["Pc",0x1000],["Pstate",0xd3]]}],
+                "registers":[["Pc",0x1000],["Pstate", if thumb { 0xf3 } else { 0xd3 }]]}],
             "ram":[{"base":0,"size":0x2000}],
             "mappings":[{"core":0,"address":0,"physical":0,"size":0x2000,"permissions":7}],
             "dma_mappings":[{"address":0,"physical":0,"size":0x2000,"permissions":3}],
@@ -348,6 +356,23 @@ mod tests {
             },
         )
         .unwrap();
+        b
+    }
+
+    #[test]
+    fn thumb_irq_links_four_bytes_past_the_interrupted_instruction() {
+        let b = exception_test_board(true);
+        let cpu = b.cpu(0).unwrap();
+        set(cpu, arm::CPSR, 0x73).unwrap();
+        set(cpu, Register::Pc, 0x1003).unwrap();
+        assert!(fujimod_emulator_cpu::armv7a::enter_irq(cpu).unwrap());
+        assert_eq!(scalar(cpu, arm::CORE[14]).unwrap(), 0x1006);
+        assert_eq!(scalar(cpu, arm::SPSR).unwrap() & 0x20, 0x20);
+        assert_eq!(scalar(cpu, Register::Pc).unwrap(), 0x18);
+    }
+
+    fn check_disabled_vfp_retry(thumb: bool) {
+        let mut b = exception_test_board(thumb);
         let words = |words: &[u32]| {
             words
                 .iter()
@@ -357,18 +382,37 @@ mod tests {
         // Undefined vector: b 0x100.
         b.write_physical(4, &words(&[0xea00003d])).unwrap();
         // Enable CP10/CP11 in CPACR and FPEXC.EN, count, then retry the
-        // faulting instruction: subs pc, lr, #4.
+        // instruction using the stock A32 retry rule: subs pc, lr, #4.
+        // Keep LR_und in r5 for the assertion below.
         b.write_physical(
             0x100,
             &words(&[
-                0xe3a0060f, 0xee010f50, 0xf57ff06f, 0xe3a00101, 0xeee80a10, 0xe2833001, 0xe25ef004,
+                0xe3a0060f, 0xee010f50, 0xf57ff06f, 0xe3a00101, 0xeee80a10, 0xe2833001,
+                0xe1a0500e, 0xe25ef004,
             ]),
         )
         .unwrap();
-        // vmov s0, r0; mov r2, #2; wfi.
-        b.write_physical(0x1000, &words(&[0xee000a10, 0xe3a02002, 0xe320f003]))
-            .unwrap();
+        if thumb {
+            // movs r4, #42 immediately before vmov s0, r0; movs r2, #2; wfi.
+            // Starting at vmov, r4 changes only if the retry landed at 0xffe.
+            b.write_physical(0xffe, &[0x2a, 0x24, 0x00, 0xee, 0x10, 0x0a, 0x02, 0x22, 0x30, 0xbf])
+                .unwrap();
+        } else {
+            // vmov s0, r0; mov r2, #2; wfi.
+            b.write_physical(0x1000, &words(&[0xee000a10, 0xe3a02002, 0xe320f003]))
+                .unwrap();
+        }
+        if thumb {
+            let points = b.instruction_points_begin(0, vec![0xffe]).unwrap();
+            b.run_for_instructions(100, 10).unwrap();
+            assert_eq!(points.event(), Some(0xffe));
+            drop(points);
+        }
         b.run_for_instructions(100, 10).unwrap();
+        let lr_und = b.read_register(0, arm::CORE[5]).unwrap();
+        assert_eq!(lr_und, if thumb { 0x1002 } else { 0x1004 });
+        assert_eq!(lr_und - 4, if thumb { 0xffe } else { 0x1000 });
+        assert_eq!(b.read_register(0, arm::CORE[4]).unwrap(), if thumb { 42 } else { 0 });
         assert_eq!(b.read_register(0, arm::CORE[3]).unwrap(), 1);
         assert_eq!(b.read_register(0, arm::CORE[2]).unwrap(), 2);
         let entries = b.armv7a_exception_entries(0).unwrap();
