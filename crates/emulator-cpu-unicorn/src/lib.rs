@@ -981,7 +981,6 @@ impl Cpu for Core {
         // uc_vmem_read uses a fast host-pointer lookup, which refuses writable
         // pages carrying a write observer/dirty flag. Translate with the requested
         // access, then use the observational physical read instead.
-        let regions = self.memory_regions()?;
         let mut offset = 0;
         while offset < bytes.len() {
             let at = address + offset as u64;
@@ -990,7 +989,7 @@ impl Cpu for Core {
             let end = physical
                 .checked_add(n as u64 - 1)
                 .ok_or("physical read range overflow")?;
-            if !regions.iter().any(|r| {
+            if !self.cached_memory_regions()?.iter().any(|r| {
                 r.begin <= physical && end <= r.end && r.permissions & protection(access) != 0
             }) {
                 return Err(format!(
