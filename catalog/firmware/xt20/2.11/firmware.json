@@ -15,6 +15,13 @@
     },
     "address": 4293918720
   },
+  "layouts": {
+    "profiles": {
+      "xt20-211": {
+        "camera_configuration_id": "xt20-211"
+      }
+    }
+  },
   "generated_facts": {
     "cfgdata_location": {
       "address": 16757092,

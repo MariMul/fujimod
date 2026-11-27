@@ -6,10 +6,7 @@
 //! with nothing held, from the boot ROM with a catalog power-on combination
 //! held, or at the native loader with a caller-verified RAM image. Opening
 //! writes nothing to disk unless the caller asked for the boot cache.
-use crate::{
-    Library, LibraryError, Stage, StateDir, flash,
-    library::FirmwareFiles,
-};
+use crate::{Library, LibraryError, Stage, StateDir, flash, library::FirmwareFiles};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
 use fujimod_catalog_remote::{Facts, Selection};
@@ -365,6 +362,7 @@ pub struct BootHolds {
     resolved: ResolvedConfiguration,
     holds: Vec<fujimod_catalog_controls::BootHold>,
     ticks_per_second: u64,
+    application_sd: bool,
 }
 
 impl BootHolds {
@@ -375,6 +373,11 @@ impl BootHolds {
 
     /// Release each hold and connect the controls the running firmware loads.
     pub fn release(&self, session: &mut Session) -> Result<(), OpenError> {
+        if self.application_sd {
+            session
+                .logic_input("sd-strap", false)
+                .map_err(|error| OpenError::at(Stage::Rec, error))?;
+        }
         finish_boot(session, &self.resolved, &self.holds, self.ticks_per_second)
     }
 }
@@ -404,9 +407,11 @@ pub fn open(library: &Library, state: &StateDir, request: Request) -> Result<Ope
     if !request.run_to_rec {
         return open_held(library, request, resolved);
     }
-    let key = match request.cache {
-        BootCache::Reuse => Some(crate::cache::Key::new(state, &request, &resolved)?),
-        BootCache::Bypass => None,
+    let key = match (request.cache, resolved.reference.soc.id.as_str()) {
+        (BootCache::Reuse, soc) if soc != "xpp" => {
+            Some(crate::cache::Key::new(state, &request, &resolved)?)
+        }
+        _ => None,
     };
     if let Some(key) = &key
         && let Some(opened) = crate::cache::restore(library, &request, &resolved, key)?
@@ -486,6 +491,13 @@ fn boot_holds(
 /// Run a constructed camera to REC, holding and releasing its controls around it.
 fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
     opened.apply_holds()?;
+    if opened.resolved.reference.soc.id == "xpp" {
+        boot::application::to_rec(&mut opened.camera, INSTRUCTION_LIMIT)
+            .map_err(|error| OpenError::at(Stage::Rec, error))?;
+        opened.release_holds()?;
+        opened.stage = Stage::Rec;
+        return Ok(());
+    }
     let card_before = card_revision(&opened.camera.session, &opened.start);
     let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
@@ -550,41 +562,82 @@ pub(crate) fn construct(
         face_result_profile: _,
         kept,
     } = request;
-    let engine = resolved
-        .configuration
-        .execution
-        .ok_or_else(|| {
-            OpenError::at(
+    let xpp = resolved.reference.soc.id == "xpp";
+    let engine = match resolved.configuration.execution {
+        Some(execution) => execution.engine,
+        None if xpp => RunEngine::Unicorn,
+        None => {
+            return Err(OpenError::at(
                 Stage::BootRom,
                 format!("{} declares no execution policy", resolved.configuration.id),
-            )
-        })?
-        .engine;
+            ));
+        }
+    };
     let files = firmware_files(library, &firmware, &files)?;
-    let camera_directory = camera_directory(library, &resolved)?;
-    let mut camera = boot::open_request(
-        resolved.clone(),
-        boot::Request {
-            update: files.update,
-            boot_rom: Some(files.boot_rom),
-            nand: None,
-            settings: None,
-            camera: camera_directory,
-            application_plan: None,
-            card_files: Vec::new(),
-            discovery: false,
-            sd_card_transfer_ticks: card.transfer_ticks,
-            card_layout: card.layout.clone(),
-            card_initialization_fault: card.initialization_fault.clone(),
-        },
-    )
+    let application_sd =
+        xpp && matches!(&start, Start::Held { combination } if combination == "sd");
+    let mut camera = if xpp {
+        if !matches!(start, Start::Rom) && !application_sd {
+            return Err(OpenError::at(
+                Stage::BootRom,
+                "XPP supports stock and SD-card starts",
+            ));
+        }
+        if application_sd {
+            for name in ["ffboot.bin", "ffsys.bin"] {
+                if !card
+                    .files
+                    .iter()
+                    .any(|(file, _)| file.eq_ignore_ascii_case(name))
+                {
+                    return Err(OpenError::at(
+                        Stage::BootRom,
+                        format!("SD card needs {name}"),
+                    ));
+                }
+            }
+        }
+        boot::open_xpp_application(
+            &resolved,
+            boot::application::Startup {
+                update: files.update,
+                plan: library.path().join(&firmware).join("application-plan.json"),
+                discovery: false,
+                quantum: application_sd.then_some(100),
+                card_image: None,
+                card_files: Vec::new(),
+            },
+            card.files.clone(),
+            application_sd.then_some(files.boot_rom.as_path()),
+        )
+    } else {
+        let camera_directory = camera_directory(library, &resolved)?;
+        boot::open_request(
+            resolved.clone(),
+            boot::Request {
+                update: files.update,
+                boot_rom: Some(files.boot_rom),
+                nand: None,
+                settings: None,
+                camera: camera_directory,
+                application_plan: None,
+                card_files: Vec::new(),
+                discovery: false,
+                sd_card_transfer_ticks: card.transfer_ticks,
+                card_layout: card.layout.clone(),
+                card_initialization_fault: card.initialization_fault.clone(),
+            },
+        )
+    }
     .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     camera
         .session
         .board
         .set_execution_policy(policy)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    install_files(&mut camera.session, &card.files)?;
+    if !xpp {
+        install_files(&mut camera.session, &card.files)?;
+    }
     if let Some(bytes) = nand_image.as_ref() {
         let medium = camera
             .session
@@ -593,9 +646,12 @@ pub(crate) fn construct(
         let restored = medium.restore_committed(bytes).map_err(|error| {
             OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
         })?;
-        camera.session.retain_nand("nand", restored).map_err(|error| {
-            OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
-        })?;
+        camera
+            .session
+            .retain_nand("nand", restored)
+            .map_err(|error| {
+                OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
+            })?;
     }
     // A power-on's kept medium replaces the flash this request would build.
     apply_kept_media(&mut camera.session, kept)?;
@@ -608,8 +664,13 @@ pub(crate) fn construct(
     }
     let holds = BootHolds {
         resolved: resolved.clone(),
-        holds: boot_holds(&start, &resolved)?,
+        holds: if application_sd {
+            Vec::new()
+        } else {
+            boot_holds(&start, &resolved)?
+        },
         ticks_per_second: camera.ticks_per_second,
+        application_sd,
     };
     Ok(Opened {
         camera,

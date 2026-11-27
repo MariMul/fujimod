@@ -14,6 +14,7 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
+    "ticks_per_second": 48000000,
     "hardware_selection": {
       "soc_profile_id": "xpp",
       "body_profile_id": "xt20-discovery"

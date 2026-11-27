@@ -35,7 +35,16 @@ struct Document {
     images: Vec<Image>,
     #[serde(default)]
     card_files: BTreeMap<String, PathBuf>,
+    rec: Option<RecMode>,
     board: Plan,
+}
+
+/// A passive witness for the recording mode, read by the host after boot.
+#[derive(Clone, Copy, Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct RecMode {
+    address: u64,
+    value: u8,
 }
 
 #[derive(Deserialize)]
@@ -295,6 +304,16 @@ fn named(
 }
 
 pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Started, String> {
+    open_with_media(resolved, startup, Vec::new(), None)
+}
+
+/// Start an application-profile camera with caller-provided SD card bytes.
+pub fn open_with_media(
+    resolved: &ResolvedConfiguration,
+    startup: Startup,
+    card_files: Vec<(String, Vec<u8>)>,
+    card_boot_rom: Option<&Path>,
+) -> Result<Started, String> {
     let update = bytes(Path::new(""), &startup.update)?;
     let identity = resolved
         .reference
@@ -319,7 +338,10 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         .map(|path| bytes(directory, path))
         .transpose()?;
     let mut files = named(directory, document.card_files)?;
-    for (name, bytes) in crate::media::read_files(&startup.card_files)? {
+    for (name, bytes) in crate::media::read_files(&startup.card_files)?
+        .into_iter()
+        .chain(card_files)
+    {
         if files.insert(name.clone(), bytes).is_some() {
             return Err(format!("SD card file {name} supplied twice"));
         }
@@ -395,7 +417,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                     "X-Processor Pro startup plan core count differs from the selected SoC".into(),
                 );
             }
-            let starts = body
+            let mut starts = body
                 .soc
                 .processors
                 .iter()
@@ -407,8 +429,11 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                     registers,
                 })
                 .collect::<Vec<_>>();
+            let rom = card_boot_rom
+                .map(|path| xpp::card_rom(resolved, path, &mut starts))
+                .transpose()?;
             let mut assets = named(directory, assets)?;
-            let assembly = xpp::assemble(
+            let mut assembly = xpp::assemble(
                 resolved,
                 &xpp::Inputs {
                     starts: &starts,
@@ -417,6 +442,9 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                     sensor_image: None,
                 },
             )?;
+            if rom.is_some() {
+                xpp::configure_sd_boot(&mut assembly)?;
+            }
             assets.insert(
                 assembly.flash_asset.into(),
                 flash.ok_or("X-Processor Pro requires flash backing")?,
@@ -432,6 +460,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                 "engine": engine,
                 "quantum": quantum,
                 "mode": mode.name(),
+                "rec": document.rec,
                 "execution": crate::graph::value(
                     &resolved.reference, &assembly.execution,
                     fujimod_catalog_configuration::RunInstructionRate {
@@ -450,6 +479,10 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                 engine,
             )?
             .into_session(definition)?;
+            if let Some(rom) = rom {
+                board.board.write_physical(xpp::BOOT_ROM_ADDRESS, &rom)?;
+                board.logic_input("sd-strap", true)?;
+            }
             if let Some(medium) = card_image {
                 let slot = board
                     .contacts
@@ -463,7 +496,11 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         }
         _ => return Err("application startup plan does not match the selected processor".into()),
     };
-    for image in document.images {
+    for image in document
+        .images
+        .into_iter()
+        .filter(|_| card_boot_rom.is_none())
+    {
         let data = bytes(directory, &image.file)?;
         if format!("{:x}", Sha256::digest(&data)) != image.sha256 {
             return Err(format!(
@@ -482,7 +519,12 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
     }
     let ticks_per_second = match resolved.configuration.inputs.as_ref() {
         Some(RunInputs::Xp4(inputs)) => inputs.ticks_per_second,
-        _ => 54_000_000,
+        _ => resolved
+            .configuration
+            .preset
+            .as_ref()
+            .and_then(|preset| preset.ticks_per_second)
+            .unwrap_or(54_000_000),
     };
     Ok(Started {
         board,
@@ -491,6 +533,26 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         engine,
         snapshot_identity,
     })
+}
+
+/// Run an application camera to the plan's observed REC mode and an LCD frame.
+pub fn to_rec(camera: &mut crate::Camera, instruction_limit: u64) -> Result<(), String> {
+    let rec: RecMode = serde_json::from_value(camera.session.definition["rec"].clone())
+        .map_err(|error| format!("application startup plan needs a REC observation: {error}"))?;
+    let session = &mut camera.session;
+    let end = session.board.instruction_counts().iter().sum::<u64>() + instruction_limit;
+    let mut presented = false;
+    while session.board.instruction_counts().iter().sum::<u64>() < end {
+        let mut mode = [0];
+        session.board.read_physical(rec.address, &mut mode)?;
+        if presented && mode[0] == rec.value {
+            return Ok(());
+        }
+        let until = session.board.now() + (camera.ticks_per_second / 60).max(1);
+        session.run_window(end, camera.quantum, None, Some(until))?;
+        presented |= !session.board.take_frames().is_empty();
+    }
+    Err("application boot reached the instruction limit before presenting REC".into())
 }
 
 fn install_card_files(
@@ -505,7 +567,10 @@ fn install_card_files(
         .as_array_mut()
         .into_iter()
         .flatten()
-        .find(|node| node["kind"] == "sd")
+        .find_map(|node| {
+            let model = &mut node["model"];
+            (model["kind"] == "sd").then_some(model)
+        })
         .ok_or("X-Processor Pro startup has no modeled SD card host")?;
     let mut entries = BTreeMap::new();
     for (index, (name, bytes)) in files.into_iter().enumerate() {

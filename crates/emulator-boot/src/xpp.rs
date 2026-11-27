@@ -22,6 +22,11 @@ use fujimod_emulator_cpu::Register;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod sd_boot;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub(crate) use sd_boot::{BOOT_ROM_ADDRESS, card_rom, configure_sd_boot};
+
 /// Performance-counter cycles per board tick of each application core.
 const CYCLES_PER_TICK: u64 = 64;
 /// MPIDR multiprocessor-extension bit; the affinity is the core index.
@@ -1899,7 +1904,10 @@ mod tests {
         let assets = assets();
         let assembly = xt20(&assets).unwrap();
         let devices = &assembly.devices;
-        assert_eq!(node(devices, "renderer")["pixmap_readback"], "preserves-words");
+        assert_eq!(
+            node(devices, "renderer")["pixmap_readback"],
+            "preserves-words"
+        );
         for output in ["display0", "display1"] {
             assert_eq!(node(devices, output)["osd_window_enable_offset"], 0x20c);
         }

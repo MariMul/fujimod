@@ -18,8 +18,8 @@ pub mod patch;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 mod png_writer;
 use fujimod_emulator_board_graph as graph;
-mod x70;
 mod exr2;
+mod x70;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod xp5;
 pub mod xpp;
@@ -877,6 +877,28 @@ fn graph_read_limit(session: &Session) -> Result<usize, String> {
         })
 }
 
+/// Open an XPP application plan through the camera builder.
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub fn open_xpp_application(
+    resolved: &ResolvedConfiguration,
+    startup: application::Startup,
+    card_files: Vec<(String, Vec<u8>)>,
+    card_boot_rom: Option<&std::path::Path>,
+) -> Result<Camera, String> {
+    let started = application::open_with_media(resolved, startup, card_files, card_boot_rom)?;
+    let application::Board::Xpp(session) = started.board else {
+        return Err("X-Processor Pro startup returned another processor generation".into());
+    };
+    let read_limit = graph_read_limit(&session)?;
+    Ok(Camera {
+        session: *session,
+        read_limit,
+        ticks_per_second: started.ticks_per_second,
+        quantum: started.quantum,
+        xp5: None,
+    })
+}
+
 fn session_quantum(session: &Session) -> Result<usize, String> {
     session.definition["quantum"]
         .as_u64()
@@ -1026,20 +1048,7 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
         (Some(RunInputs::Xp4(_)) | None, StartupInputs::Application(inputs))
             if resolved.reference.soc.id == "xpp" =>
         {
-            let started = application::open(&resolved, inputs)?;
-            let quantum = started.quantum;
-            let ticks_per_second = started.ticks_per_second;
-            let application::Board::Xpp(session) = started.board else {
-                return Err("X-Processor Pro startup returned another processor generation".into());
-            };
-            let read_limit = graph_read_limit(&session)?;
-            Ok(Camera {
-                session: *session,
-                read_limit,
-                ticks_per_second,
-                quantum,
-                xp5: None,
-            })
+            open_xpp_application(&resolved, inputs, Vec::new(), None)
         }
         _ => Err(format!(
             "startup inputs do not match configuration {}",
