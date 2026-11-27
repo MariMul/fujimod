@@ -309,6 +309,9 @@ impl Cpu for Core {
                 && !e.cpu.translation_maintenance_status().is_ok_and(|s| s.pending != 0 || s.poison != 0)
             {
                 begin = e.restart.get().unwrap_or(e.scalar(Register::Pc)?);
+                if e.a32 && e.scalar(arm::CPSR)? & 0x20 != 0 {
+                    begin |= 1;
+                }
                 continue;
             }
             return Ok(exit);

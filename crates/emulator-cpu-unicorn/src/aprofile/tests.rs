@@ -33,6 +33,66 @@ fn run(cpu: &Core, begin: u64, budget: usize) -> Exit {
     })
     .unwrap()
 }
+
+#[test]
+fn thumb_limits_resume_at_halfwords_and_preserve_itstate() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    let words = [
+        0x2000u16, 0x2800, 0xbf0c, 0xf04f, 0x0107, 0x2109, 0x3201, 0xe7fe,
+    ];
+    cpu.write_memory(
+        0x1000,
+        &words
+            .into_iter()
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let pcs = [0x1000, 0x1002, 0x1004, 0x1006, 0x100a, 0x100c, 0x100e];
+    cpu.set_entry_trace(pcs.len()).unwrap();
+    for pair in pcs.windows(2) {
+        run(&cpu, pair[0] | 1, 1);
+        assert_eq!(cpu.instruction_progress(), Some(1));
+        assert_eq!(value(&cpu, Register::Pc), pair[1]);
+        assert_ne!(value(&cpu, arm::CPSR) & 0x20, 0);
+    }
+    assert_eq!(cpu.take_entries().unwrap(), pcs[..6]);
+    assert_eq!(value(&cpu, arm::CORE[1]), 7);
+    assert_eq!(value(&cpu, arm::CORE[2]), 1);
+
+    unsafe fn pause(pc: u64, width: u32, data: *mut c_void) {
+        let cpu = unsafe { &*data.cast::<Core>() };
+        assert_eq!((pc, width), (0x1006, 4));
+        assert_ne!(value(cpu, arm::CPSR) & 0x0600_fc00, 0);
+        cpu.stop_before_instruction().unwrap();
+    }
+    let hook = unsafe {
+        cpu.install_hook(Hook::Instruction {
+            range: HookRange::Inclusive {
+                begin: 0x1006,
+                end: 0x1006,
+            },
+            callback: pause,
+            data: (&cpu as *const Core).cast_mut().cast(),
+        })
+    }
+    .unwrap();
+    run(&cpu, 0x1001, 20);
+    assert_eq!(cpu.instruction_progress(), Some(3));
+    assert_eq!(value(&cpu, Register::Pc), 0x1006);
+    assert_eq!(cpu.take_entries().unwrap(), pcs[..3]);
+    cpu.remove_hook(hook).unwrap();
+    run(&cpu, 0x1007, 2);
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, Register::Pc), 0x100c);
+    assert_eq!(value(&cpu, arm::CORE[1]), 7);
+}
 #[test]
 fn interactive_policy_is_forwarded_and_keeps_exact_instruction_limits() {
     let cpu = cpu();

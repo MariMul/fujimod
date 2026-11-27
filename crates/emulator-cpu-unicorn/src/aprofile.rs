@@ -1,4 +1,4 @@
-//! Exact AArch64 and ARMv7-A (ARM state) instruction entries, code coherence,
+//! Exact AArch64 and ARMv7-A instruction entries, code coherence,
 //! and architectural exits. Guest clocks, devices, and framework register
 //! values remain with the owner.
 use crate::{
@@ -35,7 +35,7 @@ struct Execution {
     // Engine destruction precedes callback data, ring, and owned RAM.
     cpu: Rc<RawCore>,
     memory: Memory,
-    // ARMv7-A in ARM state; otherwise AArch64.
+    // ARMv7-A (ARM or Thumb); otherwise AArch64.
     a32: bool,
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
@@ -46,6 +46,9 @@ struct Execution {
     synced: Cell<i64>,
     settled_head: Cell<u64>,
     manual: Cell<Option<Span>>,
+    // Thumb blocks always enter through the block hook. Their address list
+    // serves the same role as the fixed-width accelerator's newest span.
+    thumb_entries: RefCell<Vec<u64>>,
     active: Cell<bool>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
@@ -131,6 +134,7 @@ impl Core {
             synced: Cell::new(0),
             settled_head: Cell::new(0),
             manual: Cell::new(None),
+            thumb_entries: RefCell::new(Vec::new()),
             active: Cell::new(false),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
@@ -337,9 +341,16 @@ impl Execution {
         self.accounting().reset();
         self.synced.set(0);
         self.manual.set(None);
+        self.thumb_entries.borrow_mut().clear();
         self.settled_head.set(self.accounting().counters().1);
     }
     fn tail(&self, pc: u64, entered: bool) -> u64 {
+        let entries = self.thumb_entries.borrow();
+        if !entries.is_empty() {
+            return entries
+                .binary_search(&pc)
+                .map_or(0, |i| (entries.len() - i) as u64 - u64::from(entered));
+        }
         self.accounting()
             .newest_since(self.settled_head.get())
             .or(self.manual.get())
@@ -359,6 +370,7 @@ impl Execution {
         self.synced.set(p.budget);
         self.settled_head.set(self.accounting().counters().1);
         self.manual.set(None);
+        self.thumb_entries.borrow_mut().clear();
         Ok(())
     }
     /// Appends the entries one settlement counted: every span admitted since
@@ -382,6 +394,16 @@ impl Execution {
         let mut total = 0u64;
         let mut skip = tail;
         let mut index = head;
+        let thumb = self.thumb_entries.borrow();
+        if !thumb.is_empty() {
+            let Some(entered) = (thumb.len() as u64).checked_sub(skip) else {
+                trace.lost = true;
+                return;
+            };
+            skip = 0;
+            total += entered;
+            newest.extend(thumb[..entered as usize].iter().rev().take(wanted as usize));
+        }
         while index > oldest {
             index -= 1;
             let span = a.span(index);
@@ -437,11 +459,37 @@ impl Execution {
         let _ = self.cpu.stop();
     }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
+        let thumb = self.a32 && address & 1 != 0;
+        let address = if thumb { address & !1 } else { address };
+        let bytes = if thumb && word <= u16::MAX.into() {
+            2
+        } else {
+            4
+        };
         let physical = self.cpu.translate(address, Access::Fetch)?;
-        self.memory.note_code(self.id.get(), physical, 4)?;
+        if thumb && bytes == 4 && address & 4095 == 4094 {
+            self.memory.note_code(self.id.get(), physical, 2)?;
+            let second = self.cpu.translate(address + 2, Access::Fetch)?;
+            self.memory.note_code(self.id.get(), second, 2)?;
+        } else {
+            self.memory.note_code(self.id.get(), physical, bytes)?;
+        }
         self.memory.apply_watches()?;
-        let framework = self.framework(word);
-        let boundary = if self.a32 {
+        let framework = if thumb {
+            armv7a::thumb_framework_instruction(word).is_some()
+        } else {
+            self.framework(word)
+        };
+        let boundary = if thumb {
+            // CPS, SVC, and system/coprocessor instructions may change the
+            // state at which an owner must check interrupts or translations.
+            if bytes == 2 {
+                word & 0xffe0 == 0xb660 || word & 0xff00 == 0xdf00
+            } else {
+                word & 0xff80_8000 == 0xf380_8000
+                    || (word & 0x0c00_0e00 == 0x0c00_0e00 && !matches!((word >> 16) & 15, 7 | 8))
+            }
+        } else if self.a32 {
             armv7a::block_boundary(word) && !(self.owner_mpidr.get() && armv7a::mpidr_read(word))
         } else {
             word & 0xfff00000 == 0xd5100000
@@ -528,12 +576,11 @@ impl Execution {
             self.reset();
             return self.cpu.stop();
         }
-        // The translation filter and the 4-byte span ring cover ARM state only.
         if self.a32
             && b.thumb
                 .map_or_else(|| Ok::<_, String>(self.scalar(arm::CPSR)? & 0x20 != 0), Ok)?
         {
-            return Err("Thumb execution is unsupported by the counted ARMv7-A backend".into());
+            return self.enter_thumb(b, room);
         }
         if b.bytes == 0 || !b.bytes.is_multiple_of(4) {
             return Err("invalid A-profile block span".into());
@@ -565,13 +612,51 @@ impl Execution {
         }
         Ok(())
     }
+    fn enter_thumb(&self, block: Block, room: u64) -> Result<(), String> {
+        if block.bytes == 0 || !block.bytes.is_multiple_of(2) || block.address & 1 != 0 {
+            return Err("invalid Thumb block span".into());
+        }
+        let end = block.address + u64::from(block.bytes);
+        let mut pc = block.address;
+        let mut entries = self.thumb_entries.borrow_mut();
+        while pc < end {
+            let mut bytes = [0; 2];
+            self.cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
+            entries.push(pc);
+            pc += if u16::from_le_bytes(bytes) >= 0xe800 {
+                4
+            } else {
+                2
+            };
+        }
+        if pc != end {
+            entries.clear();
+            return Err("Thumb block ends inside an instruction".into());
+        }
+        let count = entries.len() as u64;
+        if count > room {
+            drop(entries);
+            self.reset();
+            // Unicorn's Thumb translator publishes ITSTATE on a TB exit,
+            // including on a budget-limited translation inside an IT block.
+            return self.cpu.retry_block(room as u32);
+        }
+        unsafe {
+            (*self.record.as_ptr()).enabled = 0;
+            (*self.record.as_ptr()).budget = (room - count) as i64;
+        }
+        self.synced.set(room as i64);
+        Ok(())
+    }
     fn instruction(&self, address: u64, size: u32) -> Result<(), String> {
+        let thumb = !self.thumb_entries.borrow().is_empty();
         self.settle(self.tail(address, false), false)?;
         if self.count.get() >= self.cap.get() {
             self.reset();
             return self.cpu.stop();
         }
-        self.count.set(self.count.get() + 1);
+        let previous = self.count.get();
+        self.count.set(previous + 1);
         self.at_instruction.set(true);
         let traced = self.trace.borrow().is_some();
         for (_, hook) in self.index.borrow().instructions.at(address) {
@@ -582,9 +667,23 @@ impl Execution {
         let intercepted = self.stopped.get();
         if !intercepted && self.scalar(Register::Pc)? == address {
             let mut bytes = [0; 4];
-            self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
-            let word = u32::from_le_bytes(bytes);
-            if self.framework(word) {
+            self.cpu
+                .read_virtual(address, Access::Fetch, &mut bytes[..size as usize])?;
+            let mut word = u32::from_le_bytes(bytes);
+            if thumb && size == 4 {
+                word = word.rotate_left(16);
+            }
+            let replacement = if thumb {
+                armv7a::thumb_framework_instruction(word)
+            } else {
+                self.framework(word).then_some(word)
+            };
+            if let Some(word) = replacement {
+                if thumb && self.exclusive_exits.get() {
+                    return Err(
+                        "Thumb framework exits require a Thumb-aware processor owner".into(),
+                    );
+                }
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
                 self.cpu.stop()?;
@@ -594,6 +693,7 @@ impl Execution {
             self.coherent_instruction(address)?;
         }
         if traced
+            && (!thumb || self.count.get() > previous)
             && self.exit.get().is_none()
             && let Some(trace) = self.trace.borrow_mut().as_mut()
         {

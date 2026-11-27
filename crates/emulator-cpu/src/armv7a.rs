@@ -47,6 +47,18 @@ pub fn framework_instruction(word: u32) -> bool {
         || matches!(body, 0x0320_f002..=0x0320_f004)
 }
 
+/// Normalize a Thumb framework operation to the equivalent unconditional ARM
+/// operation. The owner still evaluates the original instruction's ITSTATE.
+pub fn thumb_framework_instruction(word: u32) -> Option<u32> {
+    match word {
+        0xbf20 | 0xf3af_8002 => Some(0xe320_f002),
+        0xbf30 | 0xf3af_8003 => Some(0xe320_f003),
+        0xbf40 | 0xf3af_8004 => Some(0xe320_f004),
+        _ if word >> 24 == 0xee && framework_instruction(word) => Some(word),
+        _ => None,
+    }
+}
+
 /// Instructions after which a counted backend must end its block, so pending
 /// interrupts and translation changes take effect at the next instruction:
 /// CPSR writes and exception returns (`rprofile::arm_irq_mask_source` covers
@@ -123,7 +135,8 @@ pub fn enter_irq(cpu: &dyn Cpu) -> Result<bool, String> {
 /// lazily. Covers conditional CP10/CP11 encodings and the unconditional
 /// Advanced SIMD data-processing (0xf2/0xf3) and element/structure
 /// load/store (0xf4, bit 20 clear) encodings. Returns false for any other
-/// instruction, so the engine's refusal stands. Thumb entry is refused.
+/// instruction, so the engine's refusal stands. Thumb uses the corresponding
+/// 32-bit VFP and Advanced SIMD encoding spaces.
 pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     let read = |r| {
         let mut b = [0; 8];
@@ -132,14 +145,24 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     };
     let write = |r, v: u32| cpu.write_register(r, &v.to_le_bytes());
     let cpsr = read(arm::CPSR)?;
-    if cpsr & 0x20 != 0 {
-        return Ok(false);
-    }
+    let thumb = cpsr & 0x20 != 0;
     let pc = read(Register::Pc)?;
     let mut bytes = [0; 4];
-    cpu.read_virtual(pc.into(), super::Access::Fetch, &mut bytes)?;
-    let word = u32::from_le_bytes(bytes);
-    let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
+    let (word, simd) = if thumb {
+        cpu.read_virtual(pc.into(), super::Access::Fetch, &mut bytes[..2])?;
+        if u16::from_le_bytes([bytes[0], bytes[1]]) < 0xe800 {
+            return Ok(false);
+        }
+        cpu.read_virtual(u64::from(pc) + 2, super::Access::Fetch, &mut bytes[2..])?;
+        let word = u32::from_le_bytes(bytes).rotate_left(16);
+        let simd = word & 0xef00_0000 == 0xef00_0000 || word & 0xff10_0000 == 0xf900_0000;
+        (word, simd)
+    } else {
+        cpu.read_virtual(pc.into(), super::Access::Fetch, &mut bytes)?;
+        let word = u32::from_le_bytes(bytes);
+        let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
+        (word, simd)
+    };
     if !simd && (word >> 28 == 15 || word & 0x0c00_0e00 != 0x0c00_0a00) {
         return Ok(false);
     }
@@ -173,7 +196,8 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     let next = (cpsr & !(0x1f | 0x20 | 0x0600fc00 | 0x01000000 | 0x200)) | 0x1b | 0x80;
     write(arm::CPSR, next)?;
     write(arm::SPSR, cpsr)?;
-    write(arm::CORE[14], pc.wrapping_add(4))?;
+    // LR_und is the faulting instruction's address + 4 in ARM state and + 2 in Thumb state.
+    write(arm::CORE[14], pc.wrapping_add(if thumb { 2 } else { 4 }))?;
     write(Register::Pc, base.wrapping_add(4))?;
     Ok(true)
 }
