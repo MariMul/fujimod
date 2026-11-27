@@ -1,4 +1,5 @@
 import { connectPeer, type PeerChannel } from '../../../../crates/usb-proxy/web/peer.ts';
+import { connectLocal } from './local';
 import type { LoadingProgress } from './download-progress';
 import type { ReportSubmission } from './report';
 import type { CameraPerformance } from './performance';
@@ -70,7 +71,7 @@ const decoder = new TextDecoder();
  * and state on the room's data channel, the LCD as its video track.
  */
 export class RemoteEngine implements Engine {
-  private peer?: Promise<PeerChannel>;
+  private peer?: Promise<Pick<PeerChannel, 'send' | 'close'>>;
   private video?: HTMLVideoElement;
   private serial = 0;
   private pending = new Map<
@@ -98,6 +99,7 @@ export class RemoteEngine implements Engine {
   constructor(
     private readonly url: string,
     private readonly onError: (error: Error) => void,
+    private readonly local = false,
   ) {}
 
   /** Join a native session that publishes events before the first command. */
@@ -105,20 +107,37 @@ export class RemoteEngine implements Engine {
     await this.connect();
   }
 
-  private connect(): Promise<PeerChannel> {
+  private connect(): Promise<Pick<PeerChannel, 'send' | 'close'>> {
     if (this.disposed) return Promise.reject(Error('Emulator closed.'));
     if (this.unavailable) return Promise.reject(this.unavailable);
-    this.peer ??= connectPeer(this.url, { video: true }).then((peer) => {
-      peer.onclose = () => this.fail(Error('Native emulator connection closed.'));
-      void peer.send(text.encode(JSON.stringify({ type: 'hello' })));
-      void this.receiveMessages(peer);
-      void peer.video?.then((track) => this.showVideo(track));
-      return peer;
-    });
+    this.peer ??= this.openChannel();
     this.peer.catch((error: unknown) =>
       this.fail(error instanceof Error ? error : Error(String(error))),
     );
     return this.peer;
+  }
+
+  private async openChannel() {
+    const peer = this.local
+      ? await connectLocal(
+          this.url,
+          (message) => this.receiveJson(message),
+          (frame) => {
+            for (const listener of this.framesListeners) listener(frame);
+          },
+          (error) => this.fail(error),
+        )
+      : await this.openPeer();
+    await peer.send(text.encode(JSON.stringify({ type: 'hello' })));
+    return peer;
+  }
+
+  private async openPeer() {
+    const peer = await connectPeer(this.url, { video: true });
+    peer.onclose = () => this.fail(Error('Native emulator connection closed.'));
+    void this.receiveMessages(peer);
+    void peer.video?.then((track) => this.showVideo(track));
+    return peer;
   }
 
   private async receiveMessages(peer: PeerChannel) {

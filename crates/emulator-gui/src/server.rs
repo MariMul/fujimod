@@ -1,3 +1,4 @@
+use crate::local;
 use crate::protocol::{Event, Request, command_args};
 use crate::usb::UsbShare;
 use fujimod_emulator_devices::graphics::scanout::Frame;
@@ -48,6 +49,9 @@ pub struct Endpoint {
 pub struct Room {
     endpoint: Endpoint,
     events: mpsc::Receiver<HostEvent>,
+    local: mpsc::Receiver<(String, local::Socket)>,
+    local_frames: tokio::sync::watch::Sender<Option<axum::body::Bytes>>,
+    stop: async_channel::Sender<()>,
     _room: Arc<LoopbackRoom>,
 }
 
@@ -55,18 +59,35 @@ impl Room {
     /// A room on this machine for the desktop window. Its link names no
     /// site: the window reads only the ticket in its fragment.
     pub fn loopback() -> Result<Self, String> {
-        let room =
-            Arc::new(LoopbackRoom::start("http://localhost").map_err(|error| error.to_string())?);
+        let port = std::env::var("FUJIMOD_EMULATOR_GUI_PORT")
+            .map_or(Ok(0), |value| value.parse::<u16>())
+            .map_err(|error| format!("FUJIMOD_EMULATOR_GUI_PORT: {error}"))?;
+        let (local_events, local) = mpsc::channel();
+        let (local_frames, frames) = tokio::sync::watch::channel(None);
+        let room = Arc::new(
+            LoopbackRoom::start_with_routes("http://localhost", port, |ticket| {
+                local::routes(&ticket.key, local_events, frames)
+            })
+            .map_err(|error| error.to_string())?,
+        );
         let (send, events) = mpsc::channel();
+        let (stop, stopped) = async_channel::bounded(1);
         let watched = Arc::clone(&room);
         std::thread::Builder::new()
             .name("fujimod-viewer-room".into())
             .spawn(move || {
-                while let Ok(event) = futures_lite::future::block_on(watched.room().next_event()) {
-                    if send.send(event).is_err() {
-                        break;
-                    }
-                }
+                futures_lite::future::block_on(futures_lite::future::race(
+                    async {
+                        while let Ok(event) = watched.room().next_event().await {
+                            if send.send(event).is_err() {
+                                break;
+                            }
+                        }
+                    },
+                    async {
+                        let _ = stopped.recv().await;
+                    },
+                ));
             })
             .map_err(|error| error.to_string())?;
         Ok(Self {
@@ -74,6 +95,9 @@ impl Room {
                 url: room.link().to_owned(),
             },
             events,
+            local,
+            local_frames,
+            stop,
             _room: room,
         })
     }
@@ -97,6 +121,10 @@ impl Room {
             pending_releases: Vec::new(),
         };
         while viewer.joining.is_empty() {
+            viewer.join_local();
+            if !viewer.joining.is_empty() {
+                break;
+            }
             if abandoned() {
                 return Err("desktop window closed".into());
             }
@@ -109,6 +137,30 @@ impl Room {
             }
         }
         Ok(viewer)
+    }
+}
+
+impl Drop for Room {
+    fn drop(&mut self) {
+        self.stop.close();
+    }
+}
+
+enum Socket {
+    Peer(PeerSocket),
+    Local(local::Socket),
+}
+
+impl Socket {
+    fn try_receive(&mut self) -> Option<Result<Vec<u8>, ()>> {
+        match self {
+            Self::Peer(socket) => socket.try_receive().map(|result| result.map_err(|_| ())),
+            Self::Local(socket) => match socket.requests.try_recv() {
+                Ok(bytes) => Some(Ok(bytes)),
+                Err(async_channel::TryRecvError::Empty) => None,
+                Err(async_channel::TryRecvError::Closed) => Some(Err(())),
+            },
+        }
     }
 }
 
@@ -149,7 +201,7 @@ struct Video {
 
 struct Controller {
     id: String,
-    socket: PeerSocket,
+    socket: Socket,
     video: Option<Video>,
     catalog_sent: bool,
     last_state: Option<String>,
@@ -161,7 +213,7 @@ struct Controller {
 pub struct Viewer {
     room: Room,
     /// Controllers whose first message has not arrived; it names their protocol.
-    joining: Vec<(String, PeerSocket)>,
+    joining: Vec<(String, Socket)>,
     /// The camera's USB port, shared once a controller asks for it.
     usb: Option<UsbShare>,
     /// Controllers speaking the USB share protocol.
@@ -180,9 +232,18 @@ pub struct Viewer {
 impl Viewer {
     fn event(&mut self, event: HostEvent) {
         match event {
-            HostEvent::Controller(id, socket) => self.joining.push((id, socket)),
+            HostEvent::Controller(id, socket) => self.joining.push((id, Socket::Peer(socket))),
             HostEvent::Left(id) => self.leave(&id),
         }
+    }
+
+    fn join_local(&mut self) {
+        self.joining.extend(
+            self.room
+                .local
+                .try_iter()
+                .map(|(id, socket)| (id, Socket::Local(socket))),
+        );
     }
 
     /// Admit a controller whose first message was `first`: the USB share
@@ -191,10 +252,13 @@ impl Viewer {
         &mut self,
         run: &mut dyn Run,
         id: String,
-        socket: PeerSocket,
+        socket: Socket,
         first: Vec<u8>,
     ) -> Result<(), String> {
         if DeviceShare::opens(&first) {
+            let Socket::Peer(socket) = socket else {
+                return Ok(());
+            };
             if self.usb.is_none() {
                 match UsbShare::connect(run, &self.room.endpoint.url) {
                     Ok(usb) => self.usb = Some(usb),
@@ -211,7 +275,11 @@ impl Viewer {
             self.usb_controllers.insert(id);
             return Ok(());
         }
-        let video = socket.video().map(|sender| {
+        let sender = match &socket {
+            Socket::Peer(socket) => socket.video(),
+            Socket::Local(_) => None,
+        };
+        let video = sender.map(|sender| {
             Ok::<_, String>(Video {
                 sender,
                 encoder: encoder()?,
@@ -279,6 +347,7 @@ impl Viewer {
         while let Ok(event) = self.room.events.try_recv() {
             self.event(event);
         }
+        self.join_local();
         for control in std::mem::take(&mut self.pending_releases) {
             run.session_mut().contact_input(&control, None, true)?;
         }
@@ -322,6 +391,7 @@ impl Viewer {
     /// Keep the newest of `frames` and encode it for each controller whose
     /// track has sent the previous frame.
     pub fn show(&mut self, frames: &[Frame]) -> Result<(), String> {
+        let mut changed = false;
         if let Some(frame) = frames.iter().max_by_key(|frame| frame.sequence)
             && self
                 .latest
@@ -330,10 +400,22 @@ impl Viewer {
         {
             self.latest = Some(frame.clone());
             self.sequence += 1;
+            changed = true;
         }
         let Some(frame) = &self.latest else {
             return Ok(());
         };
+        if changed || self.room.local_frames.borrow().is_none() {
+            if self
+                .controllers
+                .iter()
+                .any(|controller| matches!(controller.socket, Socket::Local(_)))
+            {
+                self.room
+                    .local_frames
+                    .send_replace(Some(local::packet(frame, self.sequence)));
+            }
+        }
         for controller in &mut self.controllers {
             let Some(video) = &mut controller.video else {
                 continue;
@@ -423,8 +505,16 @@ impl Viewer {
 
     fn send_text(&mut self, index: usize, text: String) {
         // A controller that has gone is dropped by the next service.
-        let _ =
-            futures_lite::future::block_on(self.controllers[index].socket.send(text.into_bytes()));
+        match &mut self.controllers[index].socket {
+            Socket::Peer(socket) => {
+                let _ = futures_lite::future::block_on(socket.send(text.into_bytes()));
+            }
+            Socket::Local(socket) => {
+                if socket.replies.try_send(text).is_err() {
+                    socket.replies.close();
+                }
+            }
+        }
     }
 
     /// One controller's command. A button is pressed while any controller

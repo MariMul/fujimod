@@ -7,6 +7,7 @@
 //! guest slices.
 
 pub mod launch;
+mod local;
 mod protocol;
 mod server;
 mod usb;

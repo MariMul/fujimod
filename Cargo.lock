@@ -2878,6 +2878,7 @@ name = "fujimod-emulator-gui"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "axum",
  "fujimod-catalog",
  "fujimod-emulator-boot",
  "fujimod-emulator-controls",
@@ -2891,6 +2892,7 @@ dependencies = [
  "openh264",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

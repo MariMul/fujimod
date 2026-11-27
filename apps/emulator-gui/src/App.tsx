@@ -42,12 +42,16 @@ export default function App() {
       value.promptVisible = false;
       value.message = 'Connecting to native emulator…';
     });
-    const photo = new RemoteEngine(launched.endpoint, (error) => {
-      updateState((value) => {
-        value.message = shownError(error);
-        value.error = true;
-      });
-    });
+    const photo = new RemoteEngine(
+      launched.endpoint,
+      (error) => {
+        updateState((value) => {
+          value.message = shownError(error);
+          value.error = true;
+        });
+      },
+      typeof RTCPeerConnection === 'undefined',
+    );
     void photo.open().catch((error) => session.showFault(faultFrom(error)));
     engine = photo;
     let catalog: NativeCatalog | undefined;

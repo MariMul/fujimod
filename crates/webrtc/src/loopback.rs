@@ -22,9 +22,31 @@ impl LoopbackRoom {
     /// `site` is the page a controller link opens, for example the desktop
     /// window's own origin.
     pub fn start(site: &str) -> Result<Self> {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(error)?;
+        Self::start_with_routes(site, 0, |_| axum::Router::new())
+    }
+
+    /// Add application routes to the same loopback listener as signaling.
+    pub fn start_with_routes(
+        site: &str,
+        port: u16,
+        routes: impl FnOnce(&Ticket) -> axum::Router,
+    ) -> Result<Self> {
+        let listener =
+            std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).map_err(error)?;
         listener.set_nonblocking(true).map_err(error)?;
         let address = listener.local_addr().map_err(error)?;
+        let mut rng = rand::rng();
+        let ticket = Ticket {
+            v: 1,
+            signal: format!("ws://{address}/usb-proxy/signal"),
+            room: URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>()),
+            key: URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>()),
+            stun: Vec::new(),
+        };
+        let router = crate::signaling::router().merge(routes(&ticket));
+        let owner_key = URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>());
+        let encoded = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ticket).map_err(error)?);
+        let link = format!("{}/#?remotecontrol={encoded}", site.trim_end_matches('/'));
         let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
         let server = std::thread::Builder::new()
             .name("fujimod-loopback-signal".into())
@@ -39,25 +61,13 @@ impl LoopbackRoom {
                     let Ok(listener) = tokio::net::TcpListener::from_std(listener) else {
                         return;
                     };
-                    let _ = axum::serve(listener, crate::signaling::router())
-                        .with_graceful_shutdown(async {
-                            let _ = stopped.await;
-                        })
-                        .await;
+                    tokio::select! {
+                        _ = stopped => {}
+                        _ = async { axum::serve(listener, router).await } => {}
+                    }
                 });
             })
             .map_err(error)?;
-        let mut rng = rand::rng();
-        let ticket = Ticket {
-            v: 1,
-            signal: format!("ws://{address}/usb-proxy/signal"),
-            room: URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>()),
-            key: URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>()),
-            stun: Vec::new(),
-        };
-        let owner_key = URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>());
-        let encoded = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ticket).map_err(error)?);
-        let link = format!("{}/#?remotecontrol={encoded}", site.trim_end_matches('/'));
         let room = futures_lite::future::block_on(HostRoom::join(
             &link,
             &owner_key,
