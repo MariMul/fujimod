@@ -14,7 +14,7 @@ use fujimod_catalog::reference::{ConnectionSignal, ResolvedSelection};
 use fujimod_catalog_controls::{
     AdcEncoderCalibration, AdcInterval, ControlBehavior, ControlMotion, ElectricalInput,
     FirmwareControlIds, InputBinding, InputTarget, LocatedInput, PhysicalControl, PhysicalControls,
-    facts::{ConfigurationLocation, ControlInterface, DecodedTouch},
+    facts::{ConfigurationLocation, ControlInterface, DecodedTouch, ScannerInputKind},
 };
 use serde::Serialize;
 
@@ -272,11 +272,11 @@ struct Resolver<'a> {
     ids: &'a FirmwareControlIds,
 }
 
-/// A binding's name, or why it cannot be located.
-fn binding_name(binding: &InputBinding) -> Option<&str> {
+/// The identity used to refer to a binding in the located control.
+fn binding_name(binding: &InputBinding) -> &str {
     match binding {
-        InputBinding::DebugKey { name } | InputBinding::NativeInput { name } => Some(name),
-        InputBinding::ScannerRow { .. } => None,
+        InputBinding::DebugKey { name } | InputBinding::NativeInput { name } => name,
+        InputBinding::ScannerRow { row } => row,
     }
 }
 
@@ -405,14 +405,6 @@ fn declarations(
     if press.is_some() {
         set(&mut actions, "press", own(&press));
     }
-    // A scanner-row identity names a generated scanner row, not a firmware
-    // key this resolution can locate; such positions are left out.
-    positions.retain(|position| {
-        position
-            .key
-            .as_ref()
-            .is_none_or(|key| binding_name(key).is_some())
-    });
     (actions, positions)
 }
 
@@ -435,14 +427,17 @@ impl Resolver<'_> {
                 Some("No electronic key established for this mechanical control".into());
             return Ok(row);
         }
-        let (actions, positions) = declarations(id, control.behavior.as_ref());
+        let (actions, mut positions) = declarations(id, control.behavior.as_ref());
+        if self.selection.body.id == "xt20" && id == "shutter_speed_dial" {
+            // The 180X detent has no confirmed control binding in this catalog.
+            positions.retain(|position| position.key.is_some());
+        }
         let mut located: Vec<(String, &LocatedInput)> = Vec::new();
         let mut bind = |control_id: &str, binding: &Option<InputBinding>| -> Result<(), String> {
             let binding = binding
                 .as_ref()
                 .ok_or("Physical action has no located firmware binding")?;
-            let name =
-                binding_name(binding).ok_or("Physical action has no located firmware binding")?;
+            let name = binding_name(binding);
             if !located.iter().any(|(known, _)| known == name) {
                 located.push((name.to_owned(), self.input(control_id, binding)?));
             }
@@ -470,9 +465,12 @@ impl Resolver<'_> {
             return Ok(row);
         }
         for (name, input) in &located {
-            if let Some(electrical) = &input.electrical {
-                row.input
-                    .insert(name.clone(), vec![self.wire(electrical, input)?]);
+            let wire = match &input.electrical {
+                Some(electrical) => Some(self.wire(electrical, input)?),
+                None => self.xpp_scanner_wire(control, input)?,
+            };
+            if let Some(wire) = wire {
+                row.input.insert(name.clone(), vec![wire]);
             }
         }
         row.keys = located.into_iter().map(|(name, _)| name).collect();
@@ -481,7 +479,7 @@ impl Resolver<'_> {
             .map(|(action, group)| {
                 let keys = group
                     .iter()
-                    .filter_map(|(_, binding)| binding.as_ref().and_then(binding_name))
+                    .filter_map(|(_, binding)| binding.as_ref().map(binding_name))
                     .map(str::to_owned)
                     .collect();
                 (action, keys)
@@ -494,7 +492,7 @@ impl Resolver<'_> {
                 keys: position
                     .key
                     .as_ref()
-                    .and_then(binding_name)
+                    .map(binding_name)
                     .map(str::to_owned)
                     .into_iter()
                     .collect(),
@@ -512,38 +510,41 @@ impl Resolver<'_> {
     /// The one located input a binding names for a control, preferring
     /// inputs with a located electrical predicate.
     fn input(&self, control_id: &str, binding: &InputBinding) -> Result<&LocatedInput, String> {
-        let (event, name) = match binding {
-            InputBinding::DebugKey { name } => (
+        let name = binding_name(binding);
+        let event = match binding {
+            InputBinding::DebugKey { .. } => Some(
                 self.ids
                     .debug_keys
                     .iter()
-                    .find(|key| key.name == *name)
+                    .find(|key| key.name == name)
                     .map(|key| key.event),
-                name,
             ),
-            InputBinding::NativeInput { name } => (
+            InputBinding::NativeInput { .. } => Some(
                 self.ids
                     .native_key_names
                     .iter()
                     .flat_map(|names| &names.rows)
-                    .find(|key| key.name == *name)
+                    .find(|key| key.name == name)
                     .map(|key| key.event),
-                name,
             ),
-            InputBinding::ScannerRow { .. } => {
-                return Err("Physical action has no located firmware binding".into());
-            }
+            InputBinding::ScannerRow { .. } => None,
         };
-        let event = event.ok_or_else(|| format!("Firmware has no input named {name}"))?;
+        let event = event
+            .map(|event| event.ok_or_else(|| format!("Firmware has no input named {name}")))
+            .transpose()?;
         let candidates: Vec<&LocatedInput> = self
             .ids
             .inputs
             .iter()
             .filter(|input| {
-                input.event == event
-                    && matches!(&input.target, InputTarget::Control { control_id: owner } if owner == control_id)
-                    && (!matches!(binding, InputBinding::DebugKey { .. })
-                        || input.debug_key.as_deref() == Some(name.as_str()))
+                matches!(&input.target, InputTarget::Control { control_id: owner } if owner == control_id)
+                    && match binding {
+                        InputBinding::DebugKey { .. } => {
+                            Some(input.event) == event && input.debug_key.as_deref() == Some(name)
+                        }
+                        InputBinding::NativeInput { .. } => Some(input.event) == event,
+                        InputBinding::ScannerRow { .. } => input.id == name && input.scanner.is_some(),
+                    }
             })
             .collect();
         let electrical: Vec<&LocatedInput> = candidates
@@ -605,6 +606,117 @@ impl Resolver<'_> {
             [channel] => Ok(*channel),
             _ => Err(format!("Control input has incompatible body wiring: {id}")),
         }
+    }
+
+    /// Use the native XPP scanner predicates when the firmware has no override.
+    fn xpp_scanner_wire(
+        &self,
+        control: &PhysicalControl,
+        input: &LocatedInput,
+    ) -> Result<Option<Wire>, String> {
+        if self.selection.soc.id != "xpp" {
+            return Ok(None);
+        }
+        let mut record = self.scanner_record(input);
+        let name = input.debug_key.as_deref();
+        if record.is_none() && self.selection.body.id == "xt20" {
+            // The X-T20 scanner rows for the two interrupt-driven shutter
+            // contacts carry the same event as their debug aliases.
+            record = match name {
+                Some("S1" | "S2") => self
+                    .ids
+                    .inputs
+                    .iter()
+                    .filter(|row| row.event == input.event)
+                    .filter_map(|row| self.scanner_record(row))
+                    .find(|row| row.kind == ScannerInputKind::Kind4.raw()),
+                Some("CMD_PUSH") => self
+                    .ids
+                    .inputs
+                    .iter()
+                    .filter_map(|row| self.scanner_record(row))
+                    .find(|row| row.kind == ScannerInputKind::Kind2.raw() && row.source == 13),
+                _ => None,
+            };
+        }
+        let Some(record) = record else {
+            return self.xpp_encoder_wire(control, name);
+        };
+        let kind = match record.kind {
+            kind if kind == ScannerInputKind::Kind1.raw() => WireKind::Adc {
+                channel: u8::try_from(record.source).map_err(|_| "Invalid XPP ADC channel")?,
+                intervals: vec![AdcInterval::ConfigurationU16 {
+                    lower: record.lower,
+                    upper: record.upper,
+                    when: None,
+                    unless: Vec::new(),
+                }],
+                expected_result: Some(1),
+            },
+            kind if kind == ScannerInputKind::Kind2.raw()
+                || (kind == ScannerInputKind::Kind4.raw() && matches!(name, Some("S1" | "S2"))) =>
+            {
+                let (port, pin) = (record.source >> 16, record.source & 0xffff);
+                if port >= 16 || pin >= 16 {
+                    return Err("Invalid XPP GPIO scanner source".into());
+                }
+                let active_level = if kind == ScannerInputKind::Kind2.raw() {
+                    u8::try_from(record.upper)
+                        .ok()
+                        .filter(|&level| level <= 1 && record.lower == u32::from(1 - level))
+                        .ok_or("Invalid XPP GPIO scanner polarity")?
+                } else {
+                    0
+                };
+                WireKind::Gpio {
+                    port: port as u8,
+                    pin: pin as u8,
+                    active_level,
+                }
+            }
+            _ if self.selection.body.id == "xt20" => {
+                let levels = match name {
+                    Some("MF_AF_A") => vec![1, 0],
+                    Some("MF_AF_C") => vec![1, 1],
+                    Some("MF_AF_M") => vec![0, 1],
+                    _ => return Ok(None),
+                };
+                WireKind::GpioContacts {
+                    pins: vec![(10, 9), (10, 10)],
+                    levels,
+                }
+            }
+            _ => return Ok(None),
+        };
+        Ok(Some(Wire {
+            kind,
+            scanner_record: Some(record),
+        }))
+    }
+
+    fn xpp_encoder_wire(
+        &self,
+        control: &PhysicalControl,
+        name: Option<&str>,
+    ) -> Result<Option<Wire>, String> {
+        let (connection_id, cycle_sign) = match name {
+            Some("CMD_LEFT") => ("controls-encoder-front", -1),
+            Some("CMD_RIGHT") => ("controls-encoder-front", 1),
+            Some("CMD2_L") => ("controls-encoder-rear", -1),
+            Some("CMD2_R") => ("controls-encoder-rear", 1),
+            _ => return Ok(None),
+        };
+        if !control.connection_ids.iter().any(|id| id == connection_id) {
+            return Ok(None);
+        }
+        Ok(Some(Wire {
+            kind: WireKind::GpioFixedCycle {
+                connection_id: connection_id.into(),
+                pins: self.gpio_pins(connection_id)?,
+                cycle_sign,
+            },
+            scanner_record: None,
+        }))
     }
 
     fn wire(&self, electrical: &ElectricalInput, input: &LocatedInput) -> Result<Wire, String> {
@@ -792,7 +904,14 @@ impl Resolver<'_> {
                 }
             }
         };
-        let scanner_record = input.scanner.as_ref().map(|scanner| {
+        Ok(Wire {
+            kind,
+            scanner_record: self.scanner_record(input),
+        })
+    }
+
+    fn scanner_record(&self, input: &LocatedInput) -> Option<ScannerRecord> {
+        input.scanner.as_ref().map(|scanner| {
             let table = &self.ids.scanner;
             ScannerRecord {
                 address: table.base + u64::from(table.stride) * u64::from(scanner.index),
@@ -803,10 +922,6 @@ impl Resolver<'_> {
                 lower: scanner.witness.lower,
                 upper: scanner.witness.upper,
             }
-        });
-        Ok(Wire {
-            kind,
-            scanner_record,
         })
     }
 
@@ -1004,6 +1119,24 @@ mod tests {
             located.calibration,
             Some(super::ConfigurationLocation::Pointer { address: 0xffb164 })
         ));
+        let find = |id| located.controls.iter().find(|row| row.id == id).unwrap();
+        assert!(matches!(
+            find("menu_ok_button").input["EXE_M"][0].kind,
+            super::WireKind::Adc { channel: 3, .. }
+        ));
+        let drive = find("drive_dial");
+        for (position, key) in [("BKT2", "row-69"), ("Adv.2", "row-63")] {
+            assert!(
+                drive
+                    .positions
+                    .iter()
+                    .any(|row| row.position == position && row.keys == [key])
+            );
+            assert!(matches!(
+                drive.input[key][0].kind,
+                super::WireKind::Adc { channel: 1, .. }
+            ));
+        }
     }
 
     #[test]

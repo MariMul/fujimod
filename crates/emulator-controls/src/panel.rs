@@ -235,6 +235,14 @@ fn wire_term(
         } => {
             let mut mask = Mask::default();
             for interval in intervals {
+                // A hold-only band cannot initiate a press. Adding it to the
+                // contact's entry mask hides neighboring buttons on a ladder.
+                if matches!(
+                    interval.condition(),
+                    Some(fujimod_catalog_controls::AdcCondition::SelfActive)
+                ) {
+                    continue;
+                }
                 mask = mask.union(&interval_mask(interval, calibration, analog_levels)?);
             }
             match expected_result {
