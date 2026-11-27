@@ -132,7 +132,7 @@ test('every segment selects through the engine and remains synchronized after po
   flush();
   expect(host.querySelector('[data-value="single"]')?.getAttribute('aria-pressed')).toBe('true');
 });
-test('keyboard dials stop at their physical limits and relative dials preserve detent counts', () => {
+test('keyboard dials preserve physical limits, detents and presses', async () => {
   const { host, engine, session } = mount(
     [
       {
@@ -145,7 +145,7 @@ test('keyboard dials stop at their physical limits and relative dials preserve d
           { id: '4', label: '4' },
         ],
       },
-      { id: 'control_ring', label: 'Command', kind: 'dial', supported: true, relative: true },
+      { id: 'control_ring', label: 'Command', kind: 'button', supported: true, relative: true },
     ],
     {
       schema: 1,
@@ -177,6 +177,10 @@ test('keyboard dials stop at their physical limits and relative dials preserve d
   ]);
   expect(session.relativeSteps.get('control_ring')).toBe(1);
   expect((command.querySelector('.vals') as HTMLElement).style.backgroundPositionX).toBe('16px');
+  command.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await vi.waitFor(() => expect(engine.release).toHaveBeenCalledWith('control_ring'));
+  expect(engine.press).toHaveBeenCalledExactlyOnceWith('control_ring');
+  expect(engine.rotate).toHaveBeenCalledTimes(3);
 });
 test('a mounted empty panel reacts to the guest input inventory arriving later', () => {
   const host = document.createElement('div');

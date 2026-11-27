@@ -239,6 +239,10 @@ export class ControlSession {
     this.stopShutter?.(true);
     for (const key of this.holds.keys()) this.release(key);
   }
+  dialCanPress(id: string) {
+    const input = this.inputs.get(id);
+    return input?.relative && input.kind === 'button';
+  }
   feedback(ids: string[], glow = false) {
     this.active = ids;
     this.glowing = glow;
@@ -269,10 +273,12 @@ export class ControlSession {
     this.rotation = rotation;
     values.style.transition = 'none';
     let previous = event.clientX;
+    let dragged = false;
     let remainder = 0;
     let tickPosition = initialTicks;
     const move = (next: PointerEvent) => {
       if (next.pointerId !== event.pointerId) return;
+      dragged ||= Math.hypot(next.clientX - event.clientX, next.clientY - event.clientY) >= 4;
       const delta = next.clientX - previous;
       previous = next.clientX;
       if (rotation.center !== undefined) {
@@ -313,7 +319,10 @@ export class ControlSession {
       else this.renders.get(id)?.();
     };
     const end = (up: PointerEvent) => {
-      if (up.pointerId === event.pointerId) cleanup();
+      if (up.pointerId !== event.pointerId) return;
+      cleanup();
+      if (up.type === 'pointerup' && !dragged && this.dialCanPress(id) && !this.disabled(id))
+        void this.pulse(id);
     };
     const cleanup = () => {
       window.removeEventListener('pointermove', move);
@@ -632,7 +641,13 @@ function Dial(props: { session: ControlSession; id: string; node: ControlNode })
       aria-valuemin="0"
       aria-valuemax={Math.max(0, positions.length - 1)}
       aria-valuetext={selected() ?? ''}
+      aria-keyshortcuts={props.session.dialCanPress(props.id) ? 'Enter Space' : undefined}
       onKeyDown={(event) => {
+        if (props.session.dialCanPress(props.id) && ['Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+          if (!event.repeat && !props.session.disabled(props.id)) void props.session.pulse(props.id);
+          return;
+        }
         if (!['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp'].includes(event.key)) return;
         event.preventDefault();
         props.session.detent.beginGesture(event);
