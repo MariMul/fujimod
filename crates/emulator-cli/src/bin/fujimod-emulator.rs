@@ -47,6 +47,7 @@ Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Native GUI: --gui opens the desktop window connected to this session. --speed FACTOR|max sets its guest\n\
 seconds per wall second (default 1, real time; max runs unpaced); XP5 windows run unpaced.\n\
+With FUJIMOD_EMULATOR_GUI_PAGE set to the served window frontend, a browser joins instead of the app.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
 \n\
 open names a catalog firmware whose update and boot ROM are found by name in\n\

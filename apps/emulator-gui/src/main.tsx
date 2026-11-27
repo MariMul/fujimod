@@ -27,6 +27,29 @@ if ('__TAURI_INTERNALS__' in window) {
     connection: () => invoke('connection'),
     close: () => invoke('close'),
   };
+} else if (location.hash.includes('remotecontrol=')) {
+  // A browser joining a native session by its share link, where the desktop
+  // window's webview has no WebRTC (WebKitGTK on most Linux distributions).
+  const desktopOnly = () => Promise.reject(new Error('available only in the desktop app'));
+  (window as Window & { fujimodDesktop?: DesktopBridge }).fujimodDesktop = {
+    configurations: async () => [],
+    chooseUpdate: desktopOnly,
+    launch: desktopOnly,
+    launcherCameras: async () => [],
+    chooseSdCard: desktopOnly,
+    openCamera: desktopOnly,
+    connect: async (endpoint) => ({
+      id: endpoint,
+      configuration: '',
+      body: '',
+      model: '',
+      firmware: '',
+      endpoint,
+    }),
+    launchConnection: async () => undefined,
+    connection: async () => location.href,
+    close: async () => {},
+  };
 }
 
 try {
