@@ -1260,6 +1260,10 @@ pub struct Dmp {
 /// Word placement of the DMP copy engine's equal-shape pixmap readback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
 #[serde(rename_all = "kebab-case")]
 pub enum DmpPixmapReadback {
     /// Preserve the packed source word while untiling.
