@@ -626,7 +626,7 @@ fn encode(encoder: &mut Encoder, frame: &Frame) -> Result<Vec<u8>, String> {
                 .collect(),
         )
     };
-    let yuv = YUVBuffer::from_rgb_source(RgbaSliceU8::new(&rgba, (width, height)));
+    let yuv = YUVBuffer::from_rgba8_source(RgbaSliceU8::new(&rgba, (width, height)));
     let stream = encoder.encode(&yuv).map_err(|error| error.to_string())?;
     Ok(stream.to_vec())
 }
